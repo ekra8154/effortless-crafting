@@ -1,0 +1,35 @@
+{
+	"schemaVersion": 1,
+	"id": "reachcrafting",
+	"version": "${version}",
+	"name": "Reach Crafting",
+	"description": "A Fabric mod scaffold for reach-crafting on Minecraft 1.21.11.",
+	"authors": [
+		"Me!"
+	],
+	"contact": {
+		"homepage": "",
+		"sources": ""
+	},
+	"license": "LGPL-3.0-or-later",
+	"icon": "assets/reachcrafting/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"com.reachcrafting.ReachCraftingMod"
+		],
+		"client": [
+			"com.reachcrafting.client.ReachCraftingModClient"
+		]
+	},
+	"depends": {
+		"fabricloader": ">=0.18.2",
+		"minecraft": "~1.21.11",
+		"java": ">=21",
+		"fabric-api": "*"
+	},
+	"suggests": {
+		"modmenu": "*",
+		"cloth-config": "*"
+	}
+}
