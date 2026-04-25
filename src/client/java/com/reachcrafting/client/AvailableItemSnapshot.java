@@ -1,0 +1,71 @@
+package com.reachcrafting.client;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.StringJoiner;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.client.gui.screens.inventory.CraftingScreen;
+import net.minecraft.client.gui.screens.inventory.InventoryScreen;
+import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.item.ItemStack;
+
+public record AvailableItemSnapshot(Map<String, Integer> inventoryCounts, Map<String, Integer> gridCounts, Map<String, Integer> totalCounts) {
+	public static AvailableItemSnapshot capture(LocalPlayer player, Screen screen) {
+		Map<String, Integer> inventoryCounts = new LinkedHashMap<>();
+		for (ItemStack stack : player.getInventory().getNonEquipmentItems()) {
+			addStack(inventoryCounts, stack);
+		}
+
+		Map<String, Integer> gridCounts = new LinkedHashMap<>();
+		if (screen instanceof AbstractContainerScreen<?> containerScreen) {
+			AbstractContainerMenu menu = containerScreen.getMenu();
+			int gridSlotCount = screen instanceof InventoryScreen ? 4 : screen instanceof CraftingScreen ? 9 : 0;
+			for (int slotIndex = 1; slotIndex <= gridSlotCount; slotIndex++) {
+				addStack(gridCounts, menu.getSlot(slotIndex).getItem());
+			}
+		}
+
+		Map<String, Integer> totalCounts = new LinkedHashMap<>(inventoryCounts);
+		for (Map.Entry<String, Integer> entry : gridCounts.entrySet()) {
+			totalCounts.merge(entry.getKey(), entry.getValue(), Integer::sum);
+		}
+
+		return new AvailableItemSnapshot(
+			Map.copyOf(inventoryCounts),
+			Map.copyOf(gridCounts),
+			Map.copyOf(totalCounts)
+		);
+	}
+
+	public String inventorySummary() {
+		return formatCounts(inventoryCounts);
+	}
+
+	public String gridSummary() {
+		return formatCounts(gridCounts);
+	}
+
+	private static void addStack(Map<String, Integer> counts, ItemStack stack) {
+		if (stack.isEmpty()) {
+			return;
+		}
+
+		String itemId = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+		counts.merge(itemId, stack.getCount(), Integer::sum);
+	}
+
+	private static String formatCounts(Map<String, Integer> counts) {
+		if (counts.isEmpty()) {
+			return "<empty>";
+		}
+
+		StringJoiner joiner = new StringJoiner(", ");
+		counts.entrySet().stream()
+			.sorted(Map.Entry.comparingByKey())
+			.forEach(entry -> joiner.add(entry.getValue() + "x " + entry.getKey()));
+		return joiner.toString();
+	}
+}
