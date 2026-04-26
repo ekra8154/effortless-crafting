@@ -74,7 +74,8 @@ public final class NearbyContainerDryRun {
 		int recipeIndex,
 		String outputLabel,
 		RecipeIngredientSummary ingredientSummary,
-		AvailableItemSnapshot localItems
+		AvailableItemSnapshot localItems,
+		boolean craftAll
 	) {
 		Minecraft client = Minecraft.getInstance();
 		LocalPlayer player = client.player;
@@ -86,7 +87,7 @@ public final class NearbyContainerDryRun {
 		}
 
 		cancelCurrent();
-		SearchSession session = new SearchSession(client, player, level, gameMode, cameraEntity, recipeId, recipeIndex, outputLabel, ingredientSummary, localItems);
+		SearchSession session = new SearchSession(client, player, level, gameMode, cameraEntity, recipeId, recipeIndex, outputLabel, ingredientSummary, localItems, craftAll);
 		if (!session.canStart()) {
 			return;
 		}
@@ -123,6 +124,7 @@ public final class NearbyContainerDryRun {
 		private final String outputLabel;
 		private final RecipeIngredientSummary ingredientSummary;
 		private final AvailableItemSnapshot localItems;
+		private final boolean craftAll;
 		private final RecipeDeficitReport initialDeficit;
 		private final List<RecipeIngredientSummary.IngredientSlot> remainingSlots;
 		private final ScreenContext originalContext;
@@ -148,7 +150,8 @@ public final class NearbyContainerDryRun {
 			int recipeIndex,
 			String outputLabel,
 			RecipeIngredientSummary ingredientSummary,
-			AvailableItemSnapshot localItems
+			AvailableItemSnapshot localItems,
+			boolean craftAll
 		) {
 			this.client = client;
 			this.player = player;
@@ -160,8 +163,9 @@ public final class NearbyContainerDryRun {
 			this.outputLabel = outputLabel;
 			this.ingredientSummary = ingredientSummary;
 			this.localItems = localItems;
+			this.craftAll = craftAll;
 			this.initialDeficit = RecipeDeficitReport.from(ingredientSummary, localItems);
-			this.remainingSlots = computeRemainingSlots(ingredientSummary, localItems.totalCounts());
+			this.remainingSlots = computeRemainingSlots(ingredientSummary, localItems.totalCounts(), craftAll);
 			this.originalContext = ScreenContext.capture(client, cameraEntity, player.blockInteractionRange());
 			this.candidates = findCandidates(level, cameraEntity, player.blockInteractionRange());
 		}
@@ -172,10 +176,11 @@ public final class NearbyContainerDryRun {
 
 		private void start() {
 			ReachCraftingMod.LOGGER.info(
-				"[nearby_scan] idx={} start missing={} candidates={} planned={}",
+				"[nearby_scan] idx={} start missing={} candidates={} craft_all={} planned={}",
 				recipeIndex,
 				initialDeficit.compactMissingSummary(),
 				candidates.size(),
+				craftAll,
 				summarizeRemainingSlots(remainingSlots)
 			);
 
@@ -411,7 +416,7 @@ public final class NearbyContainerDryRun {
 			);
 
 			if (!updatedDeficit.hasMissingIngredients() && isOriginalContextReady() && player.containerMenu != null) {
-				gameMode.handlePlaceRecipe(player.containerMenu.containerId, recipeId, false);
+				gameMode.handlePlaceRecipe(player.containerMenu.containerId, recipeId, craftAll);
 				sendChat("Placed recipe: " + outputLabel);
 			} else if (!remainingSlots.isEmpty() || inventorySpaceBlocked) {
 				sendChat("Fetched what I could. Missing now: " + updatedDeficit.compactMissingSummary());
@@ -566,7 +571,8 @@ public final class NearbyContainerDryRun {
 
 		private static List<RecipeIngredientSummary.IngredientSlot> computeRemainingSlots(
 			RecipeIngredientSummary ingredientSummary,
-			Map<String, Integer> availableCounts
+			Map<String, Integer> availableCounts,
+			boolean craftAll
 		) {
 			Map<String, Integer> remainingCounts = new LinkedHashMap<>(availableCounts);
 			List<RecipeIngredientSummary.IngredientSlot> remainingSlots = new ArrayList<>();
@@ -576,13 +582,16 @@ public final class NearbyContainerDryRun {
 					continue;
 				}
 
-				String matchedItemId = firstAvailableOption(slot.itemIds(), remainingCounts);
-				if (matchedItemId == null) {
-					remainingSlots.add(slot);
-					continue;
-				}
+				int desiredCopies = slot.copiesForPlacement(craftAll);
+				for (int i = 0; i < desiredCopies; i++) {
+					String matchedItemId = firstAvailableOption(slot.itemIds(), remainingCounts);
+					if (matchedItemId == null) {
+						remainingSlots.add(slot);
+						continue;
+					}
 
-				consume(remainingCounts, matchedItemId);
+					consume(remainingCounts, matchedItemId);
+				}
 			}
 
 			return remainingSlots;

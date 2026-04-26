@@ -1,5 +1,6 @@
 package com.reachcrafting.client;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import com.reachcrafting.ReachCraftingMod;
 import com.reachcrafting.client.mixin.ClientRecipeBookAccessor;
 import java.util.Map;
@@ -16,6 +17,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.display.RecipeDisplayEntry;
 import net.minecraft.world.item.crafting.display.RecipeDisplayId;
 import net.minecraft.world.item.crafting.display.SlotDisplayContext;
+import org.lwjgl.glfw.GLFW;
 import net.minecraft.core.registries.BuiltInRegistries;
 
 public final class RecipeBookClickCapture {
@@ -26,7 +28,7 @@ public final class RecipeBookClickCapture {
 		// Reserved for future client lifecycle hooks.
 	}
 
-	public static void onRecipeButtonClicked(RecipeDisplayId recipeId, RecipeCollection collection, ItemStack displayStack, int mouseButton) {
+	public static void onRecipeButtonClicked(RecipeDisplayId recipeId, RecipeCollection collection, ItemStack displayStack, int mouseButton, boolean shiftModifierDown) {
 		Minecraft minecraft = Minecraft.getInstance();
 		Screen screen = minecraft.screen;
 		if (!(screen instanceof InventoryScreen) && !(screen instanceof CraftingScreen)) {
@@ -36,6 +38,7 @@ public final class RecipeBookClickCapture {
 		if (player == null || minecraft.level == null) {
 			return;
 		}
+		boolean craftAll = shiftModifierDown || isShiftKeyDown(minecraft);
 
 		String screenKind = screen instanceof InventoryScreen ? "inventory_2x2" : "crafting_table_3x3";
 		boolean craftable = collection.isCraftable(recipeId);
@@ -57,11 +60,12 @@ public final class RecipeBookClickCapture {
 			: "Ready: " + outputLabel;
 
 		ReachCraftingMod.LOGGER.info(
-			"[recipe_click] screen={} button={} idx={} craftable={} output={}",
+			"[recipe_click] screen={} button={} idx={} craftable={} shift={} output={}",
 			screenKind,
 			mouseButton,
 			recipeIndex,
 			craftable,
+			craftAll,
 			outputLabel
 		);
 		ReachCraftingMod.LOGGER.info(
@@ -85,9 +89,14 @@ public final class RecipeBookClickCapture {
 		);
 
 		if (deficitReport.hasMissingIngredients()) {
-			NearbyContainerDryRun.start(recipeId, recipeIndex, outputLabel, ingredientSummary, availableItems);
+			NearbyContainerDryRun.start(recipeId, recipeIndex, outputLabel, ingredientSummary, availableItems, craftAll);
 		} else {
 			NearbyContainerDryRun.cancelCurrent();
 		}
+	}
+
+	private static boolean isShiftKeyDown(Minecraft minecraft) {
+		return InputConstants.isKeyDown(minecraft.getWindow(), GLFW.GLFW_KEY_LEFT_SHIFT)
+			|| InputConstants.isKeyDown(minecraft.getWindow(), GLFW.GLFW_KEY_RIGHT_SHIFT);
 	}
 }

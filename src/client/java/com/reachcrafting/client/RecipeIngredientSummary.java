@@ -67,22 +67,27 @@ public record RecipeIngredientSummary(List<IngredientSlot> slots, List<String> r
 			.distinct()
 			.sorted(Comparator.naturalOrder())
 			.toList();
+		int stackLimit = resolvedStacks.stream()
+			.filter(stack -> !stack.isEmpty())
+			.mapToInt(ItemStack::getMaxStackSize)
+			.min()
+			.orElse(64);
 
 		if (itemIds.isEmpty()) {
-			return new IngredientSlot(List.of(), "<empty>");
+			return new IngredientSlot(List.of(), "<empty>", 0);
 		}
 		if (itemIds.size() == 1) {
-			return new IngredientSlot(itemIds, itemIds.get(0));
+			return new IngredientSlot(itemIds, itemIds.get(0), stackLimit);
 		}
 
 		StringJoiner joiner = new StringJoiner(" | ", "[", "]");
 		itemIds.stream()
 			.filter(Objects::nonNull)
 			.forEach(joiner::add);
-		return new IngredientSlot(itemIds, joiner.toString());
+		return new IngredientSlot(itemIds, joiner.toString(), stackLimit);
 	}
 
-	public record IngredientSlot(List<String> itemIds, String display) {
+	public record IngredientSlot(List<String> itemIds, String display, int maxStackSize) {
 		public IngredientSlot {
 			itemIds = List.copyOf(itemIds);
 		}
@@ -93,6 +98,13 @@ public record RecipeIngredientSummary(List<IngredientSlot> slots, List<String> r
 
 		public boolean isExact() {
 			return itemIds.size() == 1;
+		}
+
+		public int copiesForPlacement(boolean craftAll) {
+			if (!craftAll) {
+				return 1;
+			}
+			return Math.max(maxStackSize, 1);
 		}
 	}
 }
