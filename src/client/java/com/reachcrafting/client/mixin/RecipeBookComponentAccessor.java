@@ -1,6 +1,7 @@
 package com.reachcrafting.client.mixin;
 
 import java.util.List;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.CycleButton;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.recipebook.RecipeBookComponent;
@@ -27,6 +28,21 @@ public interface RecipeBookComponentAccessor {
 	@Accessor("recipeBookPage")
 	RecipeBookPage getRecipeBookPage();
 
+	@Accessor("width")
+	int getWidth();
+
+	@Accessor("height")
+	int getHeight();
+
+	@Accessor("minecraft")
+	Minecraft getMinecraft();
+
 	@Invoker("replaceSelected")
 	void invokeReplaceSelected(RecipeBookTabButton button);
+
+	@Invoker("getXOrigin")
+	int invokeGetXOrigin();
+
+	@Invoker("getYOrigin")
+	int invokeGetYOrigin();
 }

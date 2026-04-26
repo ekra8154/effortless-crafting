@@ -14,6 +14,7 @@ import net.minecraft.client.gui.screens.recipebook.RecipeCollection;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.context.ContextMap;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.crafting.display.RecipeDisplay;
 import net.minecraft.world.item.crafting.display.RecipeDisplayEntry;
 import net.minecraft.world.item.crafting.display.RecipeDisplayId;
 import net.minecraft.world.item.crafting.display.SlotDisplayContext;
@@ -50,7 +51,6 @@ public final class RecipeBookClickCapture {
 
 		String screenKind = screen instanceof InventoryScreen ? "inventory_2x2" : "crafting_table_3x3";
 		boolean craftable = collection.isCraftable(recipeId);
-		String itemId = BuiltInRegistries.ITEM.getKey(displayStack.getItem()).toString();
 		int recipeIndex = recipeId.index();
 		Map<RecipeDisplayId, RecipeDisplayEntry> knownRecipes = ((ClientRecipeBookAccessor) player.getRecipeBook()).getKnown();
 		RecipeDisplayEntry entry = knownRecipes.get(recipeId);
@@ -59,10 +59,12 @@ public final class RecipeBookClickCapture {
 			return;
 		}
 		ContextMap context = SlotDisplayContext.fromLevel(minecraft.level);
+		ItemStack resolvedDisplayStack = displayStack != null ? displayStack.copy() : resolveDisplayStack(entry.display(), context);
 		RecipeIngredientSummary ingredientSummary = RecipeIngredientSummary.fromDisplay(entry.display(), context);
 		AvailableItemSnapshot availableItems = AvailableItemSnapshot.capture(player, screen);
 		RecipeDeficitReport deficitReport = RecipeDeficitReport.from(ingredientSummary, availableItems.inventoryCounts(), craftAll);
-		String outputLabel = itemId + " x" + displayStack.getCount();
+		String resolvedItemId = BuiltInRegistries.ITEM.getKey(resolvedDisplayStack.getItem()).toString();
+		String outputLabel = resolvedItemId + " x" + resolvedDisplayStack.getCount();
 		String chatMessage = deficitReport.hasMissingIngredients()
 			? "Missing: " + deficitReport.compactMissingSummary()
 			: "Ready: " + outputLabel;
@@ -112,5 +114,13 @@ public final class RecipeBookClickCapture {
 	private static boolean isControlKeyDown(Minecraft minecraft) {
 		return InputConstants.isKeyDown(minecraft.getWindow(), GLFW.GLFW_KEY_LEFT_CONTROL)
 			|| InputConstants.isKeyDown(minecraft.getWindow(), GLFW.GLFW_KEY_RIGHT_CONTROL);
+	}
+
+	private static ItemStack resolveDisplayStack(RecipeDisplay display, ContextMap context) {
+		return display.result().resolveForStacks(context).stream()
+			.filter(stack -> !stack.isEmpty())
+			.findFirst()
+			.map(ItemStack::copy)
+			.orElse(ItemStack.EMPTY);
 	}
 }

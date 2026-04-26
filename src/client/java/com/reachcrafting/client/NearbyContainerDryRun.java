@@ -23,8 +23,11 @@ import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.AbstractRecipeBookScreen;
 import net.minecraft.client.gui.screens.inventory.CraftingScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
+import net.minecraft.client.gui.screens.recipebook.OverlayRecipeComponent;
+import net.minecraft.client.gui.screens.recipebook.RecipeButton;
 import net.minecraft.client.gui.screens.recipebook.RecipeBookComponent;
 import net.minecraft.client.gui.screens.recipebook.RecipeBookPage;
+import net.minecraft.client.gui.screens.recipebook.RecipeCollection;
 import net.minecraft.client.gui.screens.recipebook.RecipeBookTabButton;
 import net.minecraft.client.multiplayer.MultiPlayerGameMode;
 import net.minecraft.client.player.LocalPlayer;
@@ -34,6 +37,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.util.Mth;
+import net.minecraft.util.context.ContextMap;
 import net.minecraft.world.Container;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
@@ -44,6 +48,7 @@ import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.ExtendedRecipeBookCategory;
 import net.minecraft.world.item.crafting.display.RecipeDisplayId;
+import net.minecraft.world.item.crafting.display.SlotDisplayContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.BarrelBlock;
 import net.minecraft.world.level.block.Block;
@@ -1182,7 +1187,9 @@ public final class NearbyContainerDryRun {
 		boolean filtering,
 		String searchText,
 		ExtendedRecipeBookCategory selectedCategory,
-		int currentPage
+		int currentPage,
+		boolean overlayVisible,
+		RecipeCollection overlayCollection
 	) {
 		private static RecipeBookState capture(AbstractRecipeBookScreen<?> screen) {
 			RecipeBookComponent<?> component = ((AbstractRecipeBookScreenAccessor) screen).getRecipeBookComponent();
@@ -1191,17 +1198,20 @@ public final class NearbyContainerDryRun {
 			CycleButton<Boolean> filterButton = accessor.getFilterButton();
 			EditBox searchBox = accessor.getSearchBox();
 			RecipeBookPageAccessor pageAccessor = (RecipeBookPageAccessor) accessor.getRecipeBookPage();
+			OverlayRecipeComponent overlay = pageAccessor.getOverlay();
 			return new RecipeBookState(
 				component.isVisible(),
 				filterButton != null && Boolean.TRUE.equals(filterButton.getValue()),
 				searchBox != null ? searchBox.getValue() : "",
 				selectedTab != null ? selectedTab.getCategory() : null,
-				pageAccessor.getCurrentPage()
+				pageAccessor.getCurrentPage(),
+				overlay != null && overlay.isVisible(),
+				overlay != null ? overlay.getRecipeCollection() : null
 			);
 		}
 
 		private static RecipeBookState empty() {
-			return new RecipeBookState(false, false, "", null, 0);
+			return new RecipeBookState(false, false, "", null, 0, false, null);
 		}
 
 		private void restore(AbstractRecipeBookScreen<?> screen) {
@@ -1238,6 +1248,45 @@ public final class NearbyContainerDryRun {
 			pageAccessor.setCurrentPage(Mth.clamp(currentPage, 0, totalPages - 1));
 			pageAccessor.invokeUpdateButtonsForPage();
 			pageAccessor.invokeUpdateArrowButtons();
+
+			if (overlayVisible && overlayCollection != null) {
+				restoreOverlay(accessor, pageAccessor);
+			}
+		}
+
+		private void restoreOverlay(RecipeBookComponentAccessor accessor, RecipeBookPageAccessor pageAccessor) {
+			RecipeButton matchingButton = null;
+			for (RecipeButton button : pageAccessor.getButtons()) {
+				if (button.getCollection() == overlayCollection || button.getCollection().equals(overlayCollection)) {
+					matchingButton = button;
+					break;
+				}
+			}
+			if (matchingButton == null) {
+				return;
+			}
+
+			OverlayRecipeComponent overlay = pageAccessor.getOverlay();
+			Minecraft minecraft = accessor.getMinecraft();
+			if (overlay == null || minecraft == null || minecraft.level == null) {
+				return;
+			}
+
+			ContextMap context = SlotDisplayContext.fromLevel(minecraft.level);
+			int left = accessor.invokeGetXOrigin();
+			int top = accessor.invokeGetYOrigin();
+			int width = accessor.getWidth();
+			int height = accessor.getHeight();
+			overlay.init(
+				overlayCollection,
+				context,
+				pageAccessor.getIsFiltering(),
+				matchingButton.getX(),
+				matchingButton.getY(),
+				left + width / 2,
+				top + 13 + height / 2,
+				matchingButton.getWidth()
+			);
 		}
 	}
 
