@@ -4,9 +4,15 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.StringJoiner;
 
-public record RecipeDeficitReport(String compactMissingSummary, boolean hasMissingIngredients) {
+public record RecipeDeficitReport(
+	Map<String, Integer> exactMissingCounts,
+	Map<String, Integer> flexibleMissingCounts,
+	String compactMissingSummary,
+	boolean hasMissingIngredients
+) {
 	public static RecipeDeficitReport from(RecipeIngredientSummary ingredientSummary, AvailableItemSnapshot availableItems) {
 		return from(ingredientSummary, availableItems.totalCounts());
 	}
@@ -45,7 +51,16 @@ public record RecipeDeficitReport(String compactMissingSummary, boolean hasMissi
 		StringJoiner joiner = new StringJoiner(", ");
 		missingParts.forEach(joiner::add);
 		String compactMissingSummary = joiner.length() == 0 ? "<none>" : joiner.toString();
-		return new RecipeDeficitReport(compactMissingSummary, !missingParts.isEmpty());
+		return new RecipeDeficitReport(
+			Map.copyOf(missingExact),
+			Map.copyOf(missingFlexible),
+			compactMissingSummary,
+			!missingParts.isEmpty()
+		);
+	}
+
+	public Optional<String> firstExactMissingItemId() {
+		return exactMissingCounts.keySet().stream().findFirst();
 	}
 
 	private static String firstAvailableOption(List<String> itemIds, Map<String, Integer> remaining) {
