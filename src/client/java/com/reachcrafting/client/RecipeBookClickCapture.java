@@ -85,7 +85,7 @@ public final class RecipeBookClickCapture {
 		);
 
 		if (deficitReport.hasMissingIngredients()) {
-			NearbyContainerDryRun.start(recipeIndex, outputLabel, ingredientSummary, availableItems);
+			NearbyContainerDryRun.start(recipeId, recipeIndex, outputLabel, ingredientSummary, availableItems);
 		} else {
 			NearbyContainerDryRun.cancelCurrent();
 		}

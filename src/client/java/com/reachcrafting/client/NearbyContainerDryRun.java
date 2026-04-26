@@ -31,6 +31,7 @@ import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.crafting.display.RecipeDisplayId;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.BarrelBlock;
 import net.minecraft.world.level.block.Block;
@@ -68,7 +69,13 @@ public final class NearbyContainerDryRun {
 		});
 	}
 
-	public static void start(int recipeIndex, String outputLabel, RecipeIngredientSummary ingredientSummary, AvailableItemSnapshot localItems) {
+	public static void start(
+		RecipeDisplayId recipeId,
+		int recipeIndex,
+		String outputLabel,
+		RecipeIngredientSummary ingredientSummary,
+		AvailableItemSnapshot localItems
+	) {
 		Minecraft client = Minecraft.getInstance();
 		LocalPlayer player = client.player;
 		Level level = client.level;
@@ -79,7 +86,7 @@ public final class NearbyContainerDryRun {
 		}
 
 		cancelCurrent();
-		SearchSession session = new SearchSession(client, player, level, gameMode, cameraEntity, recipeIndex, outputLabel, ingredientSummary, localItems);
+		SearchSession session = new SearchSession(client, player, level, gameMode, cameraEntity, recipeId, recipeIndex, outputLabel, ingredientSummary, localItems);
 		if (!session.canStart()) {
 			return;
 		}
@@ -104,28 +111,31 @@ public final class NearbyContainerDryRun {
 	private static final class SearchSession {
 		private static final int OPEN_TIMEOUT_TICKS = 40;
 		private static final int RESUME_DELAY_TICKS = 2;
+		private static final int REOPEN_TIMEOUT_TICKS = 20;
 
 		private final Minecraft client;
 		private final LocalPlayer player;
 		private final Level level;
 		private final MultiPlayerGameMode gameMode;
 		private final Entity cameraEntity;
+		private final RecipeDisplayId recipeId;
 		private final int recipeIndex;
 		private final String outputLabel;
 		private final RecipeIngredientSummary ingredientSummary;
 		private final AvailableItemSnapshot localItems;
 		private final RecipeDeficitReport initialDeficit;
-		private final String targetExactItemId;
+		private final List<RecipeIngredientSummary.IngredientSlot> remainingSlots;
 		private final ScreenContext originalContext;
 		private final List<BlockPos> candidates;
 		private final Set<BlockPos> visited = new HashSet<>();
-		private final Map<String, Integer> nearbyMatches = new LinkedHashMap<>();
+		private final Map<String, Integer> discoveredNearby = new LinkedHashMap<>();
+		private final Map<String, Integer> withdrawnItems = new LinkedHashMap<>();
 
 		private int nextCandidateIndex;
 		private int timeoutTicks;
 		private int scannedContainers;
-		private int withdrawnCount;
 		private BlockPos pendingContainerPos;
+		private boolean inventorySpaceBlocked;
 		private SearchState state = SearchState.OPEN_NEXT;
 
 		private SearchSession(
@@ -134,6 +144,7 @@ public final class NearbyContainerDryRun {
 			Level level,
 			MultiPlayerGameMode gameMode,
 			Entity cameraEntity,
+			RecipeDisplayId recipeId,
 			int recipeIndex,
 			String outputLabel,
 			RecipeIngredientSummary ingredientSummary,
@@ -144,12 +155,13 @@ public final class NearbyContainerDryRun {
 			this.level = level;
 			this.gameMode = gameMode;
 			this.cameraEntity = cameraEntity;
+			this.recipeId = recipeId;
 			this.recipeIndex = recipeIndex;
 			this.outputLabel = outputLabel;
 			this.ingredientSummary = ingredientSummary;
 			this.localItems = localItems;
 			this.initialDeficit = RecipeDeficitReport.from(ingredientSummary, localItems);
-			this.targetExactItemId = initialDeficit.firstExactMissingItemId().orElse(null);
+			this.remainingSlots = computeRemainingSlots(ingredientSummary, localItems.totalCounts());
 			this.originalContext = ScreenContext.capture(client, cameraEntity, player.blockInteractionRange());
 			this.candidates = findCandidates(level, cameraEntity, player.blockInteractionRange());
 		}
@@ -160,19 +172,14 @@ public final class NearbyContainerDryRun {
 
 		private void start() {
 			ReachCraftingMod.LOGGER.info(
-				"[nearby_scan] idx={} start missing={} candidates={} target={}",
+				"[nearby_scan] idx={} start missing={} candidates={} planned={}",
 				recipeIndex,
 				initialDeficit.compactMissingSummary(),
 				candidates.size(),
-				targetExactItemId == null ? "<none>" : targetExactItemId
+				summarizeRemainingSlots(remainingSlots)
 			);
 
-			if (targetExactItemId == null) {
-				sendChat("Searching nearby containers...");
-				return;
-			}
-
-			sendChat("Searching for 1x " + targetExactItemId + "...");
+			sendChat("Fetching: " + summarizeRemainingSlots(remainingSlots));
 		}
 
 		private void tick() {
@@ -183,8 +190,12 @@ public final class NearbyContainerDryRun {
 			}
 
 			if (state == SearchState.OPEN_NEXT) {
+				if (remainingSlots.isEmpty()) {
+					beginResume();
+					return;
+				}
 				if (!openNextContainer()) {
-					finishDryRun();
+					beginResume();
 				}
 				return;
 			}
@@ -201,7 +212,21 @@ public final class NearbyContainerDryRun {
 				timeoutTicks--;
 				if (timeoutTicks <= 0) {
 					resumeOriginalContext();
-					finishAfterWithdrawal();
+					timeoutTicks = REOPEN_TIMEOUT_TICKS;
+					state = SearchState.WAITING_FOR_REOPEN;
+				}
+				return;
+			}
+
+			if (state == SearchState.WAITING_FOR_REOPEN) {
+				if (isOriginalContextReady()) {
+					finishAfterResume();
+					return;
+				}
+
+				timeoutTicks--;
+				if (timeoutTicks <= 0) {
+					finishAfterResume();
 				}
 			}
 		}
@@ -219,7 +244,7 @@ public final class NearbyContainerDryRun {
 
 			Map<String, Integer> usefulItems = collectUsefulItems(menu, ingredientSummary.acceptedItemIds());
 			if (!usefulItems.isEmpty()) {
-				usefulItems.forEach((itemId, count) -> nearbyMatches.merge(itemId, count, Integer::sum));
+				usefulItems.forEach((itemId, count) -> discoveredNearby.merge(itemId, count, Integer::sum));
 				ReachCraftingMod.LOGGER.info(
 					"[nearby_container] idx={} pos={} found={}",
 					recipeIndex,
@@ -229,21 +254,7 @@ public final class NearbyContainerDryRun {
 			}
 
 			scannedContainers++;
-			if (targetExactItemId != null && tryWithdrawOneExactItem(menu, targetExactItemId)) {
-				withdrawnCount = 1;
-				ReachCraftingMod.LOGGER.info(
-					"[nearby_withdraw] idx={} pos={} item={} count=1",
-					recipeIndex,
-					formatPos(pendingContainerPos),
-					targetExactItemId
-				);
-				player.closeContainer();
-				pendingContainerPos = null;
-				timeoutTicks = RESUME_DELAY_TICKS;
-				state = SearchState.RESUME_CONTEXT;
-				return;
-			}
-
+			withdrawItemsFromContainer(menu);
 			player.closeContainer();
 			pendingContainerPos = null;
 			timeoutTicks = 0;
@@ -277,12 +288,12 @@ public final class NearbyContainerDryRun {
 				if (!canAttemptOpen(level, pos, blockState)) {
 					continue;
 				}
-				if (distanceToBlock(eyePos, pos) > Mth.square(player.blockInteractionRange())) {
+				if (squaredDistanceToBlock(eyePos, pos) > Mth.square(player.blockInteractionRange())) {
 					continue;
 				}
 
-				markVisited(pos, blockState);
-				Vec3 hitPos = closestPointOnBlock(eyePos, pos);
+				markVisited(pos);
+				Vec3 hitPos = closestPointOnUnitBlock(eyePos, pos);
 				Direction face = Direction.getApproximateNearest(hitPos.subtract(eyePos)).getOpposite();
 				BlockHitResult hitResult = new BlockHitResult(hitPos, face, pos, false);
 
@@ -296,58 +307,68 @@ public final class NearbyContainerDryRun {
 			return false;
 		}
 
-		private void finishDryRun() {
-			Map<String, Integer> totalWithNearby = AvailableItemSnapshot.mergeCounts(localItems.totalCounts(), nearbyMatches);
-			RecipeDeficitReport remainingDeficit = RecipeDeficitReport.from(ingredientSummary, totalWithNearby);
-			ReachCraftingMod.LOGGER.info(
-				"[nearby_scan] idx={} scanned={} nearby={} remaining={}",
-				recipeIndex,
-				scannedContainers,
-				AvailableItemSnapshot.formatCounts(nearbyMatches),
-				remainingDeficit.compactMissingSummary()
-			);
-
-			if (remainingDeficit.hasMissingIngredients()) {
-				sendChat("Nearby still missing: " + remainingDeficit.compactMissingSummary());
-			} else {
-				sendChat("Nearby can cover: " + outputLabel);
+		private void withdrawItemsFromContainer(AbstractContainerMenu menu) {
+			if (remainingSlots.isEmpty()) {
+				return;
 			}
 
-			stop(false);
-			NearbyContainerDryRun.activeSession = null;
+			for (Slot slot : menu.slots) {
+				if (slot.container instanceof Inventory || !slot.hasItem()) {
+					continue;
+				}
+
+				String itemId = BuiltInRegistries.ITEM.getKey(slot.getItem().getItem()).toString();
+				if (findMatchingRemainingSlotIndex(itemId) < 0 || !slot.mayPickup(player)) {
+					continue;
+				}
+
+				while (slot.hasItem()) {
+					int remainingSlotIndex = findMatchingRemainingSlotIndex(itemId);
+					if (remainingSlotIndex < 0) {
+						break;
+					}
+
+					Slot targetSlot = findPlayerDestinationSlot(menu, itemId);
+					if (targetSlot == null) {
+						inventorySpaceBlocked = true;
+						sendChat("No inventory space for " + itemId);
+						return;
+					}
+					if (!withdrawOneItem(menu, slot, targetSlot)) {
+						return;
+					}
+
+					remainingSlots.remove(remainingSlotIndex);
+					withdrawnItems.merge(itemId, 1, Integer::sum);
+				}
+			}
+
+			if (!withdrawnItems.isEmpty()) {
+				ReachCraftingMod.LOGGER.info(
+					"[nearby_withdraw] idx={} pos={} total_withdrawn={} remaining={}",
+					recipeIndex,
+					formatPos(pendingContainerPos),
+					AvailableItemSnapshot.formatCounts(withdrawnItems),
+					summarizeRemainingSlots(remainingSlots)
+				);
+			}
 		}
 
-		private void finishAfterWithdrawal() {
-			Map<String, Integer> updatedCounts = new LinkedHashMap<>(localItems.totalCounts());
-			updatedCounts.merge(targetExactItemId, withdrawnCount, Integer::sum);
-			RecipeDeficitReport updatedDeficit = RecipeDeficitReport.from(ingredientSummary, updatedCounts);
-			ReachCraftingMod.LOGGER.info(
-				"[nearby_withdraw] idx={} resumed={} remaining={}",
-				recipeIndex,
-				originalContext.kind(),
-				updatedDeficit.compactMissingSummary()
-			);
-
-			sendChat("Fetched 1x " + targetExactItemId + ". Missing now: " + updatedDeficit.compactMissingSummary());
-			stop(false);
-			NearbyContainerDryRun.activeSession = null;
-		}
-
-		private boolean tryWithdrawOneExactItem(AbstractContainerMenu menu, String itemId) {
-			Slot sourceSlot = findContainerSourceSlot(menu, itemId);
-			Slot targetSlot = findPlayerDestinationSlot(menu, itemId);
-			if (sourceSlot == null) {
-				return false;
-			}
-			if (targetSlot == null) {
-				sendChat("No inventory space for 1x " + itemId);
-				return false;
-			}
-
+		private boolean withdrawOneItem(AbstractContainerMenu menu, Slot sourceSlot, Slot targetSlot) {
 			pickup(menu, sourceSlot, GLFW.GLFW_MOUSE_BUTTON_LEFT);
+			if (player.containerMenu.getCarried().isEmpty()) {
+				return false;
+			}
+
 			pickup(menu, targetSlot, GLFW.GLFW_MOUSE_BUTTON_RIGHT);
 			pickup(menu, sourceSlot, GLFW.GLFW_MOUSE_BUTTON_LEFT);
 			return player.containerMenu.getCarried().isEmpty();
+		}
+
+		private void beginResume() {
+			player.closeContainer();
+			timeoutTicks = RESUME_DELAY_TICKS;
+			state = SearchState.RESUME_CONTEXT;
 		}
 
 		private void resumeOriginalContext() {
@@ -358,13 +379,50 @@ public final class NearbyContainerDryRun {
 			if (originalContext.kind() == ScreenKind.CRAFTING_TABLE_3X3 && originalContext.craftingTablePos() != null) {
 				Vec3 eyePos = cameraEntity.getEyePosition(0);
 				BlockPos pos = originalContext.craftingTablePos();
-				if (level.getBlockState(pos).is(Blocks.CRAFTING_TABLE) && distanceToBlock(eyePos, pos) <= Mth.square(player.blockInteractionRange())) {
-					Vec3 hitPos = closestPointOnBlock(eyePos, pos);
+				if (level.getBlockState(pos).is(Blocks.CRAFTING_TABLE) && squaredDistanceToBlock(eyePos, pos) <= Mth.square(player.blockInteractionRange())) {
+					Vec3 hitPos = closestPointOnUnitBlock(eyePos, pos);
 					Direction face = Direction.getApproximateNearest(hitPos.subtract(eyePos)).getOpposite();
 					BlockHitResult hitResult = new BlockHitResult(hitPos, face, pos, false);
 					gameMode.useItemOn(player, InteractionHand.MAIN_HAND, hitResult);
 				}
 			}
+		}
+
+		private boolean isOriginalContextReady() {
+			if (originalContext.kind() == ScreenKind.NONE) {
+				return true;
+			}
+			if (originalContext.kind() == ScreenKind.INVENTORY_2X2) {
+				return client.screen instanceof InventoryScreen;
+			}
+			return client.screen instanceof CraftingScreen;
+		}
+
+		private void finishAfterResume() {
+			Map<String, Integer> updatedCounts = AvailableItemSnapshot.mergeCounts(localItems.totalCounts(), withdrawnItems);
+			RecipeDeficitReport updatedDeficit = RecipeDeficitReport.from(ingredientSummary, updatedCounts);
+			ReachCraftingMod.LOGGER.info(
+				"[nearby_scan] idx={} scanned={} discovered={} withdrawn={} remaining={}",
+				recipeIndex,
+				scannedContainers,
+				AvailableItemSnapshot.formatCounts(discoveredNearby),
+				AvailableItemSnapshot.formatCounts(withdrawnItems),
+				updatedDeficit.compactMissingSummary()
+			);
+
+			if (!updatedDeficit.hasMissingIngredients() && isOriginalContextReady() && player.containerMenu != null) {
+				gameMode.handlePlaceRecipe(player.containerMenu.containerId, recipeId, false);
+				sendChat("Placed recipe: " + outputLabel);
+			} else if (!remainingSlots.isEmpty() || inventorySpaceBlocked) {
+				sendChat("Fetched what I could. Missing now: " + updatedDeficit.compactMissingSummary());
+			} else if (updatedDeficit.hasMissingIngredients()) {
+				sendChat("Items fetched. Remaining: " + updatedDeficit.compactMissingSummary());
+			} else {
+				sendChat("Ready to place: " + outputLabel);
+			}
+
+			stop(false);
+			NearbyContainerDryRun.activeSession = null;
 		}
 
 		private void stop(boolean closeContainer) {
@@ -378,19 +436,6 @@ public final class NearbyContainerDryRun {
 				Component.literal("[Reach Crafting] " + message).withStyle(ChatFormatting.GOLD),
 				false
 			);
-		}
-
-		private static Slot findContainerSourceSlot(AbstractContainerMenu menu, String itemId) {
-			for (Slot slot : menu.slots) {
-				if (slot.container instanceof Inventory || !slot.hasItem()) {
-					continue;
-				}
-				String slotItemId = BuiltInRegistries.ITEM.getKey(slot.getItem().getItem()).toString();
-				if (itemId.equals(slotItemId) && slot.mayPickup(Minecraft.getInstance().player)) {
-					return slot;
-				}
-			}
-			return null;
 		}
 
 		private static Slot findPlayerDestinationSlot(AbstractContainerMenu menu, String itemId) {
@@ -419,6 +464,15 @@ public final class NearbyContainerDryRun {
 			gameMode.handleInventoryMouseClick(menu.containerId, slot.index, mouseButton, ClickType.PICKUP, player);
 		}
 
+		private int findMatchingRemainingSlotIndex(String itemId) {
+			for (int i = 0; i < remainingSlots.size(); i++) {
+				if (remainingSlots.get(i).itemIds().contains(itemId)) {
+					return i;
+				}
+			}
+			return -1;
+		}
+
 		private static List<BlockPos> findCandidates(Level level, Entity cameraEntity, double reachDistance) {
 			Vec3 eyePos = cameraEntity.getEyePosition(0);
 			int radius = Mth.ceil(reachDistance);
@@ -435,7 +489,7 @@ public final class NearbyContainerDryRun {
 				}
 			}
 
-			candidates.sort(Comparator.comparingDouble(pos -> distanceToBlock(eyePos, pos)));
+			candidates.sort(Comparator.comparingDouble(pos -> squaredDistanceToBlock(eyePos, pos)));
 			return candidates;
 		}
 
@@ -478,7 +532,7 @@ public final class NearbyContainerDryRun {
 			return true;
 		}
 
-		private void markVisited(BlockPos pos, BlockState state) {
+		private void markVisited(BlockPos pos) {
 			visited.add(pos);
 			getOtherHalfOfLargeChest(level, pos).ifPresent(visited::add);
 		}
@@ -503,22 +557,69 @@ public final class NearbyContainerDryRun {
 			return Optional.of(otherHalfPos.immutable());
 		}
 
-		private static double distanceToBlock(Vec3 eyePos, BlockPos pos) {
-			return closestPointOnBlock(eyePos, pos).distanceToSqr(eyePos);
-		}
-
-		private static Vec3 closestPointOnBlock(Vec3 origin, BlockPos pos) {
-			double x = Mth.clamp(origin.x, pos.getX(), pos.getX() + 1.0D);
-			double y = Mth.clamp(origin.y, pos.getY(), pos.getY() + 1.0D);
-			double z = Mth.clamp(origin.z, pos.getZ(), pos.getZ() + 1.0D);
-			return new Vec3(x, y, z);
-		}
-
 		private static String formatPos(BlockPos pos) {
 			if (pos == null) {
 				return "<none>";
 			}
 			return pos.getX() + "," + pos.getY() + "," + pos.getZ();
+		}
+
+		private static List<RecipeIngredientSummary.IngredientSlot> computeRemainingSlots(
+			RecipeIngredientSummary ingredientSummary,
+			Map<String, Integer> availableCounts
+		) {
+			Map<String, Integer> remainingCounts = new LinkedHashMap<>(availableCounts);
+			List<RecipeIngredientSummary.IngredientSlot> remainingSlots = new ArrayList<>();
+
+			for (RecipeIngredientSummary.IngredientSlot slot : ingredientSummary.slots()) {
+				if (slot.isEmpty()) {
+					continue;
+				}
+
+				String matchedItemId = firstAvailableOption(slot.itemIds(), remainingCounts);
+				if (matchedItemId == null) {
+					remainingSlots.add(slot);
+					continue;
+				}
+
+				consume(remainingCounts, matchedItemId);
+			}
+
+			return remainingSlots;
+		}
+
+		private static String summarizeRemainingSlots(List<RecipeIngredientSummary.IngredientSlot> remainingSlots) {
+			if (remainingSlots.isEmpty()) {
+				return "<none>";
+			}
+
+			Map<String, Integer> aggregate = new LinkedHashMap<>();
+			for (RecipeIngredientSummary.IngredientSlot slot : remainingSlots) {
+				String key = slot.display().startsWith("[") ? "any of " + slot.display() : slot.display();
+				aggregate.merge(key, 1, Integer::sum);
+			}
+			return AvailableItemSnapshot.formatCounts(aggregate);
+		}
+
+		private static String firstAvailableOption(List<String> itemIds, Map<String, Integer> remainingCounts) {
+			for (String itemId : itemIds) {
+				if (remainingCounts.getOrDefault(itemId, 0) > 0) {
+					return itemId;
+				}
+			}
+			return null;
+		}
+
+		private static void consume(Map<String, Integer> remainingCounts, String itemId) {
+			int available = remainingCounts.getOrDefault(itemId, 0);
+			if (available <= 0) {
+				return;
+			}
+			if (available == 1) {
+				remainingCounts.remove(itemId);
+			} else {
+				remainingCounts.put(itemId, available - 1);
+			}
 		}
 	}
 
@@ -572,7 +673,8 @@ public final class NearbyContainerDryRun {
 	private enum SearchState {
 		OPEN_NEXT,
 		WAITING_FOR_CONTAINER,
-		RESUME_CONTEXT
+		RESUME_CONTEXT,
+		WAITING_FOR_REOPEN
 	}
 
 	private static double squaredDistanceToBlock(Vec3 eyePos, BlockPos pos) {
