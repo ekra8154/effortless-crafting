@@ -8,7 +8,11 @@ import java.util.StringJoiner;
 
 public record RecipeDeficitReport(String compactMissingSummary, boolean hasMissingIngredients) {
 	public static RecipeDeficitReport from(RecipeIngredientSummary ingredientSummary, AvailableItemSnapshot availableItems) {
-		Map<String, Integer> remaining = new LinkedHashMap<>(availableItems.totalCounts());
+		return from(ingredientSummary, availableItems.totalCounts());
+	}
+
+	public static RecipeDeficitReport from(RecipeIngredientSummary ingredientSummary, Map<String, Integer> availableCounts) {
+		Map<String, Integer> remaining = new LinkedHashMap<>(availableCounts);
 		Map<String, Integer> missingExact = new LinkedHashMap<>();
 		Map<String, Integer> missingFlexible = new LinkedHashMap<>();
 

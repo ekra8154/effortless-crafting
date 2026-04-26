@@ -48,6 +48,14 @@ public record AvailableItemSnapshot(Map<String, Integer> inventoryCounts, Map<St
 		return formatCounts(gridCounts);
 	}
 
+	public static Map<String, Integer> mergeCounts(Map<String, Integer> baseCounts, Map<String, Integer> extraCounts) {
+		Map<String, Integer> merged = new LinkedHashMap<>(baseCounts);
+		for (Map.Entry<String, Integer> entry : extraCounts.entrySet()) {
+			merged.merge(entry.getKey(), entry.getValue(), Integer::sum);
+		}
+		return Map.copyOf(merged);
+	}
+
 	private static void addStack(Map<String, Integer> counts, ItemStack stack) {
 		if (stack.isEmpty()) {
 			return;
@@ -57,7 +65,7 @@ public record AvailableItemSnapshot(Map<String, Integer> inventoryCounts, Map<St
 		counts.merge(itemId, stack.getCount(), Integer::sum);
 	}
 
-	private static String formatCounts(Map<String, Integer> counts) {
+	public static String formatCounts(Map<String, Integer> counts) {
 		if (counts.isEmpty()) {
 			return "<empty>";
 		}

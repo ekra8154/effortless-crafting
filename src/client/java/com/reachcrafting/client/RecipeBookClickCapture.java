@@ -83,5 +83,11 @@ public final class RecipeBookClickCapture {
 				.withStyle(ChatFormatting.YELLOW),
 			false
 		);
+
+		if (deficitReport.hasMissingIngredients()) {
+			NearbyContainerDryRun.start(recipeIndex, outputLabel, ingredientSummary, availableItems);
+		} else {
+			NearbyContainerDryRun.cancelCurrent();
+		}
 	}
 }

@@ -17,6 +17,7 @@ public class ReachCraftingModClient implements ClientModInitializer {
 	@Override
 	public void onInitializeClient() {
 		RecipeBookClickCapture.init();
+		NearbyContainerDryRun.init();
 
 		KeyMapping.Category reachCraftingCategory = KeyMapping.Category.register(
 			Identifier.fromNamespaceAndPath(ReachCraftingMod.MOD_ID, "debug")

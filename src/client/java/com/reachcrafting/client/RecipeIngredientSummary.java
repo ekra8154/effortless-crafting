@@ -2,10 +2,12 @@ package com.reachcrafting.client;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.StringJoiner;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.util.context.ContextMap;
@@ -37,6 +39,14 @@ public record RecipeIngredientSummary(List<IngredientSlot> slots, List<String> r
 
 		String compactSummary = compact.length() == 0 ? "<no ingredients>" : compact.toString();
 		return new RecipeIngredientSummary(List.copyOf(slots), List.copyOf(rawSlots), compactSummary);
+	}
+
+	public Set<String> acceptedItemIds() {
+		Set<String> acceptedItemIds = new LinkedHashSet<>();
+		for (IngredientSlot slot : slots) {
+			acceptedItemIds.addAll(slot.itemIds());
+		}
+		return Set.copyOf(acceptedItemIds);
 	}
 
 	private static List<SlotDisplay> extractIngredients(Object display) {
