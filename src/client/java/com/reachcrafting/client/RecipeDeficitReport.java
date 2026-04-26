@@ -14,10 +14,27 @@ public record RecipeDeficitReport(
 	boolean hasMissingIngredients
 ) {
 	public static RecipeDeficitReport from(RecipeIngredientSummary ingredientSummary, AvailableItemSnapshot availableItems) {
-		return from(ingredientSummary, availableItems.totalCounts());
+		return from(ingredientSummary, availableItems.totalCounts(), false);
 	}
 
 	public static RecipeDeficitReport from(RecipeIngredientSummary ingredientSummary, Map<String, Integer> availableCounts) {
+		return from(ingredientSummary, availableCounts, false);
+	}
+
+	public static RecipeDeficitReport from(RecipeIngredientSummary ingredientSummary, Map<String, Integer> availableCounts, boolean craftAll) {
+		return from(ingredientSummary, availableCounts, craftAll, null);
+	}
+
+	public static RecipeDeficitReport from(RecipeIngredientSummary ingredientSummary, Map<String, Integer> availableCounts, int copiesPerSlot) {
+		return from(ingredientSummary, availableCounts, false, copiesPerSlot);
+	}
+
+	private static RecipeDeficitReport from(
+		RecipeIngredientSummary ingredientSummary,
+		Map<String, Integer> availableCounts,
+		boolean craftAll,
+		Integer explicitCopiesPerSlot
+	) {
 		Map<String, Integer> remaining = new LinkedHashMap<>(availableCounts);
 		Map<String, Integer> missingExact = new LinkedHashMap<>();
 		Map<String, Integer> missingFlexible = new LinkedHashMap<>();
@@ -27,21 +44,24 @@ public record RecipeDeficitReport(
 				continue;
 			}
 
-			if (slot.isExact()) {
-				String itemId = slot.itemIds().get(0);
-				if (!consume(remaining, itemId)) {
-					missingExact.merge(itemId, 1, Integer::sum);
+			int desiredCopies = explicitCopiesPerSlot != null ? explicitCopiesPerSlot : slot.copiesForPlacement(craftAll);
+			for (int i = 0; i < desiredCopies; i++) {
+				if (slot.isExact()) {
+					String itemId = slot.itemIds().get(0);
+					if (!consume(remaining, itemId)) {
+						missingExact.merge(itemId, 1, Integer::sum);
+					}
+					continue;
 				}
-				continue;
-			}
 
-			String matchedItem = firstAvailableOption(slot.itemIds(), remaining);
-			if (matchedItem == null) {
-				missingFlexible.merge(slot.display(), 1, Integer::sum);
-				continue;
-			}
+				String matchedItem = firstAvailableOption(slot.itemIds(), remaining);
+				if (matchedItem == null) {
+					missingFlexible.merge(slot.display(), 1, Integer::sum);
+					continue;
+				}
 
-			consume(remaining, matchedItem);
+				consume(remaining, matchedItem);
+			}
 		}
 
 		List<String> missingParts = new ArrayList<>();

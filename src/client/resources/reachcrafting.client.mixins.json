@@ -6,6 +6,7 @@
 		"AbstractContainerMenuMixin",
 		"AbstractRecipeBookScreenAccessor",
 		"ClientRecipeBookAccessor",
+		"MinecraftInteractionBlockMixin",
 		"RecipeBookComponentAccessor",
 		"RecipeBookPageAccessor",
 		"RecipeBookPageMixin"

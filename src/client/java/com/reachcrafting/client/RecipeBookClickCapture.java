@@ -61,7 +61,7 @@ public final class RecipeBookClickCapture {
 		ContextMap context = SlotDisplayContext.fromLevel(minecraft.level);
 		RecipeIngredientSummary ingredientSummary = RecipeIngredientSummary.fromDisplay(entry.display(), context);
 		AvailableItemSnapshot availableItems = AvailableItemSnapshot.capture(player, screen);
-		RecipeDeficitReport deficitReport = RecipeDeficitReport.from(ingredientSummary, availableItems.inventoryCounts());
+		RecipeDeficitReport deficitReport = RecipeDeficitReport.from(ingredientSummary, availableItems.inventoryCounts(), craftAll);
 		String outputLabel = itemId + " x" + displayStack.getCount();
 		String chatMessage = deficitReport.hasMissingIngredients()
 			? "Missing: " + deficitReport.compactMissingSummary()
