@@ -1,6 +1,8 @@
 package com.reachcrafting.client;
 
 import java.util.LinkedHashMap;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.StringJoiner;
 import net.minecraft.client.gui.screens.Screen;
@@ -12,7 +14,12 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.item.ItemStack;
 
-public record AvailableItemSnapshot(Map<String, Integer> inventoryCounts, Map<String, Integer> gridCounts, Map<String, Integer> totalCounts) {
+public record AvailableItemSnapshot(
+	Map<String, Integer> inventoryCounts,
+	Map<String, Integer> gridCounts,
+	Map<String, Integer> totalCounts,
+	List<ItemStack> gridStacks
+) {
 	public static AvailableItemSnapshot capture(LocalPlayer player, Screen screen) {
 		Map<String, Integer> inventoryCounts = new LinkedHashMap<>();
 		for (ItemStack stack : player.getInventory().getNonEquipmentItems()) {
@@ -20,11 +27,14 @@ public record AvailableItemSnapshot(Map<String, Integer> inventoryCounts, Map<St
 		}
 
 		Map<String, Integer> gridCounts = new LinkedHashMap<>();
+		List<ItemStack> gridStacks = new ArrayList<>();
 		if (screen instanceof AbstractContainerScreen<?> containerScreen) {
 			AbstractContainerMenu menu = containerScreen.getMenu();
 			int gridSlotCount = screen instanceof InventoryScreen ? 4 : screen instanceof CraftingScreen ? 9 : 0;
 			for (int slotIndex = 1; slotIndex <= gridSlotCount; slotIndex++) {
-				addStack(gridCounts, menu.getSlot(slotIndex).getItem());
+				ItemStack gridStack = menu.getSlot(slotIndex).getItem();
+				addStack(gridCounts, gridStack);
+				gridStacks.add(gridStack.copy());
 			}
 		}
 
@@ -36,7 +46,8 @@ public record AvailableItemSnapshot(Map<String, Integer> inventoryCounts, Map<St
 		return new AvailableItemSnapshot(
 			Map.copyOf(inventoryCounts),
 			Map.copyOf(gridCounts),
-			Map.copyOf(totalCounts)
+			Map.copyOf(totalCounts),
+			List.copyOf(gridStacks)
 		);
 	}
 
@@ -46,6 +57,10 @@ public record AvailableItemSnapshot(Map<String, Integer> inventoryCounts, Map<St
 
 	public String gridSummary() {
 		return formatCounts(gridCounts);
+	}
+
+	public boolean hasReservedGrid() {
+		return gridStacks.stream().anyMatch(stack -> !stack.isEmpty());
 	}
 
 	public static Map<String, Integer> mergeCounts(Map<String, Integer> baseCounts, Map<String, Integer> extraCounts) {

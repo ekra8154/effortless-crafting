@@ -1,6 +1,9 @@
 package com.reachcrafting.client;
 
 import com.reachcrafting.ReachCraftingMod;
+import com.reachcrafting.client.mixin.AbstractRecipeBookScreenAccessor;
+import com.reachcrafting.client.mixin.RecipeBookComponentAccessor;
+import com.reachcrafting.client.mixin.RecipeBookPageAccessor;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -9,12 +12,20 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.Iterator;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.components.CycleButton;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.client.gui.screens.inventory.AbstractRecipeBookScreen;
 import net.minecraft.client.gui.screens.inventory.CraftingScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
+import net.minecraft.client.gui.screens.recipebook.RecipeBookComponent;
+import net.minecraft.client.gui.screens.recipebook.RecipeBookPage;
+import net.minecraft.client.gui.screens.recipebook.RecipeBookTabButton;
 import net.minecraft.client.multiplayer.MultiPlayerGameMode;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
@@ -31,6 +42,7 @@ import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.crafting.ExtendedRecipeBookCategory;
 import net.minecraft.world.item.crafting.display.RecipeDisplayId;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.BarrelBlock;
@@ -164,9 +176,9 @@ public final class NearbyContainerDryRun {
 			this.ingredientSummary = ingredientSummary;
 			this.localItems = localItems;
 			this.craftAll = craftAll;
-			this.initialDeficit = RecipeDeficitReport.from(ingredientSummary, localItems);
-			this.remainingSlots = computeRemainingSlots(ingredientSummary, localItems.totalCounts(), craftAll);
-			this.originalContext = ScreenContext.capture(client, cameraEntity, player.blockInteractionRange());
+			this.initialDeficit = RecipeDeficitReport.from(ingredientSummary, localItems.inventoryCounts());
+			this.remainingSlots = computeRemainingSlots(ingredientSummary, localItems.inventoryCounts(), craftAll);
+			this.originalContext = ScreenContext.capture(client, cameraEntity, player.blockInteractionRange(), localItems);
 			this.candidates = findCandidates(level, cameraEntity, player.blockInteractionRange());
 		}
 
@@ -404,7 +416,21 @@ public final class NearbyContainerDryRun {
 		}
 
 		private void finishAfterResume() {
-			Map<String, Integer> updatedCounts = AvailableItemSnapshot.mergeCounts(localItems.totalCounts(), withdrawnItems);
+			boolean contextReady = isOriginalContextReady();
+			boolean gridRestored = false;
+			boolean reservedGridMatchesRecipe = false;
+			boolean reservedGridExpanded = false;
+			if (contextReady) {
+				restoreRecipeBookState();
+				restoreMousePosition();
+				gridRestored = restoreReservedGrid();
+				reservedGridMatchesRecipe = originalContext.reservedGridMatches(ingredientSummary);
+				if (gridRestored && reservedGridMatchesRecipe) {
+					reservedGridExpanded = expandReservedGrid();
+				}
+			}
+
+			Map<String, Integer> updatedCounts = AvailableItemSnapshot.mergeCounts(localItems.inventoryCounts(), withdrawnItems);
 			RecipeDeficitReport updatedDeficit = RecipeDeficitReport.from(ingredientSummary, updatedCounts);
 			ReachCraftingMod.LOGGER.info(
 				"[nearby_scan] idx={} scanned={} discovered={} withdrawn={} remaining={}",
@@ -415,7 +441,17 @@ public final class NearbyContainerDryRun {
 				updatedDeficit.compactMissingSummary()
 			);
 
-			if (!updatedDeficit.hasMissingIngredients() && isOriginalContextReady() && player.containerMenu != null) {
+			if (originalContext.hasReservedGrid()) {
+				if (!gridRestored) {
+					sendChat("Fetched items, but couldn't fully restore the crafting grid.");
+				} else if (!updatedDeficit.hasMissingIngredients() && contextReady && reservedGridMatchesRecipe && reservedGridExpanded) {
+					sendChat("Updated grid: " + outputLabel);
+				} else if (updatedDeficit.hasMissingIngredients()) {
+					sendChat("Fetched what I could. Missing now: " + updatedDeficit.compactMissingSummary());
+				} else {
+					sendChat("Fetched ingredients for the next craft.");
+				}
+			} else if (!updatedDeficit.hasMissingIngredients() && contextReady && player.containerMenu != null) {
 				gameMode.handlePlaceRecipe(player.containerMenu.containerId, recipeId, craftAll);
 				sendChat("Placed recipe: " + outputLabel);
 			} else if (!remainingSlots.isEmpty() || inventorySpaceBlocked) {
@@ -428,6 +464,96 @@ public final class NearbyContainerDryRun {
 
 			stop(false);
 			NearbyContainerDryRun.activeSession = null;
+		}
+
+		private void restoreRecipeBookState() {
+			if (!(client.screen instanceof AbstractRecipeBookScreen<?> recipeBookScreen)) {
+				return;
+			}
+			originalContext.recipeBookState().restore(recipeBookScreen);
+		}
+
+		private void restoreMousePosition() {
+			if (client.mouseHandler.isMouseGrabbed()) {
+				return;
+			}
+
+			double clampedX = Mth.clamp(originalContext.mouseX(), 0.0D, Math.max(0.0D, client.getWindow().getScreenWidth() - 1.0D));
+			double clampedY = Mth.clamp(originalContext.mouseY(), 0.0D, Math.max(0.0D, client.getWindow().getScreenHeight() - 1.0D));
+			client.mouseHandler.setIgnoreFirstMove();
+			GLFW.glfwSetCursorPos(client.getWindow().handle(), clampedX, clampedY);
+		}
+
+		private boolean restoreReservedGrid() {
+			if (!originalContext.hasReservedGrid()) {
+				return true;
+			}
+			if (!(client.screen instanceof AbstractContainerScreen<?> containerScreen)) {
+				return false;
+			}
+
+			AbstractContainerMenu menu = containerScreen.getMenu();
+			List<ItemStack> desiredGridStacks = originalContext.gridStacks();
+			for (int slotIndex = 1; slotIndex <= desiredGridStacks.size(); slotIndex++) {
+				ItemStack desiredStack = desiredGridStacks.get(slotIndex - 1);
+				if (desiredStack.isEmpty()) {
+					continue;
+				}
+				if (!restoreGridSlot(menu, slotIndex, desiredStack)) {
+					ReachCraftingMod.LOGGER.warn(
+						"[nearby_restore] idx={} failed to restore grid_slot={} stack={}",
+						recipeIndex,
+						slotIndex,
+						formatStack(desiredStack)
+					);
+					return false;
+				}
+			}
+
+			ReachCraftingMod.LOGGER.info("[nearby_restore] idx={} restored_grid={}", recipeIndex, originalContext.gridSummary());
+			return true;
+		}
+
+		private boolean expandReservedGrid() {
+			if (!(client.screen instanceof AbstractContainerScreen<?> containerScreen)) {
+				return false;
+			}
+
+			AbstractContainerMenu menu = containerScreen.getMenu();
+			List<ItemStack> originalGridStacks = originalContext.gridStacks();
+			for (int slotIndex = 1; slotIndex <= originalGridStacks.size(); slotIndex++) {
+				ItemStack originalStack = originalGridStacks.get(slotIndex - 1);
+				if (originalStack.isEmpty()) {
+					continue;
+				}
+
+				Slot targetSlot = menu.getSlot(slotIndex);
+				ItemStack currentStack = targetSlot.getItem();
+				if (currentStack.isEmpty() || !ItemStack.isSameItemSameComponents(currentStack, originalStack)) {
+					return false;
+				}
+
+				int targetCount = craftAll ? currentStack.getMaxStackSize() : Math.min(currentStack.getMaxStackSize(), currentStack.getCount() + 1);
+				if (currentStack.getCount() >= targetCount) {
+					continue;
+				}
+
+				ItemStack desiredStack = currentStack.copy();
+				desiredStack.setCount(targetCount);
+				if (!restoreGridSlot(menu, slotIndex, desiredStack)) {
+					ReachCraftingMod.LOGGER.warn(
+						"[nearby_restore] idx={} failed to expand grid_slot={} from={} to={}",
+						recipeIndex,
+						slotIndex,
+						formatStack(currentStack),
+						formatStack(desiredStack)
+					);
+					return false;
+				}
+			}
+
+			ReachCraftingMod.LOGGER.info("[nearby_restore] idx={} expanded_grid={}", recipeIndex, summarizeGrid(menu, originalGridStacks.size()));
+			return true;
 		}
 
 		private void stop(boolean closeContainer) {
@@ -467,6 +593,86 @@ public final class NearbyContainerDryRun {
 
 		private void pickup(AbstractContainerMenu menu, Slot slot, int mouseButton) {
 			gameMode.handleInventoryMouseClick(menu.containerId, slot.index, mouseButton, ClickType.PICKUP, player);
+		}
+
+		private boolean restoreGridSlot(AbstractContainerMenu menu, int targetSlotIndex, ItemStack desiredStack) {
+			Slot targetSlot = menu.getSlot(targetSlotIndex);
+			ItemStack currentStack = targetSlot.getItem();
+			if (!currentStack.isEmpty() && !ItemStack.isSameItemSameComponents(currentStack, desiredStack)) {
+				return false;
+			}
+
+			int remaining = desiredStack.getCount() - currentStack.getCount();
+			while (remaining > 0) {
+				Slot sourceSlot = findMatchingInventorySourceSlot(menu, desiredStack);
+				if (sourceSlot == null) {
+					return false;
+				}
+
+				int moved = moveExactCount(menu, sourceSlot, targetSlot, remaining);
+				if (moved <= 0) {
+					return false;
+				}
+				remaining -= moved;
+			}
+
+			ItemStack restoredStack = targetSlot.getItem();
+			return ItemStack.isSameItemSameComponents(restoredStack, desiredStack) && restoredStack.getCount() >= desiredStack.getCount();
+		}
+
+		private String summarizeGrid(AbstractContainerMenu menu, int gridSlotCount) {
+			Map<String, Integer> counts = new LinkedHashMap<>();
+			for (int slotIndex = 1; slotIndex <= gridSlotCount; slotIndex++) {
+				ItemStack stack = menu.getSlot(slotIndex).getItem();
+				if (stack.isEmpty()) {
+					continue;
+				}
+				String itemId = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+				counts.merge(itemId, stack.getCount(), Integer::sum);
+			}
+			return AvailableItemSnapshot.formatCounts(counts);
+		}
+
+		private Slot findMatchingInventorySourceSlot(AbstractContainerMenu menu, ItemStack desiredStack) {
+			for (Slot slot : menu.slots) {
+				if (!(slot.container instanceof Inventory) || !slot.hasItem() || !slot.mayPickup(player)) {
+					continue;
+				}
+				if (ItemStack.isSameItemSameComponents(slot.getItem(), desiredStack)) {
+					return slot;
+				}
+			}
+			return null;
+		}
+
+		private int moveExactCount(AbstractContainerMenu menu, Slot sourceSlot, Slot targetSlot, int remaining) {
+			ItemStack sourceStack = sourceSlot.getItem();
+			if (sourceStack.isEmpty()) {
+				return 0;
+			}
+
+			int moveCount = Math.min(remaining, sourceStack.getCount());
+			pickup(menu, sourceSlot, GLFW.GLFW_MOUSE_BUTTON_LEFT);
+			ItemStack carriedStack = player.containerMenu.getCarried();
+			if (carriedStack.isEmpty()) {
+				return 0;
+			}
+
+			if (targetSlot.getItem().isEmpty() && moveCount == carriedStack.getCount()) {
+				pickup(menu, targetSlot, GLFW.GLFW_MOUSE_BUTTON_LEFT);
+				return moveCount;
+			}
+
+			int placed = 0;
+			while (placed < moveCount && !player.containerMenu.getCarried().isEmpty()) {
+				pickup(menu, targetSlot, GLFW.GLFW_MOUSE_BUTTON_RIGHT);
+				placed++;
+			}
+
+			if (!player.containerMenu.getCarried().isEmpty()) {
+				pickup(menu, sourceSlot, GLFW.GLFW_MOUSE_BUTTON_LEFT);
+			}
+			return placed;
 		}
 
 		private int findMatchingRemainingSlotIndex(String itemId) {
@@ -632,15 +838,116 @@ public final class NearbyContainerDryRun {
 		}
 	}
 
-	private record ScreenContext(ScreenKind kind, BlockPos craftingTablePos) {
-		private static ScreenContext capture(Minecraft client, Entity cameraEntity, double reachDistance) {
-			if (client.screen instanceof CraftingScreen) {
-				return new ScreenContext(ScreenKind.CRAFTING_TABLE_3X3, findNearestCraftingTable(client.level, cameraEntity, reachDistance));
+	private record ScreenContext(
+		ScreenKind kind,
+		BlockPos craftingTablePos,
+		RecipeBookState recipeBookState,
+		List<ItemStack> gridStacks,
+		double mouseX,
+		double mouseY
+	) {
+		private static ScreenContext capture(Minecraft client, Entity cameraEntity, double reachDistance, AvailableItemSnapshot localItems) {
+			if (client.screen instanceof CraftingScreen craftingScreen) {
+				return new ScreenContext(
+					ScreenKind.CRAFTING_TABLE_3X3,
+					findNearestCraftingTable(client.level, cameraEntity, reachDistance),
+					RecipeBookState.capture(craftingScreen),
+					copyStacks(localItems.gridStacks()),
+					client.mouseHandler.xpos(),
+					client.mouseHandler.ypos()
+				);
 			}
-			if (client.screen instanceof InventoryScreen) {
-				return new ScreenContext(ScreenKind.INVENTORY_2X2, null);
+			if (client.screen instanceof InventoryScreen inventoryScreen) {
+				return new ScreenContext(
+					ScreenKind.INVENTORY_2X2,
+					null,
+					RecipeBookState.capture(inventoryScreen),
+					copyStacks(localItems.gridStacks()),
+					client.mouseHandler.xpos(),
+					client.mouseHandler.ypos()
+				);
 			}
-			return new ScreenContext(ScreenKind.NONE, null);
+			return new ScreenContext(ScreenKind.NONE, null, RecipeBookState.empty(), List.of(), client.mouseHandler.xpos(), client.mouseHandler.ypos());
+		}
+
+		private boolean hasReservedGrid() {
+			return gridStacks.stream().anyMatch(stack -> !stack.isEmpty());
+		}
+
+		private boolean reservedGridMatches(RecipeIngredientSummary ingredientSummary) {
+			List<RecipeIngredientSummary.IngredientSlot> ingredientSlots = ingredientSummary.slots();
+			List<ItemStack> occupiedGridStacks = gridStacks.stream()
+				.filter(stack -> !stack.isEmpty())
+				.toList();
+			List<RecipeIngredientSummary.IngredientSlot> nonEmptyIngredientSlots = ingredientSlots.stream()
+				.filter(slot -> !slot.isEmpty())
+				.toList();
+
+			if (occupiedGridStacks.size() != nonEmptyIngredientSlots.size()) {
+				return false;
+			}
+
+			if (ingredientSlots.size() == gridStacks.size()) {
+				for (int i = 0; i < gridStacks.size(); i++) {
+					ItemStack stack = gridStacks.get(i);
+					RecipeIngredientSummary.IngredientSlot ingredientSlot = ingredientSlots.get(i);
+					if (stack.isEmpty()) {
+						if (!ingredientSlot.isEmpty()) {
+							continue;
+						}
+						continue;
+					}
+					if (ingredientSlot.isEmpty()) {
+						return false;
+					}
+
+					String itemId = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+					if (!ingredientSlot.itemIds().contains(itemId)) {
+						return false;
+					}
+				}
+				return true;
+			}
+
+			List<RecipeIngredientSummary.IngredientSlot> unmatchedSlots = new ArrayList<>(nonEmptyIngredientSlots);
+			for (ItemStack stack : occupiedGridStacks) {
+				String itemId = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+				boolean matched = false;
+				Iterator<RecipeIngredientSummary.IngredientSlot> iterator = unmatchedSlots.iterator();
+				while (iterator.hasNext()) {
+					RecipeIngredientSummary.IngredientSlot slot = iterator.next();
+					if (slot.itemIds().contains(itemId)) {
+						iterator.remove();
+						matched = true;
+						break;
+					}
+				}
+
+				if (!matched) {
+					return false;
+				}
+			}
+
+			return unmatchedSlots.isEmpty();
+		}
+
+		private String gridSummary() {
+			Map<String, Integer> counts = new LinkedHashMap<>();
+			for (ItemStack stack : gridStacks) {
+				if (!stack.isEmpty()) {
+					String itemId = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+					counts.merge(itemId, stack.getCount(), Integer::sum);
+				}
+			}
+			return AvailableItemSnapshot.formatCounts(counts);
+		}
+
+		private static List<ItemStack> copyStacks(List<ItemStack> stacks) {
+			List<ItemStack> copies = new ArrayList<>(stacks.size());
+			for (ItemStack stack : stacks) {
+				copies.add(stack.copy());
+			}
+			return List.copyOf(copies);
 		}
 
 		private static BlockPos findNearestCraftingTable(Level level, Entity cameraEntity, double reachDistance) {
@@ -673,6 +980,70 @@ public final class NearbyContainerDryRun {
 		}
 	}
 
+	private record RecipeBookState(
+		boolean visible,
+		boolean filtering,
+		String searchText,
+		ExtendedRecipeBookCategory selectedCategory,
+		int currentPage
+	) {
+		private static RecipeBookState capture(AbstractRecipeBookScreen<?> screen) {
+			RecipeBookComponent<?> component = ((AbstractRecipeBookScreenAccessor) screen).getRecipeBookComponent();
+			RecipeBookComponentAccessor accessor = (RecipeBookComponentAccessor) component;
+			RecipeBookTabButton selectedTab = accessor.getSelectedTab();
+			CycleButton<Boolean> filterButton = accessor.getFilterButton();
+			EditBox searchBox = accessor.getSearchBox();
+			RecipeBookPageAccessor pageAccessor = (RecipeBookPageAccessor) accessor.getRecipeBookPage();
+			return new RecipeBookState(
+				component.isVisible(),
+				filterButton != null && Boolean.TRUE.equals(filterButton.getValue()),
+				searchBox != null ? searchBox.getValue() : "",
+				selectedTab != null ? selectedTab.getCategory() : null,
+				pageAccessor.getCurrentPage()
+			);
+		}
+
+		private static RecipeBookState empty() {
+			return new RecipeBookState(false, false, "", null, 0);
+		}
+
+		private void restore(AbstractRecipeBookScreen<?> screen) {
+			RecipeBookComponent<?> component = ((AbstractRecipeBookScreenAccessor) screen).getRecipeBookComponent();
+			RecipeBookComponentAccessor accessor = (RecipeBookComponentAccessor) component;
+			if (component.isVisible() != visible) {
+				component.toggleVisibility();
+			}
+
+			CycleButton<Boolean> filterButton = accessor.getFilterButton();
+			if (filterButton != null && Boolean.TRUE.equals(filterButton.getValue()) != filtering) {
+				filterButton.setValue(filtering);
+			}
+
+			EditBox searchBox = accessor.getSearchBox();
+			if (searchBox != null && !searchText.equals(searchBox.getValue())) {
+				searchBox.setValue(searchText);
+			}
+
+			if (selectedCategory != null) {
+				for (RecipeBookTabButton tabButton : accessor.getTabButtons()) {
+					if (selectedCategory.equals(tabButton.getCategory())) {
+						accessor.invokeReplaceSelected(tabButton);
+						break;
+					}
+				}
+			}
+
+			component.recipesUpdated();
+
+			RecipeBookPage page = accessor.getRecipeBookPage();
+			RecipeBookPageAccessor pageAccessor = (RecipeBookPageAccessor) page;
+			int totalPages = Math.max(1, pageAccessor.getTotalPages());
+			pageAccessor.setCurrentPage(Mth.clamp(currentPage, 0, totalPages - 1));
+			pageAccessor.invokeUpdateButtonsForPage();
+			pageAccessor.invokeUpdateArrowButtons();
+		}
+	}
+
 	private enum ScreenKind {
 		NONE,
 		INVENTORY_2X2,
@@ -684,6 +1055,13 @@ public final class NearbyContainerDryRun {
 		WAITING_FOR_CONTAINER,
 		RESUME_CONTEXT,
 		WAITING_FOR_REOPEN
+	}
+
+	private static String formatStack(ItemStack stack) {
+		if (stack.isEmpty()) {
+			return "<empty>";
+		}
+		return stack.getCount() + "x " + BuiltInRegistries.ITEM.getKey(stack.getItem());
 	}
 
 	private static double squaredDistanceToBlock(Vec3 eyePos, BlockPos pos) {

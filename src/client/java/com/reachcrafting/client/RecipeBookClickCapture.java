@@ -28,7 +28,14 @@ public final class RecipeBookClickCapture {
 		// Reserved for future client lifecycle hooks.
 	}
 
-	public static void onRecipeButtonClicked(RecipeDisplayId recipeId, RecipeCollection collection, ItemStack displayStack, int mouseButton, boolean shiftModifierDown) {
+	public static void onRecipeButtonClicked(
+		RecipeDisplayId recipeId,
+		RecipeCollection collection,
+		ItemStack displayStack,
+		int mouseButton,
+		boolean shiftModifierDown,
+		boolean ctrlModifierDown
+	) {
 		Minecraft minecraft = Minecraft.getInstance();
 		Screen screen = minecraft.screen;
 		if (!(screen instanceof InventoryScreen) && !(screen instanceof CraftingScreen)) {
@@ -39,6 +46,7 @@ public final class RecipeBookClickCapture {
 			return;
 		}
 		boolean craftAll = shiftModifierDown || isShiftKeyDown(minecraft);
+		boolean allowNearbyFallback = ctrlModifierDown || isControlKeyDown(minecraft);
 
 		String screenKind = screen instanceof InventoryScreen ? "inventory_2x2" : "crafting_table_3x3";
 		boolean craftable = collection.isCraftable(recipeId);
@@ -53,19 +61,20 @@ public final class RecipeBookClickCapture {
 		ContextMap context = SlotDisplayContext.fromLevel(minecraft.level);
 		RecipeIngredientSummary ingredientSummary = RecipeIngredientSummary.fromDisplay(entry.display(), context);
 		AvailableItemSnapshot availableItems = AvailableItemSnapshot.capture(player, screen);
-		RecipeDeficitReport deficitReport = RecipeDeficitReport.from(ingredientSummary, availableItems);
+		RecipeDeficitReport deficitReport = RecipeDeficitReport.from(ingredientSummary, availableItems.inventoryCounts());
 		String outputLabel = itemId + " x" + displayStack.getCount();
 		String chatMessage = deficitReport.hasMissingIngredients()
 			? "Missing: " + deficitReport.compactMissingSummary()
 			: "Ready: " + outputLabel;
 
 		ReachCraftingMod.LOGGER.info(
-			"[recipe_click] screen={} button={} idx={} craftable={} shift={} output={}",
+			"[recipe_click] screen={} button={} idx={} craftable={} shift={} ctrl={} output={}",
 			screenKind,
 			mouseButton,
 			recipeIndex,
 			craftable,
 			craftAll,
+			allowNearbyFallback,
 			outputLabel
 		);
 		ReachCraftingMod.LOGGER.info(
@@ -88,7 +97,7 @@ public final class RecipeBookClickCapture {
 			false
 		);
 
-		if (deficitReport.hasMissingIngredients()) {
+		if (deficitReport.hasMissingIngredients() && allowNearbyFallback) {
 			NearbyContainerDryRun.start(recipeId, recipeIndex, outputLabel, ingredientSummary, availableItems, craftAll);
 		} else {
 			NearbyContainerDryRun.cancelCurrent();
@@ -98,5 +107,10 @@ public final class RecipeBookClickCapture {
 	private static boolean isShiftKeyDown(Minecraft minecraft) {
 		return InputConstants.isKeyDown(minecraft.getWindow(), GLFW.GLFW_KEY_LEFT_SHIFT)
 			|| InputConstants.isKeyDown(minecraft.getWindow(), GLFW.GLFW_KEY_RIGHT_SHIFT);
+	}
+
+	private static boolean isControlKeyDown(Minecraft minecraft) {
+		return InputConstants.isKeyDown(minecraft.getWindow(), GLFW.GLFW_KEY_LEFT_CONTROL)
+			|| InputConstants.isKeyDown(minecraft.getWindow(), GLFW.GLFW_KEY_RIGHT_CONTROL);
 	}
 }

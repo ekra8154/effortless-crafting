@@ -42,7 +42,8 @@ public abstract class RecipeBookPageMixin {
 				button.getCollection(),
 				button.getDisplayStack(),
 				click.button(),
-				(click.modifiers() & GLFW.GLFW_MOD_SHIFT) != 0
+				(click.modifiers() & GLFW.GLFW_MOD_SHIFT) != 0,
+				(click.modifiers() & GLFW.GLFW_MOD_CONTROL) != 0
 			);
 			return;
 		}
