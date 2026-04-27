@@ -9,6 +9,7 @@
 		"MinecraftInteractionBlockMixin",
 		"OverlayRecipeComponentMixin",
 		"PlayerSecondaryUseMixin",
+		"RecipeButtonMixin",
 		"RecipeBookComponentAccessor",
 		"RecipeBookPageAccessor",
 		"RecipeBookPageMixin"
