@@ -18,6 +18,7 @@ import net.minecraft.world.item.crafting.display.RecipeDisplay;
 import net.minecraft.world.item.crafting.display.RecipeDisplayEntry;
 import net.minecraft.world.item.crafting.display.RecipeDisplayId;
 import net.minecraft.world.item.crafting.display.SlotDisplayContext;
+import net.minecraft.client.multiplayer.MultiPlayerGameMode;
 import org.lwjgl.glfw.GLFW;
 import net.minecraft.core.registries.BuiltInRegistries;
 
@@ -62,7 +63,12 @@ public final class RecipeBookClickCapture {
 		ItemStack resolvedDisplayStack = displayStack != null ? displayStack.copy() : resolveDisplayStack(entry.display(), context);
 		RecipeIngredientSummary ingredientSummary = RecipeIngredientSummary.fromDisplay(entry.display(), context);
 		AvailableItemSnapshot availableItems = AvailableItemSnapshot.capture(player, screen);
-		RecipeDeficitReport deficitReport = RecipeDeficitReport.from(ingredientSummary, availableItems.inventoryCounts(), craftAll);
+		RecipeDeficitReport deficitReport = RecipeDeficitReport.from(
+			ingredientSummary,
+			availableItems.inventoryCounts(),
+			availableItems.gridStacks(),
+			craftAll
+		);
 		String resolvedItemId = BuiltInRegistries.ITEM.getKey(resolvedDisplayStack.getItem()).toString();
 		String outputLabel = resolvedItemId + " x" + resolvedDisplayStack.getCount();
 		String chatMessage = deficitReport.hasMissingIngredients()
@@ -98,6 +104,27 @@ public final class RecipeBookClickCapture {
 				.withStyle(ChatFormatting.YELLOW),
 			false
 		);
+
+		if (allowNearbyFallback && availableItems.hasReservedGrid() && !deficitReport.hasMissingIngredients()) {
+			if (NearbyContainerDryRun.tryExpandReservedGrid(recipeId, recipeIndex, outputLabel, ingredientSummary, availableItems, craftAll)) {
+				return;
+			}
+			NearbyContainerDryRun.start(recipeId, recipeIndex, outputLabel, ingredientSummary, availableItems, craftAll);
+			return;
+		}
+
+		if (allowNearbyFallback && !deficitReport.hasMissingIngredients() && !availableItems.hasReservedGrid()) {
+			MultiPlayerGameMode gameMode = minecraft.gameMode;
+			if (gameMode != null) {
+				gameMode.handlePlaceRecipe(player.containerMenu.containerId, recipeId, craftAll);
+				player.displayClientMessage(
+					Component.literal("[Reach Crafting] Placed recipe: " + outputLabel)
+						.withStyle(ChatFormatting.YELLOW),
+					false
+				);
+				return;
+			}
+		}
 
 		if (deficitReport.hasMissingIngredients() && allowNearbyFallback) {
 			NearbyContainerDryRun.start(recipeId, recipeIndex, outputLabel, ingredientSummary, availableItems, craftAll);

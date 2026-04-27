@@ -23,6 +23,47 @@ public abstract class RecipeBookPageMixin {
 
 	@Inject(
 		method = "mouseClicked(Lnet/minecraft/client/input/MouseButtonEvent;IIIIZ)Z",
+		at = @At("HEAD"),
+		cancellable = true
+	)
+	private void reachcrafting$interceptCtrlRecipeButtonClick(
+		MouseButtonEvent click,
+		int left,
+		int top,
+		int width,
+		int height,
+		boolean filtering,
+		CallbackInfoReturnable<Boolean> cir
+	) {
+		if (click.button() != GLFW.GLFW_MOUSE_BUTTON_LEFT || (click.modifiers() & GLFW.GLFW_MOD_CONTROL) == 0) {
+			return;
+		}
+
+		OverlayRecipeComponent overlay = ((RecipeBookPageAccessor) (Object) this).getOverlay();
+		if (overlay != null && overlay.isVisible()) {
+			return;
+		}
+
+		for (RecipeButton button : this.buttons) {
+			if (!button.isMouseOver(click.x(), click.y())) {
+				continue;
+			}
+
+			RecipeBookClickCapture.onRecipeButtonClicked(
+				button.getCurrentRecipe(),
+				button.getCollection(),
+				button.getDisplayStack(),
+				click.button(),
+				(click.modifiers() & GLFW.GLFW_MOD_SHIFT) != 0,
+				true
+			);
+			cir.setReturnValue(true);
+			return;
+		}
+	}
+
+	@Inject(
+		method = "mouseClicked(Lnet/minecraft/client/input/MouseButtonEvent;IIIIZ)Z",
 		at = @At(value = "RETURN", ordinal = 3)
 	)
 	private void reachcrafting$onRecipeButtonClicked(
@@ -34,7 +75,7 @@ public abstract class RecipeBookPageMixin {
 		boolean filtering,
 		CallbackInfoReturnable<Boolean> cir
 	) {
-		if (!cir.getReturnValueZ() || click.button() != GLFW.GLFW_MOUSE_BUTTON_LEFT) {
+		if (!cir.getReturnValueZ() || click.button() != GLFW.GLFW_MOUSE_BUTTON_LEFT || (click.modifiers() & GLFW.GLFW_MOD_CONTROL) != 0) {
 			return;
 		}
 

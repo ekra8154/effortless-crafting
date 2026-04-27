@@ -117,6 +117,28 @@ public final class NearbyContainerDryRun {
 		session.start();
 	}
 
+	public static boolean tryExpandReservedGrid(
+		RecipeDisplayId recipeId,
+		int recipeIndex,
+		String outputLabel,
+		RecipeIngredientSummary ingredientSummary,
+		AvailableItemSnapshot localItems,
+		boolean craftAll
+	) {
+		Minecraft client = Minecraft.getInstance();
+		LocalPlayer player = client.player;
+		Level level = client.level;
+		MultiPlayerGameMode gameMode = client.gameMode;
+		Entity cameraEntity = client.getCameraEntity();
+		if (player == null || level == null || gameMode == null || cameraEntity == null) {
+			return false;
+		}
+
+		cancelCurrent();
+		SearchSession session = new SearchSession(client, player, level, gameMode, cameraEntity, recipeId, recipeIndex, outputLabel, ingredientSummary, localItems, craftAll);
+		return session.expandReservedGridInPlace();
+	}
+
 	public static void cancelCurrent() {
 		if (activeSession != null) {
 			activeSession.stop(true);
@@ -156,13 +178,15 @@ public final class NearbyContainerDryRun {
 		private final RecipeIngredientSummary ingredientSummary;
 		private final AvailableItemSnapshot localItems;
 		private final boolean craftAll;
+		private final IngredientPlanning.Policy planningPolicy;
 		private final RecipeDeficitReport initialDeficit;
-		private final List<RecipeIngredientSummary.IngredientSlot> remainingSlots;
+		private final List<String> remainingItemIds;
 		private final ScreenContext originalContext;
 		private final List<BlockPos> candidates;
 		private final Set<BlockPos> visited = new HashSet<>();
 		private final Map<String, Integer> discoveredNearby = new LinkedHashMap<>();
 		private final Map<String, Integer> withdrawnItems = new LinkedHashMap<>();
+		private List<IngredientPlanning.SlotTarget> plannedTargets = List.of();
 
 		private int nextCandidateIndex;
 		private int timeoutTicks;
@@ -200,12 +224,18 @@ public final class NearbyContainerDryRun {
 			this.ingredientSummary = ingredientSummary;
 			this.localItems = localItems;
 			this.craftAll = craftAll;
-			this.initialDeficit = RecipeDeficitReport.from(ingredientSummary, localItems.inventoryCounts(), craftAll);
-			this.remainingSlots = new ArrayList<>(computeRemainingSlots(ingredientSummary, localItems.inventoryCounts(), craftAll));
 			this.originalContext = ScreenContext.capture(client, cameraEntity, player.blockInteractionRange(), localItems);
+			this.planningPolicy = IngredientPlanning.defaultPolicy();
+			this.initialDeficit = RecipeDeficitReport.from(
+				ingredientSummary,
+				localItems.inventoryCounts(),
+				originalContext.gridStacks(),
+				craftAll
+			);
+			this.remainingItemIds = new ArrayList<>(initialDeficit.missingItemIds());
 			this.candidates = findCandidates(level, cameraEntity, player.blockInteractionRange());
 			this.targetCopiesPerSlot = craftAll ? 0 : 1;
-			this.phase = craftAll ? SearchPhase.DISCOVERY : SearchPhase.WITHDRAW;
+			this.phase = SearchPhase.DISCOVERY;
 		}
 
 		private boolean canStart() {
@@ -220,14 +250,74 @@ public final class NearbyContainerDryRun {
 				candidates.size(),
 				craftAll,
 				phase.name().toLowerCase(),
-				summarizeRemainingSlots(remainingSlots)
+				summarizeRemainingItems(remainingItemIds)
 			);
 
-			if (phase == SearchPhase.DISCOVERY) {
-				sendChat("Scanning nearby containers...");
-			} else {
-				sendChat("Fetching: " + summarizeRemainingSlots(remainingSlots));
+			sendChat("Scanning nearby containers...");
+		}
+
+		private boolean expandReservedGridInPlace() {
+		if (!originalContext.hasReservedGrid() || !originalContext.reservedGridMatches(ingredientSummary)) {
+			return false;
+		}
+
+			Map<String, Integer> availableCounts = localItems.inventoryCounts();
+			targetCopiesPerSlot = craftAll
+				? IngredientPlanning.computeMaxCraftCopies(
+					ingredientSummary,
+					localItems.inventoryCounts(),
+					originalContext.gridStacks(),
+					availableCounts,
+					availableCounts,
+					planningPolicy
+				)
+				: 1;
+			if (targetCopiesPerSlot <= 0) {
+				return false;
 			}
+			if (!hasInventoryForReservedGridExpansion()) {
+				return false;
+			}
+
+			lastRestoreFailure = "<none>";
+			boolean expanded = expandReservedGrid();
+			if (!expanded) {
+				ReachCraftingMod.LOGGER.warn(
+					"[nearby_restore] idx={} in_place_expand_failed reason={}",
+					recipeIndex,
+					lastRestoreFailure
+				);
+				return false;
+			}
+
+			sendChat("Updated grid: " + outputLabel);
+			return true;
+		}
+
+		private boolean hasInventoryForReservedGridExpansion() {
+			Map<String, Integer> neededCounts = new LinkedHashMap<>();
+			for (ItemStack stack : originalContext.gridStacks()) {
+				if (stack.isEmpty()) {
+					continue;
+				}
+
+				String itemId = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+				int currentCount = stack.getCount();
+				int desiredCount = craftAll
+					? Math.max(targetCopiesPerSlot, currentCount)
+					: Math.min(stack.getMaxStackSize(), currentCount + 1);
+				int missing = Math.max(desiredCount - currentCount, 0);
+				if (missing > 0) {
+					neededCounts.merge(itemId, missing, Integer::sum);
+				}
+			}
+
+			for (Map.Entry<String, Integer> entry : neededCounts.entrySet()) {
+				if (localItems.inventoryCounts().getOrDefault(entry.getKey(), 0) < entry.getValue()) {
+					return false;
+				}
+			}
+			return true;
 		}
 
 		private void tick() {
@@ -238,7 +328,7 @@ public final class NearbyContainerDryRun {
 			}
 
 			if (state == SearchState.OPEN_NEXT) {
-				if (phase == SearchPhase.WITHDRAW && remainingSlots.isEmpty()) {
+				if (phase == SearchPhase.WITHDRAW && remainingItemIds.isEmpty()) {
 					beginResume();
 					return;
 				}
@@ -382,7 +472,7 @@ public final class NearbyContainerDryRun {
 		}
 
 		private void withdrawItemsFromContainer(AbstractContainerMenu menu) {
-			if (remainingSlots.isEmpty()) {
+			if (remainingItemIds.isEmpty()) {
 				return;
 			}
 
@@ -392,13 +482,13 @@ public final class NearbyContainerDryRun {
 				}
 
 				String itemId = BuiltInRegistries.ITEM.getKey(slot.getItem().getItem()).toString();
-				if (findMatchingRemainingSlotIndex(itemId) < 0 || !slot.mayPickup(player)) {
+				if (findMatchingRemainingItemIndex(itemId) < 0 || !slot.mayPickup(player)) {
 					continue;
 				}
 
 				while (slot.hasItem()) {
-					int remainingSlotIndex = findMatchingRemainingSlotIndex(itemId);
-					if (remainingSlotIndex < 0) {
+					int remainingItemIndex = findMatchingRemainingItemIndex(itemId);
+					if (remainingItemIndex < 0) {
 						break;
 					}
 
@@ -412,7 +502,7 @@ public final class NearbyContainerDryRun {
 						return;
 					}
 
-					remainingSlots.remove(remainingSlotIndex);
+					remainingItemIds.remove(remainingItemIndex);
 					withdrawnItems.merge(itemId, 1, Integer::sum);
 				}
 			}
@@ -423,7 +513,7 @@ public final class NearbyContainerDryRun {
 					recipeIndex,
 					formatPos(pendingContainerPos),
 					AvailableItemSnapshot.formatCounts(withdrawnItems),
-					summarizeRemainingSlots(remainingSlots)
+					summarizeRemainingItems(remainingItemIds)
 				);
 			}
 		}
@@ -449,18 +539,46 @@ public final class NearbyContainerDryRun {
 
 		private void beginWithdrawPhaseOrResume() {
 			Map<String, Integer> totalAvailable = AvailableItemSnapshot.mergeCounts(localItems.inventoryCounts(), discoveredNearby);
-			targetCopiesPerSlot = computeMaxCraftCopies(ingredientSummary, totalAvailable);
-			remainingSlots.clear();
-			remainingSlots.addAll(computeRemainingSlots(ingredientSummary, localItems.inventoryCounts(), targetCopiesPerSlot));
+			IngredientPlanning.PlanResult combinedPlan = IngredientPlanning.plan(
+				ingredientSummary,
+				localItems.inventoryCounts(),
+				originalContext.gridStacks(),
+				totalAvailable,
+				totalAvailable,
+				1,
+				planningPolicy
+			);
+			targetCopiesPerSlot = craftAll
+				? IngredientPlanning.computeMaxCraftCopies(
+					ingredientSummary,
+					localItems.inventoryCounts(),
+					originalContext.gridStacks(),
+					totalAvailable,
+					totalAvailable,
+					planningPolicy
+				)
+				: combinedPlan.hasMissingIngredients() ? 0 : 1;
+			IngredientPlanning.PlanResult plannedResult = IngredientPlanning.plan(
+				ingredientSummary,
+				localItems.inventoryCounts(),
+				originalContext.gridStacks(),
+				totalAvailable,
+				totalAvailable,
+				targetCopiesPerSlot,
+				planningPolicy
+			);
+			plannedTargets = plannedResult.slotTargets();
+			remainingItemIds.clear();
+			remainingItemIds.addAll(computeFetchItemIds(plannedTargets));
 			ReachCraftingMod.LOGGER.info(
 				"[nearby_plan] idx={} total_available={} target_copies={} planned={}",
 				recipeIndex,
 				AvailableItemSnapshot.formatCounts(totalAvailable),
 				targetCopiesPerSlot,
-				summarizeRemainingSlots(remainingSlots)
+				summarizeRemainingItems(remainingItemIds)
 			);
 
-			if (targetCopiesPerSlot <= 0 || remainingSlots.isEmpty()) {
+			if (targetCopiesPerSlot <= 0 || plannedResult.hasMissingIngredients() || remainingItemIds.isEmpty()) {
 				beginResume();
 				return;
 			}
@@ -470,7 +588,90 @@ public final class NearbyContainerDryRun {
 			pendingContainerPos = null;
 			phase = SearchPhase.WITHDRAW;
 			state = SearchState.OPEN_NEXT;
-			sendChat("Fetching: " + summarizeRemainingSlots(remainingSlots));
+			sendChat("Fetching: " + summarizeRemainingItems(remainingItemIds));
+		}
+
+		private List<String> computeFetchItemIds(List<IngredientPlanning.SlotTarget> slotTargets) {
+			if (originalContext.hasReservedGrid() && originalContext.reservedGridMatches(ingredientSummary)) {
+				return computeReservedGridFetchItemIds();
+			}
+
+			Map<String, Integer> desiredCounts = new LinkedHashMap<>();
+			Map<String, Integer> alreadyCovered = new LinkedHashMap<>(localItems.inventoryCounts());
+
+			for (IngredientPlanning.SlotTarget slotTarget : slotTargets) {
+				if (slotTarget.itemId() == null || slotTarget.targetCount() <= 0) {
+					continue;
+				}
+				desiredCounts.merge(slotTarget.itemId(), slotTarget.targetCount(), Integer::sum);
+			}
+
+			List<ItemStack> reservedGrid = originalContext.gridStacks();
+			for (IngredientPlanning.SlotTarget slotTarget : slotTargets) {
+				int slotIndex = slotTarget.slotIndex() - 1;
+				if (slotIndex < 0 || slotIndex >= reservedGrid.size()) {
+					continue;
+				}
+				ItemStack stack = reservedGrid.get(slotIndex);
+				if (stack.isEmpty() || slotTarget.itemId() == null) {
+					continue;
+				}
+				String stackItemId = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+				if (slotTarget.itemId().equals(stackItemId)) {
+					alreadyCovered.merge(stackItemId, stack.getCount(), Integer::sum);
+				}
+			}
+
+			List<String> fetchItems = new ArrayList<>();
+			for (Map.Entry<String, Integer> entry : desiredCounts.entrySet()) {
+				String itemId = entry.getKey();
+				int missing = entry.getValue() - alreadyCovered.getOrDefault(itemId, 0);
+				for (int i = 0; i < Math.max(missing, 0); i++) {
+					fetchItems.add(itemId);
+				}
+			}
+			return fetchItems;
+		}
+
+		private List<String> computeReservedGridFetchItemIds() {
+			Map<String, Integer> neededCounts = new LinkedHashMap<>();
+			for (ItemStack stack : originalContext.gridStacks()) {
+				if (stack.isEmpty()) {
+					continue;
+				}
+
+				String itemId = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+				int currentCount = stack.getCount();
+				int desiredCount = craftAll
+					? Math.max(targetCopiesPerSlot, currentCount)
+					: Math.min(stack.getMaxStackSize(), currentCount + 1);
+				int missing = Math.max(desiredCount - currentCount, 0);
+				if (missing > 0) {
+					neededCounts.merge(itemId, missing, Integer::sum);
+				}
+			}
+
+			Map<String, Integer> availableInventory = new LinkedHashMap<>(localItems.inventoryCounts());
+			List<String> fetchItems = new ArrayList<>();
+			for (Map.Entry<String, Integer> entry : neededCounts.entrySet()) {
+				String itemId = entry.getKey();
+				int stillNeeded = entry.getValue();
+				int inventoryCount = availableInventory.getOrDefault(itemId, 0);
+				int coveredByInventory = Math.min(inventoryCount, stillNeeded);
+				stillNeeded -= coveredByInventory;
+				if (coveredByInventory > 0) {
+					if (inventoryCount == coveredByInventory) {
+						availableInventory.remove(itemId);
+					} else {
+						availableInventory.put(itemId, inventoryCount - coveredByInventory);
+					}
+				}
+
+				for (int i = 0; i < stillNeeded; i++) {
+					fetchItems.add(itemId);
+				}
+			}
+			return fetchItems;
 		}
 
 		private void resumeOriginalContext() {
@@ -529,15 +730,32 @@ public final class NearbyContainerDryRun {
 				}
 				reservedGridMatchesRecipe = originalContext.reservedGridMatches(ingredientSummary);
 				if (gridRestored && reservedGridMatchesRecipe && targetCopiesPerSlot > 0) {
-					if (craftAll && player.containerMenu != null) {
-						gameMode.handlePlaceRecipe(player.containerMenu.containerId, recipeId, craftAll);
-					}
 					reservedGridExpanded = expandReservedGrid();
 				}
 			}
 
 			Map<String, Integer> updatedCounts = AvailableItemSnapshot.mergeCounts(localItems.inventoryCounts(), withdrawnItems);
-			RecipeDeficitReport updatedDeficit = RecipeDeficitReport.from(ingredientSummary, updatedCounts, targetCopiesPerSlot);
+			RecipeDeficitReport updatedDeficit = RecipeDeficitReport.from(
+				ingredientSummary,
+				updatedCounts,
+				originalContext.gridStacks(),
+				targetCopiesPerSlot
+			);
+			if (originalContext.hasReservedGrid()
+				&& gridRestored
+				&& reservedGridMatchesRecipe
+				&& reservedGridExpanded
+				&& remainingItemIds.isEmpty()
+				&& !inventorySpaceBlocked) {
+				updatedDeficit = new RecipeDeficitReport(
+					Map.of(),
+					Map.of(),
+					List.of(),
+					plannedTargets,
+					"<none>",
+					false
+				);
+			}
 			ReachCraftingMod.LOGGER.info(
 				"[nearby_scan] idx={} scanned={} discovered={} withdrawn={} remaining={}",
 				recipeIndex,
@@ -565,7 +783,7 @@ public final class NearbyContainerDryRun {
 			} else if (targetCopiesPerSlot > 0 && !updatedDeficit.hasMissingIngredients() && contextReady && player.containerMenu != null) {
 				gameMode.handlePlaceRecipe(player.containerMenu.containerId, recipeId, craftAll);
 				sendChat("Placed recipe: " + outputLabel);
-			} else if (!remainingSlots.isEmpty() || inventorySpaceBlocked) {
+			} else if (!remainingItemIds.isEmpty() || inventorySpaceBlocked) {
 				sendChat("Fetched what I could. Missing now: " + updatedDeficit.compactMissingSummary());
 			} else if (updatedDeficit.hasMissingIngredients()) {
 				sendChat("Items fetched. Remaining: " + updatedDeficit.compactMissingSummary());
@@ -839,9 +1057,9 @@ public final class NearbyContainerDryRun {
 			return placed;
 		}
 
-		private int findMatchingRemainingSlotIndex(String itemId) {
-			for (int i = 0; i < remainingSlots.size(); i++) {
-				if (remainingSlots.get(i).itemIds().contains(itemId)) {
+		private int findMatchingRemainingItemIndex(String itemId) {
+			for (int i = 0; i < remainingItemIds.size(); i++) {
+				if (itemId.equals(remainingItemIds.get(i))) {
 					return i;
 				}
 			}
@@ -939,104 +1157,16 @@ public final class NearbyContainerDryRun {
 			return pos.getX() + "," + pos.getY() + "," + pos.getZ();
 		}
 
-		private static List<RecipeIngredientSummary.IngredientSlot> computeRemainingSlots(
-			RecipeIngredientSummary ingredientSummary,
-			Map<String, Integer> availableCounts,
-			boolean craftAll
-		) {
-			return computeRemainingSlots(ingredientSummary, availableCounts, craftAll ? minSlotMaxStackSize(ingredientSummary) : 1);
-		}
-
-		private static List<RecipeIngredientSummary.IngredientSlot> computeRemainingSlots(
-			RecipeIngredientSummary ingredientSummary,
-			Map<String, Integer> availableCounts,
-			int copiesPerSlot
-		) {
-			Map<String, Integer> remainingCounts = new LinkedHashMap<>(availableCounts);
-			List<RecipeIngredientSummary.IngredientSlot> remainingSlots = new ArrayList<>();
-
-			for (RecipeIngredientSummary.IngredientSlot slot : ingredientSummary.slots()) {
-				if (slot.isEmpty()) {
-					continue;
-				}
-
-				int desiredCopies = copiesPerSlot;
-				for (int i = 0; i < desiredCopies; i++) {
-					String matchedItemId = firstAvailableOption(slot.itemIds(), remainingCounts);
-					if (matchedItemId == null) {
-						remainingSlots.add(slot);
-						continue;
-					}
-
-					consume(remainingCounts, matchedItemId);
-				}
-			}
-
-			return remainingSlots;
-		}
-
-		private static int computeMaxCraftCopies(RecipeIngredientSummary ingredientSummary, Map<String, Integer> availableCounts) {
-			int upperBound = minSlotMaxStackSize(ingredientSummary);
-			if (upperBound <= 0) {
-				return 0;
-			}
-
-			int low = 0;
-			int high = upperBound;
-			while (low < high) {
-				int mid = (low + high + 1) / 2;
-				if (computeRemainingSlots(ingredientSummary, availableCounts, mid).isEmpty()) {
-					low = mid;
-				} else {
-					high = mid - 1;
-				}
-			}
-			return low;
-		}
-
-		private static int minSlotMaxStackSize(RecipeIngredientSummary ingredientSummary) {
-			int minStackSize = Integer.MAX_VALUE;
-			for (RecipeIngredientSummary.IngredientSlot slot : ingredientSummary.slots()) {
-				if (slot.isEmpty()) {
-					continue;
-				}
-				minStackSize = Math.min(minStackSize, Math.max(slot.maxStackSize(), 1));
-			}
-			return minStackSize == Integer.MAX_VALUE ? 0 : minStackSize;
-		}
-
-		private static String summarizeRemainingSlots(List<RecipeIngredientSummary.IngredientSlot> remainingSlots) {
-			if (remainingSlots.isEmpty()) {
+		private static String summarizeRemainingItems(List<String> remainingItemIds) {
+			if (remainingItemIds.isEmpty()) {
 				return "<none>";
 			}
 
 			Map<String, Integer> aggregate = new LinkedHashMap<>();
-			for (RecipeIngredientSummary.IngredientSlot slot : remainingSlots) {
-				String key = slot.display().startsWith("[") ? "any of " + slot.display() : slot.display();
-				aggregate.merge(key, 1, Integer::sum);
+			for (String itemId : remainingItemIds) {
+				aggregate.merge(itemId, 1, Integer::sum);
 			}
 			return AvailableItemSnapshot.formatCounts(aggregate);
-		}
-
-		private static String firstAvailableOption(List<String> itemIds, Map<String, Integer> remainingCounts) {
-			for (String itemId : itemIds) {
-				if (remainingCounts.getOrDefault(itemId, 0) > 0) {
-					return itemId;
-				}
-			}
-			return null;
-		}
-
-		private static void consume(Map<String, Integer> remainingCounts, String itemId) {
-			int available = remainingCounts.getOrDefault(itemId, 0);
-			if (available <= 0) {
-				return;
-			}
-			if (available == 1) {
-				remainingCounts.remove(itemId);
-			} else {
-				remainingCounts.put(itemId, available - 1);
-			}
 		}
 	}
 
