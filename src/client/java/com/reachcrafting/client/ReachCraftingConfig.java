@@ -19,6 +19,7 @@ public final class ReachCraftingConfig {
 	private IngredientPlanning.CountPreference countPreference;
 	private boolean showNearbyCraftableIndicator;
 	private boolean cacheContainersForFasterSearch;
+	private boolean reachCraftHoldAndRelease;
 
 	private ReachCraftingConfig() {
 	}
@@ -47,6 +48,7 @@ public final class ReachCraftingConfig {
 			instance.cacheContainersForFasterSearch = stored.cacheContainersForFasterSearch == null
 				? true
 				: stored.cacheContainersForFasterSearch;
+			instance.reachCraftHoldAndRelease = stored.reachCraftHoldAndRelease;
 		} catch (Exception exception) {
 			ReachCraftingMod.LOGGER.warn("Failed to load reachcrafting config from {}", CONFIG_PATH, exception);
 			instance = defaults();
@@ -116,6 +118,14 @@ public final class ReachCraftingConfig {
 		}
 	}
 
+	public boolean reachCraftHoldAndRelease() {
+		return reachCraftHoldAndRelease;
+	}
+
+	public void setReachCraftHoldAndRelease(boolean reachCraftHoldAndRelease) {
+		this.reachCraftHoldAndRelease = reachCraftHoldAndRelease;
+	}
+
 	private static ReachCraftingConfig defaults() {
 		ReachCraftingConfig defaults = new ReachCraftingConfig();
 		defaults.redistributeToCraftWhenNeeded = false;
@@ -123,6 +133,7 @@ public final class ReachCraftingConfig {
 		defaults.countPreference = IngredientPlanning.CountPreference.HIGHEST_TOTAL;
 		defaults.showNearbyCraftableIndicator = false;
 		defaults.cacheContainersForFasterSearch = true;
+		defaults.reachCraftHoldAndRelease = false;
 		return defaults;
 	}
 
@@ -138,6 +149,7 @@ public final class ReachCraftingConfig {
 		private IngredientPlanning.CountPreference countPreference;
 		private boolean showNearbyCraftableIndicator;
 		private Boolean cacheContainersForFasterSearch;
+		private boolean reachCraftHoldAndRelease;
 
 		private StoredConfig(ReachCraftingConfig config) {
 			this.redistributeToCraftWhenNeeded = config.redistributeToCraftWhenNeeded;
@@ -145,6 +157,7 @@ public final class ReachCraftingConfig {
 			this.countPreference = config.countPreference;
 			this.showNearbyCraftableIndicator = config.showNearbyCraftableIndicator;
 			this.cacheContainersForFasterSearch = config.cacheContainersForFasterSearch;
+			this.reachCraftHoldAndRelease = config.reachCraftHoldAndRelease;
 		}
 	}
 }

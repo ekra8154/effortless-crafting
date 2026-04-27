@@ -13,6 +13,8 @@
 	"tooltip.reachcrafting.show_nearby_craftable_indicator": "Show the orange recipe-book indicator when cached nearby containers suggest a missing recipe can be crafted from local storage.",
 	"option.reachcrafting.cache_containers_for_faster_search": "Cache Containers For Faster Search",
 	"tooltip.reachcrafting.cache_containers_for_faster_search": "Remember observed nearby container contents to power the recipe-book indicator and speed up Ctrl-assisted nearby searches.",
+	"option.reachcrafting.reach_craft_hold_and_release": "Reach Craft Hold And Release",
+	"tooltip.reachcrafting.reach_craft_hold_and_release": "When enabled, plain Ctrl recipe clicks are queued while Ctrl is held and replayed one at a time when you release the key.",
 	"option.reachcrafting.revolving_craft_handling": "Revolving Craft Handling",
 	"tooltip.reachcrafting.revolving_craft_handling": "Controls how rotating generic recipe-book entries choose sibling variants during Ctrl-assisted crafting.",
 	"enum.reachcrafting.revolving_craft_handling.always_prefer_based_on_count": "Always Prefer Based On Count",

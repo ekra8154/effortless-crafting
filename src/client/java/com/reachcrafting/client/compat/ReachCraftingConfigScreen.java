@@ -59,6 +59,15 @@ public final class ReachCraftingConfigScreen {
 			.setSaveConsumer(config::setCacheContainersForFasterSearch)
 			.build());
 
+		general.addEntry(entries.startBooleanToggle(
+				Component.translatable("option.reachcrafting.reach_craft_hold_and_release"),
+				config.reachCraftHoldAndRelease()
+			)
+			.setDefaultValue(false)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.reach_craft_hold_and_release"))
+			.setSaveConsumer(config::setReachCraftHoldAndRelease)
+			.build());
+
 		general.addEntry(entries.startEnumSelector(
 				Component.translatable("option.reachcrafting.revolving_craft_handling"),
 				ReachCraftingConfig.RevolvingCraftHandling.class,

@@ -2,6 +2,7 @@ package com.reachcrafting.client;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import com.reachcrafting.ReachCraftingMod;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
@@ -17,11 +18,25 @@ import net.minecraft.world.item.crafting.display.RecipeDisplayId;
 import org.lwjgl.glfw.GLFW;
 
 public final class RecipeBookClickCapture {
+	private static PendingHeldRecipe pendingHeldRecipe;
+	private static ReplayBatch replayBatch;
+	private static boolean wasControlDown;
+
 	private RecipeBookClickCapture() {
 	}
 
 	public static void init() {
-		// Reserved for future client lifecycle hooks.
+		ClientTickEvents.END_CLIENT_TICK.register(client -> {
+			boolean controlDown = isControlKeyDown(client);
+			if (wasControlDown && !controlDown) {
+				releasePendingHeldRecipe();
+			}
+			wasControlDown = controlDown;
+			processReplayBatch(client);
+			if (!controlDown && !ReachCraftingConfig.get().reachCraftHoldAndRelease()) {
+				pendingHeldRecipe = null;
+			}
+		});
 	}
 
 	public static void onRecipeButtonClicked(
@@ -42,9 +57,44 @@ public final class RecipeBookClickCapture {
 		if (player == null || minecraft.level == null) {
 			return;
 		}
-		AvailableItemSnapshot availableItems = AvailableItemSnapshot.capture(player, screen);
+		if (replayBatch != null) {
+			return;
+		}
+
 		boolean craftAll = shiftModifierDown || isShiftKeyDown(minecraft);
 		boolean allowNearbyFallback = ctrlModifierDown || isControlKeyDown(minecraft);
+		if (shouldQueueHeldRecipe(minecraft, allowNearbyFallback, craftAll) && replayBatch == null) {
+			queueHeldRecipe(recipeId, collection, displayStack, mouseButton, explicitVariantSelection);
+			return;
+		}
+
+		executeRecipeButtonClick(
+			minecraft,
+			player,
+			screen,
+			recipeId,
+			collection,
+			displayStack,
+			mouseButton,
+			craftAll,
+			allowNearbyFallback,
+			explicitVariantSelection
+		);
+	}
+
+	private static void executeRecipeButtonClick(
+		Minecraft minecraft,
+		LocalPlayer player,
+		Screen screen,
+		RecipeDisplayId recipeId,
+		RecipeCollection collection,
+		ItemStack displayStack,
+		int mouseButton,
+		boolean craftAll,
+		boolean allowNearbyFallback,
+		boolean explicitVariantSelection
+	) {
+		AvailableItemSnapshot availableItems = AvailableItemSnapshot.capture(player, screen);
 		boolean allowReservedGridVariantSwitch = false;
 		int desiredVariantCopies = availableItems.hasReservedGrid() && !craftAll
 			? currentReservedCraftCopies(availableItems) + 1
@@ -181,6 +231,87 @@ public final class RecipeBookClickCapture {
 		}
 	}
 
+	private static boolean shouldQueueHeldRecipe(Minecraft minecraft, boolean allowNearbyFallback, boolean craftAll) {
+		return ReachCraftingConfig.get().reachCraftHoldAndRelease()
+			&& allowNearbyFallback
+			&& !craftAll
+			&& isControlKeyDown(minecraft);
+	}
+
+	private static void queueHeldRecipe(
+		RecipeDisplayId recipeId,
+		RecipeCollection collection,
+		ItemStack displayStack,
+		int mouseButton,
+		boolean explicitVariantSelection
+	) {
+		HeldRecipeAction action = new HeldRecipeAction(
+			recipeId,
+			collection,
+			displayStack != null ? displayStack.copy() : ItemStack.EMPTY,
+			mouseButton,
+			explicitVariantSelection
+		);
+		if (pendingHeldRecipe == null) {
+			pendingHeldRecipe = new PendingHeldRecipe(action, 1, false);
+			return;
+		}
+
+		if (pendingHeldRecipe.action().sameRecipe(action)) {
+			int updatedCount = pendingHeldRecipe.clickCount() + 1;
+			pendingHeldRecipe = new PendingHeldRecipe(action, updatedCount, updatedCount >= 2);
+			return;
+		}
+
+		if (!pendingHeldRecipe.locked()) {
+			pendingHeldRecipe = new PendingHeldRecipe(action, 1, false);
+		}
+	}
+
+	private static void releasePendingHeldRecipe() {
+		if (pendingHeldRecipe == null) {
+			return;
+		}
+		replayBatch = new ReplayBatch(pendingHeldRecipe.action(), pendingHeldRecipe.clickCount());
+		pendingHeldRecipe = null;
+	}
+
+	private static void processReplayBatch(Minecraft minecraft) {
+		if (replayBatch == null) {
+			return;
+		}
+		if (NearbyContainerDryRun.isActiveSessionRunning()) {
+			return;
+		}
+
+		Screen screen = minecraft.screen;
+		LocalPlayer player = minecraft.player;
+		if (!(screen instanceof InventoryScreen) && !(screen instanceof CraftingScreen)) {
+			replayBatch = null;
+			return;
+		}
+		if (player == null || minecraft.level == null) {
+			replayBatch = null;
+			return;
+		}
+
+		executeRecipeButtonClick(
+			minecraft,
+			player,
+			screen,
+			replayBatch.action().recipeId(),
+			replayBatch.action().collection(),
+			replayBatch.action().displayStack().copy(),
+			replayBatch.action().mouseButton(),
+			false,
+			true,
+			replayBatch.action().explicitVariantSelection()
+		);
+
+		int remaining = replayBatch.remainingClicks() - 1;
+		replayBatch = remaining > 0 ? new ReplayBatch(replayBatch.action(), remaining) : null;
+	}
+
 	private static boolean isShiftKeyDown(Minecraft minecraft) {
 		return InputConstants.isKeyDown(minecraft.getWindow(), GLFW.GLFW_KEY_LEFT_SHIFT)
 			|| InputConstants.isKeyDown(minecraft.getWindow(), GLFW.GLFW_KEY_RIGHT_SHIFT);
@@ -200,5 +331,25 @@ public final class RecipeBookClickCapture {
 			minCount = Math.min(minCount, stack.getCount());
 		}
 		return minCount == Integer.MAX_VALUE ? 0 : minCount;
+	}
+
+	private record HeldRecipeAction(
+		RecipeDisplayId recipeId,
+		RecipeCollection collection,
+		ItemStack displayStack,
+		int mouseButton,
+		boolean explicitVariantSelection
+	) {
+		private boolean sameRecipe(HeldRecipeAction other) {
+			return other != null
+				&& recipeId.equals(other.recipeId)
+				&& explicitVariantSelection == other.explicitVariantSelection;
+		}
+	}
+
+	private record PendingHeldRecipe(HeldRecipeAction action, int clickCount, boolean locked) {
+	}
+
+	private record ReplayBatch(HeldRecipeAction action, int remainingClicks) {
 	}
 }
