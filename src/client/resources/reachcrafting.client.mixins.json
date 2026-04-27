@@ -4,9 +4,11 @@
 	"compatibilityLevel": "JAVA_21",
 	"client": [
 		"AbstractContainerMenuMixin",
+		"AbstractContainerScreenMixin",
 		"AbstractRecipeBookScreenAccessor",
 		"ClientRecipeBookAccessor",
 		"MinecraftInteractionBlockMixin",
+		"MultiPlayerGameModeMixin",
 		"OverlayRecipeComponentMixin",
 		"PlayerSecondaryUseMixin",
 		"RecipeButtonMixin",

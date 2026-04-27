@@ -17,6 +17,8 @@ public final class ReachCraftingConfig {
 	private boolean redistributeToCraftWhenNeeded;
 	private RevolvingCraftHandling revolvingCraftHandling;
 	private IngredientPlanning.CountPreference countPreference;
+	private boolean showNearbyCraftableIndicator;
+	private boolean cacheContainersForFasterSearch;
 
 	private ReachCraftingConfig() {
 	}
@@ -41,6 +43,10 @@ public final class ReachCraftingConfig {
 			instance.countPreference = stored.countPreference != null
 				? stored.countPreference
 				: IngredientPlanning.CountPreference.HIGHEST_TOTAL;
+			instance.showNearbyCraftableIndicator = stored.showNearbyCraftableIndicator;
+			instance.cacheContainersForFasterSearch = stored.cacheContainersForFasterSearch == null
+				? true
+				: stored.cacheContainersForFasterSearch;
 		} catch (Exception exception) {
 			ReachCraftingMod.LOGGER.warn("Failed to load reachcrafting config from {}", CONFIG_PATH, exception);
 			instance = defaults();
@@ -91,11 +97,32 @@ public final class ReachCraftingConfig {
 		this.countPreference = countPreference;
 	}
 
+	public boolean showNearbyCraftableIndicator() {
+		return showNearbyCraftableIndicator;
+	}
+
+	public void setShowNearbyCraftableIndicator(boolean showNearbyCraftableIndicator) {
+		this.showNearbyCraftableIndicator = showNearbyCraftableIndicator;
+	}
+
+	public boolean cacheContainersForFasterSearch() {
+		return cacheContainersForFasterSearch;
+	}
+
+	public void setCacheContainersForFasterSearch(boolean cacheContainersForFasterSearch) {
+		this.cacheContainersForFasterSearch = cacheContainersForFasterSearch;
+		if (!cacheContainersForFasterSearch) {
+			NearbyContainerCache.clear();
+		}
+	}
+
 	private static ReachCraftingConfig defaults() {
 		ReachCraftingConfig defaults = new ReachCraftingConfig();
 		defaults.redistributeToCraftWhenNeeded = false;
 		defaults.revolvingCraftHandling = RevolvingCraftHandling.PREFER_CLICKED_TYPE_WITH_COUNT_FALLBACK;
 		defaults.countPreference = IngredientPlanning.CountPreference.HIGHEST_TOTAL;
+		defaults.showNearbyCraftableIndicator = false;
+		defaults.cacheContainersForFasterSearch = true;
 		return defaults;
 	}
 
@@ -109,11 +136,15 @@ public final class ReachCraftingConfig {
 		private boolean redistributeToCraftWhenNeeded;
 		private RevolvingCraftHandling revolvingCraftHandling;
 		private IngredientPlanning.CountPreference countPreference;
+		private boolean showNearbyCraftableIndicator;
+		private Boolean cacheContainersForFasterSearch;
 
 		private StoredConfig(ReachCraftingConfig config) {
 			this.redistributeToCraftWhenNeeded = config.redistributeToCraftWhenNeeded;
 			this.revolvingCraftHandling = config.revolvingCraftHandling;
 			this.countPreference = config.countPreference;
+			this.showNearbyCraftableIndicator = config.showNearbyCraftableIndicator;
+			this.cacheContainersForFasterSearch = config.cacheContainersForFasterSearch;
 		}
 	}
 }

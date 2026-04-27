@@ -9,10 +9,19 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.inventory.CraftingScreen;
+import net.minecraft.client.gui.screens.inventory.InventoryScreen;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.InventoryMenu;
+import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.BarrelBlock;
 import net.minecraft.world.level.block.ChestBlock;
@@ -29,14 +38,40 @@ public final class NearbyContainerCache {
 	private static long revision;
 	private static ViewCacheKey lastViewKey;
 	private static ReachableView lastView;
+	private static BlockPos pendingObservedPos;
+	private static int pendingObservedTicks;
+	private static BlockPos openObservedPos;
+	private static int openObservedContainerId = -1;
 
 	private NearbyContainerCache() {
 	}
 
 	public static void init() {
+		ClientTickEvents.END_CLIENT_TICK.register(client -> {
+			if (pendingObservedTicks > 0) {
+				pendingObservedTicks--;
+				if (pendingObservedTicks == 0) {
+					pendingObservedPos = null;
+				}
+			}
+		});
+	}
+
+	public static void clear() {
+		SNAPSHOTS.clear();
+		revision++;
+		lastViewKey = null;
+		lastView = null;
+		pendingObservedPos = null;
+		pendingObservedTicks = 0;
+		openObservedPos = null;
+		openObservedContainerId = -1;
 	}
 
 	public static ReachableView getReachableView(Level level, Entity cameraEntity, double reachDistance) {
+		if (!ReachCraftingConfig.get().cacheContainersForFasterSearch()) {
+			return ReachableView.empty(revision);
+		}
 		if (level == null || cameraEntity == null) {
 			return ReachableView.empty(revision);
 		}
@@ -109,6 +144,9 @@ public final class NearbyContainerCache {
 		ReachableView reachableView,
 		Set<String> acceptedItemIds
 	) {
+		if (!ReachCraftingConfig.get().cacheContainersForFasterSearch()) {
+			return candidates;
+		}
 		if (candidates.isEmpty() || reachableView.isEmpty() || acceptedItemIds.isEmpty()) {
 			return candidates;
 		}
@@ -128,6 +166,9 @@ public final class NearbyContainerCache {
 	}
 
 	public static void recordObservedContents(Level level, BlockPos observedPos, Map<String, Integer> itemCounts) {
+		if (!ReachCraftingConfig.get().cacheContainersForFasterSearch()) {
+			return;
+		}
 		ContainerKey key = resolveContainerKey(level, observedPos);
 		if (key == null) {
 			return;
@@ -144,6 +185,9 @@ public final class NearbyContainerCache {
 	}
 
 	public static void applyWithdrawals(Level level, BlockPos observedPos, Map<String, Integer> withdrawnCounts) {
+		if (!ReachCraftingConfig.get().cacheContainersForFasterSearch()) {
+			return;
+		}
 		if (withdrawnCounts.isEmpty()) {
 			return;
 		}
@@ -181,6 +225,73 @@ public final class NearbyContainerCache {
 		bumpRevision();
 	}
 
+	public static void notePotentialContainerInteraction(Level level, BlockPos pos) {
+		if (!ReachCraftingConfig.get().cacheContainersForFasterSearch() || level == null || pos == null) {
+			return;
+		}
+
+		BlockState state = level.getBlockState(pos);
+		if (!isSupportedContainer(state) || !canAttemptOpen(level, pos, state)) {
+			return;
+		}
+
+		pendingObservedPos = pos.immutable();
+		pendingObservedTicks = 10;
+	}
+
+	public static void onContainerContentsInitialized(AbstractContainerMenu menu) {
+		if (!ReachCraftingConfig.get().cacheContainersForFasterSearch()) {
+			pendingObservedPos = null;
+			pendingObservedTicks = 0;
+			return;
+		}
+		if (NearbyContainerDryRun.isActiveSessionRunning()) {
+			return;
+		}
+
+		Minecraft client = Minecraft.getInstance();
+		LocalPlayer player = client.player;
+		if (player == null || client.level == null) {
+			return;
+		}
+		if (pendingObservedPos == null || pendingObservedTicks <= 0) {
+			return;
+		}
+		if (menu instanceof InventoryMenu || client.screen instanceof InventoryScreen || client.screen instanceof CraftingScreen) {
+			pendingObservedPos = null;
+			pendingObservedTicks = 0;
+			return;
+		}
+		if (!(client.screen instanceof AbstractContainerScreen<?>)) {
+			return;
+		}
+
+		recordObservedContents(client.level, pendingObservedPos, collectAllItems(menu));
+		openObservedPos = pendingObservedPos;
+		openObservedContainerId = menu.containerId;
+		pendingObservedPos = null;
+		pendingObservedTicks = 0;
+	}
+
+	public static void onContainerScreenRemoved(AbstractContainerMenu menu) {
+		if (!ReachCraftingConfig.get().cacheContainersForFasterSearch()) {
+			return;
+		}
+		if (NearbyContainerDryRun.isActiveSessionRunning()) {
+			return;
+		}
+		if (openObservedPos == null || menu == null || menu.containerId != openObservedContainerId) {
+			return;
+		}
+
+		Minecraft client = Minecraft.getInstance();
+		if (client.level != null) {
+			recordObservedContents(client.level, openObservedPos, collectAllItems(menu));
+		}
+		openObservedPos = null;
+		openObservedContainerId = -1;
+	}
+
 	private static Map<String, Integer> normalizeCounts(Map<String, Integer> itemCounts) {
 		Map<String, Integer> normalized = new LinkedHashMap<>();
 		for (Map.Entry<String, Integer> entry : itemCounts.entrySet()) {
@@ -195,6 +306,19 @@ public final class NearbyContainerCache {
 		revision++;
 		lastViewKey = null;
 		lastView = null;
+	}
+
+	private static Map<String, Integer> collectAllItems(AbstractContainerMenu menu) {
+		Map<String, Integer> allItems = new LinkedHashMap<>();
+		for (Slot slot : menu.slots) {
+			if (slot.container instanceof net.minecraft.world.entity.player.Inventory || !slot.hasItem()) {
+				continue;
+			}
+
+			String itemId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(slot.getItem().getItem()).toString();
+			allItems.merge(itemId, slot.getItem().getCount(), Integer::sum);
+		}
+		return allItems;
 	}
 
 	private static ContainerKey resolveContainerKey(Level level, BlockPos pos) {

@@ -183,6 +183,10 @@ public final class NearbyContainerDryRun {
 		}
 	}
 
+	public static boolean isActiveSessionRunning() {
+		return activeSession != null;
+	}
+
 	public static boolean shouldBlockWorldInteraction() {
 		return activeSession != null || interactionBlockTicks > 0;
 	}
@@ -354,16 +358,6 @@ public final class NearbyContainerDryRun {
 			);
 
 			sendChat("Scanning nearby containers...");
-			if (!cachedNearbyCounts.isEmpty()) {
-				discoveredNearby.putAll(cachedNearbyCounts);
-				beginWithdrawPhaseOrResume();
-				if (phase == SearchPhase.WITHDRAW) {
-					usedCachedFastPath = true;
-					discoveredNearby.clear();
-					return;
-				}
-				resetForLiveDiscovery();
-			}
 		}
 
 		private boolean expandReservedGridInPlace() {
@@ -447,12 +441,6 @@ public final class NearbyContainerDryRun {
 					if (phase == SearchPhase.DISCOVERY) {
 						beginWithdrawPhaseOrResume();
 					} else {
-				if (usedCachedFastPath && !attemptedLiveDiscoveryFallback && !remainingItemIds.isEmpty()) {
-							attemptedLiveDiscoveryFallback = true;
-							usedCachedFastPath = false;
-							beginLiveDiscoveryFallback();
-							return;
-						}
 						beginResume();
 					}
 				}
@@ -1006,15 +994,6 @@ public final class NearbyContainerDryRun {
 			state = SearchState.OPEN_NEXT;
 		}
 
-		private void beginLiveDiscoveryFallback() {
-			nextCandidateIndex = 0;
-			timeoutTicks = 0;
-			pendingContainerPos = null;
-			blockedCommittedLayoutMissingSummary = null;
-			phase = SearchPhase.DISCOVERY;
-			state = SearchState.OPEN_NEXT;
-		}
-
 		private static Map<String, Integer> countStacks(List<ItemStack> stacks) {
 			Map<String, Integer> counts = new LinkedHashMap<>();
 			for (ItemStack stack : stacks) {
@@ -1413,8 +1392,20 @@ public final class NearbyContainerDryRun {
 
 			AbstractContainerMenu menu = containerScreen.getMenu();
 			Map<Integer, IngredientPlanning.SlotTarget> targetsBySlot = new LinkedHashMap<>();
+			List<Integer> occupiedOriginalSlots = originalOccupiedGridSlotIndices();
+			int occupiedTargetIndex = 0;
 			for (IngredientPlanning.SlotTarget slotTarget : plannedTargets) {
-				targetsBySlot.put(slotTarget.slotIndex(), slotTarget);
+				int remappedSlotIndex = slotTarget.slotIndex();
+				if (originalContext.gridStacks().size() != ingredientSummary.slots().size()
+					&& slotTarget.itemId() != null
+					&& occupiedTargetIndex < occupiedOriginalSlots.size()) {
+					remappedSlotIndex = occupiedOriginalSlots.get(occupiedTargetIndex++);
+				}
+
+				targetsBySlot.put(
+					remappedSlotIndex,
+					new IngredientPlanning.SlotTarget(remappedSlotIndex, slotTarget.ingredientSlot(), slotTarget.itemId(), slotTarget.targetCount())
+				);
 			}
 
 			if (!clearGridForRedistribute(menu, targetsBySlot)) {
@@ -1450,6 +1441,17 @@ public final class NearbyContainerDryRun {
 
 			ReachCraftingMod.LOGGER.info("[nearby_restore] idx={} redistributed_grid={}", recipeIndex, summarizeGrid(menu, originalContext.gridStacks().size()));
 			return true;
+		}
+
+		private List<Integer> originalOccupiedGridSlotIndices() {
+			List<Integer> occupiedSlots = new ArrayList<>();
+			List<ItemStack> gridStacks = originalContext.gridStacks();
+			for (int index = 0; index < gridStacks.size(); index++) {
+				if (!gridStacks.get(index).isEmpty()) {
+					occupiedSlots.add(index + 1);
+				}
+			}
+			return occupiedSlots;
 		}
 
 		private boolean clearGridForRedistribute(AbstractContainerMenu menu, Map<Integer, IngredientPlanning.SlotTarget> targetsBySlot) {

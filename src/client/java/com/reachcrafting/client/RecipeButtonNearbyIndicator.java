@@ -14,6 +14,11 @@ public final class RecipeButtonNearbyIndicator {
 	}
 
 	public static boolean shouldShow(RecipeButton button) {
+		if (!ReachCraftingConfig.get().showNearbyCraftableIndicator()
+			|| !ReachCraftingConfig.get().cacheContainersForFasterSearch()) {
+			return false;
+		}
+
 		Minecraft minecraft = Minecraft.getInstance();
 		Screen screen = minecraft.screen;
 		if (!(screen instanceof InventoryScreen) && !(screen instanceof CraftingScreen)) {

@@ -114,7 +114,7 @@ public final class RecipeVariantResolver {
 
 		return candidates.stream()
 			.filter(candidate -> candidate.copiesAvailable() > 0)
-			.max(compareSelections(ReachCraftingConfig.get().countPreference()))
+			.max(compareSelections(ReachCraftingConfig.get().countPreference(), craftAll))
 			.orElse(exactSelection);
 	}
 
@@ -189,14 +189,15 @@ public final class RecipeVariantResolver {
 		return new Selection(entry.id(), entry, ingredientSummary, displayStack, outputItemId, outputLabel, copiesAvailable, preferredTotalCount);
 	}
 
-	private static Comparator<Selection> compareSelections(IngredientPlanning.CountPreference countPreference) {
+	private static Comparator<Selection> compareSelections(IngredientPlanning.CountPreference countPreference, boolean craftAll) {
 		Comparator<Selection> byPreferredCount = Comparator.comparingInt(Selection::preferredTotalCount);
 		if (countPreference == IngredientPlanning.CountPreference.LOWEST_TOTAL) {
 			byPreferredCount = byPreferredCount.reversed();
 		}
-		return byPreferredCount
-			.thenComparingInt(Selection::copiesAvailable)
-			.thenComparing(Selection::outputItemId);
+		Comparator<Selection> byCopies = Comparator.comparingInt(Selection::copiesAvailable);
+		return craftAll
+			? byCopies.thenComparing(byPreferredCount).thenComparing(Selection::outputItemId)
+			: byPreferredCount.thenComparing(byCopies).thenComparing(Selection::outputItemId);
 	}
 
 	private static ItemStack resolveDisplayStack(RecipeDisplay display, ContextMap context) {

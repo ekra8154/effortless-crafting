@@ -41,6 +41,24 @@ public final class ReachCraftingConfigScreen {
 			.setSaveConsumer(config::setRedistributeToCraftWhenNeeded)
 			.build());
 
+		general.addEntry(entries.startBooleanToggle(
+				Component.translatable("option.reachcrafting.show_nearby_craftable_indicator"),
+				config.showNearbyCraftableIndicator()
+			)
+			.setDefaultValue(false)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.show_nearby_craftable_indicator"))
+			.setSaveConsumer(config::setShowNearbyCraftableIndicator)
+			.build());
+
+		general.addEntry(entries.startBooleanToggle(
+				Component.translatable("option.reachcrafting.cache_containers_for_faster_search"),
+				config.cacheContainersForFasterSearch()
+			)
+			.setDefaultValue(true)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.cache_containers_for_faster_search"))
+			.setSaveConsumer(config::setCacheContainersForFasterSearch)
+			.build());
+
 		general.addEntry(entries.startEnumSelector(
 				Component.translatable("option.reachcrafting.revolving_craft_handling"),
 				ReachCraftingConfig.RevolvingCraftHandling.class,
