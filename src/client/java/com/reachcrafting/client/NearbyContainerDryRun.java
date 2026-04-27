@@ -245,6 +245,9 @@ public final class NearbyContainerDryRun {
 		private final RecipeCollection recipeCollection;
 		private final boolean explicitVariantSelection;
 		private final int recipeIndex;
+		private final RecipeDisplayId originalRecipeId;
+		private final String originalOutputLabel;
+		private final RecipeIngredientSummary originalIngredientSummary;
 		private RecipeDisplayId recipeId;
 		private String outputLabel;
 		private RecipeIngredientSummary ingredientSummary;
@@ -255,6 +258,8 @@ public final class NearbyContainerDryRun {
 		private final List<String> remainingItemIds;
 		private final ScreenContext originalContext;
 		private final Set<String> scanAcceptedItemIds;
+		private final NearbyContainerCache.ReachableView cachedReachableView;
+		private final Map<String, Integer> cachedNearbyCounts;
 		private final List<BlockPos> candidates;
 		private final Set<BlockPos> visited = new HashSet<>();
 		private final Map<String, Integer> discoveredNearby = new LinkedHashMap<>();
@@ -270,6 +275,8 @@ public final class NearbyContainerDryRun {
 		private BlockPos pendingContainerPos;
 		private boolean inventorySpaceBlocked;
 		private boolean redistributeThisRun;
+		private boolean usedCachedFastPath;
+		private boolean attemptedLiveDiscoveryFallback;
 		private String blockedCommittedLayoutMissingSummary;
 		private String lastRestoreFailure = "<none>";
 		private SearchPhase phase;
@@ -297,6 +304,9 @@ public final class NearbyContainerDryRun {
 			this.cameraEntity = cameraEntity;
 			this.recipeCollection = recipeCollection;
 			this.explicitVariantSelection = explicitVariantSelection;
+			this.originalRecipeId = recipeId;
+			this.originalOutputLabel = outputLabel;
+			this.originalIngredientSummary = ingredientSummary;
 			this.recipeId = recipeId;
 			this.recipeIndex = recipeIndex;
 			this.outputLabel = outputLabel;
@@ -313,9 +323,17 @@ public final class NearbyContainerDryRun {
 				craftAll
 			);
 			this.remainingItemIds = new ArrayList<>(initialDeficit.missingItemIds());
-			this.candidates = findCandidates(level, cameraEntity, player.blockInteractionRange());
+			this.cachedReachableView = NearbyContainerCache.getReachableView(level, cameraEntity, player.blockInteractionRange());
+			this.cachedNearbyCounts = cachedReachableView.countsFor(scanAcceptedItemIds);
+			this.candidates = NearbyContainerCache.prioritizeCandidates(
+				findCandidates(level, cameraEntity, player.blockInteractionRange()),
+				cachedReachableView,
+				scanAcceptedItemIds
+			);
 			this.targetCopiesPerSlot = craftAll ? 0 : 1;
 			this.redistributeThisRun = false;
+			this.usedCachedFastPath = false;
+			this.attemptedLiveDiscoveryFallback = false;
 			this.blockedCommittedLayoutMissingSummary = null;
 			this.phase = SearchPhase.DISCOVERY;
 		}
@@ -336,6 +354,16 @@ public final class NearbyContainerDryRun {
 			);
 
 			sendChat("Scanning nearby containers...");
+			if (!cachedNearbyCounts.isEmpty()) {
+				discoveredNearby.putAll(cachedNearbyCounts);
+				beginWithdrawPhaseOrResume();
+				if (phase == SearchPhase.WITHDRAW) {
+					usedCachedFastPath = true;
+					discoveredNearby.clear();
+					return;
+				}
+				resetForLiveDiscovery();
+			}
 		}
 
 		private boolean expandReservedGridInPlace() {
@@ -378,6 +406,7 @@ public final class NearbyContainerDryRun {
 
 		private boolean hasInventoryForReservedGridExpansion() {
 			Map<String, Integer> neededCounts = new LinkedHashMap<>();
+			Map<String, Integer> inventoryCounts = currentInventoryCounts();
 			for (ItemStack stack : originalContext.gridStacks()) {
 				if (stack.isEmpty()) {
 					continue;
@@ -395,7 +424,7 @@ public final class NearbyContainerDryRun {
 			}
 
 			for (Map.Entry<String, Integer> entry : neededCounts.entrySet()) {
-				if (localItems.inventoryCounts().getOrDefault(entry.getKey(), 0) < entry.getValue()) {
+				if (inventoryCounts.getOrDefault(entry.getKey(), 0) < entry.getValue()) {
 					return false;
 				}
 			}
@@ -418,6 +447,12 @@ public final class NearbyContainerDryRun {
 					if (phase == SearchPhase.DISCOVERY) {
 						beginWithdrawPhaseOrResume();
 					} else {
+				if (usedCachedFastPath && !attemptedLiveDiscoveryFallback && !remainingItemIds.isEmpty()) {
+							attemptedLiveDiscoveryFallback = true;
+							usedCachedFastPath = false;
+							beginLiveDiscoveryFallback();
+							return;
+						}
 						beginResume();
 					}
 				}
@@ -486,6 +521,8 @@ public final class NearbyContainerDryRun {
 				return;
 			}
 
+			Map<String, Integer> allItems = collectAllItems(menu);
+			NearbyContainerCache.recordObservedContents(level, pendingContainerPos, allItems);
 			Map<String, Integer> usefulItems = collectUsefulItems(menu, scanAcceptedItemIds);
 			if (!usefulItems.isEmpty()) {
 				usefulItems.forEach((itemId, count) -> discoveredNearby.merge(itemId, count, Integer::sum));
@@ -568,6 +605,7 @@ public final class NearbyContainerDryRun {
 				return;
 			}
 
+			Map<String, Integer> containerWithdrawnItems = new LinkedHashMap<>();
 			for (Slot slot : menu.slots) {
 				if (slot.container instanceof Inventory || !slot.hasItem()) {
 					continue;
@@ -596,9 +634,12 @@ public final class NearbyContainerDryRun {
 
 					remainingItemIds.remove(remainingItemIndex);
 					withdrawnItems.merge(itemId, 1, Integer::sum);
+					containerWithdrawnItems.merge(itemId, 1, Integer::sum);
 				}
 			}
 
+			subtractCounts(discoveredNearby, containerWithdrawnItems);
+			NearbyContainerCache.applyWithdrawals(level, pendingContainerPos, containerWithdrawnItems);
 			if (!withdrawnItems.isEmpty()) {
 				ReachCraftingMod.LOGGER.info(
 					"[nearby_withdraw] idx={} pos={} total_withdrawn={} remaining={}",
@@ -630,7 +671,8 @@ public final class NearbyContainerDryRun {
 		}
 
 		private void beginWithdrawPhaseOrResume() {
-			Map<String, Integer> inventoryAndNearby = AvailableItemSnapshot.mergeCounts(localItems.inventoryCounts(), discoveredNearby);
+			Map<String, Integer> inventoryCounts = currentInventoryCounts();
+			Map<String, Integer> inventoryAndNearby = AvailableItemSnapshot.mergeCounts(inventoryCounts, discoveredNearby);
 			boolean reservedGridMatchesCollection = originalContext.hasReservedGrid() && originalContext.reservedGridMatchesCollection(client.level, recipeCollection);
 			boolean committedReservedGrid = originalContext.hasReservedGrid()
 				&& (originalContext.reservedGridMatches(ingredientSummary) || reservedGridMatchesCollection);
@@ -655,11 +697,16 @@ public final class NearbyContainerDryRun {
 			Map<String, Integer> totalAvailable = redistributeReservedGrid
 				? AvailableItemSnapshot.mergeCounts(inventoryAndNearby, gridCounts)
 				: inventoryAndNearby;
-			Map<String, Integer> planningInventoryCounts = redistributeReservedGrid ? totalAvailable : localItems.inventoryCounts();
+			Map<String, Integer> planningInventoryCounts = redistributeReservedGrid ? totalAvailable : inventoryCounts;
 			List<ItemStack> planningGridStacks = redistributeReservedGrid ? List.of() : originalContext.gridStacks();
 			AvailableItemSnapshot resolverItems = redistributeReservedGrid
 				? new AvailableItemSnapshot(Map.copyOf(totalAvailable), Map.of(), Map.copyOf(totalAvailable), List.of())
-				: localItems;
+				: new AvailableItemSnapshot(
+					Map.copyOf(inventoryCounts),
+					localItems.gridCounts(),
+					AvailableItemSnapshot.mergeCounts(inventoryCounts, localItems.gridCounts()),
+					localItems.gridStacks()
+				);
 			int desiredVariantCopies = craftAll
 				? 1
 				: allowReservedGridVariantSwitch
@@ -783,7 +830,7 @@ public final class NearbyContainerDryRun {
 			}
 
 			Map<String, Integer> desiredCounts = new LinkedHashMap<>();
-			Map<String, Integer> alreadyCovered = new LinkedHashMap<>(localItems.inventoryCounts());
+			Map<String, Integer> alreadyCovered = new LinkedHashMap<>(currentInventoryCounts());
 
 			for (IngredientPlanning.SlotTarget slotTarget : slotTargets) {
 				if (slotTarget.itemId() == null || slotTarget.targetCount() <= 0) {
@@ -845,7 +892,7 @@ public final class NearbyContainerDryRun {
 		private List<String> computeReservedGridFetchItemIds() {
 			Map<String, Integer> neededCounts = computeReservedGridNeededCounts();
 
-			Map<String, Integer> availableInventory = new LinkedHashMap<>(localItems.inventoryCounts());
+			Map<String, Integer> availableInventory = new LinkedHashMap<>(currentInventoryCounts());
 			List<String> fetchItems = new ArrayList<>();
 			for (Map.Entry<String, Integer> entry : neededCounts.entrySet()) {
 				String itemId = entry.getKey();
@@ -877,7 +924,7 @@ public final class NearbyContainerDryRun {
 				desiredCounts.merge(slotTarget.itemId(), slotTarget.targetCount(), Integer::sum);
 			}
 
-			Map<String, Integer> movableCounts = AvailableItemSnapshot.mergeCounts(localItems.inventoryCounts(), countStacks(originalContext.gridStacks()));
+			Map<String, Integer> movableCounts = AvailableItemSnapshot.mergeCounts(currentInventoryCounts(), countStacks(originalContext.gridStacks()));
 			List<String> fetchItems = new ArrayList<>();
 			for (Map.Entry<String, Integer> entry : desiredCounts.entrySet()) {
 				String itemId = entry.getKey();
@@ -918,6 +965,54 @@ public final class NearbyContainerDryRun {
 				}
 			}
 			return remaining;
+		}
+
+		private Map<String, Integer> currentInventoryCounts() {
+			return AvailableItemSnapshot.mergeCounts(localItems.inventoryCounts(), withdrawnItems);
+		}
+
+		private static void subtractCounts(Map<String, Integer> counts, Map<String, Integer> subtract) {
+			for (Map.Entry<String, Integer> entry : subtract.entrySet()) {
+				int remaining = counts.getOrDefault(entry.getKey(), 0) - entry.getValue();
+				if (remaining > 0) {
+					counts.put(entry.getKey(), remaining);
+				} else {
+					counts.remove(entry.getKey());
+				}
+			}
+		}
+
+		private void resetForLiveDiscovery() {
+			recipeId = originalRecipeId;
+			outputLabel = originalOutputLabel;
+			ingredientSummary = originalIngredientSummary;
+			remainingItemIds.clear();
+			remainingItemIds.addAll(initialDeficit.missingItemIds());
+			plannedTargets = List.of();
+			nextCandidateIndex = 0;
+			timeoutTicks = 0;
+			restoreTicksRemaining = 0;
+			reopenAttemptsRemaining = 0;
+			targetCopiesPerSlot = craftAll ? 0 : 1;
+			pendingContainerPos = null;
+			inventorySpaceBlocked = false;
+			redistributeThisRun = false;
+			blockedCommittedLayoutMissingSummary = null;
+			lastRestoreFailure = "<none>";
+			visited.clear();
+			discoveredNearby.clear();
+			withdrawnItems.clear();
+			phase = SearchPhase.DISCOVERY;
+			state = SearchState.OPEN_NEXT;
+		}
+
+		private void beginLiveDiscoveryFallback() {
+			nextCandidateIndex = 0;
+			timeoutTicks = 0;
+			pendingContainerPos = null;
+			blockedCommittedLayoutMissingSummary = null;
+			phase = SearchPhase.DISCOVERY;
+			state = SearchState.OPEN_NEXT;
 		}
 
 		private static Map<String, Integer> countStacks(List<ItemStack> stacks) {
@@ -1038,7 +1133,7 @@ public final class NearbyContainerDryRun {
 				}
 			}
 
-			List<String> orderedVariants = orderRedistributedVariants(ingredientSlot.itemIds(), committedVariants, localItems.inventoryCounts(), preferenceTotals);
+			List<String> orderedVariants = orderRedistributedVariants(ingredientSlot.itemIds(), committedVariants, currentInventoryCounts(), preferenceTotals);
 			for (String variant : orderedVariants) {
 				while (!unassigned.isEmpty() && remaining.getOrDefault(variant, 0) >= targetCopies) {
 					ReservedSlotState slotState = unassigned.removeFirst();
@@ -1596,6 +1691,19 @@ public final class NearbyContainerDryRun {
 				}
 			}
 			return usefulItems;
+		}
+
+		private static Map<String, Integer> collectAllItems(AbstractContainerMenu menu) {
+			Map<String, Integer> allItems = new LinkedHashMap<>();
+			for (Slot slot : menu.slots) {
+				if (slot.container instanceof Inventory || !slot.hasItem()) {
+					continue;
+				}
+
+				String itemId = BuiltInRegistries.ITEM.getKey(slot.getItem().getItem()).toString();
+				allItems.merge(itemId, slot.getItem().getCount(), Integer::sum);
+			}
+			return allItems;
 		}
 
 		private static boolean isSupportedContainer(BlockState state) {
