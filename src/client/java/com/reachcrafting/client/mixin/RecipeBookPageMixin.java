@@ -35,6 +35,29 @@ public abstract class RecipeBookPageMixin {
 		boolean filtering,
 		CallbackInfoReturnable<Boolean> cir
 	) {
+		if (click.button() == GLFW.GLFW_MOUSE_BUTTON_RIGHT) {
+			OverlayRecipeComponent overlay = ((RecipeBookPageAccessor) (Object) this).getOverlay();
+			if (overlay != null && overlay.isVisible()) {
+				return;
+			}
+
+			for (RecipeButton button : this.buttons) {
+				if (!button.isMouseOver(click.x(), click.y())) {
+					continue;
+				}
+
+				if (RecipeBookClickCapture.onRecipeButtonRightClicked(
+					button.getCurrentRecipe(),
+					button.getCollection(),
+					button.getDisplayStack(),
+					false
+				)) {
+					cir.setReturnValue(true);
+				}
+				return;
+			}
+		}
+
 		if (click.button() != GLFW.GLFW_MOUSE_BUTTON_LEFT || (click.modifiers() & GLFW.GLFW_MOD_CONTROL) == 0) {
 			return;
 		}

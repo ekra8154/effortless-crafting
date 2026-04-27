@@ -18,14 +18,26 @@ public abstract class OverlayRecipeComponentMixin {
 		at = @At("RETURN")
 	)
 	private void reachcrafting$onOverlayRecipeClicked(MouseButtonEvent click, boolean filtering, CallbackInfoReturnable<Boolean> cir) {
-		if (!cir.getReturnValueZ() || click.button() != GLFW.GLFW_MOUSE_BUTTON_LEFT) {
-			return;
-		}
-
 		OverlayRecipeComponent overlay = (OverlayRecipeComponent) (Object) this;
 		RecipeDisplayId recipeId = overlay.getLastRecipeClicked();
 		RecipeCollection collection = overlay.getRecipeCollection();
 		if (recipeId == null || collection == null) {
+			return;
+		}
+
+		if (click.button() == GLFW.GLFW_MOUSE_BUTTON_RIGHT) {
+			if (cir.getReturnValueZ()) {
+				RecipeBookClickCapture.onRecipeButtonRightClicked(
+					recipeId,
+					collection,
+					null,
+					true
+				);
+			}
+			return;
+		}
+
+		if (!cir.getReturnValueZ() || click.button() != GLFW.GLFW_MOUSE_BUTTON_LEFT) {
 			return;
 		}
 

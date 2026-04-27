@@ -2,17 +2,29 @@ package com.reachcrafting.client;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import com.reachcrafting.ReachCraftingMod;
+import com.reachcrafting.client.mixin.AbstractRecipeBookScreenAccessor;
+import com.reachcrafting.client.mixin.OverlayRecipeButtonAccessor;
+import com.reachcrafting.client.mixin.OverlayRecipeComponentAccessor;
+import com.reachcrafting.client.mixin.RecipeBookComponentAccessor;
+import com.reachcrafting.client.mixin.RecipeBookPageAccessor;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
+import net.fabricmc.fabric.api.client.screen.v1.ScreenMouseEvents;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.inventory.AbstractRecipeBookScreen;
 import net.minecraft.client.gui.screens.inventory.CraftingScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
+import net.minecraft.client.gui.screens.recipebook.OverlayRecipeComponent;
 import net.minecraft.client.gui.screens.recipebook.RecipeCollection;
+import net.minecraft.client.gui.screens.recipebook.RecipeButton;
 import net.minecraft.client.multiplayer.MultiPlayerGameMode;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.util.Mth;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.display.RecipeDisplayId;
 import org.lwjgl.glfw.GLFW;
@@ -36,6 +48,24 @@ public final class RecipeBookClickCapture {
 			if (!controlDown && !ReachCraftingConfig.get().reachCraftHoldAndRelease()) {
 				pendingHeldRecipe = null;
 			}
+		});
+		ScreenEvents.AFTER_INIT.register((client, screen, scaledWidth, scaledHeight) -> {
+			ScreenMouseEvents.allowMouseClick(screen).register((currentScreen, event) -> {
+				if (event.button() != GLFW.GLFW_MOUSE_BUTTON_RIGHT) {
+					return true;
+				}
+				HeldRecipeAction action = findHoveredHeldRecipeAction(currentScreen, event.x(), event.y());
+				if (action != null && clearHeldRecipe(action)) {
+					return false;
+				}
+				return true;
+			});
+			ScreenMouseEvents.allowMouseScroll(screen).register((currentScreen, mouseX, mouseY, horizontalAmount, verticalAmount) -> {
+				if (handleHeldRecipeScroll(currentScreen, mouseX, mouseY, verticalAmount)) {
+					return false;
+				}
+				return true;
+			});
 		});
 	}
 
@@ -78,7 +108,8 @@ public final class RecipeBookClickCapture {
 			mouseButton,
 			craftAll,
 			allowNearbyFallback,
-			explicitVariantSelection
+			explicitVariantSelection,
+			1
 		);
 	}
 
@@ -92,13 +123,14 @@ public final class RecipeBookClickCapture {
 		int mouseButton,
 		boolean craftAll,
 		boolean allowNearbyFallback,
-		boolean explicitVariantSelection
+		boolean explicitVariantSelection,
+		int requestedClicks
 	) {
 		AvailableItemSnapshot availableItems = AvailableItemSnapshot.capture(player, screen);
 		boolean allowReservedGridVariantSwitch = false;
 		int desiredVariantCopies = availableItems.hasReservedGrid() && !craftAll
-			? currentReservedCraftCopies(availableItems) + 1
-			: 1;
+			? currentReservedCraftCopies(availableItems) + requestedClicks
+			: Math.max(requestedClicks, 1);
 
 		String screenKind = screen instanceof InventoryScreen ? "inventory_2x2" : "crafting_table_3x3";
 		RecipeVariantResolver.Selection selectedRecipe = RecipeVariantResolver.resolve(
@@ -134,12 +166,19 @@ public final class RecipeBookClickCapture {
 
 		ItemStack resolvedDisplayStack = selectedRecipe.displayStack().copy();
 		RecipeIngredientSummary ingredientSummary = selectedRecipe.ingredientSummary();
-		RecipeDeficitReport deficitReport = RecipeDeficitReport.from(
-			ingredientSummary,
-			availableItems.inventoryCounts(),
-			availableItems.gridStacks(),
-			craftAll
-		);
+		RecipeDeficitReport deficitReport = craftAll
+			? RecipeDeficitReport.from(
+				ingredientSummary,
+				availableItems.inventoryCounts(),
+				availableItems.gridStacks(),
+				true
+			)
+			: RecipeDeficitReport.from(
+				ingredientSummary,
+				availableItems.inventoryCounts(),
+				availableItems.gridStacks(),
+				desiredVariantCopies
+			);
 		String resolvedItemId = BuiltInRegistries.ITEM.getKey(resolvedDisplayStack.getItem()).toString();
 		String outputLabel = resolvedItemId + " x" + resolvedDisplayStack.getCount();
 		String chatMessage = deficitReport.hasMissingIngredients()
@@ -185,7 +224,8 @@ public final class RecipeBookClickCapture {
 				outputLabel,
 				ingredientSummary,
 				availableItems,
-				craftAll
+				craftAll,
+				requestedClicks
 			)) {
 				return;
 			}
@@ -197,12 +237,27 @@ public final class RecipeBookClickCapture {
 				outputLabel,
 				ingredientSummary,
 				availableItems,
-				craftAll
+				craftAll,
+				requestedClicks
 			);
 			return;
 		}
 
 		if (allowNearbyFallback && !deficitReport.hasMissingIngredients() && !availableItems.hasReservedGrid()) {
+			if (!craftAll && requestedClicks > 1) {
+				NearbyContainerDryRun.start(
+					selectedRecipe.recipeId(),
+					collection,
+					explicitVariantSelection,
+					recipeIndex,
+					outputLabel,
+					ingredientSummary,
+					availableItems,
+					false,
+					requestedClicks
+				);
+				return;
+			}
 			MultiPlayerGameMode gameMode = minecraft.gameMode;
 			if (gameMode != null) {
 				gameMode.handlePlaceRecipe(player.containerMenu.containerId, selectedRecipe.recipeId(), craftAll);
@@ -224,7 +279,8 @@ public final class RecipeBookClickCapture {
 				outputLabel,
 				ingredientSummary,
 				availableItems,
-				craftAll
+				craftAll,
+				requestedClicks
 			);
 		} else {
 			NearbyContainerDryRun.cancelCurrent();
@@ -268,6 +324,24 @@ public final class RecipeBookClickCapture {
 		}
 	}
 
+	public static boolean onRecipeButtonRightClicked(
+		RecipeDisplayId recipeId,
+		RecipeCollection collection,
+		ItemStack displayStack,
+		boolean explicitVariantSelection
+	) {
+		if (!canUseHeldQueueControls(Minecraft.getInstance()) || recipeId == null || collection == null) {
+			return false;
+		}
+		return clearHeldRecipe(new HeldRecipeAction(
+			recipeId,
+			collection,
+			displayStack != null ? displayStack.copy() : ItemStack.EMPTY,
+			GLFW.GLFW_MOUSE_BUTTON_LEFT,
+			explicitVariantSelection
+		));
+	}
+
 	private static void releasePendingHeldRecipe() {
 		if (pendingHeldRecipe == null) {
 			return;
@@ -305,11 +379,148 @@ public final class RecipeBookClickCapture {
 			replayBatch.action().mouseButton(),
 			false,
 			true,
-			replayBatch.action().explicitVariantSelection()
+			replayBatch.action().explicitVariantSelection(),
+			replayBatch.remainingClicks()
 		);
+		replayBatch = null;
+	}
 
-		int remaining = replayBatch.remainingClicks() - 1;
-		replayBatch = remaining > 0 ? new ReplayBatch(replayBatch.action(), remaining) : null;
+	private static boolean handleHeldRecipeScroll(Screen screen, double mouseX, double mouseY, double verticalAmount) {
+		Minecraft minecraft = Minecraft.getInstance();
+		if (!canUseHeldQueueControls(minecraft) || verticalAmount == 0.0D) {
+			return false;
+		}
+
+		HeldRecipeAction action = findHoveredHeldRecipeAction(screen, mouseX, mouseY);
+		if (action == null) {
+			return false;
+		}
+
+		int delta = verticalAmount > 0.0D ? 1 : -1;
+		return adjustHeldRecipeCount(action, delta);
+	}
+
+	private static boolean canUseHeldQueueControls(Minecraft minecraft) {
+		return ReachCraftingConfig.get().reachCraftHoldAndRelease()
+			&& replayBatch == null
+			&& isControlKeyDown(minecraft);
+	}
+
+	private static HeldRecipeAction findHoveredHeldRecipeAction(Screen screen, double mouseX, double mouseY) {
+		if (!(screen instanceof AbstractRecipeBookScreen<?> recipeBookScreen)) {
+			return null;
+		}
+
+		RecipeBookComponentAccessor componentAccessor = (RecipeBookComponentAccessor) ((AbstractRecipeBookScreenAccessor) recipeBookScreen).getRecipeBookComponent();
+		RecipeBookPageAccessor pageAccessor = (RecipeBookPageAccessor) componentAccessor.getRecipeBookPage();
+		OverlayRecipeComponent overlay = pageAccessor.getOverlay();
+		if (overlay != null && overlay.isVisible() && overlay.getRecipeCollection() != null) {
+			for (Object entry : ((OverlayRecipeComponentAccessor) overlay).getRecipeButtons()) {
+				if (!(entry instanceof AbstractWidget widget) || !widget.isMouseOver(mouseX, mouseY)) {
+					continue;
+				}
+				RecipeDisplayId recipeId = ((OverlayRecipeButtonAccessor) entry).getRecipe();
+				if (recipeId == null) {
+					continue;
+				}
+				return new HeldRecipeAction(
+					recipeId,
+					overlay.getRecipeCollection(),
+					ItemStack.EMPTY,
+					GLFW.GLFW_MOUSE_BUTTON_LEFT,
+					true
+				);
+			}
+			return null;
+		}
+
+		for (RecipeButton button : pageAccessor.getButtons()) {
+			if (!button.isMouseOver(mouseX, mouseY) || button.getCurrentRecipe() == null || button.getCollection() == null) {
+				continue;
+			}
+			return new HeldRecipeAction(
+				button.getCurrentRecipe(),
+				button.getCollection(),
+				button.getDisplayStack().copy(),
+				GLFW.GLFW_MOUSE_BUTTON_LEFT,
+				false
+			);
+		}
+		return null;
+	}
+
+	private static boolean adjustHeldRecipeCount(HeldRecipeAction action, int delta) {
+		if (delta == 0) {
+			return false;
+		}
+
+		if (pendingHeldRecipe == null) {
+			if (delta < 0) {
+				return false;
+			}
+			pendingHeldRecipe = new PendingHeldRecipe(action, 1, false);
+			return true;
+		}
+
+		if (pendingHeldRecipe.action().sameRecipe(action)) {
+			int updatedCount = Mth.clamp(pendingHeldRecipe.clickCount() + delta, 0, 64);
+			if (updatedCount <= 0) {
+				pendingHeldRecipe = null;
+				return true;
+			}
+			pendingHeldRecipe = new PendingHeldRecipe(action, updatedCount, updatedCount >= 2);
+			return true;
+		}
+
+		if (delta > 0 && !pendingHeldRecipe.locked()) {
+			pendingHeldRecipe = new PendingHeldRecipe(action, 1, false);
+			return true;
+		}
+
+		return false;
+	}
+
+	private static boolean clearHeldRecipe(HeldRecipeAction action) {
+		if (pendingHeldRecipe == null || !pendingHeldRecipe.action().sameRecipe(action)) {
+			return false;
+		}
+		pendingHeldRecipe = null;
+		return true;
+	}
+
+	public static int getHeldQueuedCount(RecipeButton button) {
+		if (button == null) {
+			return 0;
+		}
+		if (button.getCollection() == null || button.getCurrentRecipe() == null) {
+			return 0;
+		}
+		return getHeldQueuedCount(button.getCurrentRecipe(), button.getCollection(), false);
+	}
+
+	public static int getHeldQueuedCount(
+		RecipeDisplayId recipeId,
+		RecipeCollection collection,
+		boolean explicitVariantSelection
+	) {
+		if (!ReachCraftingConfig.get().reachCraftHoldAndRelease()
+			|| pendingHeldRecipe == null
+			|| recipeId == null
+			|| collection == null) {
+			return 0;
+		}
+
+		HeldRecipeAction action = pendingHeldRecipe.action();
+		if (action.explicitVariantSelection() != explicitVariantSelection) {
+			return 0;
+		}
+		if (explicitVariantSelection) {
+			return action.recipeId().equals(recipeId) ? pendingHeldRecipe.clickCount() : 0;
+		}
+		if (action.collection() != null && action.collection() == collection) {
+			return pendingHeldRecipe.clickCount();
+		}
+		return action.recipeId().equals(recipeId) ? pendingHeldRecipe.clickCount() : 0;
 	}
 
 	private static boolean isShiftKeyDown(Minecraft minecraft) {
@@ -341,9 +552,16 @@ public final class RecipeBookClickCapture {
 		boolean explicitVariantSelection
 	) {
 		private boolean sameRecipe(HeldRecipeAction other) {
-			return other != null
-				&& recipeId.equals(other.recipeId)
-				&& explicitVariantSelection == other.explicitVariantSelection;
+			if (other == null || explicitVariantSelection != other.explicitVariantSelection) {
+				return false;
+			}
+			if (explicitVariantSelection) {
+				return recipeId.equals(other.recipeId);
+			}
+			if (collection != null && other.collection != null) {
+				return collection == other.collection || collection.equals(other.collection);
+			}
+			return recipeId.equals(other.recipeId);
 		}
 	}
 

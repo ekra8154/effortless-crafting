@@ -103,7 +103,8 @@ public final class NearbyContainerDryRun {
 		String outputLabel,
 		RecipeIngredientSummary ingredientSummary,
 		AvailableItemSnapshot localItems,
-		boolean craftAll
+		boolean craftAll,
+		int requestedSingleClicks
 	) {
 		Minecraft client = Minecraft.getInstance();
 		LocalPlayer player = client.player;
@@ -128,7 +129,8 @@ public final class NearbyContainerDryRun {
 			outputLabel,
 			ingredientSummary,
 			localItems,
-			craftAll
+			craftAll,
+			requestedSingleClicks
 		);
 		if (!session.canStart()) {
 			return;
@@ -146,7 +148,8 @@ public final class NearbyContainerDryRun {
 		String outputLabel,
 		RecipeIngredientSummary ingredientSummary,
 		AvailableItemSnapshot localItems,
-		boolean craftAll
+		boolean craftAll,
+		int requestedSingleClicks
 	) {
 		Minecraft client = Minecraft.getInstance();
 		LocalPlayer player = client.player;
@@ -171,7 +174,8 @@ public final class NearbyContainerDryRun {
 			outputLabel,
 			ingredientSummary,
 			localItems,
-			craftAll
+			craftAll,
+			requestedSingleClicks
 		);
 		return session.expandReservedGridInPlace();
 	}
@@ -239,6 +243,7 @@ public final class NearbyContainerDryRun {
 		private static final int RESUME_DELAY_TICKS = 2;
 		private static final int REOPEN_TIMEOUT_TICKS = 20;
 		private static final int RESTORE_TIMEOUT_TICKS = 10;
+		private static final int SEED_WAIT_TICKS = 5;
 		private static final int MAX_REOPEN_ATTEMPTS = 3;
 
 		private final Minecraft client;
@@ -257,6 +262,7 @@ public final class NearbyContainerDryRun {
 		private RecipeIngredientSummary ingredientSummary;
 		private final AvailableItemSnapshot localItems;
 		private final boolean craftAll;
+		private final int requestedSingleClicks;
 		private final IngredientPlanning.Policy planningPolicy;
 		private final RecipeDeficitReport initialDeficit;
 		private final List<String> remainingItemIds;
@@ -281,6 +287,8 @@ public final class NearbyContainerDryRun {
 		private boolean redistributeThisRun;
 		private boolean usedCachedFastPath;
 		private boolean attemptedLiveDiscoveryFallback;
+		private boolean seededVanillaBatchLayout;
+		private int seedWaitTicksRemaining;
 		private String blockedCommittedLayoutMissingSummary;
 		private String lastRestoreFailure = "<none>";
 		private SearchPhase phase;
@@ -299,7 +307,8 @@ public final class NearbyContainerDryRun {
 			String outputLabel,
 			RecipeIngredientSummary ingredientSummary,
 			AvailableItemSnapshot localItems,
-			boolean craftAll
+			boolean craftAll,
+			int requestedSingleClicks
 		) {
 			this.client = client;
 			this.player = player;
@@ -317,6 +326,7 @@ public final class NearbyContainerDryRun {
 			this.ingredientSummary = ingredientSummary;
 			this.localItems = localItems;
 			this.craftAll = craftAll;
+			this.requestedSingleClicks = Math.max(requestedSingleClicks, 1);
 			this.originalContext = ScreenContext.capture(client, cameraEntity, player.blockInteractionRange(), localItems);
 			this.planningPolicy = ReachCraftingConfig.get().toPlanningPolicy();
 			this.scanAcceptedItemIds = computeScanAcceptedItemIds(recipeCollection, ingredientSummary, explicitVariantSelection, originalContext.hasReservedGrid());
@@ -334,10 +344,12 @@ public final class NearbyContainerDryRun {
 				cachedReachableView,
 				scanAcceptedItemIds
 			);
-			this.targetCopiesPerSlot = craftAll ? 0 : 1;
+			this.targetCopiesPerSlot = craftAll ? 0 : this.requestedSingleClicks;
 			this.redistributeThisRun = false;
 			this.usedCachedFastPath = false;
 			this.attemptedLiveDiscoveryFallback = false;
+			this.seededVanillaBatchLayout = false;
+			this.seedWaitTicksRemaining = SEED_WAIT_TICKS;
 			this.blockedCommittedLayoutMissingSummary = null;
 			this.phase = SearchPhase.DISCOVERY;
 		}
@@ -366,16 +378,17 @@ public final class NearbyContainerDryRun {
 		}
 
 			Map<String, Integer> availableCounts = localItems.inventoryCounts();
+			int maxReachableCopies = IngredientPlanning.computeMaxCraftCopies(
+				ingredientSummary,
+				localItems.inventoryCounts(),
+				originalContext.gridStacks(),
+				availableCounts,
+				availableCounts,
+				planningPolicy
+			);
 			targetCopiesPerSlot = craftAll
-				? IngredientPlanning.computeMaxCraftCopies(
-					ingredientSummary,
-					localItems.inventoryCounts(),
-					originalContext.gridStacks(),
-					availableCounts,
-					availableCounts,
-					planningPolicy
-				)
-				: 1;
+				? maxReachableCopies
+				: Math.min(currentReservedCraftCopies() + requestedSingleClicks, maxReachableCopies);
 			if (targetCopiesPerSlot <= 0) {
 				return false;
 			}
@@ -408,9 +421,7 @@ public final class NearbyContainerDryRun {
 
 				String itemId = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
 				int currentCount = stack.getCount();
-				int desiredCount = craftAll
-					? Math.max(targetCopiesPerSlot, currentCount)
-					: Math.min(stack.getMaxStackSize(), currentCount + 1);
+				int desiredCount = Math.min(stack.getMaxStackSize(), Math.max(targetCopiesPerSlot, currentCount));
 				int missing = Math.max(desiredCount - currentCount, 0);
 				if (missing > 0) {
 					neededCounts.merge(itemId, missing, Integer::sum);
@@ -698,8 +709,8 @@ public final class NearbyContainerDryRun {
 			int desiredVariantCopies = craftAll
 				? 1
 				: allowReservedGridVariantSwitch
-					? currentReservedCraftCopies() + 1
-					: 1;
+					? currentReservedCraftCopies() + requestedSingleClicks
+					: requestedSingleClicks;
 			RecipeVariantResolver.Selection resolvedSelection = RecipeVariantResolver.resolve(
 				client,
 				player,
@@ -727,15 +738,9 @@ public final class NearbyContainerDryRun {
 				outputLabel = resolvedSelection.outputLabel();
 				ingredientSummary = resolvedSelection.ingredientSummary();
 			}
-			IngredientPlanning.PlanResult combinedPlan = IngredientPlanning.plan(
-				ingredientSummary,
-				planningInventoryCounts,
-				planningGridStacks,
-				totalAvailable,
-				totalAvailable,
-				1,
-				planningPolicy
-			);
+			int desiredTargetCopies = committedReservedGrid
+				? currentReservedCraftCopies() + requestedSingleClicks
+				: requestedSingleClicks;
 			int redistributedMaxCopies = redistributeReservedGrid
 				? IngredientPlanning.computeMaxCraftCopies(
 					ingredientSummary,
@@ -746,18 +751,19 @@ public final class NearbyContainerDryRun {
 					planningPolicy
 				)
 				: 0;
+			int maxReachableCopies = IngredientPlanning.computeMaxCraftCopies(
+				ingredientSummary,
+				planningInventoryCounts,
+				planningGridStacks,
+				totalAvailable,
+				totalAvailable,
+				planningPolicy
+			);
 			targetCopiesPerSlot = craftAll
-				? IngredientPlanning.computeMaxCraftCopies(
-					ingredientSummary,
-					planningInventoryCounts,
-					planningGridStacks,
-					totalAvailable,
-					totalAvailable,
-					planningPolicy
-				)
+				? maxReachableCopies
 				: redistributeReservedGrid
-					? Math.min(currentReservedCraftCopies() + 1, redistributedMaxCopies)
-					: combinedPlan.hasMissingIngredients() ? 0 : 1;
+					? Math.min(desiredTargetCopies, redistributedMaxCopies)
+					: Math.min(desiredTargetCopies, maxReachableCopies);
 			IngredientPlanning.PlanResult plannedResult = IngredientPlanning.plan(
 				ingredientSummary,
 				planningInventoryCounts,
@@ -933,9 +939,7 @@ public final class NearbyContainerDryRun {
 
 				String itemId = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
 				int currentCount = stack.getCount();
-				int desiredCount = craftAll
-					? Math.max(targetCopiesPerSlot, currentCount)
-					: Math.min(stack.getMaxStackSize(), currentCount + 1);
+				int desiredCount = Math.min(stack.getMaxStackSize(), Math.max(targetCopiesPerSlot, currentCount));
 				int missing = Math.max(desiredCount - currentCount, 0);
 				if (missing > 0) {
 					neededCounts.merge(itemId, missing, Integer::sum);
@@ -981,10 +985,12 @@ public final class NearbyContainerDryRun {
 			timeoutTicks = 0;
 			restoreTicksRemaining = 0;
 			reopenAttemptsRemaining = 0;
-			targetCopiesPerSlot = craftAll ? 0 : 1;
+			targetCopiesPerSlot = craftAll ? 0 : requestedSingleClicks;
 			pendingContainerPos = null;
 			inventorySpaceBlocked = false;
 			redistributeThisRun = false;
+			seededVanillaBatchLayout = false;
+			seedWaitTicksRemaining = SEED_WAIT_TICKS;
 			blockedCommittedLayoutMissingSummary = null;
 			lastRestoreFailure = "<none>";
 			visited.clear();
@@ -1196,6 +1202,7 @@ public final class NearbyContainerDryRun {
 			boolean gridRestored = false;
 			boolean reservedGridMatchesRecipe = false;
 			boolean reservedGridExpanded = false;
+			boolean placedPlannedGrid = false;
 			lastRestoreFailure = contextReady ? "<none>" : "context_not_ready";
 			if (contextReady) {
 				restoreRecipeBookState();
@@ -1219,6 +1226,28 @@ public final class NearbyContainerDryRun {
 						? applyPlannedTargetsToGrid()
 						: expandReservedGrid();
 				}
+				if (!originalContext.hasReservedGrid()
+					&& !craftAll
+					&& requestedSingleClicks > 1
+					&& targetCopiesPerSlot > 0
+					&& !plannedTargets.isEmpty()) {
+					PlacementAttempt seededPlacement = placePlannedGridWithVanillaShape();
+					if (seededPlacement == PlacementAttempt.WAITING_FOR_SEED) {
+						if (seedWaitTicksRemaining > 0) {
+							seedWaitTicksRemaining--;
+							timeoutTicks = 1;
+							ReachCraftingMod.LOGGER.info(
+								"[nearby_restore] idx={} waiting_for_seeded_shape remaining_ticks={}",
+								recipeIndex,
+								seedWaitTicksRemaining
+							);
+							return false;
+						}
+						lastRestoreFailure = "vanilla_shape_seed_timeout";
+					} else {
+						placedPlannedGrid = seededPlacement == PlacementAttempt.SUCCESS;
+					}
+				}
 			}
 
 			Map<String, Integer> updatedCounts = AvailableItemSnapshot.mergeCounts(localItems.inventoryCounts(), withdrawnItems);
@@ -1232,6 +1261,18 @@ public final class NearbyContainerDryRun {
 				&& gridRestored
 				&& reservedGridMatchesRecipe
 				&& reservedGridExpanded
+				&& remainingItemIds.isEmpty()
+				&& !inventorySpaceBlocked) {
+				updatedDeficit = new RecipeDeficitReport(
+					Map.of(),
+					Map.of(),
+					List.of(),
+					plannedTargets,
+					"<none>",
+					false
+				);
+			} else if (!originalContext.hasReservedGrid()
+				&& placedPlannedGrid
 				&& remainingItemIds.isEmpty()
 				&& !inventorySpaceBlocked) {
 				updatedDeficit = new RecipeDeficitReport(
@@ -1270,6 +1311,8 @@ public final class NearbyContainerDryRun {
 				} else {
 					sendChat("Fetched ingredients for the next craft.");
 				}
+			} else if (placedPlannedGrid) {
+				sendChat("Updated grid: " + outputLabel);
 			} else if (targetCopiesPerSlot > 0 && !updatedDeficit.hasMissingIngredients() && contextReady && player.containerMenu != null) {
 				gameMode.handlePlaceRecipe(player.containerMenu.containerId, recipeId, craftAll);
 				sendChat("Placed recipe: " + outputLabel);
@@ -1358,9 +1401,7 @@ public final class NearbyContainerDryRun {
 					return false;
 				}
 
-				int targetCount = craftAll
-					? Math.min(currentStack.getMaxStackSize(), Math.max(targetCopiesPerSlot, currentStack.getCount()))
-					: Math.min(currentStack.getMaxStackSize(), currentStack.getCount() + 1);
+				int targetCount = Math.min(currentStack.getMaxStackSize(), Math.max(targetCopiesPerSlot, currentStack.getCount()));
 				if (currentStack.getCount() >= targetCount) {
 					continue;
 				}
@@ -1386,27 +1427,67 @@ public final class NearbyContainerDryRun {
 		}
 
 		private boolean applyPlannedTargetsToGrid() {
+			return applyPlannedTargetsToGrid(originalOccupiedGridSlotIndices());
+		}
+
+		private PlacementAttempt placePlannedGridWithVanillaShape() {
+			if (!(client.screen instanceof AbstractContainerScreen<?> containerScreen)) {
+				lastRestoreFailure = "screen_not_container";
+				return PlacementAttempt.FAILURE;
+			}
+			AbstractContainerMenu menu = containerScreen.getMenu();
+			if (!seededVanillaBatchLayout) {
+				gameMode.handlePlaceRecipe(player.containerMenu.containerId, recipeId, false);
+				seededVanillaBatchLayout = true;
+			}
+			List<Integer> occupiedSlots = currentOccupiedGridSlotIndices(menu, originalContext.gridStacks().size());
+			if (occupiedSlots.isEmpty()) {
+				lastRestoreFailure = "vanilla_shape_seed_waiting";
+				return PlacementAttempt.WAITING_FOR_SEED;
+			}
+			return topUpSeededGridToPlannedTargets(menu, occupiedSlots) ? PlacementAttempt.SUCCESS : PlacementAttempt.FAILURE;
+		}
+
+		private boolean topUpSeededGridToPlannedTargets(AbstractContainerMenu menu, List<Integer> occupiedAnchorSlots) {
+			Map<Integer, IngredientPlanning.SlotTarget> targetsBySlot = remapPlannedTargetsToAnchors(occupiedAnchorSlots);
+			for (int slotIndex = 1; slotIndex <= originalContext.gridStacks().size(); slotIndex++) {
+				IngredientPlanning.SlotTarget desiredTarget = targetsBySlot.get(slotIndex);
+				if (desiredTarget == null || desiredTarget.itemId() == null || desiredTarget.targetCount() <= 0) {
+					continue;
+				}
+
+				ItemStack desiredStack = BuiltInRegistries.ITEM.getOptional(Identifier.parse(desiredTarget.itemId()))
+					.map(item -> new ItemStack(item, desiredTarget.targetCount()))
+					.orElse(ItemStack.EMPTY);
+				if (desiredStack.isEmpty()) {
+					lastRestoreFailure = "missing_item_for_target=" + desiredTarget.itemId();
+					return false;
+				}
+
+				if (!restoreGridSlot(menu, slotIndex, desiredStack)) {
+					ReachCraftingMod.LOGGER.warn(
+						"[nearby_restore] idx={} failed_to_top_up_seeded grid_slot={} desired={} actual={} reason={}",
+						recipeIndex,
+						slotIndex,
+						formatStack(desiredStack),
+						formatStack(menu.getSlot(slotIndex).getItem()),
+						lastRestoreFailure
+					);
+					return false;
+				}
+			}
+
+			ReachCraftingMod.LOGGER.info("[nearby_restore] idx={} seeded_grid={}", recipeIndex, summarizeGrid(menu, originalContext.gridStacks().size()));
+			return true;
+		}
+
+		private boolean applyPlannedTargetsToGrid(List<Integer> occupiedAnchorSlots) {
 			if (!(client.screen instanceof AbstractContainerScreen<?> containerScreen)) {
 				return false;
 			}
 
 			AbstractContainerMenu menu = containerScreen.getMenu();
-			Map<Integer, IngredientPlanning.SlotTarget> targetsBySlot = new LinkedHashMap<>();
-			List<Integer> occupiedOriginalSlots = originalOccupiedGridSlotIndices();
-			int occupiedTargetIndex = 0;
-			for (IngredientPlanning.SlotTarget slotTarget : plannedTargets) {
-				int remappedSlotIndex = slotTarget.slotIndex();
-				if (originalContext.gridStacks().size() != ingredientSummary.slots().size()
-					&& slotTarget.itemId() != null
-					&& occupiedTargetIndex < occupiedOriginalSlots.size()) {
-					remappedSlotIndex = occupiedOriginalSlots.get(occupiedTargetIndex++);
-				}
-
-				targetsBySlot.put(
-					remappedSlotIndex,
-					new IngredientPlanning.SlotTarget(remappedSlotIndex, slotTarget.ingredientSlot(), slotTarget.itemId(), slotTarget.targetCount())
-				);
-			}
+			Map<Integer, IngredientPlanning.SlotTarget> targetsBySlot = remapPlannedTargetsToAnchors(occupiedAnchorSlots);
 
 			if (!clearGridForRedistribute(menu, targetsBySlot)) {
 				return false;
@@ -1443,12 +1524,41 @@ public final class NearbyContainerDryRun {
 			return true;
 		}
 
+		private Map<Integer, IngredientPlanning.SlotTarget> remapPlannedTargetsToAnchors(List<Integer> occupiedAnchorSlots) {
+			Map<Integer, IngredientPlanning.SlotTarget> targetsBySlot = new LinkedHashMap<>();
+			int occupiedTargetIndex = 0;
+			for (IngredientPlanning.SlotTarget slotTarget : plannedTargets) {
+				int remappedSlotIndex = slotTarget.slotIndex();
+				if (originalContext.gridStacks().size() != ingredientSummary.slots().size()
+					&& slotTarget.itemId() != null
+					&& occupiedTargetIndex < occupiedAnchorSlots.size()) {
+					remappedSlotIndex = occupiedAnchorSlots.get(occupiedTargetIndex++);
+				}
+
+				targetsBySlot.put(
+					remappedSlotIndex,
+					new IngredientPlanning.SlotTarget(remappedSlotIndex, slotTarget.ingredientSlot(), slotTarget.itemId(), slotTarget.targetCount())
+				);
+			}
+			return targetsBySlot;
+		}
+
 		private List<Integer> originalOccupiedGridSlotIndices() {
 			List<Integer> occupiedSlots = new ArrayList<>();
 			List<ItemStack> gridStacks = originalContext.gridStacks();
 			for (int index = 0; index < gridStacks.size(); index++) {
 				if (!gridStacks.get(index).isEmpty()) {
 					occupiedSlots.add(index + 1);
+				}
+			}
+			return occupiedSlots;
+		}
+
+		private List<Integer> currentOccupiedGridSlotIndices(AbstractContainerMenu menu, int gridSlotCount) {
+			List<Integer> occupiedSlots = new ArrayList<>();
+			for (int index = 1; index <= gridSlotCount; index++) {
+				if (menu.getSlot(index).hasItem()) {
+					occupiedSlots.add(index);
 				}
 			}
 			return occupiedSlots;
@@ -1482,6 +1592,12 @@ public final class NearbyContainerDryRun {
 			String currentItemId,
 			int currentCount
 		) {
+		}
+
+		private enum PlacementAttempt {
+			SUCCESS,
+			WAITING_FOR_SEED,
+			FAILURE
 		}
 
 		private void stop(boolean closeContainer) {
