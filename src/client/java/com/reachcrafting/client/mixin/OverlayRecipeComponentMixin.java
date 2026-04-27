@@ -35,7 +35,8 @@ public abstract class OverlayRecipeComponentMixin {
 			null,
 			click.button(),
 			(click.modifiers() & GLFW.GLFW_MOD_SHIFT) != 0,
-			(click.modifiers() & GLFW.GLFW_MOD_CONTROL) != 0
+			(click.modifiers() & GLFW.GLFW_MOD_CONTROL) != 0,
+			true
 		);
 	}
 }

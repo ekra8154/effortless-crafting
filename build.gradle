@@ -34,7 +34,9 @@ dependencies {
 
 	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
 
-	// Optional runtime integrations for testing alongside common config UIs.
+	// Optional compile/runtime integrations for config UI support.
+	modCompileOnly "com.terraformersmc:modmenu:${project.modmenu_version}"
+	modCompileOnly "me.shedaniel.cloth:cloth-config-fabric:${project.cloth_config_version}"
 	modLocalRuntime "com.terraformersmc:modmenu:${project.modmenu_version}"
 	modLocalRuntime "me.shedaniel.cloth:cloth-config-fabric:${project.cloth_config_version}"
 }

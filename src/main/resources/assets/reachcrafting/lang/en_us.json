@@ -1,4 +1,17 @@
 {
 	"key.reachcrafting.debug_ping": "Debug Ping",
-	"key.category.reachcrafting.debug": "Reach Crafting"
+	"key.category.reachcrafting.debug": "Reach Crafting",
+	"title.reachcrafting.config": "Reach Crafting Settings",
+	"category.reachcrafting.general": "General",
+	"option.reachcrafting.count_preference": "Count Preference",
+	"tooltip.reachcrafting.count_preference": "Controls whether nearby crafting prefers higher-count or lower-count variants when multiple valid choices exist.",
+	"enum.reachcrafting.count_preference.highest_total": "Prefer Highest Count",
+	"enum.reachcrafting.count_preference.lowest_total": "Prefer Lowest Count",
+	"option.reachcrafting.redistribute_to_craft_when_needed": "Redistribute To Craft More",
+	"tooltip.reachcrafting.redistribute_to_craft_when_needed": "Allow already-filled interchangeable slots to be rebalanced when that would craft more items.",
+	"option.reachcrafting.revolving_craft_handling": "Revolving Craft Handling",
+	"tooltip.reachcrafting.revolving_craft_handling": "Controls how rotating generic recipe-book entries choose sibling variants during Ctrl-assisted crafting.",
+	"enum.reachcrafting.revolving_craft_handling.always_prefer_based_on_count": "Always Prefer Based On Count",
+	"enum.reachcrafting.revolving_craft_handling.prefer_clicked_type_with_count_fallback": "Prefer Clicked Type With Count Fallback",
+	"enum.reachcrafting.revolving_craft_handling.specific_variant_only": "Specific Variant Only"
 }

@@ -16,6 +16,7 @@ public class ReachCraftingModClient implements ClientModInitializer {
 
 	@Override
 	public void onInitializeClient() {
+		ReachCraftingConfig.load();
 		RecipeBookClickCapture.init();
 		NearbyContainerDryRun.init();
 

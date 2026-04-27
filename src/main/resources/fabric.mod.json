@@ -20,6 +20,9 @@
 		],
 		"client": [
 			"com.reachcrafting.client.ReachCraftingModClient"
+		],
+		"modmenu": [
+			"com.reachcrafting.client.compat.ReachCraftingModMenuIntegration"
 		]
 	},
 	"mixins": [

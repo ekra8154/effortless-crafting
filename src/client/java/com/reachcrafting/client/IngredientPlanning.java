@@ -74,7 +74,7 @@ public final class IngredientPlanning {
 	}
 
 	public static Policy defaultPolicy() {
-		return new Policy(CountPreference.HIGHEST_TOTAL, false);
+		return ReachCraftingConfig.get().toPlanningPolicy();
 	}
 
 	private static void planGroup(
@@ -132,10 +132,12 @@ public final class IngredientPlanning {
 			return;
 		}
 
-		String singleVariant = findSingleVariantForAllSlots(orderedVariants, remainingUsable, copiesPerSlot, emptySlots.size());
-		if (singleVariant != null) {
-			assignSlots(emptySlots, singleVariant, copiesPerSlot, remainingUsable, slotTargets);
-			return;
+		if (policy.countPreference() == CountPreference.HIGHEST_TOTAL) {
+			String singleVariant = findSingleVariantForAllSlots(orderedVariants, remainingUsable, copiesPerSlot, emptySlots.size());
+			if (singleVariant != null) {
+				assignSlots(emptySlots, singleVariant, copiesPerSlot, remainingUsable, slotTargets);
+				return;
+			}
 		}
 
 		List<SlotState> unassigned = new ArrayList<>(emptySlots);

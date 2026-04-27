@@ -55,7 +55,8 @@ public abstract class RecipeBookPageMixin {
 				button.getDisplayStack(),
 				click.button(),
 				(click.modifiers() & GLFW.GLFW_MOD_SHIFT) != 0,
-				true
+				true,
+				false
 			);
 			cir.setReturnValue(true);
 			return;
@@ -95,7 +96,8 @@ public abstract class RecipeBookPageMixin {
 				button.getDisplayStack(),
 				click.button(),
 				(click.modifiers() & GLFW.GLFW_MOD_SHIFT) != 0,
-				(click.modifiers() & GLFW.GLFW_MOD_CONTROL) != 0
+				(click.modifiers() & GLFW.GLFW_MOD_CONTROL) != 0,
+				false
 			);
 			return;
 		}
