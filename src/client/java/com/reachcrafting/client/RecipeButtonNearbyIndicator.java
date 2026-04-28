@@ -8,12 +8,18 @@ import net.minecraft.client.gui.screens.recipebook.RecipeButton;
 import net.minecraft.client.player.LocalPlayer;
 import java.util.Map;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.crafting.display.RecipeDisplayId;
+import net.minecraft.client.gui.screens.recipebook.RecipeCollection;
 
 public final class RecipeButtonNearbyIndicator {
 	private RecipeButtonNearbyIndicator() {
 	}
 
 	public static boolean shouldShow(RecipeButton button) {
+		return shouldShow(button.getCurrentRecipe(), button.getCollection(), button.getDisplayStack().copy(), false);
+	}
+
+	public static boolean shouldShow(RecipeDisplayId recipe, RecipeCollection collection, ItemStack displayStack, boolean explicitVariantSelection) {
 		if (!ReachCraftingConfig.get().showNearbyCraftableIndicator()
 			|| !ReachCraftingConfig.get().cacheContainersForFasterSearch()) {
 			return false;
@@ -29,7 +35,7 @@ public final class RecipeButtonNearbyIndicator {
 		if (player == null || minecraft.level == null || minecraft.getCameraEntity() == null) {
 			return false;
 		}
-		if (button.getCurrentRecipe() == null || button.getCollection() == null) {
+		if (recipe == null || collection == null) {
 			return false;
 		}
 
@@ -45,16 +51,30 @@ public final class RecipeButtonNearbyIndicator {
 		AvailableItemSnapshot availableItems = AvailableItemSnapshot.capture(player, screen);
 		Map<String, Integer> cachedNearbyCounts = reachableView.aggregateCounts();
 		Map<String, Integer> totalAvailable = AvailableItemSnapshot.mergeCounts(availableItems.inventoryCounts(), cachedNearbyCounts);
-		int desiredVariantCopies = availableItems.hasReservedGrid()
+		
+		// If the variant matches the grid, we check for a 'top-up' (current + 1).
+		// If it's a DIFFERENT variant, we just check if we can craft 1.
+		boolean variantMatchesGrid = false;
+		if (availableItems.hasReservedGrid()) {
+			RecipeVariantResolver.Selection currentGridSelection = RecipeVariantResolver.resolveMatchForGrid(
+				minecraft, player, collection, availableItems.gridStacks(), availableItems.gridStacks().stream().anyMatch(s -> !s.isEmpty()) ? availableItems : AvailableItemSnapshot.capture(player, screen), totalAvailable, totalAvailable, false, 1
+			);
+			if (currentGridSelection != null && currentGridSelection.recipeId().equals(recipe)) {
+				variantMatchesGrid = true;
+			}
+		}
+
+		int desiredVariantCopies = variantMatchesGrid
 			? currentReservedCraftCopies(availableItems) + 1
 			: 1;
+
 		RecipeVariantResolver.Selection selection = RecipeVariantResolver.resolve(
 			minecraft,
 			player,
-			button.getCurrentRecipe(),
-			button.getCollection(),
-			button.getDisplayStack().copy(),
-			false,
+			recipe,
+			collection,
+			displayStack,
+			explicitVariantSelection,
 			true,
 			availableItems,
 			totalAvailable,
@@ -102,5 +122,22 @@ public final class RecipeButtonNearbyIndicator {
 			minCount = Math.min(minCount, stack.getCount());
 		}
 		return minCount == Integer.MAX_VALUE ? 0 : minCount;
+	}
+
+	public static void renderOverlayButton(net.minecraft.client.gui.GuiGraphics guiGraphics, int x, int y, int width, RecipeDisplayId recipe, RecipeCollection collection) {
+		if (shouldShow(recipe, collection, ItemStack.EMPTY, true)) {
+			renderDot(guiGraphics, x, y);
+		}
+	}
+
+	public static void renderDot(net.minecraft.client.gui.GuiGraphics guiGraphics, int x, int y) {
+		int outer = 0xCC8B3A10;
+		int inner = 0xFFFFB24A;
+
+		guiGraphics.fill(x + 1, y, x + 4, y + 1, outer);
+		guiGraphics.fill(x, y + 1, x + 5, y + 4, outer);
+		guiGraphics.fill(x + 1, y + 4, x + 4, y + 5, outer);
+
+		guiGraphics.fill(x + 1, y + 1, x + 4, y + 4, inner);
 	}
 }

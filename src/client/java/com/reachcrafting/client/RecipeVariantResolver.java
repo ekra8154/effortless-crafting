@@ -112,10 +112,64 @@ public final class RecipeVariantResolver {
 			return exactSelection;
 		}
 
+		if (handling == ReachCraftingConfig.RevolvingCraftHandling.PREFER_CLICKED_TYPE_WITH_COUNT_FALLBACK
+			&& exactSelection.copiesAvailable() > 0) {
+			return exactSelection;
+		}
+
+		if (!allowReservedGridVariantSwitch && availableItems.hasReservedGrid()) {
+			Selection gridMatch = candidates.stream()
+				.filter(candidate -> isMatchForGrid(candidate, availableItems.gridStacks()))
+				.filter(candidate -> candidate.copiesAvailable() > 0)
+				.findFirst()
+				.orElse(null);
+			if (gridMatch != null) {
+				return gridMatch;
+			}
+		}
+
 		return candidates.stream()
 			.filter(candidate -> candidate.copiesAvailable() > 0)
 			.max(compareSelections(ReachCraftingConfig.get().countPreference(), craftAll))
 			.orElse(exactSelection);
+	}
+
+	public static Selection resolveMatchForGrid(
+		Minecraft minecraft,
+		LocalPlayer player,
+		RecipeCollection collection,
+		List<ItemStack> gridStacks,
+		AvailableItemSnapshot availableItems,
+		Map<String, Integer> usableCounts,
+		Map<String, Integer> preferenceTotals,
+		boolean craftAll,
+		int desiredCopiesPerSlot
+	) {
+		if (collection == null || minecraft.level == null) {
+			return null;
+		}
+
+		ContextMap context = SlotDisplayContext.fromLevel(minecraft.level);
+		return collection.getRecipes().stream()
+			.map(entry -> toSelection(entry, ItemStack.EMPTY, context, availableItems, usableCounts, preferenceTotals, craftAll, desiredCopiesPerSlot))
+			.filter(candidate -> isMatchForGrid(candidate, gridStacks))
+			.findFirst()
+			.orElse(null);
+	}
+
+	private static boolean isMatchForGrid(Selection selection, List<ItemStack> gridStacks) {
+		RecipeIngredientSummary summary = selection.ingredientSummary();
+		for (int i = 0; i < gridStacks.size(); i++) {
+			ItemStack gridStack = gridStacks.get(i);
+			if (gridStack.isEmpty()) continue;
+			if (i >= summary.slots().size()) return false;
+			
+			String itemId = BuiltInRegistries.ITEM.getKey(gridStack.getItem()).toString();
+			if (!summary.slots().get(i).itemIds().contains(itemId)) {
+				return false;
+			}
+		}
+		return true;
 	}
 
 	private static boolean shouldResolveCollectionVariant(

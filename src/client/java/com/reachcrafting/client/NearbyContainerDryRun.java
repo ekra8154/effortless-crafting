@@ -329,7 +329,14 @@ public final class NearbyContainerDryRun {
 			this.requestedSingleClicks = Math.max(requestedSingleClicks, 1);
 			this.originalContext = ScreenContext.capture(client, cameraEntity, player.blockInteractionRange(), localItems);
 			this.planningPolicy = ReachCraftingConfig.get().toPlanningPolicy();
-			this.scanAcceptedItemIds = computeScanAcceptedItemIds(recipeCollection, ingredientSummary, explicitVariantSelection, originalContext.hasReservedGrid());
+			Set<String> accepted = new HashSet<>(ingredientSummary.acceptedItemIds());
+			if (recipeCollection != null && (planningPolicy.redistributeToCraftWhenNeeded() || ReachCraftingConfig.get().revolvingCraftHandling() != ReachCraftingConfig.RevolvingCraftHandling.SPECIFIC_VARIANT_ONLY)) {
+				ContextMap context = SlotDisplayContext.fromLevel(client.level);
+				for (var entry : recipeCollection.getRecipes()) {
+					accepted.addAll(RecipeIngredientSummary.fromDisplay(entry.display(), context).acceptedItemIds());
+				}
+			}
+			this.scanAcceptedItemIds = Set.copyOf(accepted);
 			this.initialDeficit = RecipeDeficitReport.from(
 				ingredientSummary,
 				localItems.inventoryCounts(),
@@ -676,11 +683,9 @@ public final class NearbyContainerDryRun {
 			boolean reservedGridMatchesCollection = originalContext.hasReservedGrid() && originalContext.reservedGridMatchesCollection(client.level, recipeCollection);
 			boolean committedReservedGrid = originalContext.hasReservedGrid()
 				&& (originalContext.reservedGridMatches(ingredientSummary) || reservedGridMatchesCollection);
-			Map<String, Integer> committedMissingCounts = committedReservedGrid ? computeReservedGridNeededCounts() : Map.of();
-			Map<String, Integer> missingForCommittedLayout = committedReservedGrid
-				? subtractAvailableCounts(committedMissingCounts, inventoryAndNearby)
-				: Map.of();
-			boolean committedLayoutCanContinue = committedReservedGrid && missingForCommittedLayout.isEmpty();
+			// Initial check to see if we can continue with the current layout at the requested count
+			Map<String, Integer> initialMissing = committedReservedGrid ? subtractAvailableCounts(computeReservedGridNeededCounts(), inventoryAndNearby) : Map.of();
+			boolean committedLayoutCanContinue = committedReservedGrid && initialMissing.isEmpty();
 			boolean rotatingFamilyRedistribute = planningPolicy.redistributeToCraftWhenNeeded()
 				&& reservedGridMatchesCollection
 				&& recipeCollection != null
@@ -689,7 +694,7 @@ public final class NearbyContainerDryRun {
 				|| (planningPolicy.redistributeToCraftWhenNeeded()
 					&& reservedGridMatchesCollection
 					&& (craftAll || !committedLayoutCanContinue));
-			boolean redistributeReservedGrid = planningPolicy.redistributeToCraftWhenNeeded() && (craftAll || targetCopiesPerSlot > 1 || rotatingFamilyRedistribute);
+			boolean redistributeReservedGrid = planningPolicy.redistributeToCraftWhenNeeded() && (craftAll || requestedSingleClicks > 1 || rotatingFamilyRedistribute);
 			this.redistributeThisRun = redistributeReservedGrid;
 			Map<String, Integer> gridCounts = countStacks(originalContext.gridStacks());
 			Map<String, Integer> totalAvailable = redistributeReservedGrid
@@ -712,32 +717,53 @@ public final class NearbyContainerDryRun {
 				: allowReservedGridVariantSwitch
 					? currentReservedCraftCopies() + requestedSingleClicks
 					: requestedSingleClicks;
-			RecipeVariantResolver.Selection resolvedSelection = RecipeVariantResolver.resolve(
-				client,
-				player,
-				recipeId,
-				recipeCollection,
-				ItemStack.EMPTY,
-				explicitVariantSelection,
-				true,
-				resolverItems,
-				totalAvailable,
-				totalAvailable,
-				craftAll,
-				allowReservedGridVariantSwitch,
-				desiredVariantCopies
-			);
-			if (resolvedSelection != null && !resolvedSelection.recipeId().equals(recipeId)) {
-				ReachCraftingMod.LOGGER.info(
-					"[recipe_variant] clicked_idx={} selected_idx={} mode={} output={}",
-					recipeIndex,
-					resolvedSelection.recipeId().index(),
-					ReachCraftingConfig.get().revolvingCraftHandling().name().toLowerCase(),
-					resolvedSelection.outputLabel()
+			RecipeVariantResolver.Selection resolvedSelection = null;
+			if (!redistributeReservedGrid && committedReservedGrid) {
+				// Lock to current grid variant
+				resolvedSelection = RecipeVariantResolver.resolveMatchForGrid(
+					client,
+					player,
+					recipeCollection,
+					originalContext.gridStacks(),
+					resolverItems,
+					totalAvailable,
+					totalAvailable,
+					craftAll,
+					desiredVariantCopies
 				);
-				recipeId = resolvedSelection.recipeId();
-				outputLabel = resolvedSelection.outputLabel();
-				ingredientSummary = resolvedSelection.ingredientSummary();
+				ReachCraftingMod.LOGGER.info("[recipe_variant] locked_to_grid_variant idx={} mode=locked_expansion match={}", recipeIndex, resolvedSelection != null);
+			} else {
+				resolvedSelection = RecipeVariantResolver.resolve(
+					client,
+					player,
+					recipeId,
+					recipeCollection,
+					ItemStack.EMPTY,
+					explicitVariantSelection,
+					true,
+					resolverItems,
+					totalAvailable,
+					totalAvailable,
+					craftAll,
+					allowReservedGridVariantSwitch,
+					desiredVariantCopies
+				);
+			}
+
+			if (resolvedSelection != null) {
+				boolean variantChanged = !resolvedSelection.recipeId().equals(recipeId);
+				if (variantChanged || (!redistributeReservedGrid && committedReservedGrid)) {
+					ReachCraftingMod.LOGGER.info(
+						"[recipe_variant] clicked_idx={} selected_idx={} mode={} output={}",
+						recipeIndex,
+						resolvedSelection.recipeId().index(),
+						redistributeReservedGrid ? ReachCraftingConfig.get().revolvingCraftHandling().name().toLowerCase() : "locked_expansion",
+						resolvedSelection.outputLabel()
+					);
+					recipeId = resolvedSelection.recipeId();
+					outputLabel = resolvedSelection.outputLabel();
+					ingredientSummary = resolvedSelection.ingredientSummary();
+				}
 			}
 			int desiredTargetCopies = committedReservedGrid
 				? currentReservedCraftCopies() + requestedSingleClicks
@@ -781,10 +807,10 @@ public final class NearbyContainerDryRun {
 			remainingItemIds.clear();
 			remainingItemIds.addAll(redistributeReservedGrid ? computeRedistributedFetchItemIds(plannedTargets) : computeFetchItemIds(plannedTargets));
 
-			if (!planningPolicy.redistributeToCraftWhenNeeded()
-				&& committedReservedGrid) {
-				if (!missingForCommittedLayout.isEmpty()) {
-					blockedCommittedLayoutMissingSummary = AvailableItemSnapshot.formatCounts(missingForCommittedLayout);
+			if (!planningPolicy.redistributeToCraftWhenNeeded() && committedReservedGrid) {
+				Map<String, Integer> finalMissing = subtractAvailableCounts(computeReservedGridNeededCounts(), inventoryAndNearby);
+				if (!finalMissing.isEmpty()) {
+					blockedCommittedLayoutMissingSummary = AvailableItemSnapshot.formatCounts(finalMissing);
 					remainingItemIds.clear();
 					ReachCraftingMod.LOGGER.info(
 						"[nearby_plan] idx={} committed_layout_blocked missing={}",
