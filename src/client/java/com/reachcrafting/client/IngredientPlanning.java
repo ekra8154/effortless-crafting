@@ -101,7 +101,7 @@ public final class IngredientPlanning {
 		LinkedHashSet<String> committedVariants = new LinkedHashSet<>();
 
 		for (SlotState slotState : groupSlots) {
-			if (slotState.currentItemId() == null) {
+			if (slotState.currentItemId() == null || policy.redistributeToCraftWhenNeeded()) {
 				emptySlots.add(slotState);
 				continue;
 			}
@@ -132,16 +132,27 @@ public final class IngredientPlanning {
 			return;
 		}
 
-		if (policy.countPreference() == CountPreference.HIGHEST_TOTAL) {
-			String singleVariant = findSingleVariantForAllSlots(orderedVariants, remainingUsable, copiesPerSlot, emptySlots.size());
-			if (singleVariant != null) {
-				assignSlots(emptySlots, singleVariant, copiesPerSlot, remainingUsable, slotTargets);
-				return;
+		List<SlotState> unassigned = new ArrayList<>(emptySlots);
+
+		// Pass 1: Try to satisfy slots using ONLY what we have in inventory (if preferInventory is on)
+		if (policy.preferInventory()) {
+			for (String variant : orderedVariants) {
+				int invCount = inventoryCounts.getOrDefault(variant, 0);
+				int capacity = invCount / copiesPerSlot;
+				while (capacity > 0 && !unassigned.isEmpty()) {
+					SlotState slotState = unassigned.removeFirst();
+					assignSlot(slotState, variant, copiesPerSlot, remainingUsable, slotTargets);
+					capacity--;
+				}
 			}
 		}
 
-		List<SlotState> unassigned = new ArrayList<>(emptySlots);
-		for (String variant : orderedVariants) {
+		// Pass 2: Use the rest of the materials based on strict preference (no inventory bias)
+		List<String> preferenceOrdered = groupSlots.getFirst().ingredientSlot().itemIds().stream()
+			.sorted(compareByPreference(preferenceTotals, Map.of(), policy)) // Pass empty map to ignore inventory bias
+			.toList();
+
+		for (String variant : preferenceOrdered) {
 			int capacity = remainingUsable.getOrDefault(variant, 0) / copiesPerSlot;
 			while (capacity > 0 && !unassigned.isEmpty()) {
 				SlotState slotState = unassigned.removeFirst();
@@ -230,23 +241,29 @@ public final class IngredientPlanning {
 		ordered.addAll(committedVariants);
 
 		acceptedVariants.stream()
-			.filter(itemId -> inventoryCounts.getOrDefault(itemId, 0) > 0)
-			.sorted(compareByPreference(preferenceTotals, policy))
-			.forEach(ordered::add);
-
-		acceptedVariants.stream()
-			.sorted(compareByPreference(preferenceTotals, policy))
+			.sorted(compareByPreference(preferenceTotals, inventoryCounts, policy))
 			.forEach(ordered::add);
 
 		return List.copyOf(ordered);
 	}
 
-	private static Comparator<String> compareByPreference(Map<String, Integer> preferenceTotals, Policy policy) {
+	private static Comparator<String> compareByPreference(Map<String, Integer> preferenceTotals, Map<String, Integer> inventoryCounts, Policy policy) {
+		Comparator<String> comp = Comparator.comparingInt(itemId -> 0);
+
+		if (policy.preferInventory()) {
+			// Prioritize items already in inventory
+			comp = comp.thenComparing(itemId -> inventoryCounts.getOrDefault(itemId, 0) > 0 ? 0 : 1);
+		}
+
 		Comparator<String> byCount = Comparator.comparingInt((String itemId) -> preferenceTotals.getOrDefault(itemId, 0));
 		if (policy.countPreference() == CountPreference.HIGHEST_TOTAL) {
 			byCount = byCount.reversed();
 		}
-		return byCount.thenComparing(Comparator.naturalOrder());
+
+		// Tie-breaker: prefer items already in inventory even if preferInventory is false (as a final tie-breaker)
+		Comparator<String> byInventory = Comparator.comparingInt((String itemId) -> inventoryCounts.getOrDefault(itemId, 0)).reversed();
+
+		return comp.thenComparing(byCount).thenComparing(byInventory).thenComparing(Comparator.naturalOrder());
 	}
 
 	private static String findSingleVariantForAllSlots(
@@ -342,7 +359,7 @@ public final class IngredientPlanning {
 		return joiner.length() == 0 ? "<none>" : joiner.toString();
 	}
 
-	public record Policy(CountPreference countPreference, boolean redistributeToCraftWhenNeeded) {
+	public record Policy(CountPreference countPreference, boolean redistributeToCraftWhenNeeded, boolean preferInventory) {
 		public Policy {
 			Objects.requireNonNull(countPreference, "countPreference");
 		}

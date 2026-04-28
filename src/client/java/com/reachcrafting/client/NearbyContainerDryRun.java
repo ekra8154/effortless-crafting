@@ -689,15 +689,15 @@ public final class NearbyContainerDryRun {
 				|| (planningPolicy.redistributeToCraftWhenNeeded()
 					&& reservedGridMatchesCollection
 					&& (craftAll || !committedLayoutCanContinue));
-			boolean redistributeReservedGrid = planningPolicy.redistributeToCraftWhenNeeded()
-				&& committedReservedGrid
-				&& (craftAll || !committedLayoutCanContinue || rotatingFamilyRedistribute);
+			boolean redistributeReservedGrid = planningPolicy.redistributeToCraftWhenNeeded() && (craftAll || targetCopiesPerSlot > 1 || rotatingFamilyRedistribute);
 			this.redistributeThisRun = redistributeReservedGrid;
 			Map<String, Integer> gridCounts = countStacks(originalContext.gridStacks());
 			Map<String, Integer> totalAvailable = redistributeReservedGrid
 				? AvailableItemSnapshot.mergeCounts(inventoryAndNearby, gridCounts)
 				: inventoryAndNearby;
-			Map<String, Integer> planningInventoryCounts = redistributeReservedGrid ? totalAvailable : inventoryCounts;
+			Map<String, Integer> planningInventoryCounts = redistributeReservedGrid 
+				? AvailableItemSnapshot.mergeCounts(inventoryCounts, gridCounts) 
+				: inventoryCounts;
 			List<ItemStack> planningGridStacks = redistributeReservedGrid ? List.of() : originalContext.gridStacks();
 			AvailableItemSnapshot resolverItems = redistributeReservedGrid
 				? new AvailableItemSnapshot(Map.copyOf(totalAvailable), Map.of(), Map.copyOf(totalAvailable), List.of())
@@ -774,9 +774,7 @@ public final class NearbyContainerDryRun {
 				targetCopiesPerSlot,
 				planningPolicy
 			);
-			plannedTargets = redistributeReservedGrid && !craftAll
-				? computeMinimalRedistributedTargets(totalAvailable, targetCopiesPerSlot)
-				: plannedResult.slotTargets();
+			plannedTargets = plannedResult.slotTargets();
 			if (plannedTargets.isEmpty()) {
 				plannedTargets = plannedResult.slotTargets();
 			}
@@ -1208,7 +1206,7 @@ public final class NearbyContainerDryRun {
 			if (contextReady) {
 				restoreRecipeBookState();
 				restoreMousePosition();
-				gridRestored = restoreReservedGrid();
+				gridRestored = redistributeThisRun || restoreReservedGrid();
 				if (!gridRestored && originalContext.hasReservedGrid() && restoreTicksRemaining > 0) {
 					restoreTicksRemaining--;
 					ReachCraftingMod.LOGGER.info(
@@ -1223,7 +1221,7 @@ public final class NearbyContainerDryRun {
 					: originalContext.reservedGridMatches(ingredientSummary);
 				if (gridRestored && reservedGridMatchesRecipe && targetCopiesPerSlot > 0) {
 					reservedGridExpanded = redistributeThisRun
-						? applyPlannedTargetsToGrid()
+						? applyPlannedTargetsToGrid(originalOccupiedGridSlotIndices())
 						: expandReservedGrid();
 				}
 				if (!originalContext.hasReservedGrid()
@@ -1433,55 +1431,19 @@ public final class NearbyContainerDryRun {
 		}
 
 		private PlacementAttempt placePlannedGridWithVanillaShape() {
-			if (!(client.screen instanceof AbstractContainerScreen<?> containerScreen)) {
-				lastRestoreFailure = "screen_not_container";
-				return PlacementAttempt.FAILURE;
+			if (targetCopiesPerSlot <= 0 || recipeId == null) {
+				return PlacementAttempt.SUCCESS;
 			}
-			AbstractContainerMenu menu = containerScreen.getMenu();
-			if (!seededVanillaBatchLayout) {
+
+			for (int i = 0; i < targetCopiesPerSlot; i++) {
 				gameMode.handlePlaceRecipe(player.containerMenu.containerId, recipeId, false);
-				seededVanillaBatchLayout = true;
 			}
-			List<Integer> occupiedSlots = currentOccupiedGridSlotIndices(menu, originalContext.gridStacks().size());
-			if (occupiedSlots.size() < plannedTargets.size()) {
-				lastRestoreFailure = "vanilla_shape_seed_waiting";
-				return PlacementAttempt.WAITING_FOR_SEED;
-			}
-			return topUpSeededGridToPlannedTargets(menu, occupiedSlots) ? PlacementAttempt.SUCCESS : PlacementAttempt.FAILURE;
+
+			ReachCraftingMod.LOGGER.info("[nearby_restore] idx={} placed_via_vanilla_calls count={}", recipeIndex, targetCopiesPerSlot);
+			return PlacementAttempt.SUCCESS;
 		}
 
-		private boolean topUpSeededGridToPlannedTargets(AbstractContainerMenu menu, List<Integer> occupiedAnchorSlots) {
-			Map<Integer, IngredientPlanning.SlotTarget> targetsBySlot = remapPlannedTargetsToAnchors(menu, occupiedAnchorSlots);
-			for (int slotIndex = 1; slotIndex <= originalContext.gridStacks().size(); slotIndex++) {
-				IngredientPlanning.SlotTarget desiredTarget = targetsBySlot.get(slotIndex);
-				if (desiredTarget == null || desiredTarget.itemId() == null || desiredTarget.targetCount() <= 0) {
-					continue;
-				}
 
-				ItemStack desiredStack = BuiltInRegistries.ITEM.getOptional(Identifier.parse(desiredTarget.itemId()))
-					.map(item -> new ItemStack(item, desiredTarget.targetCount()))
-					.orElse(ItemStack.EMPTY);
-				if (desiredStack.isEmpty()) {
-					lastRestoreFailure = "missing_item_for_target=" + desiredTarget.itemId();
-					return false;
-				}
-
-				if (!restoreGridSlot(menu, slotIndex, desiredStack)) {
-					ReachCraftingMod.LOGGER.warn(
-						"[nearby_restore] idx={} failed_to_top_up_seeded grid_slot={} desired={} actual={} reason={}",
-						recipeIndex,
-						slotIndex,
-						formatStack(desiredStack),
-						formatStack(menu.getSlot(slotIndex).getItem()),
-						lastRestoreFailure
-					);
-					return false;
-				}
-			}
-
-			ReachCraftingMod.LOGGER.info("[nearby_restore] idx={} seeded_grid={}", recipeIndex, summarizeGrid(menu, originalContext.gridStacks().size()));
-			return true;
-		}
 
 		private boolean applyPlannedTargetsToGrid(List<Integer> occupiedAnchorSlots) {
 			if (!(client.screen instanceof AbstractContainerScreen<?> containerScreen)) {
@@ -1489,41 +1451,28 @@ public final class NearbyContainerDryRun {
 			}
 
 			AbstractContainerMenu menu = containerScreen.getMenu();
-			Map<Integer, IngredientPlanning.SlotTarget> targetsBySlot = remapPlannedTargetsToAnchors(menu, occupiedAnchorSlots);
-
-			if (!clearGridForRedistribute(menu, targetsBySlot)) {
+			// Clear the entire grid to ensure a clean slate for vanilla placement
+			if (!clearGridForRedistribute(menu, Map.of())) {
 				return false;
 			}
 
-			for (int slotIndex = 1; slotIndex <= originalContext.gridStacks().size(); slotIndex++) {
-				IngredientPlanning.SlotTarget desiredTarget = targetsBySlot.get(slotIndex);
-				if (desiredTarget == null || desiredTarget.itemId() == null || desiredTarget.targetCount() <= 0) {
-					continue;
+			// Ensure cursor is empty before starting vanilla placement
+			if (!player.containerMenu.getCarried().isEmpty()) {
+				// Try to drop the item into the inventory
+				for (Slot slot : menu.slots) {
+					if (slot.container instanceof Inventory && !slot.hasItem()) {
+						pickup(menu, slot, GLFW.GLFW_MOUSE_BUTTON_LEFT);
+						break;
+					}
 				}
-
-				ItemStack desiredStack = BuiltInRegistries.ITEM.getOptional(Identifier.parse(desiredTarget.itemId()))
-					.map(item -> new ItemStack(item, desiredTarget.targetCount()))
-					.orElse(ItemStack.EMPTY);
-				if (desiredStack.isEmpty()) {
-					lastRestoreFailure = "missing_item_for_target=" + desiredTarget.itemId();
-					return false;
-				}
-
-				if (!restoreGridSlot(menu, slotIndex, desiredStack)) {
-					ReachCraftingMod.LOGGER.warn(
-						"[nearby_restore] idx={} failed_to_redistribute grid_slot={} desired={} actual={} reason={}",
-						recipeIndex,
-						slotIndex,
-						formatStack(desiredStack),
-						formatStack(menu.getSlot(slotIndex).getItem()),
-						lastRestoreFailure
-					);
+				// If still not empty, we might need to wait or fail
+				if (!player.containerMenu.getCarried().isEmpty()) {
+					lastRestoreFailure = "cursor_not_empty_after_clear item=" + BuiltInRegistries.ITEM.getKey(player.containerMenu.getCarried().getItem());
 					return false;
 				}
 			}
 
-			ReachCraftingMod.LOGGER.info("[nearby_restore] idx={} redistributed_grid={}", recipeIndex, summarizeGrid(menu, originalContext.gridStacks().size()));
-			return true;
+			return placePlannedGridWithVanillaShape() == PlacementAttempt.SUCCESS;
 		}
 
 		private Map<Integer, IngredientPlanning.SlotTarget> remapPlannedTargetsToAnchors(AbstractContainerMenu menu, List<Integer> occupiedAnchorSlots) {
@@ -1715,11 +1664,10 @@ public final class NearbyContainerDryRun {
 			while (!player.containerMenu.getCarried().isEmpty()) {
 				Slot destinationSlot = findPlayerDestinationSlot(menu, itemId);
 				if (destinationSlot == null) {
-					pickup(menu, sourceGridSlot, GLFW.GLFW_MOUSE_BUTTON_LEFT);
-					lastRestoreFailure = "no_inventory_space_to_clear_grid item=" + itemId;
-					return false;
+					// Inventory is full, drop it on the ground to clear the cursor
+					gameMode.handleInventoryMouseClick(menu.containerId, -999, 0, ClickType.PICKUP, player);
+					return true; // Cursor is now clear
 				}
-
 				int carriedBefore = player.containerMenu.getCarried().getCount();
 				pickup(menu, destinationSlot, GLFW.GLFW_MOUSE_BUTTON_LEFT);
 				int carriedAfter = player.containerMenu.getCarried().getCount();
@@ -1760,30 +1708,54 @@ public final class NearbyContainerDryRun {
 
 		private int moveExactCount(AbstractContainerMenu menu, Slot sourceSlot, Slot targetSlot, int remaining) {
 			ItemStack sourceStack = sourceSlot.getItem();
+			ItemStack targetStack = targetSlot.getItem();
 			if (sourceStack.isEmpty()) {
 				return 0;
 			}
 
 			int moveCount = Math.min(remaining, sourceStack.getCount());
+			boolean canLeftClickMerge = targetStack.isEmpty() || (ItemStack.isSameItemSameComponents(sourceStack, targetStack) && targetStack.getCount() + moveCount <= targetStack.getMaxStackSize());
+
+			if (canLeftClickMerge && moveCount == sourceStack.getCount()) {
+				pickup(menu, sourceSlot, GLFW.GLFW_MOUSE_BUTTON_LEFT);
+				pickup(menu, targetSlot, GLFW.GLFW_MOUSE_BUTTON_LEFT);
+				if (!player.containerMenu.getCarried().isEmpty()) {
+					pickup(menu, sourceSlot, GLFW.GLFW_MOUSE_BUTTON_LEFT);
+				}
+				return moveCount;
+			}
+
+			// Fallback to manual placement if we need a partial stack or can't simple-merge
 			pickup(menu, sourceSlot, GLFW.GLFW_MOUSE_BUTTON_LEFT);
 			ItemStack carriedStack = player.containerMenu.getCarried();
 			if (carriedStack.isEmpty()) {
 				return 0;
 			}
 
-			if (targetSlot.getItem().isEmpty() && moveCount == carriedStack.getCount()) {
-				pickup(menu, targetSlot, GLFW.GLFW_MOUSE_BUTTON_LEFT);
-				return moveCount;
-			}
-
 			int placed = 0;
-			while (placed < moveCount && !player.containerMenu.getCarried().isEmpty()) {
-				pickup(menu, targetSlot, GLFW.GLFW_MOUSE_BUTTON_RIGHT);
-				placed++;
+			if (canLeftClickMerge && moveCount == carriedStack.getCount()) {
+				pickup(menu, targetSlot, GLFW.GLFW_MOUSE_BUTTON_LEFT);
+				placed = moveCount;
+			} else {
+				while (placed < moveCount && !player.containerMenu.getCarried().isEmpty()) {
+					pickup(menu, targetSlot, GLFW.GLFW_MOUSE_BUTTON_RIGHT);
+					placed++;
+				}
 			}
 
 			if (!player.containerMenu.getCarried().isEmpty()) {
-				pickup(menu, sourceSlot, GLFW.GLFW_MOUSE_BUTTON_LEFT);
+				Slot returnSlot = findMatchingInventorySourceSlot(menu, player.containerMenu.getCarried());
+				if (returnSlot != null) {
+					pickup(menu, returnSlot, GLFW.GLFW_MOUSE_BUTTON_LEFT);
+				} else {
+					// Drop or find any empty slot? Let's try to find an empty one
+					for (Slot slot : menu.slots) {
+						if (slot.container instanceof Inventory && !slot.hasItem()) {
+							pickup(menu, slot, GLFW.GLFW_MOUSE_BUTTON_LEFT);
+							break;
+						}
+					}
+				}
 			}
 			return placed;
 		}

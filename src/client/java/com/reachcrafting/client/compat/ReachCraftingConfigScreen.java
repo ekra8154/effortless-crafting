@@ -68,6 +68,24 @@ public final class ReachCraftingConfigScreen {
 			.setSaveConsumer(config::setReachCraftHoldAndRelease)
 			.build());
 
+		general.addEntry(entries.startBooleanToggle(
+				Component.translatable("option.reachcrafting.reach_craft_close_overlay_after_release"),
+				config.reachCraftCloseOverlayAfterRelease()
+			)
+			.setDefaultValue(true)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.reach_craft_close_overlay_after_release"))
+			.setSaveConsumer(config::setReachCraftCloseOverlayAfterRelease)
+			.build());
+
+		general.addEntry(entries.startBooleanToggle(
+				Component.translatable("option.reachcrafting.reach_craft_prefer_inventory"),
+				config.reachCraftPreferInventory()
+			)
+			.setDefaultValue(true)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.reach_craft_prefer_inventory"))
+			.setSaveConsumer(config::setReachCraftPreferInventory)
+			.build());
+
 		general.addEntry(entries.startEnumSelector(
 				Component.translatable("option.reachcrafting.revolving_craft_handling"),
 				ReachCraftingConfig.RevolvingCraftHandling.class,

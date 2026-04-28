@@ -21,6 +21,7 @@ public final class ReachCraftingConfig {
 	private boolean cacheContainersForFasterSearch;
 	private boolean reachCraftHoldAndRelease;
 	private boolean reachCraftCloseOverlayAfterRelease;
+	private boolean reachCraftPreferInventory;
 
 	private ReachCraftingConfig() {
 	}
@@ -51,6 +52,7 @@ public final class ReachCraftingConfig {
 				: stored.cacheContainersForFasterSearch;
 			instance.reachCraftHoldAndRelease = stored.reachCraftHoldAndRelease;
 			instance.reachCraftCloseOverlayAfterRelease = stored.reachCraftCloseOverlayAfterRelease == null ? true : stored.reachCraftCloseOverlayAfterRelease;
+			instance.reachCraftPreferInventory = stored.reachCraftPreferInventory == null ? true : stored.reachCraftPreferInventory;
 		} catch (Exception exception) {
 			ReachCraftingMod.LOGGER.warn("Failed to load reachcrafting config from {}", CONFIG_PATH, exception);
 			instance = defaults();
@@ -74,7 +76,7 @@ public final class ReachCraftingConfig {
 	}
 
 	public IngredientPlanning.Policy toPlanningPolicy() {
-		return new IngredientPlanning.Policy(countPreference, redistributeToCraftWhenNeeded);
+		return new IngredientPlanning.Policy(countPreference, redistributeToCraftWhenNeeded, reachCraftPreferInventory);
 	}
 
 	public boolean redistributeToCraftWhenNeeded() {
@@ -136,6 +138,14 @@ public final class ReachCraftingConfig {
 		this.reachCraftCloseOverlayAfterRelease = reachCraftCloseOverlayAfterRelease;
 	}
 
+	public boolean reachCraftPreferInventory() {
+		return reachCraftPreferInventory;
+	}
+
+	public void setReachCraftPreferInventory(boolean reachCraftPreferInventory) {
+		this.reachCraftPreferInventory = reachCraftPreferInventory;
+	}
+
 	private static ReachCraftingConfig defaults() {
 		ReachCraftingConfig defaults = new ReachCraftingConfig();
 		defaults.redistributeToCraftWhenNeeded = false;
@@ -145,6 +155,7 @@ public final class ReachCraftingConfig {
 		defaults.cacheContainersForFasterSearch = true;
 		defaults.reachCraftHoldAndRelease = false;
 		defaults.reachCraftCloseOverlayAfterRelease = true;
+		defaults.reachCraftPreferInventory = true;
 		return defaults;
 	}
 
@@ -162,6 +173,7 @@ public final class ReachCraftingConfig {
 		private Boolean cacheContainersForFasterSearch;
 		private boolean reachCraftHoldAndRelease;
 		private Boolean reachCraftCloseOverlayAfterRelease;
+		private Boolean reachCraftPreferInventory;
 
 		private StoredConfig(ReachCraftingConfig config) {
 			this.redistributeToCraftWhenNeeded = config.redistributeToCraftWhenNeeded;
@@ -171,6 +183,7 @@ public final class ReachCraftingConfig {
 			this.cacheContainersForFasterSearch = config.cacheContainersForFasterSearch;
 			this.reachCraftHoldAndRelease = config.reachCraftHoldAndRelease;
 			this.reachCraftCloseOverlayAfterRelease = config.reachCraftCloseOverlayAfterRelease;
+			this.reachCraftPreferInventory = config.reachCraftPreferInventory;
 		}
 	}
 }
