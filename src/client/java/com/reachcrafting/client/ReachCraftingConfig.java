@@ -20,6 +20,7 @@ public final class ReachCraftingConfig {
 	private boolean showNearbyCraftableIndicator;
 	private boolean cacheContainersForFasterSearch;
 	private boolean reachCraftHoldAndRelease;
+	private boolean reachCraftCloseOverlayAfterRelease;
 
 	private ReachCraftingConfig() {
 	}
@@ -49,6 +50,7 @@ public final class ReachCraftingConfig {
 				? true
 				: stored.cacheContainersForFasterSearch;
 			instance.reachCraftHoldAndRelease = stored.reachCraftHoldAndRelease;
+			instance.reachCraftCloseOverlayAfterRelease = stored.reachCraftCloseOverlayAfterRelease == null ? true : stored.reachCraftCloseOverlayAfterRelease;
 		} catch (Exception exception) {
 			ReachCraftingMod.LOGGER.warn("Failed to load reachcrafting config from {}", CONFIG_PATH, exception);
 			instance = defaults();
@@ -126,6 +128,14 @@ public final class ReachCraftingConfig {
 		this.reachCraftHoldAndRelease = reachCraftHoldAndRelease;
 	}
 
+	public boolean reachCraftCloseOverlayAfterRelease() {
+		return reachCraftCloseOverlayAfterRelease;
+	}
+
+	public void setReachCraftCloseOverlayAfterRelease(boolean reachCraftCloseOverlayAfterRelease) {
+		this.reachCraftCloseOverlayAfterRelease = reachCraftCloseOverlayAfterRelease;
+	}
+
 	private static ReachCraftingConfig defaults() {
 		ReachCraftingConfig defaults = new ReachCraftingConfig();
 		defaults.redistributeToCraftWhenNeeded = false;
@@ -134,6 +144,7 @@ public final class ReachCraftingConfig {
 		defaults.showNearbyCraftableIndicator = false;
 		defaults.cacheContainersForFasterSearch = true;
 		defaults.reachCraftHoldAndRelease = false;
+		defaults.reachCraftCloseOverlayAfterRelease = true;
 		return defaults;
 	}
 
@@ -150,6 +161,7 @@ public final class ReachCraftingConfig {
 		private boolean showNearbyCraftableIndicator;
 		private Boolean cacheContainersForFasterSearch;
 		private boolean reachCraftHoldAndRelease;
+		private Boolean reachCraftCloseOverlayAfterRelease;
 
 		private StoredConfig(ReachCraftingConfig config) {
 			this.redistributeToCraftWhenNeeded = config.redistributeToCraftWhenNeeded;
@@ -158,6 +170,7 @@ public final class ReachCraftingConfig {
 			this.showNearbyCraftableIndicator = config.showNearbyCraftableIndicator;
 			this.cacheContainersForFasterSearch = config.cacheContainersForFasterSearch;
 			this.reachCraftHoldAndRelease = config.reachCraftHoldAndRelease;
+			this.reachCraftCloseOverlayAfterRelease = config.reachCraftCloseOverlayAfterRelease;
 		}
 	}
 }

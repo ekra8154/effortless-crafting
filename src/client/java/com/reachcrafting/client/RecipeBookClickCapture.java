@@ -266,6 +266,9 @@ public final class RecipeBookClickCapture {
 						.withStyle(ChatFormatting.YELLOW),
 					false
 				);
+				if (explicitVariantSelection) {
+					tryCloseOverlayAfterRelease();
+				}
 				return;
 			}
 		}
@@ -486,6 +489,22 @@ public final class RecipeBookClickCapture {
 		}
 		pendingHeldRecipe = null;
 		return true;
+	}
+
+	public static void tryCloseOverlayAfterRelease() {
+		if (!ReachCraftingConfig.get().reachCraftCloseOverlayAfterRelease()) {
+			return;
+		}
+		Minecraft minecraft = Minecraft.getInstance();
+		if (!(minecraft.screen instanceof AbstractRecipeBookScreen<?> recipeBookScreen)) {
+			return;
+		}
+		RecipeBookComponentAccessor componentAccessor = (RecipeBookComponentAccessor) ((AbstractRecipeBookScreenAccessor) recipeBookScreen).getRecipeBookComponent();
+		RecipeBookPageAccessor pageAccessor = (RecipeBookPageAccessor) componentAccessor.getRecipeBookPage();
+		OverlayRecipeComponent overlay = pageAccessor.getOverlay();
+		if (overlay != null && overlay.isVisible()) {
+			((OverlayRecipeComponentAccessor) overlay).setIsVisible(false);
+		}
 	}
 
 	public static int getHeldQueuedCount(RecipeButton button) {

@@ -9,4 +9,7 @@ import org.spongepowered.asm.mixin.gen.Accessor;
 public interface OverlayRecipeComponentAccessor {
 	@Accessor("recipeButtons")
 	List<Object> getRecipeButtons();
+
+	@Accessor("isVisible")
+	void setIsVisible(boolean visible);
 }

@@ -1324,6 +1324,9 @@ public final class NearbyContainerDryRun {
 			}
 
 			NearbyContainerDryRun.armInteractionBlock();
+			if (explicitVariantSelection) {
+				RecipeBookClickCapture.tryCloseOverlayAfterRelease();
+			}
 			stop(false);
 			NearbyContainerDryRun.activeSession = null;
 			return true;
@@ -1448,7 +1451,7 @@ public final class NearbyContainerDryRun {
 		}
 
 		private boolean topUpSeededGridToPlannedTargets(AbstractContainerMenu menu, List<Integer> occupiedAnchorSlots) {
-			Map<Integer, IngredientPlanning.SlotTarget> targetsBySlot = remapPlannedTargetsToAnchors(occupiedAnchorSlots);
+			Map<Integer, IngredientPlanning.SlotTarget> targetsBySlot = remapPlannedTargetsToAnchors(menu, occupiedAnchorSlots);
 			for (int slotIndex = 1; slotIndex <= originalContext.gridStacks().size(); slotIndex++) {
 				IngredientPlanning.SlotTarget desiredTarget = targetsBySlot.get(slotIndex);
 				if (desiredTarget == null || desiredTarget.itemId() == null || desiredTarget.targetCount() <= 0) {
@@ -1486,7 +1489,7 @@ public final class NearbyContainerDryRun {
 			}
 
 			AbstractContainerMenu menu = containerScreen.getMenu();
-			Map<Integer, IngredientPlanning.SlotTarget> targetsBySlot = remapPlannedTargetsToAnchors(occupiedAnchorSlots);
+			Map<Integer, IngredientPlanning.SlotTarget> targetsBySlot = remapPlannedTargetsToAnchors(menu, occupiedAnchorSlots);
 
 			if (!clearGridForRedistribute(menu, targetsBySlot)) {
 				return false;
@@ -1523,23 +1526,41 @@ public final class NearbyContainerDryRun {
 			return true;
 		}
 
-		private Map<Integer, IngredientPlanning.SlotTarget> remapPlannedTargetsToAnchors(List<Integer> occupiedAnchorSlots) {
+		private Map<Integer, IngredientPlanning.SlotTarget> remapPlannedTargetsToAnchors(AbstractContainerMenu menu, List<Integer> occupiedAnchorSlots) {
 			Map<Integer, IngredientPlanning.SlotTarget> targetsBySlot = new LinkedHashMap<>();
-			int occupiedTargetIndex = 0;
+			List<IngredientPlanning.SlotTarget> unassignedTargets = new ArrayList<>(plannedTargets);
 
-			for (IngredientPlanning.SlotTarget slotTarget : plannedTargets) {
-				int remappedSlotIndex = slotTarget.slotIndex();
-				boolean needsItem = slotTarget.itemId() != null && slotTarget.targetCount() > 0;
-
-				if (needsItem && occupiedTargetIndex < occupiedAnchorSlots.size()) {
-					remappedSlotIndex = occupiedAnchorSlots.get(occupiedTargetIndex++);
+			for (int slotIndex : occupiedAnchorSlots) {
+				ItemStack stack = menu.getSlot(slotIndex).getItem();
+				if (stack.isEmpty()) {
+					continue;
 				}
 
-				targetsBySlot.put(
-					remappedSlotIndex,
-					new IngredientPlanning.SlotTarget(remappedSlotIndex, slotTarget.ingredientSlot(), slotTarget.itemId(), slotTarget.targetCount())
-				);
+				String itemId = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+				IngredientPlanning.SlotTarget bestMatch = null;
+				for (IngredientPlanning.SlotTarget target : unassignedTargets) {
+					if (itemId.equals(target.itemId())) {
+						bestMatch = target;
+						break;
+					}
+				}
+
+				if (bestMatch != null) {
+					unassignedTargets.remove(bestMatch);
+					targetsBySlot.put(
+						slotIndex,
+						new IngredientPlanning.SlotTarget(slotIndex, bestMatch.ingredientSlot(), bestMatch.itemId(), bestMatch.targetCount())
+					);
+				}
 			}
+
+			// Add any remaining unassigned targets using their original indices (e.g. for slots we expect to fill but are currently empty)
+			for (IngredientPlanning.SlotTarget target : unassignedTargets) {
+				if (!targetsBySlot.containsKey(target.slotIndex())) {
+					targetsBySlot.put(target.slotIndex(), target);
+				}
+			}
+
 			return targetsBySlot;
 		}
 
