@@ -59,6 +59,7 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.ChestBlock;
 import net.minecraft.world.level.block.EnderChestBlock;
+import net.minecraft.world.level.block.HopperBlock;
 import net.minecraft.world.level.block.ShulkerBoxBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
@@ -1844,11 +1845,18 @@ public final class NearbyContainerDryRun {
 		}
 
 		private static boolean isSupportedContainer(BlockState state) {
+			String blockId = BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
+			if (ReachCraftingConfig.get().blacklistedContainerIds().contains(blockId)) {
+				return false;
+			}
+
 			Block block = state.getBlock();
 			return block instanceof ChestBlock
 				|| block instanceof BarrelBlock
 				|| block instanceof ShulkerBoxBlock
-				|| block instanceof EnderChestBlock;
+				|| block instanceof EnderChestBlock
+				|| block instanceof HopperBlock
+				|| (blockId.startsWith("minecraft:") && blockId.endsWith("copper_chest"));
 		}
 
 		private static boolean canAttemptOpen(Level level, BlockPos pos, BlockState state) {

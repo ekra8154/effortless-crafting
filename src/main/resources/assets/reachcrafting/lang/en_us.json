@@ -19,5 +19,17 @@
 	"tooltip.reachcrafting.revolving_craft_handling": "Controls how rotating generic recipe-book entries choose sibling variants during Ctrl-assisted crafting.",
 	"enum.reachcrafting.revolving_craft_handling.always_prefer_based_on_count": "Always Prefer Based On Count",
 	"enum.reachcrafting.revolving_craft_handling.prefer_clicked_type_with_count_fallback": "Prefer Clicked Type With Count Fallback",
-	"enum.reachcrafting.revolving_craft_handling.specific_variant_only": "Specific Variant Only"
+	"enum.reachcrafting.revolving_craft_handling.specific_variant_only": "Specific Variant Only",
+	"option.reachcrafting.reach_craft_close_overlay_after_release": "Close Overlay After Release",
+	"tooltip.reachcrafting.reach_craft_close_overlay_after_release": "Close the recipe overlay after releasing Ctrl if any items were fetched.",
+	"option.reachcrafting.reach_craft_prefer_inventory": "Prefer Inventory Over Grid",
+	"tooltip.reachcrafting.reach_craft_prefer_inventory": "When crafting, prefer using items already in your inventory before pulling from the crafting grid.",
+	"category.reachcrafting.containers": "Containers",
+	"option.reachcrafting.blacklisted_container_ids": "Blacklisted Container IDs",
+	"tooltip.reachcrafting.blacklisted_container_ids": "List of block IDs (e.g., 'minecraft:chest') that should be ignored when scanning for nearby items.",
+	"option.reachcrafting.auto_focus_search": "Auto Focus Search Bar",
+	"tooltip.reachcrafting.auto_focus_search": "Automatically focus the recipe book search bar when opening supported crafting grids if the recipe book is visible.",
+	"enum.reachcrafting.auto_focus_search.none": "None",
+	"enum.reachcrafting.auto_focus_search.crafting_3x3": "3x3",
+	"enum.reachcrafting.auto_focus_search.inventory_2x2_and_3x3": "2x2 and 3x3"
 }

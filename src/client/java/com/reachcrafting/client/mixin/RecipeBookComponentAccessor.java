@@ -45,4 +45,7 @@ public interface RecipeBookComponentAccessor {
 
 	@Invoker("getYOrigin")
 	int invokeGetYOrigin();
+
+	@Invoker("updateCollections")
+	void invokeUpdateCollections(boolean resetPage, boolean filtering);
 }

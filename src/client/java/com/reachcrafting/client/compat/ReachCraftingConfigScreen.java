@@ -5,6 +5,9 @@ import com.reachcrafting.client.ReachCraftingConfig;
 import me.shedaniel.clothconfig2.api.ConfigBuilder;
 import me.shedaniel.clothconfig2.api.ConfigCategory;
 import me.shedaniel.clothconfig2.api.ConfigEntryBuilder;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
@@ -95,6 +98,27 @@ public final class ReachCraftingConfigScreen {
 			.setTooltip(Component.translatable("tooltip.reachcrafting.revolving_craft_handling"))
 			.setSaveConsumer(config::setRevolvingCraftHandling)
 			.setEnumNameProvider(value -> Component.translatable("enum.reachcrafting.revolving_craft_handling." + value.name().toLowerCase()))
+			.build());
+
+		general.addEntry(entries.startEnumSelector(
+				Component.translatable("option.reachcrafting.auto_focus_search"),
+				ReachCraftingConfig.AutoFocusSearch.class,
+				config.autoFocusSearch()
+			)
+			.setDefaultValue(ReachCraftingConfig.AutoFocusSearch.NONE)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.auto_focus_search"))
+			.setSaveConsumer(config::setAutoFocusSearch)
+			.setEnumNameProvider(value -> Component.translatable("enum.reachcrafting.auto_focus_search." + value.name().toLowerCase()))
+			.build());
+
+		ConfigCategory containers = builder.getOrCreateCategory(Component.translatable("category.reachcrafting.containers"));
+		containers.addEntry(entries.startStrList(
+				Component.translatable("option.reachcrafting.blacklisted_container_ids"),
+				new ArrayList<>(config.blacklistedContainerIds())
+			)
+			.setDefaultValue(List.of())
+			.setTooltip(Component.translatable("tooltip.reachcrafting.blacklisted_container_ids"))
+			.setSaveConsumer(list -> config.setBlacklistedContainerIds(new HashSet<>(list)))
 			.build());
 
 		builder.setSavingRunnable(ReachCraftingConfig::save);

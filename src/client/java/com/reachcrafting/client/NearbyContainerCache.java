@@ -26,6 +26,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.BarrelBlock;
 import net.minecraft.world.level.block.ChestBlock;
 import net.minecraft.world.level.block.EnderChestBlock;
+import net.minecraft.world.level.block.HopperBlock;
 import net.minecraft.world.level.block.ShulkerBoxBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
@@ -365,10 +366,17 @@ public final class NearbyContainerCache {
 	}
 
 	private static boolean isSupportedContainer(BlockState state) {
+		String blockId = net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
+		if (ReachCraftingConfig.get().blacklistedContainerIds().contains(blockId)) {
+			return false;
+		}
+
 		return state.getBlock() instanceof ChestBlock
 			|| state.getBlock() instanceof BarrelBlock
 			|| state.getBlock() instanceof ShulkerBoxBlock
-			|| state.getBlock() instanceof EnderChestBlock;
+			|| state.getBlock() instanceof EnderChestBlock
+			|| state.getBlock() instanceof HopperBlock
+			|| (blockId.startsWith("minecraft:") && blockId.endsWith("copper_chest"));
 	}
 
 	private static boolean canAttemptOpen(Level level, BlockPos pos, BlockState state) {

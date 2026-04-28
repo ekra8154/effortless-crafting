@@ -17,7 +17,8 @@
 		"RecipeButtonMixin",
 		"RecipeBookComponentAccessor",
 		"RecipeBookPageAccessor",
-		"RecipeBookPageMixin"
+		"RecipeBookPageMixin",
+		"RecipeBookComponentMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

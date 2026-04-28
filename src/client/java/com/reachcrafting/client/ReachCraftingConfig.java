@@ -7,11 +7,26 @@ import java.io.Reader;
 import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
 import net.fabricmc.loader.api.FabricLoader;
 
 public final class ReachCraftingConfig {
 	private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 	private static final Path CONFIG_PATH = FabricLoader.getInstance().getConfigDir().resolve("reachcrafting.json");
+	private static final Set<String> DEFAULT_BLACKLIST = Set.of(
+		"minecraft:ender_chest",
+		"minecraft:hopper",
+		"minecraft:copper_chest",
+		"minecraft:exposed_copper_chest",
+		"minecraft:weathered_copper_chest",
+		"minecraft:oxidized_copper_chest",
+		"minecraft:waxed_copper_chest",
+		"minecraft:waxed_exposed_copper_chest",
+		"minecraft:waxed_weathered_copper_chest",
+		"minecraft:waxed_oxidized_copper_chest"
+	);
 	private static ReachCraftingConfig instance = defaults();
 
 	private boolean redistributeToCraftWhenNeeded;
@@ -22,6 +37,10 @@ public final class ReachCraftingConfig {
 	private boolean reachCraftHoldAndRelease;
 	private boolean reachCraftCloseOverlayAfterRelease;
 	private boolean reachCraftPreferInventory;
+	private AutoFocusSearch autoFocusSearch;
+	private Set<String> blacklistedContainerIds;
+
+	private static String lastSearchText = "";
 
 	private ReachCraftingConfig() {
 	}
@@ -53,6 +72,8 @@ public final class ReachCraftingConfig {
 			instance.reachCraftHoldAndRelease = stored.reachCraftHoldAndRelease;
 			instance.reachCraftCloseOverlayAfterRelease = stored.reachCraftCloseOverlayAfterRelease == null ? true : stored.reachCraftCloseOverlayAfterRelease;
 			instance.reachCraftPreferInventory = stored.reachCraftPreferInventory == null ? true : stored.reachCraftPreferInventory;
+			instance.autoFocusSearch = stored.autoFocusSearch != null ? stored.autoFocusSearch : AutoFocusSearch.NONE;
+			instance.blacklistedContainerIds = stored.blacklistedContainerIds != null ? new HashSet<>(stored.blacklistedContainerIds) : new HashSet<>(DEFAULT_BLACKLIST);
 		} catch (Exception exception) {
 			ReachCraftingMod.LOGGER.warn("Failed to load reachcrafting config from {}", CONFIG_PATH, exception);
 			instance = defaults();
@@ -146,6 +167,31 @@ public final class ReachCraftingConfig {
 		this.reachCraftPreferInventory = reachCraftPreferInventory;
 	}
 
+	public AutoFocusSearch autoFocusSearch() {
+		return autoFocusSearch;
+	}
+
+	public void setAutoFocusSearch(AutoFocusSearch autoFocusSearch) {
+		this.autoFocusSearch = autoFocusSearch;
+	}
+
+	public static String getLastSearchText() {
+		return lastSearchText;
+	}
+
+	public static void setLastSearchText(String text) {
+		lastSearchText = text != null ? text : "";
+	}
+	
+	public Set<String> blacklistedContainerIds() {
+		return Collections.unmodifiableSet(blacklistedContainerIds);
+	}
+
+	public void setBlacklistedContainerIds(Set<String> blacklistedContainerIds) {
+		this.blacklistedContainerIds = new HashSet<>(blacklistedContainerIds);
+		NearbyContainerCache.clear();
+	}
+
 	private static ReachCraftingConfig defaults() {
 		ReachCraftingConfig defaults = new ReachCraftingConfig();
 		defaults.redistributeToCraftWhenNeeded = false;
@@ -156,7 +202,15 @@ public final class ReachCraftingConfig {
 		defaults.reachCraftHoldAndRelease = false;
 		defaults.reachCraftCloseOverlayAfterRelease = true;
 		defaults.reachCraftPreferInventory = true;
+		defaults.autoFocusSearch = AutoFocusSearch.NONE;
+		defaults.blacklistedContainerIds = new HashSet<>(DEFAULT_BLACKLIST);
 		return defaults;
+	}
+
+	public enum AutoFocusSearch {
+		NONE,
+		CRAFTING_3X3,
+		INVENTORY_2X2_AND_3X3
 	}
 
 	public enum RevolvingCraftHandling {
@@ -174,6 +228,8 @@ public final class ReachCraftingConfig {
 		private boolean reachCraftHoldAndRelease;
 		private Boolean reachCraftCloseOverlayAfterRelease;
 		private Boolean reachCraftPreferInventory;
+		private AutoFocusSearch autoFocusSearch;
+		private Set<String> blacklistedContainerIds;
 
 		private StoredConfig(ReachCraftingConfig config) {
 			this.redistributeToCraftWhenNeeded = config.redistributeToCraftWhenNeeded;
@@ -184,6 +240,8 @@ public final class ReachCraftingConfig {
 			this.reachCraftHoldAndRelease = config.reachCraftHoldAndRelease;
 			this.reachCraftCloseOverlayAfterRelease = config.reachCraftCloseOverlayAfterRelease;
 			this.reachCraftPreferInventory = config.reachCraftPreferInventory;
+			this.autoFocusSearch = config.autoFocusSearch;
+			this.blacklistedContainerIds = config.blacklistedContainerIds;
 		}
 	}
 }
