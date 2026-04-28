@@ -243,7 +243,7 @@ public final class NearbyContainerDryRun {
 		private static final int RESUME_DELAY_TICKS = 2;
 		private static final int REOPEN_TIMEOUT_TICKS = 20;
 		private static final int RESTORE_TIMEOUT_TICKS = 10;
-		private static final int SEED_WAIT_TICKS = 5;
+		private static final int SEED_WAIT_TICKS = 20;
 		private static final int MAX_REOPEN_ATTEMPTS = 3;
 
 		private final Minecraft client;
@@ -481,6 +481,7 @@ public final class NearbyContainerDryRun {
 					if (tryFinishAfterResume()) {
 						return;
 					}
+					return;
 				}
 
 				timeoutTicks--;
@@ -1210,7 +1211,6 @@ public final class NearbyContainerDryRun {
 				gridRestored = restoreReservedGrid();
 				if (!gridRestored && originalContext.hasReservedGrid() && restoreTicksRemaining > 0) {
 					restoreTicksRemaining--;
-					timeoutTicks = 1;
 					ReachCraftingMod.LOGGER.info(
 						"[nearby_restore] idx={} waiting_for_grid_restore remaining_ticks={}",
 						recipeIndex,
@@ -1235,7 +1235,6 @@ public final class NearbyContainerDryRun {
 					if (seededPlacement == PlacementAttempt.WAITING_FOR_SEED) {
 						if (seedWaitTicksRemaining > 0) {
 							seedWaitTicksRemaining--;
-							timeoutTicks = 1;
 							ReachCraftingMod.LOGGER.info(
 								"[nearby_restore] idx={} waiting_for_seeded_shape remaining_ticks={}",
 								recipeIndex,
@@ -1441,7 +1440,7 @@ public final class NearbyContainerDryRun {
 				seededVanillaBatchLayout = true;
 			}
 			List<Integer> occupiedSlots = currentOccupiedGridSlotIndices(menu, originalContext.gridStacks().size());
-			if (occupiedSlots.isEmpty()) {
+			if (occupiedSlots.size() < plannedTargets.size()) {
 				lastRestoreFailure = "vanilla_shape_seed_waiting";
 				return PlacementAttempt.WAITING_FOR_SEED;
 			}
@@ -1527,11 +1526,12 @@ public final class NearbyContainerDryRun {
 		private Map<Integer, IngredientPlanning.SlotTarget> remapPlannedTargetsToAnchors(List<Integer> occupiedAnchorSlots) {
 			Map<Integer, IngredientPlanning.SlotTarget> targetsBySlot = new LinkedHashMap<>();
 			int occupiedTargetIndex = 0;
+
 			for (IngredientPlanning.SlotTarget slotTarget : plannedTargets) {
 				int remappedSlotIndex = slotTarget.slotIndex();
-				if (originalContext.gridStacks().size() != ingredientSummary.slots().size()
-					&& slotTarget.itemId() != null
-					&& occupiedTargetIndex < occupiedAnchorSlots.size()) {
+				boolean needsItem = slotTarget.itemId() != null && slotTarget.targetCount() > 0;
+
+				if (needsItem && occupiedTargetIndex < occupiedAnchorSlots.size()) {
 					remappedSlotIndex = occupiedAnchorSlots.get(occupiedTargetIndex++);
 				}
 
