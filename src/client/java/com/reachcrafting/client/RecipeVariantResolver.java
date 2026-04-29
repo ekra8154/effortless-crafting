@@ -112,11 +112,6 @@ public final class RecipeVariantResolver {
 			return exactSelection;
 		}
 
-		if (handling == ReachCraftingConfig.RevolvingCraftHandling.PREFER_CLICKED_TYPE_WITH_COUNT_FALLBACK
-			&& exactSelection.copiesAvailable() > 0) {
-			return exactSelection;
-		}
-
 		if (!allowReservedGridVariantSwitch && availableItems.hasReservedGrid()) {
 			Selection gridMatch = candidates.stream()
 				.filter(candidate -> isMatchForGrid(candidate, availableItems.gridStacks()))

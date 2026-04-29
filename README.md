@@ -85,22 +85,22 @@ This project is licensed under **LGPL-3.0-or-later**. It draws inspiration and c
 
 
 TODO:
-check if works with modded blocks or custom datapack recipes?
 
 shift = vanilla scroll
+    scroll wheel over results slot + shift to craft that many times?
+
+scroll wraparound 64 --> 0 and vice versa
 
 alt = auto craft
 
 need to define blacklist containers / regions
 
-work with hoppers! need container types blacklist
-
-cache on other containers, as well as crafts cause new cache. 
-
-need attempt to put resources back setting
-
 settings / more to make caching actually faster
 
 search radius?
 
-code cleanup (SUPER NEEDED BUT SUPER BORING)
+code cleanup - in progress
+
+eject items from grid to old positions in inventory setting
+
+clear grid ui button (hold ctrl makes pulled items return?) otherwise eject into inventory (try to remember slots - maybe do this after adding the eject setting mentioned above)

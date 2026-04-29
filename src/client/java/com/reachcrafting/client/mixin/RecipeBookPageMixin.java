@@ -1,7 +1,6 @@
 package com.reachcrafting.client.mixin;
 
 import com.reachcrafting.client.RecipeBookClickCapture;
-// import com.reachcrafting.client.mixin.RecipeBookPageAccessor;
 import java.util.List;
 import net.minecraft.client.gui.screens.recipebook.OverlayRecipeComponent;
 import net.minecraft.client.gui.screens.recipebook.RecipeButton;
