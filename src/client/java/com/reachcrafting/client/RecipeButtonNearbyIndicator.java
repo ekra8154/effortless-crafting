@@ -114,14 +114,7 @@ public final class RecipeButtonNearbyIndicator {
 	}
 
 	private static int currentReservedCraftCopies(AvailableItemSnapshot availableItems) {
-		int minCount = Integer.MAX_VALUE;
-		for (ItemStack stack : availableItems.gridStacks()) {
-			if (stack.isEmpty()) {
-				continue;
-			}
-			minCount = Math.min(minCount, stack.getCount());
-		}
-		return minCount == Integer.MAX_VALUE ? 0 : minCount;
+		return ContainerUtils.currentReservedCraftCopies(availableItems.gridStacks());
 	}
 
 	public static void renderOverlayButton(net.minecraft.client.gui.GuiGraphics guiGraphics, int x, int y, int width, RecipeDisplayId recipe, RecipeCollection collection) {

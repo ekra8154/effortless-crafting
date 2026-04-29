@@ -13,7 +13,6 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
@@ -41,7 +40,6 @@ import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.network.protocol.game.ServerboundPlayerInputPacket;
 import net.minecraft.util.Mth;
 import net.minecraft.util.context.ContextMap;
-import net.minecraft.world.Container;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Inventory;
@@ -54,16 +52,8 @@ import net.minecraft.world.item.crafting.ExtendedRecipeBookCategory;
 import net.minecraft.world.item.crafting.display.RecipeDisplayId;
 import net.minecraft.world.item.crafting.display.SlotDisplayContext;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.BarrelBlock;
-import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.block.ChestBlock;
-import net.minecraft.world.level.block.EnderChestBlock;
-import net.minecraft.world.level.block.HopperBlock;
-import net.minecraft.world.level.block.ShulkerBoxBlock;
-import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.block.state.properties.ChestType;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 import org.lwjgl.glfw.GLFW;
@@ -564,7 +554,7 @@ public final class NearbyContainerDryRun {
 				return;
 			}
 
-			Map<String, Integer> allItems = collectAllItems(menu);
+			Map<String, Integer> allItems = ContainerUtils.collectAllItems(menu);
 			NearbyContainerCache.recordObservedContents(level, pendingContainerPos, allItems);
 			Map<String, Integer> usefulItems = collectUsefulItems(menu, scanAcceptedItemIds);
 			if (!usefulItems.isEmpty()) {
@@ -572,7 +562,7 @@ public final class NearbyContainerDryRun {
 				ReachCraftingMod.LOGGER.info(
 					"[nearby_container] idx={} pos={} found={}",
 					recipeIndex,
-					formatPos(pendingContainerPos),
+					ContainerUtils.formatPos(pendingContainerPos),
 					AvailableItemSnapshot.formatCounts(usefulItems)
 				);
 			}
@@ -592,7 +582,7 @@ public final class NearbyContainerDryRun {
 			ReachCraftingMod.LOGGER.info(
 				"[nearby_container] idx={} pos={} skipped={}",
 				recipeIndex,
-				formatPos(pendingContainerPos),
+				ContainerUtils.formatPos(pendingContainerPos),
 				reason
 			);
 			pendingContainerPos = null;
@@ -609,18 +599,18 @@ public final class NearbyContainerDryRun {
 				}
 
 				BlockState blockState = level.getBlockState(pos);
-				if (!isSupportedContainer(blockState)) {
+				if (!ContainerUtils.isSupportedContainer(blockState)) {
 					continue;
 				}
-				if (!canAttemptOpen(level, pos, blockState)) {
+				if (!ContainerUtils.canAttemptOpen(level, pos, blockState)) {
 					continue;
 				}
-				if (squaredDistanceToBlock(eyePos, pos) > Mth.square(player.blockInteractionRange())) {
+				if (ContainerUtils.squaredDistanceToBlock(eyePos, pos) > Mth.square(player.blockInteractionRange())) {
 					continue;
 				}
 
 				markVisited(pos);
-				Vec3 hitPos = closestPointOnUnitBlock(eyePos, pos);
+				Vec3 hitPos = ContainerUtils.closestPointOnUnitBlock(eyePos, pos);
 				Direction face = Direction.getApproximateNearest(hitPos.subtract(eyePos)).getOpposite();
 				BlockHitResult hitResult = new BlockHitResult(hitPos, face, pos, false);
 				boolean wasSneaking = player.isShiftKeyDown() || (player.input != null && player.input.keyPresses != null && player.input.keyPresses.shift());
@@ -688,7 +678,7 @@ public final class NearbyContainerDryRun {
 				ReachCraftingMod.LOGGER.info(
 					"[nearby_withdraw] idx={} pos={} total_withdrawn={} remaining={}",
 					recipeIndex,
-					formatPos(pendingContainerPos),
+					ContainerUtils.formatPos(pendingContainerPos),
 					AvailableItemSnapshot.formatCounts(withdrawnItems),
 					summarizeRemainingItems(remainingItemIds)
 				);
@@ -697,7 +687,7 @@ public final class NearbyContainerDryRun {
 
 		private void markVisited(BlockPos pos) {
 			visited.add(pos);
-			getOtherHalfOfLargeChest(level, pos).ifPresent(visited::add);
+			ContainerUtils.getOtherHalfOfLargeChest(level, pos).ifPresent(visited::add);
 		}
 
 		private boolean withdrawOneItem(AbstractContainerMenu menu, Slot sourceSlot, Slot targetSlot) {
@@ -1038,14 +1028,7 @@ public final class NearbyContainerDryRun {
 		}
 
 		private int currentReservedCraftCopies() {
-			int minCount = Integer.MAX_VALUE;
-			for (ItemStack stack : originalContext.gridStacks()) {
-				if (stack.isEmpty()) {
-					continue;
-				}
-				minCount = Math.min(minCount, stack.getCount());
-			}
-			return minCount == Integer.MAX_VALUE ? 0 : minCount;
+			return ContainerUtils.currentReservedCraftCopies(originalContext.gridStacks());
 		}
 
 
@@ -1057,8 +1040,8 @@ public final class NearbyContainerDryRun {
 			if (originalContext.kind() == ScreenKind.CRAFTING_TABLE_3X3 && originalContext.craftingTablePos() != null) {
 				Vec3 eyePos = cameraEntity.getEyePosition(0);
 				BlockPos pos = originalContext.craftingTablePos();
-				if (level.getBlockState(pos).is(Blocks.CRAFTING_TABLE) && squaredDistanceToBlock(eyePos, pos) <= Mth.square(player.blockInteractionRange())) {
-					Vec3 hitPos = closestPointOnUnitBlock(eyePos, pos);
+				if (level.getBlockState(pos).is(Blocks.CRAFTING_TABLE) && ContainerUtils.squaredDistanceToBlock(eyePos, pos) <= Mth.square(player.blockInteractionRange())) {
+					Vec3 hitPos = ContainerUtils.closestPointOnUnitBlock(eyePos, pos);
 					Direction face = Direction.getApproximateNearest(hitPos.subtract(eyePos)).getOpposite();
 					BlockHitResult hitResult = new BlockHitResult(hitPos, face, pos, false);
 					boolean wasSneaking = player.isShiftKeyDown() || (player.input != null && player.input.keyPresses != null && player.input.keyPresses.shift());
@@ -1261,8 +1244,8 @@ public final class NearbyContainerDryRun {
 						"[nearby_restore] idx={} failed_to_restore grid_slot={} desired={} actual={} reason={}",
 						recipeIndex,
 						slotIndex,
-						formatStack(desiredStack),
-						formatStack(menu.getSlot(slotIndex).getItem()),
+						ContainerUtils.formatStack(desiredStack),
+						ContainerUtils.formatStack(menu.getSlot(slotIndex).getItem()),
 						lastRestoreFailure
 					);
 					return false;
@@ -1304,9 +1287,9 @@ public final class NearbyContainerDryRun {
 						"[nearby_restore] idx={} failed_to_expand grid_slot={} from={} to={} actual={} reason={}",
 						recipeIndex,
 						slotIndex,
-						formatStack(currentStack),
-						formatStack(desiredStack),
-						formatStack(menu.getSlot(slotIndex).getItem()),
+						ContainerUtils.formatStack(currentStack),
+						ContainerUtils.formatStack(desiredStack),
+						ContainerUtils.formatStack(menu.getSlot(slotIndex).getItem()),
 						lastRestoreFailure
 					);
 					return false;
@@ -1437,7 +1420,7 @@ public final class NearbyContainerDryRun {
 
 		private boolean restoreGridSlot(AbstractContainerMenu menu, int targetSlotIndex, ItemStack desiredStack) {
 			if (!player.containerMenu.getCarried().isEmpty()) {
-				lastRestoreFailure = "carried_stack=" + formatStack(player.containerMenu.getCarried());
+				lastRestoreFailure = "carried_stack=" + ContainerUtils.formatStack(player.containerMenu.getCarried());
 				return false;
 			}
 
@@ -1445,7 +1428,7 @@ public final class NearbyContainerDryRun {
 			ItemStack currentStack = targetSlot.getItem();
 			if (!currentStack.isEmpty() && !ItemStack.isSameItemSameComponents(currentStack, desiredStack)) {
 				if (!moveGridSlotBackToInventory(menu, targetSlot)) {
-					lastRestoreFailure = "wrong_item_in_grid actual=" + formatStack(currentStack) + " desired=" + formatStack(desiredStack);
+					lastRestoreFailure = "wrong_item_in_grid actual=" + ContainerUtils.formatStack(currentStack) + " desired=" + ContainerUtils.formatStack(desiredStack);
 					return false;
 				}
 				currentStack = targetSlot.getItem();
@@ -1455,13 +1438,13 @@ public final class NearbyContainerDryRun {
 			while (remaining > 0) {
 				Slot sourceSlot = findMatchingInventorySourceSlot(menu, desiredStack);
 				if (sourceSlot == null) {
-					lastRestoreFailure = "missing_source_for=" + formatStack(desiredStack) + " remaining=" + remaining;
+					lastRestoreFailure = "missing_source_for=" + ContainerUtils.formatStack(desiredStack) + " remaining=" + remaining;
 					return false;
 				}
 
 				int moved = moveExactCount(menu, sourceSlot, targetSlot, remaining);
 				if (moved <= 0) {
-					lastRestoreFailure = "move_failed source=" + formatStack(sourceSlot.getItem()) + " target=" + formatStack(targetSlot.getItem()) + " remaining=" + remaining;
+					lastRestoreFailure = "move_failed source=" + ContainerUtils.formatStack(sourceSlot.getItem()) + " target=" + ContainerUtils.formatStack(targetSlot.getItem()) + " remaining=" + remaining;
 					return false;
 				}
 				remaining -= moved;
@@ -1470,7 +1453,7 @@ public final class NearbyContainerDryRun {
 			ItemStack restoredStack = targetSlot.getItem();
 			boolean restored = ItemStack.isSameItemSameComponents(restoredStack, desiredStack) && restoredStack.getCount() >= desiredStack.getCount();
 			if (!restored) {
-				lastRestoreFailure = "post_check actual=" + formatStack(restoredStack) + " desired=" + formatStack(desiredStack);
+				lastRestoreFailure = "post_check actual=" + ContainerUtils.formatStack(restoredStack) + " desired=" + ContainerUtils.formatStack(desiredStack);
 			}
 			return restored;
 		}
@@ -1606,12 +1589,12 @@ public final class NearbyContainerDryRun {
 				center.offset(radius, radius, radius)
 			)) {
 				BlockState state = level.getBlockState(pos);
-				if (isSupportedContainer(state)) {
+				if (ContainerUtils.isSupportedContainer(state)) {
 					candidates.add(pos.immutable());
 				}
 			}
 
-			candidates.sort(Comparator.comparingDouble(pos -> squaredDistanceToBlock(eyePos, pos)));
+			candidates.sort(Comparator.comparingDouble(pos -> ContainerUtils.squaredDistanceToBlock(eyePos, pos)));
 			return candidates;
 		}
 
@@ -1630,78 +1613,9 @@ public final class NearbyContainerDryRun {
 			return usefulItems;
 		}
 
-		private static Map<String, Integer> collectAllItems(AbstractContainerMenu menu) {
-			Map<String, Integer> allItems = new LinkedHashMap<>();
-			for (Slot slot : menu.slots) {
-				if (slot.container instanceof Inventory || !slot.hasItem()) {
-					continue;
-				}
-
-				String itemId = BuiltInRegistries.ITEM.getKey(slot.getItem().getItem()).toString();
-				allItems.merge(itemId, slot.getItem().getCount(), Integer::sum);
-			}
-			return allItems;
-		}
 
 	}
 
-	private static boolean isSupportedContainer(BlockState state) {
-		String blockId = BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
-		if (ReachCraftingConfig.get().blacklistedContainerIds().contains(blockId)) {
-			return false;
-		}
-
-		Block block = state.getBlock();
-		return block instanceof ChestBlock
-			|| block instanceof BarrelBlock
-			|| block instanceof ShulkerBoxBlock
-			|| block instanceof EnderChestBlock
-			|| block instanceof HopperBlock
-			|| (blockId.startsWith("minecraft:") && blockId.endsWith("copper_chest"));
-	}
-
-	private static boolean canAttemptOpen(Level level, BlockPos pos, BlockState state) {
-		BlockEntity blockEntity = level.getBlockEntity(pos);
-		if (!(blockEntity instanceof Container) && !(state.getBlock() instanceof EnderChestBlock)) {
-			return false;
-		}
-		if (state.getBlock() instanceof ChestBlock || state.getBlock() instanceof EnderChestBlock) {
-			if (ChestBlock.isChestBlockedAt(level, pos)) {
-				return false;
-			}
-			return getOtherHalfOfLargeChest(level, pos)
-				.map(otherHalf -> !ChestBlock.isChestBlockedAt(level, otherHalf))
-				.orElse(true);
-		}
-		return true;
-	}
-
-	private static Optional<BlockPos> getOtherHalfOfLargeChest(Level level, BlockPos pos) {
-		BlockState state = level.getBlockState(pos);
-		if (!(state.getBlock() instanceof ChestBlock) || state.getValue(ChestBlock.TYPE) == ChestType.SINGLE) {
-			return Optional.empty();
-		}
-
-		BlockPos otherHalfPos = pos.relative(ChestBlock.getConnectedDirection(state));
-		BlockState otherHalf = level.getBlockState(otherHalfPos);
-		if (!(otherHalf.getBlock() instanceof ChestBlock)) {
-			return Optional.empty();
-		}
-		if (state.getValue(ChestBlock.FACING) != otherHalf.getValue(ChestBlock.FACING)) {
-			return Optional.empty();
-		}
-		if (ChestBlock.getConnectedDirection(state) != ChestBlock.getConnectedDirection(otherHalf).getOpposite()) {
-			return Optional.empty();
-		}
-		return Optional.of(otherHalfPos.immutable());
-	}
-
-	private static String formatPos(BlockPos pos) {
-		if (pos == null) {
-			return "<none>";
-		}
-		return pos.getX() + "," + pos.getY() + "," + pos.getZ();
-	}
 
 	private static String summarizeRemainingItems(List<String> remainingItemIds) {
 		if (remainingItemIds.isEmpty()) {
@@ -1860,7 +1774,7 @@ public final class NearbyContainerDryRun {
 					continue;
 				}
 
-				double distance = squaredDistanceToBlock(eyePos, pos);
+				double distance = ContainerUtils.squaredDistanceToBlock(eyePos, pos);
 				if (distance < bestDistance) {
 					bestDistance = distance;
 					bestPos = pos.immutable();
@@ -1997,23 +1911,6 @@ public final class NearbyContainerDryRun {
 		WITHDRAW
 	}
 
-	private static String formatStack(ItemStack stack) {
-		if (stack.isEmpty()) {
-			return "<empty>";
-		}
-		return stack.getCount() + "x " + BuiltInRegistries.ITEM.getKey(stack.getItem());
-	}
-
-	private static double squaredDistanceToBlock(Vec3 eyePos, BlockPos pos) {
-		return closestPointOnUnitBlock(eyePos, pos).distanceToSqr(eyePos);
-	}
-
-	private static Vec3 closestPointOnUnitBlock(Vec3 origin, BlockPos pos) {
-		double x = Mth.clamp(origin.x, pos.getX(), pos.getX() + 1.0D);
-		double y = Mth.clamp(origin.y, pos.getY(), pos.getY() + 1.0D);
-		double z = Mth.clamp(origin.z, pos.getZ(), pos.getZ() + 1.0D);
-		return new Vec3(x, y, z);
-	}
 
 	private static final class ReturnSession extends BaseSession {
 		private final List<PulledResourcesTracker.WithdrawnItem> itemsToReturn;
@@ -2106,7 +2003,7 @@ public final class NearbyContainerDryRun {
 
 		@Override
 		public void onOpenFailed(String reason) {
-			ReachCraftingMod.LOGGER.info("[nearby_return] pos={} skipped={}", formatPos(pendingContainerPos), reason);
+			ReachCraftingMod.LOGGER.info("[nearby_return] pos={} skipped={}", ContainerUtils.formatPos(pendingContainerPos), reason);
 			pendingContainerPos = null;
 			timeoutTicks = 0;
 			state = SearchState.OPEN_NEXT;
@@ -2117,11 +2014,11 @@ public final class NearbyContainerDryRun {
 			while (nextPositionIndex < uniquePositions.size()) {
 				BlockPos pos = uniquePositions.get(nextPositionIndex++);
 				BlockState blockState = level.getBlockState(pos);
-				if (!isSupportedContainer(blockState)) continue;
-				if (!canAttemptOpen(level, pos, blockState)) continue;
-				if (squaredDistanceToBlock(eyePos, pos) > net.minecraft.util.Mth.square(player.blockInteractionRange())) continue;
+				if (!ContainerUtils.isSupportedContainer(blockState)) continue;
+				if (!ContainerUtils.canAttemptOpen(level, pos, blockState)) continue;
+				if (ContainerUtils.squaredDistanceToBlock(eyePos, pos) > net.minecraft.util.Mth.square(player.blockInteractionRange())) continue;
 
-				Vec3 hitPos = closestPointOnUnitBlock(eyePos, pos);
+				Vec3 hitPos = ContainerUtils.closestPointOnUnitBlock(eyePos, pos);
 				Direction face = Direction.getApproximateNearest(hitPos.subtract(eyePos)).getOpposite();
 				BlockHitResult hitResult = new BlockHitResult(hitPos, face, pos, false);
 				
@@ -2139,7 +2036,7 @@ public final class NearbyContainerDryRun {
 
 		@Override
 		public void onContainerContentsInitialized(AbstractContainerMenu menu) {
-			ReachCraftingMod.LOGGER.info("[nearby_return] Container opened at {}", formatPos(pendingContainerPos));
+			ReachCraftingMod.LOGGER.info("[nearby_return] Container opened at {}", ContainerUtils.formatPos(pendingContainerPos));
 			if (state != SearchState.WAITING_FOR_CONTAINER) return;
 
 			List<PulledResourcesTracker.WithdrawnItem> itemsAtThisPos = itemsToReturn.stream()

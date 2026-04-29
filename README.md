@@ -104,3 +104,10 @@ code cleanup - in progress
 eject items from grid to old positions in inventory setting
 
 clear grid ui button (hold ctrl makes pulled items return?) otherwise eject into inventory (try to remember slots - maybe do this after adding the eject setting mentioned above)
+
+
+
+KNOWN BUGS:
+- queuing a single harness works but queuing too many results in nothing appearing at all
+
+- queuing a new item when one is in the grid ejects the first and pulls the second but both end up in the inventory instead of the second being in the grid

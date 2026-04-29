@@ -17,20 +17,13 @@ import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.world.Container;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.InventoryMenu;
-import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.BarrelBlock;
 import net.minecraft.world.level.block.ChestBlock;
 import net.minecraft.world.level.block.EnderChestBlock;
-import net.minecraft.world.level.block.HopperBlock;
-import net.minecraft.world.level.block.ShulkerBoxBlock;
-import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.block.state.properties.ChestType;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.util.Mth;
 
@@ -96,10 +89,10 @@ public final class NearbyContainerCache {
 		)) {
 			BlockPos immutablePos = pos.immutable();
 			BlockState state = level.getBlockState(immutablePos);
-			if (!isSupportedContainer(state) || !canAttemptOpen(level, immutablePos, state)) {
+			if (!ContainerUtils.isSupportedContainer(state) || !ContainerUtils.canAttemptOpen(level, immutablePos, state)) {
 				continue;
 			}
-			if (squaredDistanceToBlock(eyePos, immutablePos) > Mth.square(reachDistance)) {
+			if (ContainerUtils.squaredDistanceToBlock(eyePos, immutablePos) > Mth.square(reachDistance)) {
 				continue;
 			}
 
@@ -110,7 +103,7 @@ public final class NearbyContainerCache {
 
 			accessKeysByPos.put(immutablePos, key);
 			BlockPos currentNearest = nearestAccessByKey.get(key);
-			if (currentNearest == null || squaredDistanceToBlock(eyePos, immutablePos) < squaredDistanceToBlock(eyePos, currentNearest)) {
+			if (currentNearest == null || ContainerUtils.squaredDistanceToBlock(eyePos, immutablePos) < ContainerUtils.squaredDistanceToBlock(eyePos, currentNearest)) {
 				nearestAccessByKey.put(key, immutablePos);
 			}
 
@@ -232,7 +225,7 @@ public final class NearbyContainerCache {
 		}
 
 		BlockState state = level.getBlockState(pos);
-		if (!isSupportedContainer(state) || !canAttemptOpen(level, pos, state)) {
+		if (!ContainerUtils.isSupportedContainer(state) || !ContainerUtils.canAttemptOpen(level, pos, state)) {
 			return;
 		}
 
@@ -267,7 +260,7 @@ public final class NearbyContainerCache {
 			return;
 		}
 
-		recordObservedContents(client.level, pendingObservedPos, collectAllItems(menu));
+		recordObservedContents(client.level, pendingObservedPos, ContainerUtils.collectAllItems(menu));
 		openObservedPos = pendingObservedPos;
 		openObservedContainerId = menu.containerId;
 		pendingObservedPos = null;
@@ -287,7 +280,7 @@ public final class NearbyContainerCache {
 
 		Minecraft client = Minecraft.getInstance();
 		if (client.level != null) {
-			recordObservedContents(client.level, openObservedPos, collectAllItems(menu));
+			recordObservedContents(client.level, openObservedPos, ContainerUtils.collectAllItems(menu));
 		}
 		openObservedPos = null;
 		openObservedContainerId = -1;
@@ -309,18 +302,6 @@ public final class NearbyContainerCache {
 		lastView = null;
 	}
 
-	private static Map<String, Integer> collectAllItems(AbstractContainerMenu menu) {
-		Map<String, Integer> allItems = new LinkedHashMap<>();
-		for (Slot slot : menu.slots) {
-			if (slot.container instanceof net.minecraft.world.entity.player.Inventory || !slot.hasItem()) {
-				continue;
-			}
-
-			String itemId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(slot.getItem().getItem()).toString();
-			allItems.merge(itemId, slot.getItem().getCount(), Integer::sum);
-		}
-		return allItems;
-	}
 
 	private static ContainerKey resolveContainerKey(Level level, BlockPos pos) {
 		if (level == null || pos == null) {
@@ -330,7 +311,7 @@ public final class NearbyContainerCache {
 	}
 
 	private static ContainerKey resolveContainerKey(Level level, BlockPos pos, BlockState state) {
-		if (!isSupportedContainer(state)) {
+		if (!ContainerUtils.isSupportedContainer(state)) {
 			return null;
 		}
 
@@ -346,7 +327,7 @@ public final class NearbyContainerCache {
 
 	private static BlockPos canonicalizeContainerPos(Level level, BlockPos pos, BlockState state) {
 		if (state.getBlock() instanceof ChestBlock) {
-			Optional<BlockPos> otherHalf = getOtherHalfOfLargeChest(level, pos);
+			Optional<BlockPos> otherHalf = ContainerUtils.getOtherHalfOfLargeChest(level, pos);
 			if (otherHalf.isPresent()) {
 				BlockPos other = otherHalf.get();
 				return compareBlockPos(pos, other) <= 0 ? pos.immutable() : other.immutable();
@@ -365,66 +346,6 @@ public final class NearbyContainerCache {
 		return Integer.compare(left.getZ(), right.getZ());
 	}
 
-	private static boolean isSupportedContainer(BlockState state) {
-		String blockId = net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
-		if (ReachCraftingConfig.get().blacklistedContainerIds().contains(blockId)) {
-			return false;
-		}
-
-		return state.getBlock() instanceof ChestBlock
-			|| state.getBlock() instanceof BarrelBlock
-			|| state.getBlock() instanceof ShulkerBoxBlock
-			|| state.getBlock() instanceof EnderChestBlock
-			|| state.getBlock() instanceof HopperBlock
-			|| (blockId.startsWith("minecraft:") && blockId.endsWith("copper_chest"));
-	}
-
-	private static boolean canAttemptOpen(Level level, BlockPos pos, BlockState state) {
-		BlockEntity blockEntity = level.getBlockEntity(pos);
-		if (!(blockEntity instanceof Container) && !(state.getBlock() instanceof EnderChestBlock)) {
-			return false;
-		}
-		if (state.getBlock() instanceof ChestBlock || state.getBlock() instanceof EnderChestBlock) {
-			if (ChestBlock.isChestBlockedAt(level, pos)) {
-				return false;
-			}
-			return getOtherHalfOfLargeChest(level, pos)
-				.map(otherHalf -> !ChestBlock.isChestBlockedAt(level, otherHalf))
-				.orElse(true);
-		}
-		return true;
-	}
-
-	private static Optional<BlockPos> getOtherHalfOfLargeChest(Level level, BlockPos pos) {
-		BlockState state = level.getBlockState(pos);
-		if (!(state.getBlock() instanceof ChestBlock) || state.getValue(ChestBlock.TYPE) == ChestType.SINGLE) {
-			return Optional.empty();
-		}
-
-		BlockPos otherHalfPos = pos.relative(ChestBlock.getConnectedDirection(state));
-		BlockState otherHalf = level.getBlockState(otherHalfPos);
-		if (!(otherHalf.getBlock() instanceof ChestBlock)) {
-			return Optional.empty();
-		}
-		if (state.getValue(ChestBlock.FACING) != otherHalf.getValue(ChestBlock.FACING)) {
-			return Optional.empty();
-		}
-		if (ChestBlock.getConnectedDirection(state) != ChestBlock.getConnectedDirection(otherHalf).getOpposite()) {
-			return Optional.empty();
-		}
-		return Optional.of(otherHalfPos.immutable());
-	}
-
-	private static double squaredDistanceToBlock(Vec3 eyePos, BlockPos pos) {
-		return closestPointOnUnitBlock(eyePos, pos).distanceToSqr(eyePos);
-	}
-
-	private static Vec3 closestPointOnUnitBlock(Vec3 origin, BlockPos pos) {
-		double x = Mth.clamp(origin.x, pos.getX(), pos.getX() + 1.0D);
-		double y = Mth.clamp(origin.y, pos.getY(), pos.getY() + 1.0D);
-		double z = Mth.clamp(origin.z, pos.getZ(), pos.getZ() + 1.0D);
-		return new Vec3(x, y, z);
-	}
 
 	public record ReachableView(
 		long revision,

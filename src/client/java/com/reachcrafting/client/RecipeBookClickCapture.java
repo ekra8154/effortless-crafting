@@ -553,14 +553,7 @@ public final class RecipeBookClickCapture {
 	}
 
 	private static int currentReservedCraftCopies(AvailableItemSnapshot availableItems) {
-		int minCount = Integer.MAX_VALUE;
-		for (ItemStack stack : availableItems.gridStacks()) {
-			if (stack.isEmpty()) {
-				continue;
-			}
-			minCount = Math.min(minCount, stack.getCount());
-		}
-		return minCount == Integer.MAX_VALUE ? 0 : minCount;
+		return ContainerUtils.currentReservedCraftCopies(availableItems.gridStacks());
 	}
 
 	private record HeldRecipeAction(
