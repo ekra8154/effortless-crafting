@@ -266,33 +266,6 @@ public final class IngredientPlanning {
 		return comp.thenComparing(byCount).thenComparing(byInventory).thenComparing(Comparator.naturalOrder());
 	}
 
-	private static String findSingleVariantForAllSlots(
-		List<String> orderedVariants,
-		Map<String, Integer> remainingUsable,
-		int copiesPerSlot,
-		int slotCount
-	) {
-		int totalNeeded = copiesPerSlot * slotCount;
-		for (String variant : orderedVariants) {
-			if (remainingUsable.getOrDefault(variant, 0) >= totalNeeded) {
-				return variant;
-			}
-		}
-		return null;
-	}
-
-	private static void assignSlots(
-		List<SlotState> slots,
-		String variant,
-		int copiesPerSlot,
-		Map<String, Integer> remainingUsable,
-		List<SlotTarget> slotTargets
-	) {
-		for (SlotState slotState : slots) {
-			assignSlot(slotState, variant, copiesPerSlot, remainingUsable, slotTargets);
-		}
-	}
-
 	private static void assignSlot(
 		SlotState slotState,
 		String variant,

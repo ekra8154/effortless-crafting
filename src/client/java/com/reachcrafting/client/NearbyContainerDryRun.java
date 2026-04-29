@@ -6,6 +6,7 @@ import com.reachcrafting.client.mixin.RecipeBookComponentAccessor;
 import com.reachcrafting.client.mixin.RecipeBookPageAccessor;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -180,18 +181,19 @@ public final class NearbyContainerDryRun {
 		return session.expandReservedGridInPlace();
 	}
 
-	public static void startReturn(List<PulledResourcesTracker.WithdrawnItem> items) {
+	public static void startReturn(AbstractContainerMenu closingMenu, List<PulledResourcesTracker.WithdrawnItem> items) {
 		Minecraft client = Minecraft.getInstance();
 		LocalPlayer player = client.player;
 		Level level = client.level;
 		MultiPlayerGameMode gameMode = client.gameMode;
 		Entity cameraEntity = client.getCameraEntity();
-		if (player == null || level == null || gameMode == null || cameraEntity == null || items.isEmpty()) {
+
+		if (client == null || player == null || level == null || gameMode == null || cameraEntity == null || items.isEmpty()) {
 			return;
 		}
 
 		cancelCurrent();
-		activeSession = new ReturnSession(client, player, level, gameMode, cameraEntity, items);
+		activeSession = new ReturnSession(client, player, level, gameMode, cameraEntity, closingMenu, items);
 		activeSession.start();
 	}
 
@@ -281,6 +283,13 @@ public final class NearbyContainerDryRun {
 		public abstract void onOpenFailed(String reason);
 
 		public abstract void onContainerContentsInitialized(AbstractContainerMenu menu);
+
+		protected void sendChat(String message) {
+			player.displayClientMessage(
+				Component.literal("[Reach Crafting] " + message).withStyle(ChatFormatting.GOLD),
+				false
+			);
+		}
 	}
 
 	private static BaseSession activeSession;
@@ -322,7 +331,9 @@ public final class NearbyContainerDryRun {
 		private int timeoutTicks;
 		private int restoreTicksRemaining;
 		private int reopenAttemptsRemaining;
+		private int seedWaitTicksRemaining;
 		private int scannedContainers;
+		private String lastRestoreFailure = "<none>";
 		private int targetCopiesPerSlot;
 		private BlockPos pendingContainerPos;
 		private boolean inventorySpaceBlocked;
@@ -330,9 +341,7 @@ public final class NearbyContainerDryRun {
 		private boolean usedCachedFastPath;
 		private boolean attemptedLiveDiscoveryFallback;
 		private boolean seededVanillaBatchLayout;
-		private int seedWaitTicksRemaining;
 		private String blockedCommittedLayoutMissingSummary;
-		private String lastRestoreFailure = "<none>";
 		private SearchPhase phase;
 		private SearchState state = SearchState.OPEN_NEXT;
 
@@ -390,11 +399,13 @@ public final class NearbyContainerDryRun {
 				scanAcceptedItemIds
 			);
 			this.targetCopiesPerSlot = craftAll ? 0 : this.requestedSingleClicks;
+			this.reopenAttemptsRemaining = 3;
+			this.restoreTicksRemaining = 10;
+			this.seedWaitTicksRemaining = 20;
 			this.redistributeThisRun = false;
 			this.usedCachedFastPath = false;
 			this.attemptedLiveDiscoveryFallback = false;
 			this.seededVanillaBatchLayout = false;
-			this.seedWaitTicksRemaining = SEED_WAIT_TICKS;
 			this.blockedCommittedLayoutMissingSummary = null;
 			this.phase = SearchPhase.DISCOVERY;
 		}
@@ -1658,12 +1669,6 @@ public final class NearbyContainerDryRun {
 			}
 		}
 
-		private void sendChat(String message) {
-			player.displayClientMessage(
-				Component.literal("[Reach Crafting] " + message).withStyle(ChatFormatting.GOLD),
-				false
-			);
-		}
 
 		private static Slot findPlayerDestinationSlot(AbstractContainerMenu menu, String itemId) {
 			Slot emptySlot = null;
@@ -2274,10 +2279,12 @@ public final class NearbyContainerDryRun {
 	private static final class ReturnSession extends BaseSession {
 		private final List<PulledResourcesTracker.WithdrawnItem> itemsToReturn;
 		private final List<BlockPos> uniquePositions;
+		private final AbstractContainerMenu closingMenu;
 		private int nextPositionIndex = 0;
 		private int timeoutTicks = 0;
 		private BlockPos pendingContainerPos;
 		private SearchState state = SearchState.OPEN_NEXT;
+		private final Map<String, Integer> currentExcess = new HashMap<>();
 
 		private ReturnSession(
 			Minecraft client,
@@ -2285,9 +2292,11 @@ public final class NearbyContainerDryRun {
 			Level level,
 			MultiPlayerGameMode gameMode,
 			Entity cameraEntity,
+			AbstractContainerMenu closingMenu,
 			List<PulledResourcesTracker.WithdrawnItem> itemsToReturn
 		) {
 			super(client, player, level, gameMode, cameraEntity);
+			this.closingMenu = closingMenu;
 			this.itemsToReturn = new ArrayList<>(itemsToReturn);
 			LinkedHashSet<BlockPos> positions = new LinkedHashSet<>();
 			for (PulledResourcesTracker.WithdrawnItem item : itemsToReturn) {
@@ -2298,7 +2307,37 @@ public final class NearbyContainerDryRun {
 
 		@Override
 		public void start() {
-			ReachCraftingMod.LOGGER.info("[nearby_return] starting return of {} items to {} containers", itemsToReturn.size(), uniquePositions.size());
+			ReachCraftingMod.LOGGER.info("[nearby_return] starting return session with menu {} ({} slots)", closingMenu.getClass().getSimpleName(), closingMenu.slots.size());
+			sendChat("Returning items to containers...");
+			
+			Map<String, Integer> currentCounts = new HashMap<>();
+			for (Slot slot : closingMenu.slots) {
+				// Skip result slots (slot 0 in both 2x2 and 3x3)
+				if (slot.index == 0 && (closingMenu instanceof net.minecraft.world.inventory.CraftingMenu || closingMenu instanceof net.minecraft.world.inventory.InventoryMenu)) {
+					continue;
+				}
+				if (slot.hasItem()) {
+					String itemId = BuiltInRegistries.ITEM.getKey(slot.getItem().getItem()).toString();
+					currentCounts.merge(itemId, slot.getItem().getCount(), Integer::sum);
+				}
+			}
+
+			Set<String> trackedItemIds = new HashSet<>();
+			for (PulledResourcesTracker.WithdrawnItem item : itemsToReturn) {
+				trackedItemIds.add(BuiltInRegistries.ITEM.getKey(item.stack().getItem()).toString());
+			}
+
+			for (String itemId : trackedItemIds) {
+				int initial = PulledResourcesTracker.getInitialCount(itemId);
+				int current = currentCounts.getOrDefault(itemId, 0);
+				int excess = PulledResourcesTracker.getExcessCount(itemId, current);
+				
+				ReachCraftingMod.LOGGER.info("[nearby_return] item={} initial={} current={} excess={}", itemId, initial, current, excess);
+				
+				if (excess > 0) {
+					currentExcess.put(itemId, excess);
+				}
+			}
 		}
 
 		@Override
@@ -2361,12 +2400,14 @@ public final class NearbyContainerDryRun {
 
 		@Override
 		public void onContainerContentsInitialized(AbstractContainerMenu menu) {
+			ReachCraftingMod.LOGGER.info("[nearby_return] Container opened at {}", formatPos(pendingContainerPos));
 			if (state != SearchState.WAITING_FOR_CONTAINER) return;
 
 			List<PulledResourcesTracker.WithdrawnItem> itemsAtThisPos = itemsToReturn.stream()
 				.filter(item -> item.containerPos().equals(pendingContainerPos))
 				.toList();
 
+			ReachCraftingMod.LOGGER.info("[nearby_return] Returning {} items to this container", itemsAtThisPos.size());
 			for (PulledResourcesTracker.WithdrawnItem item : itemsAtThisPos) {
 				returnItemToContainer(menu, item);
 			}
@@ -2378,23 +2419,42 @@ public final class NearbyContainerDryRun {
 		}
 
 		private void returnItemToContainer(AbstractContainerMenu menu, PulledResourcesTracker.WithdrawnItem item) {
-			Slot inventorySlot = findItemInInventory(menu, item.stack());
-			if (inventorySlot == null) return;
+			String itemId = BuiltInRegistries.ITEM.getKey(item.stack().getItem()).toString();
+			int totalToReturn = Math.min(item.stack().getCount(), currentExcess.getOrDefault(itemId, 0));
+			if (totalToReturn <= 0) return;
 
 			Slot targetSlot = menu.getSlot(item.slotIndex());
 			if (targetSlot.container instanceof net.minecraft.world.entity.player.Inventory || (targetSlot.hasItem() && !ItemStack.isSameItemSameComponents(targetSlot.getItem(), item.stack()))) {
 				targetSlot = findEmptyContainerSlot(menu);
 			}
 
-			if (targetSlot != null && targetSlot.mayPlace(item.stack())) {
-				moveItem(menu, inventorySlot, targetSlot);
+			if (targetSlot == null || !targetSlot.mayPlace(item.stack())) {
+				return;
+			}
+
+			int stillToReturn = totalToReturn;
+			while (stillToReturn > 0) {
+				Slot inventorySlot = findItemInInventory(menu, itemId);
+				if (inventorySlot == null) break;
+
+				int amountInSlot = inventorySlot.getItem().getCount();
+				int amountToMove = Math.min(stillToReturn, amountInSlot);
+				
+				moveItem(menu, inventorySlot, targetSlot, amountToMove);
+				
+				ReachCraftingMod.LOGGER.info("[nearby_return] Moved {}x {} to slot {}", amountToMove, itemId, targetSlot.index);
+				stillToReturn -= amountToMove;
+				currentExcess.put(itemId, currentExcess.get(itemId) - amountToMove);
 			}
 		}
 
-		private Slot findItemInInventory(AbstractContainerMenu menu, ItemStack stack) {
+		private Slot findItemInInventory(AbstractContainerMenu menu, String itemId) {
 			for (Slot slot : menu.slots) {
-				if (slot.container instanceof net.minecraft.world.entity.player.Inventory && slot.hasItem() && ItemStack.isSameItemSameComponents(slot.getItem(), stack)) {
-					return slot;
+				if (slot.container instanceof net.minecraft.world.entity.player.Inventory && slot.hasItem()) {
+					String slotItemId = BuiltInRegistries.ITEM.getKey(slot.getItem().getItem()).toString();
+					if (slotItemId.equals(itemId)) {
+						return slot;
+					}
 				}
 			}
 			return null;
@@ -2409,9 +2469,17 @@ public final class NearbyContainerDryRun {
 			return null;
 		}
 
-		private void moveItem(AbstractContainerMenu menu, Slot source, Slot target) {
+		private void moveItem(AbstractContainerMenu menu, Slot source, Slot target, int count) {
 			gameMode.handleInventoryMouseClick(menu.containerId, source.index, GLFW.GLFW_MOUSE_BUTTON_LEFT, ClickType.PICKUP, player);
-			gameMode.handleInventoryMouseClick(menu.containerId, target.index, GLFW.GLFW_MOUSE_BUTTON_LEFT, ClickType.PICKUP, player);
+			ItemStack carried = player.containerMenu.getCarried();
+			if (carried.getCount() == count) {
+				gameMode.handleInventoryMouseClick(menu.containerId, target.index, GLFW.GLFW_MOUSE_BUTTON_LEFT, ClickType.PICKUP, player);
+			} else {
+				for (int i = 0; i < count; i++) {
+					gameMode.handleInventoryMouseClick(menu.containerId, target.index, GLFW.GLFW_MOUSE_BUTTON_RIGHT, ClickType.PICKUP, player);
+				}
+			}
+
 			if (!player.containerMenu.getCarried().isEmpty()) {
 				gameMode.handleInventoryMouseClick(menu.containerId, source.index, GLFW.GLFW_MOUSE_BUTTON_LEFT, ClickType.PICKUP, player);
 			}
@@ -2425,4 +2493,5 @@ public final class NearbyContainerDryRun {
 			PulledResourcesTracker.clear();
 		}
 	}
+
 }

@@ -15,6 +15,16 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 	@Shadow
 	protected T menu;
 
+	@Inject(method = "init", at = @At("HEAD"))
+	private void reachcrafting$captureInventoryOnOpen(CallbackInfo ci) {
+		if (ReachCraftingConfig.get().putPulledResourcesBack() 
+			&& com.reachcrafting.client.PulledResourcesTracker.isEmpty()
+			&& ((Object) this instanceof net.minecraft.client.gui.screens.inventory.CraftingScreen || (Object) this instanceof net.minecraft.client.gui.screens.inventory.InventoryScreen)) {
+			com.reachcrafting.ReachCraftingMod.LOGGER.info("[nearby_return] Detected screen open, capturing snapshot...");
+			com.reachcrafting.client.PulledResourcesTracker.captureInventorySnapshot(net.minecraft.client.Minecraft.getInstance().player);
+		}
+	}
+
 	@Inject(method = "removed", at = @At("HEAD"))
 	private void reachcrafting$cacheContainerOnClose(CallbackInfo ci) {
 		NearbyContainerCache.onContainerScreenRemoved(this.menu);
@@ -22,7 +32,11 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 		if (ReachCraftingConfig.get().putPulledResourcesBack() 
 			&& !com.reachcrafting.client.NearbyContainerDryRun.isActiveSessionRunning()
 			&& ((Object) this instanceof net.minecraft.client.gui.screens.inventory.CraftingScreen || (Object) this instanceof net.minecraft.client.gui.screens.inventory.InventoryScreen)) {
-			com.reachcrafting.client.NearbyContainerDryRun.startReturn(com.reachcrafting.client.PulledResourcesTracker.getWithdrawnItems());
+			int withdrawnCount = com.reachcrafting.client.PulledResourcesTracker.getWithdrawnItems().size();
+			com.reachcrafting.ReachCraftingMod.LOGGER.info("[nearby_return] Screen closed, initiating return of {} tracked withdrawals", withdrawnCount);
+			com.reachcrafting.client.NearbyContainerDryRun.startReturn(this.menu, com.reachcrafting.client.PulledResourcesTracker.getWithdrawnItems());
+		} else if (!com.reachcrafting.client.NearbyContainerDryRun.isActiveSessionRunning()) {
+			com.reachcrafting.client.PulledResourcesTracker.clear();
 		}
 	}
 }
