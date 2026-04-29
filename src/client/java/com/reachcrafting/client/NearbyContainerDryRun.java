@@ -94,7 +94,8 @@ public final class NearbyContainerDryRun {
 		RecipeIngredientSummary ingredientSummary,
 		AvailableItemSnapshot localItems,
 		boolean craftAll,
-		int requestedSingleClicks
+		int requestedSingleClicks,
+		boolean allowNearby
 	) {
 		Minecraft client = Minecraft.getInstance();
 		LocalPlayer player = client.player;
@@ -120,7 +121,8 @@ public final class NearbyContainerDryRun {
 			ingredientSummary,
 			localItems,
 			craftAll,
-			requestedSingleClicks
+			requestedSingleClicks,
+			allowNearby
 		);
 		if (!session.canStart()) {
 			return;
@@ -139,7 +141,8 @@ public final class NearbyContainerDryRun {
 		RecipeIngredientSummary ingredientSummary,
 		AvailableItemSnapshot localItems,
 		boolean craftAll,
-		int requestedSingleClicks
+		int requestedSingleClicks,
+		boolean allowNearby
 	) {
 		Minecraft client = Minecraft.getInstance();
 		LocalPlayer player = client.player;
@@ -165,7 +168,8 @@ public final class NearbyContainerDryRun {
 			ingredientSummary,
 			localItems,
 			craftAll,
-			requestedSingleClicks
+			requestedSingleClicks,
+			allowNearby
 		);
 		return session.expandReservedGridInPlace();
 	}
@@ -309,6 +313,7 @@ public final class NearbyContainerDryRun {
 		private final Set<BlockPos> visited = new HashSet<>();
 		private final Map<String, Integer> discoveredNearby = new LinkedHashMap<>();
 		private final Map<String, Integer> withdrawnItems = new LinkedHashMap<>();
+		private final boolean allowNearby;
 		private List<IngredientPlanning.SlotTarget> plannedTargets = List.of();
 
 		private int nextCandidateIndex;
@@ -340,7 +345,8 @@ public final class NearbyContainerDryRun {
 			RecipeIngredientSummary ingredientSummary,
 			AvailableItemSnapshot localItems,
 			boolean craftAll,
-			int requestedSingleClicks
+			int requestedSingleClicks,
+			boolean allowNearby
 		) {
 			super(client, player, level, gameMode, cameraEntity);
 			this.recipeCollection = recipeCollection;
@@ -352,6 +358,7 @@ public final class NearbyContainerDryRun {
 			this.localItems = localItems;
 			this.craftAll = craftAll;
 			this.requestedSingleClicks = Math.max(requestedSingleClicks, 1);
+			this.allowNearby = allowNearby;
 			this.originalContext = ScreenContext.capture(client, cameraEntity, player.blockInteractionRange(), localItems);
 			this.planningPolicy = ReachCraftingConfig.get().toPlanningPolicy();
 			Set<String> accepted = new HashSet<>(ingredientSummary.acceptedItemIds());
@@ -370,11 +377,11 @@ public final class NearbyContainerDryRun {
 			);
 			this.remainingItemIds = new ArrayList<>(initialDeficit.missingItemIds());
 			this.cachedReachableView = NearbyContainerCache.getReachableView(level, cameraEntity, player.blockInteractionRange());
-			this.candidates = NearbyContainerCache.prioritizeCandidates(
+			this.candidates = allowNearby ? NearbyContainerCache.prioritizeCandidates(
 				findCandidates(level, cameraEntity, player.blockInteractionRange()),
 				cachedReachableView,
 				scanAcceptedItemIds
-			);
+			) : List.of();
 			this.targetCopiesPerSlot = craftAll ? 0 : this.requestedSingleClicks;
 			this.reopenAttemptsRemaining = 3;
 			this.restoreTicksRemaining = 10;
@@ -400,7 +407,9 @@ public final class NearbyContainerDryRun {
 				summarizeRemainingItems(remainingItemIds)
 			);
 
-			sendChat("Scanning nearby containers...");
+			if (allowNearby) {
+				sendChat("Scanning nearby containers...");
+			}
 		}
 
 		private boolean expandReservedGridInPlace() {
@@ -656,7 +665,7 @@ public final class NearbyContainerDryRun {
 						break;
 					}
 
-					Slot targetSlot = findPlayerDestinationSlot(menu, itemId);
+					Slot targetSlot = findPlayerDestinationSlot(player, menu, itemId);
 					if (targetSlot == null) {
 						inventorySpaceBlocked = true;
 						sendChat("No inventory space for " + itemId);
@@ -710,6 +719,11 @@ public final class NearbyContainerDryRun {
 		}
 
 		private void beginResume() {
+			if (!allowNearby && isOriginalContextReady()) {
+				state = SearchState.WAITING_FOR_REOPEN;
+				timeoutTicks = 0;
+				return;
+			}
 			player.closeContainer();
 			timeoutTicks = RESUME_DELAY_TICKS;
 			restoreTicksRemaining = RESTORE_TIMEOUT_TICKS;
@@ -780,7 +794,7 @@ public final class NearbyContainerDryRun {
 					recipeCollection,
 					ItemStack.EMPTY,
 					explicitVariantSelection,
-					true,
+					allowNearby,
 					resolverItems,
 					totalAvailable,
 					totalAvailable,
@@ -1392,14 +1406,14 @@ public final class NearbyContainerDryRun {
 		}
 
 
-		private static Slot findPlayerDestinationSlot(AbstractContainerMenu menu, String itemId) {
+		private static Slot findPlayerDestinationSlot(LocalPlayer player, AbstractContainerMenu menu, String itemId) {
 			Slot emptySlot = null;
 			for (Slot slot : menu.slots) {
 				if (!(slot.container instanceof Inventory)) {
 					continue;
 				}
 				if (!slot.hasItem()) {
-					if (emptySlot == null) {
+					if (emptySlot == null && slot.mayPlace(player.containerMenu.getCarried())) {
 						emptySlot = slot;
 					}
 					continue;
@@ -1471,7 +1485,7 @@ public final class NearbyContainerDryRun {
 			}
 
 			while (!player.containerMenu.getCarried().isEmpty()) {
-				Slot destinationSlot = findPlayerDestinationSlot(menu, itemId);
+				Slot destinationSlot = findPlayerDestinationSlot(player, menu, itemId);
 				if (destinationSlot == null) {
 					// Inventory is full, drop it on the ground to clear the cursor
 					gameMode.handleInventoryMouseClick(menu.containerId, -999, 0, ClickType.PICKUP, player);
@@ -1508,7 +1522,7 @@ public final class NearbyContainerDryRun {
 				if (!(slot.container instanceof Inventory) || !slot.hasItem() || !slot.mayPickup(player)) {
 					continue;
 				}
-				if (ItemStack.isSameItemSameComponents(slot.getItem(), desiredStack)) {
+				if (ItemStack.isSameItemSameComponents(slot.getItem(), desiredStack) && slot.mayPlace(desiredStack)) {
 					return slot;
 				}
 			}
@@ -1559,7 +1573,7 @@ public final class NearbyContainerDryRun {
 				} else {
 					// Drop or find any empty slot? Let's try to find an empty one
 					for (Slot slot : menu.slots) {
-						if (slot.container instanceof Inventory && !slot.hasItem()) {
+						if (slot.container instanceof Inventory && !slot.hasItem() && slot.mayPlace(player.containerMenu.getCarried())) {
 							pickup(menu, slot, GLFW.GLFW_MOUSE_BUTTON_LEFT);
 							break;
 						}

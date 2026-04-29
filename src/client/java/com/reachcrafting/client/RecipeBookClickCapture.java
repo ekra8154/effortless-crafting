@@ -33,6 +33,7 @@ public final class RecipeBookClickCapture {
 	private static PendingHeldRecipe pendingHeldRecipe;
 	private static ReplayBatch replayBatch;
 	private static boolean wasControlDown;
+	private static boolean wasShiftDown;
 
 	private RecipeBookClickCapture() {
 	}
@@ -40,12 +41,25 @@ public final class RecipeBookClickCapture {
 	public static void init() {
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			boolean controlDown = isControlKeyDown(client);
-			if (wasControlDown && !controlDown) {
-				releasePendingHeldRecipe();
+			boolean shiftDown = isShiftKeyDown(client);
+
+			if (pendingHeldRecipe != null) {
+				if (pendingHeldRecipe.allowNearby()) {
+					if (wasControlDown && !controlDown) {
+						releasePendingHeldRecipe();
+					}
+				} else {
+					if (wasShiftDown && !shiftDown) {
+						releasePendingHeldRecipe();
+					}
+				}
 			}
+
 			wasControlDown = controlDown;
+			wasShiftDown = shiftDown;
+
 			processReplayBatch(client);
-			if (!controlDown && !ReachCraftingConfig.get().reachCraftHoldAndRelease()) {
+			if (!controlDown && !shiftDown && !ReachCraftingConfig.get().reachCraftHoldAndRelease()) {
 				pendingHeldRecipe = null;
 			}
 		});
@@ -94,7 +108,7 @@ public final class RecipeBookClickCapture {
 		boolean craftAll = shiftModifierDown || isShiftKeyDown(minecraft);
 		boolean allowNearbyFallback = ctrlModifierDown || isControlKeyDown(minecraft);
 		if (shouldQueueHeldRecipe(minecraft, allowNearbyFallback, craftAll) && replayBatch == null) {
-			queueHeldRecipe(recipeId, collection, displayStack, mouseButton, explicitVariantSelection);
+			queueHeldRecipe(recipeId, collection, displayStack, mouseButton, explicitVariantSelection, allowNearbyFallback);
 			return;
 		}
 
@@ -108,6 +122,7 @@ public final class RecipeBookClickCapture {
 			mouseButton,
 			craftAll,
 			allowNearbyFallback,
+			false,
 			explicitVariantSelection,
 			1
 		);
@@ -123,6 +138,7 @@ public final class RecipeBookClickCapture {
 		int mouseButton,
 		boolean craftAll,
 		boolean allowNearbyFallback,
+		boolean forceDryRun,
 		boolean explicitVariantSelection,
 		int requestedClicks
 	) {
@@ -215,37 +231,11 @@ public final class RecipeBookClickCapture {
 			false
 		);
 
-		if (allowNearbyFallback && availableItems.hasReservedGrid() && !deficitReport.hasMissingIngredients()) {
-			if (NearbyContainerDryRun.tryExpandReservedGrid(
-				selectedRecipe.recipeId(),
-				collection,
-				explicitVariantSelection,
-				recipeIndex,
-				outputLabel,
-				ingredientSummary,
-				availableItems,
-				craftAll,
-				requestedClicks
-			)) {
-				return;
-			}
-			NearbyContainerDryRun.start(
-				selectedRecipe.recipeId(),
-				collection,
-				explicitVariantSelection,
-				recipeIndex,
-				outputLabel,
-				ingredientSummary,
-				availableItems,
-				craftAll,
-				requestedClicks
-			);
-			return;
-		}
+		boolean useDryRun = forceDryRun || allowNearbyFallback;
 
-		if (allowNearbyFallback && !deficitReport.hasMissingIngredients() && !availableItems.hasReservedGrid()) {
-			if (!craftAll && requestedClicks > 1) {
-				NearbyContainerDryRun.start(
+		if (useDryRun) {
+			if (!deficitReport.hasMissingIngredients() && availableItems.hasReservedGrid()) {
+				if (NearbyContainerDryRun.tryExpandReservedGrid(
 					selectedRecipe.recipeId(),
 					collection,
 					explicitVariantSelection,
@@ -253,27 +243,13 @@ public final class RecipeBookClickCapture {
 					outputLabel,
 					ingredientSummary,
 					availableItems,
-					false,
-					requestedClicks
-				);
-				return;
-			}
-			MultiPlayerGameMode gameMode = minecraft.gameMode;
-			if (gameMode != null) {
-				gameMode.handlePlaceRecipe(player.containerMenu.containerId, selectedRecipe.recipeId(), craftAll);
-				player.displayClientMessage(
-					Component.literal("[Reach Crafting] Placed recipe: " + outputLabel)
-						.withStyle(ChatFormatting.YELLOW),
-					false
-				);
-				if (explicitVariantSelection) {
-					tryCloseOverlayAfterRelease();
+					craftAll,
+					requestedClicks,
+					allowNearbyFallback
+				)) {
+					return;
 				}
-				return;
 			}
-		}
-
-		if (deficitReport.hasMissingIngredients() && allowNearbyFallback) {
 			NearbyContainerDryRun.start(
 				selectedRecipe.recipeId(),
 				collection,
@@ -283,18 +259,31 @@ public final class RecipeBookClickCapture {
 				ingredientSummary,
 				availableItems,
 				craftAll,
-				requestedClicks
+				requestedClicks,
+				allowNearbyFallback
 			);
-		} else {
-			NearbyContainerDryRun.cancelCurrent();
+			return;
+		}
+
+		MultiPlayerGameMode gameMode = minecraft.gameMode;
+		if (gameMode != null) {
+			gameMode.handlePlaceRecipe(player.containerMenu.containerId, selectedRecipe.recipeId(), craftAll);
+			player.displayClientMessage(
+				Component.literal("[Reach Crafting] Placed recipe: " + outputLabel)
+					.withStyle(ChatFormatting.YELLOW),
+				false
+			);
+			if (explicitVariantSelection) {
+				tryCloseOverlayAfterRelease();
+			}
+			return;
 		}
 	}
 
 	private static boolean shouldQueueHeldRecipe(Minecraft minecraft, boolean allowNearbyFallback, boolean craftAll) {
 		return ReachCraftingConfig.get().reachCraftHoldAndRelease()
-			&& allowNearbyFallback
 			&& !craftAll
-			&& isControlKeyDown(minecraft);
+			&& (allowNearbyFallback || isShiftKeyDown(minecraft));
 	}
 
 	private static void queueHeldRecipe(
@@ -302,7 +291,8 @@ public final class RecipeBookClickCapture {
 		RecipeCollection collection,
 		ItemStack displayStack,
 		int mouseButton,
-		boolean explicitVariantSelection
+		boolean explicitVariantSelection,
+		boolean allowNearby
 	) {
 		HeldRecipeAction action = new HeldRecipeAction(
 			recipeId,
@@ -312,18 +302,18 @@ public final class RecipeBookClickCapture {
 			explicitVariantSelection
 		);
 		if (pendingHeldRecipe == null) {
-			pendingHeldRecipe = new PendingHeldRecipe(action, 1, false);
+			pendingHeldRecipe = new PendingHeldRecipe(action, 1, false, allowNearby);
 			return;
 		}
 
 		if (pendingHeldRecipe.action().sameRecipe(action)) {
 			int updatedCount = pendingHeldRecipe.clickCount() + 1;
-			pendingHeldRecipe = new PendingHeldRecipe(action, updatedCount, updatedCount >= 2);
+			pendingHeldRecipe = new PendingHeldRecipe(action, updatedCount, updatedCount >= 2, allowNearby);
 			return;
 		}
 
 		if (!pendingHeldRecipe.locked()) {
-			pendingHeldRecipe = new PendingHeldRecipe(action, 1, false);
+			pendingHeldRecipe = new PendingHeldRecipe(action, 1, false, allowNearby);
 		}
 	}
 
@@ -349,7 +339,7 @@ public final class RecipeBookClickCapture {
 		if (pendingHeldRecipe == null) {
 			return;
 		}
-		replayBatch = new ReplayBatch(pendingHeldRecipe.action(), pendingHeldRecipe.clickCount());
+		replayBatch = new ReplayBatch(pendingHeldRecipe.action(), pendingHeldRecipe.clickCount(), pendingHeldRecipe.allowNearby());
 		pendingHeldRecipe = null;
 	}
 
@@ -381,6 +371,7 @@ public final class RecipeBookClickCapture {
 			replayBatch.action().displayStack().copy(),
 			replayBatch.action().mouseButton(),
 			false,
+			replayBatch.allowNearby(),
 			true,
 			replayBatch.action().explicitVariantSelection(),
 			replayBatch.remainingClicks()
@@ -400,13 +391,13 @@ public final class RecipeBookClickCapture {
 		}
 
 		int delta = verticalAmount > 0.0D ? 1 : -1;
-		return adjustHeldRecipeCount(action, delta);
+		return adjustHeldRecipeCount(minecraft, action, delta);
 	}
 
 	private static boolean canUseHeldQueueControls(Minecraft minecraft) {
 		return ReachCraftingConfig.get().reachCraftHoldAndRelease()
 			&& replayBatch == null
-			&& isControlKeyDown(minecraft);
+			&& (isControlKeyDown(minecraft) || isShiftKeyDown(minecraft));
 	}
 
 	private static HeldRecipeAction findHoveredHeldRecipeAction(Screen screen, double mouseX, double mouseY) {
@@ -452,7 +443,7 @@ public final class RecipeBookClickCapture {
 		return null;
 	}
 
-	private static boolean adjustHeldRecipeCount(HeldRecipeAction action, int delta) {
+	private static boolean adjustHeldRecipeCount(Minecraft minecraft, HeldRecipeAction action, int delta) {
 		if (delta == 0) {
 			return false;
 		}
@@ -461,7 +452,7 @@ public final class RecipeBookClickCapture {
 			if (delta < 0) {
 				return false;
 			}
-			pendingHeldRecipe = new PendingHeldRecipe(action, 1, false);
+			pendingHeldRecipe = new PendingHeldRecipe(action, 1, false, isControlKeyDown(minecraft));
 			return true;
 		}
 
@@ -471,12 +462,12 @@ public final class RecipeBookClickCapture {
 				pendingHeldRecipe = null;
 				return true;
 			}
-			pendingHeldRecipe = new PendingHeldRecipe(action, updatedCount, updatedCount >= 2);
+			pendingHeldRecipe = new PendingHeldRecipe(action, updatedCount, updatedCount >= 2, pendingHeldRecipe.allowNearby());
 			return true;
 		}
 
 		if (delta > 0 && !pendingHeldRecipe.locked()) {
-			pendingHeldRecipe = new PendingHeldRecipe(action, 1, false);
+			pendingHeldRecipe = new PendingHeldRecipe(action, 1, false, isControlKeyDown(minecraft));
 			return true;
 		}
 
@@ -577,9 +568,9 @@ public final class RecipeBookClickCapture {
 		}
 	}
 
-	private record PendingHeldRecipe(HeldRecipeAction action, int clickCount, boolean locked) {
+	private record PendingHeldRecipe(HeldRecipeAction action, int clickCount, boolean locked, boolean allowNearby) {
 	}
 
-	private record ReplayBatch(HeldRecipeAction action, int remainingClicks) {
+	private record ReplayBatch(HeldRecipeAction action, int remainingClicks, boolean allowNearby) {
 	}
 }

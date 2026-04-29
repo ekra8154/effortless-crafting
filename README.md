@@ -105,6 +105,10 @@ eject items from grid to old positions in inventory setting
 
 clear grid ui button (hold ctrl makes pulled items return?) otherwise eject into inventory (try to remember slots - maybe do this after adding the eject setting mentioned above)
 
+shift craft does not rewrite grid if changing recipes
+
+should add setting to switch between append mode and set mode
+
 
 
 KNOWN BUGS:

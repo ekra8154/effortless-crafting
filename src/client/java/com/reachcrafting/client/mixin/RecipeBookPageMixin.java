@@ -25,7 +25,7 @@ public abstract class RecipeBookPageMixin {
 		at = @At("HEAD"),
 		cancellable = true
 	)
-	private void reachcrafting$interceptCtrlRecipeButtonClick(
+	private void reachcrafting$interceptRecipeButtonClick(
 		MouseButtonEvent click,
 		int left,
 		int top,
@@ -57,7 +57,15 @@ public abstract class RecipeBookPageMixin {
 			}
 		}
 
-		if (click.button() != GLFW.GLFW_MOUSE_BUTTON_LEFT || (click.modifiers() & GLFW.GLFW_MOD_CONTROL) == 0) {
+		if (click.button() != GLFW.GLFW_MOUSE_BUTTON_LEFT) {
+			return;
+		}
+
+		boolean ctrlDown = (click.modifiers() & GLFW.GLFW_MOD_CONTROL) != 0;
+		boolean shiftDown = (click.modifiers() & GLFW.GLFW_MOD_SHIFT) != 0;
+
+		// Only intercept if we have a mod trigger (Ctrl or Shift)
+		if (!ctrlDown && !shiftDown) {
 			return;
 		}
 
@@ -76,51 +84,11 @@ public abstract class RecipeBookPageMixin {
 				button.getCollection(),
 				button.getDisplayStack(),
 				click.button(),
-				(click.modifiers() & GLFW.GLFW_MOD_SHIFT) != 0,
-				true,
+				shiftDown,
+				ctrlDown,
 				false
 			);
 			cir.setReturnValue(true);
-			return;
-		}
-	}
-
-	@Inject(
-		method = "mouseClicked(Lnet/minecraft/client/input/MouseButtonEvent;IIIIZ)Z",
-		at = @At(value = "RETURN", ordinal = 3)
-	)
-	private void reachcrafting$onRecipeButtonClicked(
-		MouseButtonEvent click,
-		int left,
-		int top,
-		int width,
-		int height,
-		boolean filtering,
-		CallbackInfoReturnable<Boolean> cir
-	) {
-		if (!cir.getReturnValueZ() || click.button() != GLFW.GLFW_MOUSE_BUTTON_LEFT || (click.modifiers() & GLFW.GLFW_MOD_CONTROL) != 0) {
-			return;
-		}
-
-		OverlayRecipeComponent overlay = ((RecipeBookPageAccessor) (Object) this).getOverlay();
-		if (overlay != null && overlay.isVisible()) {
-			return;
-		}
-
-		for (RecipeButton button : this.buttons) {
-			if (!button.isMouseOver(click.x(), click.y())) {
-				continue;
-			}
-
-			RecipeBookClickCapture.onRecipeButtonClicked(
-				button.getCurrentRecipe(),
-				button.getCollection(),
-				button.getDisplayStack(),
-				click.button(),
-				(click.modifiers() & GLFW.GLFW_MOD_SHIFT) != 0,
-				(click.modifiers() & GLFW.GLFW_MOD_CONTROL) != 0,
-				false
-			);
 			return;
 		}
 	}
