@@ -88,6 +88,15 @@ public final class ReachCraftingConfigScreen {
 			.setTooltip(Component.translatable("tooltip.reachcrafting.reach_craft_prefer_inventory"))
 			.setSaveConsumer(config::setReachCraftPreferInventory)
 			.build());
+		
+		general.addEntry(entries.startBooleanToggle(
+				Component.translatable("option.reachcrafting.put_pulled_resources_back"),
+				config.putPulledResourcesBack()
+			)
+			.setDefaultValue(false)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.put_pulled_resources_back"))
+			.setSaveConsumer(config::setPutPulledResourcesBack)
+			.build());
 
 		general.addEntry(entries.startEnumSelector(
 				Component.translatable("option.reachcrafting.revolving_craft_handling"),

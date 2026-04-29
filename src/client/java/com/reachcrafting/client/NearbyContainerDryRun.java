@@ -69,7 +69,6 @@ import net.minecraft.world.phys.Vec3;
 import org.lwjgl.glfw.GLFW;
 
 public final class NearbyContainerDryRun {
-	private static SearchSession activeSession;
 	private static int interactionBlockTicks;
 	private static boolean suppressSecondaryUse;
 
@@ -181,6 +180,21 @@ public final class NearbyContainerDryRun {
 		return session.expandReservedGridInPlace();
 	}
 
+	public static void startReturn(List<PulledResourcesTracker.WithdrawnItem> items) {
+		Minecraft client = Minecraft.getInstance();
+		LocalPlayer player = client.player;
+		Level level = client.level;
+		MultiPlayerGameMode gameMode = client.gameMode;
+		Entity cameraEntity = client.getCameraEntity();
+		if (player == null || level == null || gameMode == null || cameraEntity == null || items.isEmpty()) {
+			return;
+		}
+
+		cancelCurrent();
+		activeSession = new ReturnSession(client, player, level, gameMode, cameraEntity, items);
+		activeSession.start();
+	}
+
 	public static void cancelCurrent() {
 		if (activeSession != null) {
 			activeSession.stop(true);
@@ -235,11 +249,43 @@ public final class NearbyContainerDryRun {
 
 	public static void onContainerContentsInitialized(AbstractContainerMenu menu) {
 		if (activeSession != null) {
-			activeSession.onContainerContentsInitialized(menu);
+			if (activeSession instanceof SearchSession searchSession) {
+				searchSession.onContainerContentsInitialized(menu);
+			} else if (activeSession instanceof ReturnSession returnSession) {
+				returnSession.onContainerContentsInitialized(menu);
+			}
 		}
 	}
 
-	private static final class SearchSession {
+	private abstract static class BaseSession {
+		protected final Minecraft client;
+		protected final LocalPlayer player;
+		protected final Level level;
+		protected final MultiPlayerGameMode gameMode;
+		protected final Entity cameraEntity;
+
+		protected BaseSession(Minecraft client, LocalPlayer player, Level level, MultiPlayerGameMode gameMode, Entity cameraEntity) {
+			this.client = client;
+			this.player = player;
+			this.level = level;
+			this.gameMode = gameMode;
+			this.cameraEntity = cameraEntity;
+		}
+
+		public abstract void tick();
+
+		public abstract void start();
+
+		public abstract void stop(boolean closeContainer);
+
+		public abstract void onOpenFailed(String reason);
+
+		public abstract void onContainerContentsInitialized(AbstractContainerMenu menu);
+	}
+
+	private static BaseSession activeSession;
+
+	private static final class SearchSession extends BaseSession {
 		private static final int OPEN_TIMEOUT_TICKS = 40;
 		private static final int RESUME_DELAY_TICKS = 2;
 		private static final int REOPEN_TIMEOUT_TICKS = 20;
@@ -247,11 +293,6 @@ public final class NearbyContainerDryRun {
 		private static final int SEED_WAIT_TICKS = 20;
 		private static final int MAX_REOPEN_ATTEMPTS = 3;
 
-		private final Minecraft client;
-		private final LocalPlayer player;
-		private final Level level;
-		private final MultiPlayerGameMode gameMode;
-		private final Entity cameraEntity;
 		private final RecipeCollection recipeCollection;
 		private final boolean explicitVariantSelection;
 		private final int recipeIndex;
@@ -311,11 +352,7 @@ public final class NearbyContainerDryRun {
 			boolean craftAll,
 			int requestedSingleClicks
 		) {
-			this.client = client;
-			this.player = player;
-			this.level = level;
-			this.gameMode = gameMode;
-			this.cameraEntity = cameraEntity;
+			super(client, player, level, gameMode, cameraEntity);
 			this.recipeCollection = recipeCollection;
 			this.explicitVariantSelection = explicitVariantSelection;
 			this.originalRecipeId = recipeId;
@@ -366,7 +403,8 @@ public final class NearbyContainerDryRun {
 			return !player.isSpectator() && !player.isShiftKeyDown() && !player.isHandsBusy() && player.containerMenu.getCarried().isEmpty();
 		}
 
-		private void start() {
+		@Override
+		public void start() {
 			ReachCraftingMod.LOGGER.info(
 				"[nearby_scan] idx={} start missing={} candidates={} craft_all={} phase={} planned={}",
 				recipeIndex,
@@ -444,7 +482,8 @@ public final class NearbyContainerDryRun {
 			return true;
 		}
 
-		private void tick() {
+		@Override
+		public void tick() {
 			if (client.player != player || client.level != level) {
 				stop(false);
 				NearbyContainerDryRun.activeSession = null;
@@ -518,7 +557,8 @@ public final class NearbyContainerDryRun {
 			}
 		}
 
-		private void onContainerContentsInitialized(AbstractContainerMenu menu) {
+		@Override
+		public void onContainerContentsInitialized(AbstractContainerMenu menu) {
 			if (state != SearchState.WAITING_FOR_CONTAINER) {
 				return;
 			}
@@ -552,7 +592,8 @@ public final class NearbyContainerDryRun {
 			state = SearchState.OPEN_NEXT;
 		}
 
-		private void onOpenFailed(String reason) {
+		@Override
+		public void onOpenFailed(String reason) {
 			ReachCraftingMod.LOGGER.info(
 				"[nearby_container] idx={} pos={} skipped={}",
 				recipeIndex,
@@ -659,7 +700,15 @@ public final class NearbyContainerDryRun {
 			}
 		}
 
+		private void markVisited(BlockPos pos) {
+			visited.add(pos);
+			getOtherHalfOfLargeChest(level, pos).ifPresent(visited::add);
+		}
+
 		private boolean withdrawOneItem(AbstractContainerMenu menu, Slot sourceSlot, Slot targetSlot) {
+			ItemStack withdrawnStack = sourceSlot.getItem().copy();
+			withdrawnStack.setCount(1);
+			
 			pickup(menu, sourceSlot, GLFW.GLFW_MOUSE_BUTTON_LEFT);
 			if (player.containerMenu.getCarried().isEmpty()) {
 				return false;
@@ -667,7 +716,12 @@ public final class NearbyContainerDryRun {
 
 			pickup(menu, targetSlot, GLFW.GLFW_MOUSE_BUTTON_RIGHT);
 			pickup(menu, sourceSlot, GLFW.GLFW_MOUSE_BUTTON_LEFT);
-			return player.containerMenu.getCarried().isEmpty();
+			
+			boolean success = player.containerMenu.getCarried().isEmpty();
+			if (success) {
+				PulledResourcesTracker.recordWithdrawal(pendingContainerPos, sourceSlot.index, withdrawnStack);
+			}
+			return success;
 		}
 
 		private void beginResume() {
@@ -1597,7 +1651,8 @@ public final class NearbyContainerDryRun {
 			FAILURE
 		}
 
-		private void stop(boolean closeContainer) {
+		@Override
+		public void stop(boolean closeContainer) {
 			if (closeContainer && player.containerMenu != player.inventoryMenu) {
 				player.closeContainer();
 			}
@@ -1844,80 +1899,76 @@ public final class NearbyContainerDryRun {
 			return allItems;
 		}
 
-		private static boolean isSupportedContainer(BlockState state) {
-			String blockId = BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
-			if (ReachCraftingConfig.get().blacklistedContainerIds().contains(blockId)) {
+	}
+
+	private static boolean isSupportedContainer(BlockState state) {
+		String blockId = BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
+		if (ReachCraftingConfig.get().blacklistedContainerIds().contains(blockId)) {
+			return false;
+		}
+
+		Block block = state.getBlock();
+		return block instanceof ChestBlock
+			|| block instanceof BarrelBlock
+			|| block instanceof ShulkerBoxBlock
+			|| block instanceof EnderChestBlock
+			|| block instanceof HopperBlock
+			|| (blockId.startsWith("minecraft:") && blockId.endsWith("copper_chest"));
+	}
+
+	private static boolean canAttemptOpen(Level level, BlockPos pos, BlockState state) {
+		BlockEntity blockEntity = level.getBlockEntity(pos);
+		if (!(blockEntity instanceof Container) && !(state.getBlock() instanceof EnderChestBlock)) {
+			return false;
+		}
+		if (state.getBlock() instanceof ChestBlock || state.getBlock() instanceof EnderChestBlock) {
+			if (ChestBlock.isChestBlockedAt(level, pos)) {
 				return false;
 			}
+			return getOtherHalfOfLargeChest(level, pos)
+				.map(otherHalf -> !ChestBlock.isChestBlockedAt(level, otherHalf))
+				.orElse(true);
+		}
+		return true;
+	}
 
-			Block block = state.getBlock();
-			return block instanceof ChestBlock
-				|| block instanceof BarrelBlock
-				|| block instanceof ShulkerBoxBlock
-				|| block instanceof EnderChestBlock
-				|| block instanceof HopperBlock
-				|| (blockId.startsWith("minecraft:") && blockId.endsWith("copper_chest"));
+	private static Optional<BlockPos> getOtherHalfOfLargeChest(Level level, BlockPos pos) {
+		BlockState state = level.getBlockState(pos);
+		if (!(state.getBlock() instanceof ChestBlock) || state.getValue(ChestBlock.TYPE) == ChestType.SINGLE) {
+			return Optional.empty();
 		}
 
-		private static boolean canAttemptOpen(Level level, BlockPos pos, BlockState state) {
-			BlockEntity blockEntity = level.getBlockEntity(pos);
-			if (!(blockEntity instanceof Container) && !(state.getBlock() instanceof EnderChestBlock)) {
-				return false;
-			}
-			if (state.getBlock() instanceof ChestBlock || state.getBlock() instanceof EnderChestBlock) {
-				if (ChestBlock.isChestBlockedAt(level, pos)) {
-					return false;
-				}
-				return getOtherHalfOfLargeChest(level, pos)
-					.map(otherHalf -> !ChestBlock.isChestBlockedAt(level, otherHalf))
-					.orElse(true);
-			}
-			return true;
+		BlockPos otherHalfPos = pos.relative(ChestBlock.getConnectedDirection(state));
+		BlockState otherHalf = level.getBlockState(otherHalfPos);
+		if (!(otherHalf.getBlock() instanceof ChestBlock)) {
+			return Optional.empty();
+		}
+		if (state.getValue(ChestBlock.FACING) != otherHalf.getValue(ChestBlock.FACING)) {
+			return Optional.empty();
+		}
+		if (ChestBlock.getConnectedDirection(state) != ChestBlock.getConnectedDirection(otherHalf).getOpposite()) {
+			return Optional.empty();
+		}
+		return Optional.of(otherHalfPos.immutable());
+	}
+
+	private static String formatPos(BlockPos pos) {
+		if (pos == null) {
+			return "<none>";
+		}
+		return pos.getX() + "," + pos.getY() + "," + pos.getZ();
+	}
+
+	private static String summarizeRemainingItems(List<String> remainingItemIds) {
+		if (remainingItemIds.isEmpty()) {
+			return "<none>";
 		}
 
-		private void markVisited(BlockPos pos) {
-			visited.add(pos);
-			getOtherHalfOfLargeChest(level, pos).ifPresent(visited::add);
+		Map<String, Integer> aggregate = new LinkedHashMap<>();
+		for (String itemId : remainingItemIds) {
+			aggregate.merge(itemId, 1, Integer::sum);
 		}
-
-		private static Optional<BlockPos> getOtherHalfOfLargeChest(Level level, BlockPos pos) {
-			BlockState state = level.getBlockState(pos);
-			if (!(state.getBlock() instanceof ChestBlock) || state.getValue(ChestBlock.TYPE) == ChestType.SINGLE) {
-				return Optional.empty();
-			}
-
-			BlockPos otherHalfPos = pos.relative(ChestBlock.getConnectedDirection(state));
-			BlockState otherHalf = level.getBlockState(otherHalfPos);
-			if (!(otherHalf.getBlock() instanceof ChestBlock)) {
-				return Optional.empty();
-			}
-			if (state.getValue(ChestBlock.FACING) != otherHalf.getValue(ChestBlock.FACING)) {
-				return Optional.empty();
-			}
-			if (ChestBlock.getConnectedDirection(state) != ChestBlock.getConnectedDirection(otherHalf).getOpposite()) {
-				return Optional.empty();
-			}
-			return Optional.of(otherHalfPos.immutable());
-		}
-
-		private static String formatPos(BlockPos pos) {
-			if (pos == null) {
-				return "<none>";
-			}
-			return pos.getX() + "," + pos.getY() + "," + pos.getZ();
-		}
-
-		private static String summarizeRemainingItems(List<String> remainingItemIds) {
-			if (remainingItemIds.isEmpty()) {
-				return "<none>";
-			}
-
-			Map<String, Integer> aggregate = new LinkedHashMap<>();
-			for (String itemId : remainingItemIds) {
-				aggregate.merge(itemId, 1, Integer::sum);
-			}
-			return AvailableItemSnapshot.formatCounts(aggregate);
-		}
+		return AvailableItemSnapshot.formatCounts(aggregate);
 	}
 
 	private record ScreenContext(
@@ -2218,5 +2269,160 @@ public final class NearbyContainerDryRun {
 		double y = Mth.clamp(origin.y, pos.getY(), pos.getY() + 1.0D);
 		double z = Mth.clamp(origin.z, pos.getZ(), pos.getZ() + 1.0D);
 		return new Vec3(x, y, z);
+	}
+
+	private static final class ReturnSession extends BaseSession {
+		private final List<PulledResourcesTracker.WithdrawnItem> itemsToReturn;
+		private final List<BlockPos> uniquePositions;
+		private int nextPositionIndex = 0;
+		private int timeoutTicks = 0;
+		private BlockPos pendingContainerPos;
+		private SearchState state = SearchState.OPEN_NEXT;
+
+		private ReturnSession(
+			Minecraft client,
+			LocalPlayer player,
+			Level level,
+			MultiPlayerGameMode gameMode,
+			Entity cameraEntity,
+			List<PulledResourcesTracker.WithdrawnItem> itemsToReturn
+		) {
+			super(client, player, level, gameMode, cameraEntity);
+			this.itemsToReturn = new ArrayList<>(itemsToReturn);
+			LinkedHashSet<BlockPos> positions = new LinkedHashSet<>();
+			for (PulledResourcesTracker.WithdrawnItem item : itemsToReturn) {
+				positions.add(item.containerPos());
+			}
+			this.uniquePositions = new ArrayList<>(positions);
+		}
+
+		@Override
+		public void start() {
+			ReachCraftingMod.LOGGER.info("[nearby_return] starting return of {} items to {} containers", itemsToReturn.size(), uniquePositions.size());
+		}
+
+		@Override
+		public void tick() {
+			if (client.player != player || client.level != level) {
+				stop(false);
+				NearbyContainerDryRun.activeSession = null;
+				return;
+			}
+
+			if (state == SearchState.OPEN_NEXT) {
+				if (!openNextContainer()) {
+					stop(false);
+					NearbyContainerDryRun.activeSession = null;
+				}
+				return;
+			}
+
+			if (state == SearchState.WAITING_FOR_CONTAINER) {
+				timeoutTicks--;
+				if (timeoutTicks <= 0) {
+					onOpenFailed("timeout");
+				}
+				return;
+			}
+		}
+
+		@Override
+		public void onOpenFailed(String reason) {
+			ReachCraftingMod.LOGGER.info("[nearby_return] pos={} skipped={}", formatPos(pendingContainerPos), reason);
+			pendingContainerPos = null;
+			timeoutTicks = 0;
+			state = SearchState.OPEN_NEXT;
+		}
+
+		private boolean openNextContainer() {
+			Vec3 eyePos = cameraEntity.getEyePosition(0);
+			while (nextPositionIndex < uniquePositions.size()) {
+				BlockPos pos = uniquePositions.get(nextPositionIndex++);
+				BlockState blockState = level.getBlockState(pos);
+				if (!isSupportedContainer(blockState)) continue;
+				if (!canAttemptOpen(level, pos, blockState)) continue;
+				if (squaredDistanceToBlock(eyePos, pos) > net.minecraft.util.Mth.square(player.blockInteractionRange())) continue;
+
+				Vec3 hitPos = closestPointOnUnitBlock(eyePos, pos);
+				Direction face = Direction.getApproximateNearest(hitPos.subtract(eyePos)).getOpposite();
+				BlockHitResult hitResult = new BlockHitResult(hitPos, face, pos, false);
+				
+				withSuppressedSecondaryUse(() -> {
+					gameMode.useItemOn(player, InteractionHand.MAIN_HAND, hitResult);
+				});
+				
+				pendingContainerPos = pos;
+				timeoutTicks = 40;
+				state = SearchState.WAITING_FOR_CONTAINER;
+				return true;
+			}
+			return false;
+		}
+
+		@Override
+		public void onContainerContentsInitialized(AbstractContainerMenu menu) {
+			if (state != SearchState.WAITING_FOR_CONTAINER) return;
+
+			List<PulledResourcesTracker.WithdrawnItem> itemsAtThisPos = itemsToReturn.stream()
+				.filter(item -> item.containerPos().equals(pendingContainerPos))
+				.toList();
+
+			for (PulledResourcesTracker.WithdrawnItem item : itemsAtThisPos) {
+				returnItemToContainer(menu, item);
+			}
+
+			player.closeContainer();
+			pendingContainerPos = null;
+			timeoutTicks = 0;
+			state = SearchState.OPEN_NEXT;
+		}
+
+		private void returnItemToContainer(AbstractContainerMenu menu, PulledResourcesTracker.WithdrawnItem item) {
+			Slot inventorySlot = findItemInInventory(menu, item.stack());
+			if (inventorySlot == null) return;
+
+			Slot targetSlot = menu.getSlot(item.slotIndex());
+			if (targetSlot.container instanceof net.minecraft.world.entity.player.Inventory || (targetSlot.hasItem() && !ItemStack.isSameItemSameComponents(targetSlot.getItem(), item.stack()))) {
+				targetSlot = findEmptyContainerSlot(menu);
+			}
+
+			if (targetSlot != null && targetSlot.mayPlace(item.stack())) {
+				moveItem(menu, inventorySlot, targetSlot);
+			}
+		}
+
+		private Slot findItemInInventory(AbstractContainerMenu menu, ItemStack stack) {
+			for (Slot slot : menu.slots) {
+				if (slot.container instanceof net.minecraft.world.entity.player.Inventory && slot.hasItem() && ItemStack.isSameItemSameComponents(slot.getItem(), stack)) {
+					return slot;
+				}
+			}
+			return null;
+		}
+
+		private Slot findEmptyContainerSlot(AbstractContainerMenu menu) {
+			for (Slot slot : menu.slots) {
+				if (!(slot.container instanceof net.minecraft.world.entity.player.Inventory) && !slot.hasItem()) {
+					return slot;
+				}
+			}
+			return null;
+		}
+
+		private void moveItem(AbstractContainerMenu menu, Slot source, Slot target) {
+			gameMode.handleInventoryMouseClick(menu.containerId, source.index, GLFW.GLFW_MOUSE_BUTTON_LEFT, ClickType.PICKUP, player);
+			gameMode.handleInventoryMouseClick(menu.containerId, target.index, GLFW.GLFW_MOUSE_BUTTON_LEFT, ClickType.PICKUP, player);
+			if (!player.containerMenu.getCarried().isEmpty()) {
+				gameMode.handleInventoryMouseClick(menu.containerId, source.index, GLFW.GLFW_MOUSE_BUTTON_LEFT, ClickType.PICKUP, player);
+			}
+		}
+
+		@Override
+		public void stop(boolean closeContainer) {
+			if (closeContainer) {
+				player.closeContainer();
+			}
+			PulledResourcesTracker.clear();
+		}
 	}
 }

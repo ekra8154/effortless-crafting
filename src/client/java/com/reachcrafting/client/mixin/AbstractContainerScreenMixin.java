@@ -1,6 +1,7 @@
 package com.reachcrafting.client.mixin;
 
 import com.reachcrafting.client.NearbyContainerCache;
+import com.reachcrafting.client.ReachCraftingConfig;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import org.spongepowered.asm.mixin.Mixin;
@@ -17,5 +18,11 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 	@Inject(method = "removed", at = @At("HEAD"))
 	private void reachcrafting$cacheContainerOnClose(CallbackInfo ci) {
 		NearbyContainerCache.onContainerScreenRemoved(this.menu);
+		
+		if (ReachCraftingConfig.get().putPulledResourcesBack() 
+			&& !com.reachcrafting.client.NearbyContainerDryRun.isActiveSessionRunning()
+			&& ((Object) this instanceof net.minecraft.client.gui.screens.inventory.CraftingScreen || (Object) this instanceof net.minecraft.client.gui.screens.inventory.InventoryScreen)) {
+			com.reachcrafting.client.NearbyContainerDryRun.startReturn(com.reachcrafting.client.PulledResourcesTracker.getWithdrawnItems());
+		}
 	}
 }
