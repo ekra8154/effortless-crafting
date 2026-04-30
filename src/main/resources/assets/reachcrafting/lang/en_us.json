@@ -40,5 +40,11 @@
 	"tooltip.reachcrafting.in_world_filter_mode": "Enable per-world container filtering. None: Disable UI dots. Blacklist: Show white dots unless blacklisted. Whitelist: Show black dots unless whitelisted. Holding Ctrl shows dots and clicking them toggles the state.",
 	"enum.reachcrafting.in_world_filter_mode.none": "None",
 	"enum.reachcrafting.in_world_filter_mode.blacklist": "Blacklist",
-	"enum.reachcrafting.in_world_filter_mode.whitelist": "Whitelist"
+	"enum.reachcrafting.in_world_filter_mode.whitelist": "Whitelist",
+	"option.reachcrafting.show_filter_outlines": "Show Filter Outlines In-World",
+	"tooltip.reachcrafting.show_filter_outlines": "Draw a black (for blacklist) or white (for whitelist) wireframe box around filtered containers in the world within 16 blocks.",
+	"enum.reachcrafting.outline_display_mode.off": "Off",
+	"enum.reachcrafting.outline_display_mode.on": "On",
+	"enum.reachcrafting.outline_display_mode.keybind": "With Keybind",
+	"key.reachcrafting.show_filter_outlines": "Display Filtered Containers"
 }

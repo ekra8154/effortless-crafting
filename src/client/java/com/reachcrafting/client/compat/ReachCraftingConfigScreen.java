@@ -142,6 +142,17 @@ public final class ReachCraftingConfigScreen {
 			.setEnumNameProvider(value -> Component.translatable("enum.reachcrafting.in_world_filter_mode." + value.name().toLowerCase()))
 			.build());
 
+		containers.addEntry(entries.startEnumSelector(
+				Component.translatable("option.reachcrafting.show_filter_outlines"),
+				ReachCraftingConfig.OutlineDisplayMode.class,
+				config.showFilterOutlines()
+			)
+			.setDefaultValue(ReachCraftingConfig.OutlineDisplayMode.OFF)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.show_filter_outlines"))
+			.setEnumNameProvider(value -> Component.translatable("enum.reachcrafting.outline_display_mode." + value.name().toLowerCase()))
+			.setSaveConsumer(config::setShowFilterOutlines)
+			.build());
+
 		containers.addEntry(entries.startStrList(
 				Component.translatable("option.reachcrafting.blacklisted_container_ids"),
 				new ArrayList<>(config.blacklistedContainerIds())

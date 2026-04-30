@@ -13,6 +13,7 @@ import org.lwjgl.glfw.GLFW;
 
 public class ReachCraftingModClient implements ClientModInitializer {
 	private static KeyMapping debugPingKey;
+	public static KeyMapping showFilterOutlinesKey;
 
 	@Override
 	public void onInitializeClient() {
@@ -20,6 +21,7 @@ public class ReachCraftingModClient implements ClientModInitializer {
 		NearbyContainerCache.init();
 		RecipeBookClickCapture.init();
 		NearbyContainerDryRun.init();
+		ContainerFilterRenderer.init();
 
 		KeyMapping.Category reachCraftingCategory = KeyMapping.Category.register(
 			Identifier.fromNamespaceAndPath(ReachCraftingMod.MOD_ID, "debug")
@@ -29,6 +31,13 @@ public class ReachCraftingModClient implements ClientModInitializer {
 			"key.reachcrafting.debug_ping",
 			InputConstants.Type.KEYSYM,
 			GLFW.GLFW_KEY_F8,
+			reachCraftingCategory
+		));
+
+		showFilterOutlinesKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
+			"key.reachcrafting.show_filter_outlines",
+			InputConstants.Type.KEYSYM,
+			InputConstants.UNKNOWN.getValue(),
 			reachCraftingCategory
 		));
 

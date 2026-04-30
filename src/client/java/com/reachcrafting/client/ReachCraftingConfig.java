@@ -41,6 +41,7 @@ public final class ReachCraftingConfig {
 	private boolean putPulledResourcesBack;
 	private boolean restoreInventoryItemPositions;
 	private AutoFocusSearch autoFocusSearch;
+	private OutlineDisplayMode showFilterOutlines;
 	private Set<String> blacklistedContainerIds;
 
 	private static String lastSearchText = "";
@@ -79,6 +80,7 @@ public final class ReachCraftingConfig {
 			instance.putPulledResourcesBack = stored.putPulledResourcesBack;
 			instance.restoreInventoryItemPositions = stored.restoreInventoryItemPositions == null ? true : stored.restoreInventoryItemPositions;
 			instance.autoFocusSearch = stored.autoFocusSearch != null ? stored.autoFocusSearch : AutoFocusSearch.NONE;
+			instance.showFilterOutlines = stored.showFilterOutlines != null ? stored.showFilterOutlines : OutlineDisplayMode.OFF;
 			instance.blacklistedContainerIds = stored.blacklistedContainerIds != null ? new HashSet<>(stored.blacklistedContainerIds) : new HashSet<>(DEFAULT_BLACKLIST);
 		} catch (Exception exception) {
 			ReachCraftingMod.LOGGER.warn("Failed to load reachcrafting config from {}", CONFIG_PATH, exception);
@@ -205,6 +207,14 @@ public final class ReachCraftingConfig {
 		this.restoreInventoryItemPositions = restoreInventoryItemPositions;
 	}
 
+	public OutlineDisplayMode showFilterOutlines() {
+		return showFilterOutlines;
+	}
+
+	public void setShowFilterOutlines(OutlineDisplayMode showFilterOutlines) {
+		this.showFilterOutlines = showFilterOutlines;
+	}
+
 	public static String getLastSearchText() {
 		return lastSearchText;
 	}
@@ -236,6 +246,7 @@ public final class ReachCraftingConfig {
 		defaults.putPulledResourcesBack = false;
 		defaults.restoreInventoryItemPositions = true;
 		defaults.autoFocusSearch = AutoFocusSearch.NONE;
+		defaults.showFilterOutlines = OutlineDisplayMode.OFF;
 		defaults.blacklistedContainerIds = new HashSet<>(DEFAULT_BLACKLIST);
 		return defaults;
 	}
@@ -271,6 +282,7 @@ public final class ReachCraftingConfig {
 		private boolean putPulledResourcesBack;
 		private Boolean restoreInventoryItemPositions;
 		private AutoFocusSearch autoFocusSearch;
+		private OutlineDisplayMode showFilterOutlines;
 		private Set<String> blacklistedContainerIds;
 
 		private StoredConfig(ReachCraftingConfig config) {
@@ -286,7 +298,14 @@ public final class ReachCraftingConfig {
 			this.putPulledResourcesBack = config.putPulledResourcesBack;
 			this.restoreInventoryItemPositions = config.restoreInventoryItemPositions;
 			this.autoFocusSearch = config.autoFocusSearch;
+			this.showFilterOutlines = config.showFilterOutlines;
 			this.blacklistedContainerIds = config.blacklistedContainerIds;
 		}
+	}
+
+	public enum OutlineDisplayMode {
+		OFF,
+		ON,
+		KEYBIND
 	}
 }

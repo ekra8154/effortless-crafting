@@ -95,6 +95,16 @@ public final class InWorldFilterManager {
 		}
 	}
 
+	public static Set<String> getBlacklistedKeys() {
+		updateContext();
+		return Set.copyOf(INSTANCE_BLACKLIST);
+	}
+
+	public static Set<String> getWhitelistedKeys() {
+		updateContext();
+		return Set.copyOf(INSTANCE_WHITELIST);
+	}
+
 	private static void validateSet(Level level, Set<String> set, Set<String> toRemove) {
 		for (String key : set) {
 			// Parse key back to pos
