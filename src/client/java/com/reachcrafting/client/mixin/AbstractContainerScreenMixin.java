@@ -9,11 +9,34 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.network.chat.Component;
+import net.minecraft.client.gui.screens.Screen;
+import com.mojang.blaze3d.platform.InputConstants;
+import org.lwjgl.glfw.GLFW;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.input.MouseButtonEvent;
+import com.reachcrafting.client.RecipeButtonNearbyIndicator;
 
 @Mixin(AbstractContainerScreen.class)
 public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMenu> {
 	@Shadow
 	protected T menu;
+
+	@Shadow
+	protected int titleLabelX;
+
+	@Shadow
+	protected int titleLabelY;
+	
+	@Shadow
+	protected int leftPos;
+	
+	@Shadow
+	protected int topPos;
+
+
 
 	@Inject(method = "init", at = @At("HEAD"))
 	private void reachcrafting$captureInventoryOnOpen(CallbackInfo ci) {
@@ -61,6 +84,52 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 		if (!com.reachcrafting.client.NearbyContainerDryRun.isActiveSessionRunning()) {
 			com.reachcrafting.client.PulledResourcesTracker.clear();
 			com.reachcrafting.client.InventoryGridRestoreTracker.clear();
+		}
+	}
+
+	@Inject(method = "renderLabels", at = @At("TAIL"))
+	private void reachcrafting$renderControlDot(GuiGraphics guiGraphics, int mouseX, int mouseY, CallbackInfo ci) {
+		Minecraft client = Minecraft.getInstance();
+		if ((InputConstants.isKeyDown(client.getWindow(), GLFW.GLFW_KEY_LEFT_CONTROL)
+			|| InputConstants.isKeyDown(client.getWindow(), GLFW.GLFW_KEY_RIGHT_CONTROL))
+			&& NearbyContainerCache.isCurrentContainerSupported()) {
+			
+			Component titleComponent = ((Screen) (Object) this).getTitle();
+			int titleWidth = client.font.width(titleComponent);
+			int dotX = this.titleLabelX + titleWidth + 4;
+			int dotY = this.titleLabelY + 2;
+			
+			if (NearbyContainerCache.isCurrentContainerBlacklisted()) {
+				RecipeButtonNearbyIndicator.renderWhiteDot(guiGraphics, dotX, dotY);
+			} else {
+				RecipeButtonNearbyIndicator.renderBlackDot(guiGraphics, dotX, dotY);
+			}
+		}
+	}
+
+	@Inject(method = "mouseClicked", at = @At("HEAD"), cancellable = true)
+	private void reachcrafting$onMouseClicked(MouseButtonEvent click, boolean filtering, CallbackInfoReturnable<Boolean> cir) {
+		if (click.button() != 0) return; // Only left click
+		
+		Minecraft client = Minecraft.getInstance();
+		if (!NearbyContainerCache.isCurrentContainerSupported()) return;
+		
+		boolean ctrlDown = (click.modifiers() & GLFW.GLFW_MOD_CONTROL) != 0;
+		if (!ctrlDown) return;
+
+		Component titleComponent = ((Screen) (Object) this).getTitle();
+		int titleWidth = client.font.width(titleComponent);
+		
+		// The dot is at (leftPos + titleLabelX + titleWidth + 4, topPos + titleLabelY + 2)
+		// and is 5x5 pixels (from RecipeButtonNearbyIndicator.renderDot)
+		double dotStartX = this.leftPos + this.titleLabelX + titleWidth + 4;
+		double dotStartY = this.topPos + this.titleLabelY + 2;
+		double dotEndX = dotStartX + 5;
+		double dotEndY = dotStartY + 5;
+
+		if (click.x() >= dotStartX && click.x() <= dotEndX && click.y() >= dotStartY && click.y() <= dotEndY) {
+			NearbyContainerCache.toggleCurrentContainerBlacklist();
+			cir.setReturnValue(true);
 		}
 	}
 }

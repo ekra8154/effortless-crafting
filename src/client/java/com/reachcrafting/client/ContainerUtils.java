@@ -37,7 +37,11 @@ public final class ContainerUtils {
 		if (ReachCraftingConfig.get().blacklistedContainerIds().contains(blockId)) {
 			return false;
 		}
+		return isPotentiallySupportedContainer(state);
+	}
 
+	public static boolean isPotentiallySupportedContainer(BlockState state) {
+		String blockId = BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
 		Block block = state.getBlock();
 		return block instanceof ChestBlock
 			|| block instanceof BarrelBlock

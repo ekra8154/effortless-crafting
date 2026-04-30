@@ -29,6 +29,7 @@ import net.minecraft.util.Mth;
 
 public final class NearbyContainerCache {
 	private static final Map<ContainerKey, ContainerSnapshot> SNAPSHOTS = new LinkedHashMap<>();
+	private static final Set<ContainerKey> BLACKLISTED_KEYS = new java.util.HashSet<>();
 	private static long revision;
 	private static ViewCacheKey lastViewKey;
 	private static ReachableView lastView;
@@ -60,6 +61,45 @@ public final class NearbyContainerCache {
 		pendingObservedTicks = 0;
 		openObservedPos = null;
 		openObservedContainerId = -1;
+	}
+
+	public static boolean isCurrentContainerSupported() {
+		return openObservedPos != null;
+	}
+
+	public static boolean isCurrentContainerGloballyBlacklisted() {
+		if (openObservedPos == null) return false;
+		Minecraft client = Minecraft.getInstance();
+		if (client.level == null) return false;
+		BlockState state = client.level.getBlockState(openObservedPos);
+		return !ContainerUtils.isSupportedContainer(state) && ContainerUtils.isPotentiallySupportedContainer(state);
+	}
+
+	public static boolean isCurrentContainerBlacklisted() {
+		if (openObservedPos == null) return false;
+		Minecraft client = Minecraft.getInstance();
+		if (client.level == null) return false;
+		ContainerKey key = resolveContainerKey(client.level, openObservedPos);
+		return key != null && BLACKLISTED_KEYS.contains(key);
+	}
+
+	public static void toggleCurrentContainerBlacklist() {
+		if (openObservedPos == null) return;
+		Minecraft client = Minecraft.getInstance();
+		if (client.level == null) return;
+		ContainerKey key = resolveContainerKey(client.level, openObservedPos);
+		if (key == null) return;
+
+		if (isCurrentContainerGloballyBlacklisted()) {
+			return; // Cannot toggle if globally blacklisted
+		}
+
+		if (BLACKLISTED_KEYS.contains(key)) {
+			BLACKLISTED_KEYS.remove(key);
+		} else {
+			BLACKLISTED_KEYS.add(key);
+		}
+		bumpRevision();
 	}
 
 	public static ReachableView getReachableView(Level level, Entity cameraEntity, double reachDistance) {
@@ -225,7 +265,7 @@ public final class NearbyContainerCache {
 		}
 
 		BlockState state = level.getBlockState(pos);
-		if (!ContainerUtils.isSupportedContainer(state) || !ContainerUtils.canAttemptOpen(level, pos, state)) {
+		if (!ContainerUtils.isPotentiallySupportedContainer(state) || !ContainerUtils.canAttemptOpen(level, pos, state)) {
 			return;
 		}
 
@@ -251,6 +291,14 @@ public final class NearbyContainerCache {
 		if (pendingObservedPos == null || pendingObservedTicks <= 0) {
 			return;
 		}
+		
+		BlockState state = client.level.getBlockState(pendingObservedPos);
+		if (!ContainerUtils.isPotentiallySupportedContainer(state)) {
+			pendingObservedPos = null;
+			pendingObservedTicks = 0;
+			return;
+		}
+
 		if (menu instanceof InventoryMenu || client.screen instanceof InventoryScreen || client.screen instanceof CraftingScreen) {
 			pendingObservedPos = null;
 			pendingObservedTicks = 0;
@@ -311,7 +359,7 @@ public final class NearbyContainerCache {
 	}
 
 	private static ContainerKey resolveContainerKey(Level level, BlockPos pos, BlockState state) {
-		if (!ContainerUtils.isSupportedContainer(state)) {
+		if (!ContainerUtils.isPotentiallySupportedContainer(state)) {
 			return null;
 		}
 
