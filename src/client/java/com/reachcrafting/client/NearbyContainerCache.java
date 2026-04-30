@@ -65,6 +65,10 @@ public final class NearbyContainerCache {
 		return openObservedPos != null;
 	}
 
+	public static BlockPos getCurrentContainerPos() {
+		return openObservedPos;
+	}
+
 	public static boolean isCurrentContainerActive() {
 		if (openObservedPos == null) return false;
 		Minecraft client = Minecraft.getInstance();

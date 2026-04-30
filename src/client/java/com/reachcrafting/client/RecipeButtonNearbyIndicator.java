@@ -136,7 +136,7 @@ public final class RecipeButtonNearbyIndicator {
 
 	public static void renderBlackDot(net.minecraft.client.gui.GuiGraphics guiGraphics, int x, int y) {
 		int outer = 0xCC000000;
-		int inner = 0xFF222222;
+		int inner = 0xFF000000;
 
 		guiGraphics.fill(x + 1, y, x + 4, y + 1, outer);
 		guiGraphics.fill(x, y + 1, x + 5, y + 4, outer);
@@ -147,7 +147,18 @@ public final class RecipeButtonNearbyIndicator {
 
 	public static void renderWhiteDot(net.minecraft.client.gui.GuiGraphics guiGraphics, int x, int y) {
 		int outer = 0xCCFFFFFF;
-		int inner = 0xFFAAAAAA;
+		int inner = 0xFFFFFFFF;
+
+		guiGraphics.fill(x + 1, y, x + 4, y + 1, outer);
+		guiGraphics.fill(x, y + 1, x + 5, y + 4, outer);
+		guiGraphics.fill(x + 1, y + 4, x + 4, y + 5, outer);
+
+		guiGraphics.fill(x + 1, y + 1, x + 4, y + 4, inner);
+	}
+
+	public static void renderGrayDot(net.minecraft.client.gui.GuiGraphics guiGraphics, int x, int y) {
+		int outer = 0xCC888888;
+		int inner = 0xFF888888;
 
 		guiGraphics.fill(x + 1, y, x + 4, y + 1, outer);
 		guiGraphics.fill(x, y + 1, x + 5, y + 4, outer);

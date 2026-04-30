@@ -32,7 +32,15 @@ public class ReachCraftingModClient implements ClientModInitializer {
 			reachCraftingCategory
 		));
 
+		int[] tickCounter = {0};
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
+			tickCounter[0]++;
+			if (tickCounter[0] >= 200) {
+				tickCounter[0] = 0;
+				InWorldFilterManager.validateFilters(client.level);
+				InWorldFilterManager.saveIfDirty();
+			}
+
 			while (debugPingKey.consumeClick()) {
 				ReachCraftingMod.LOGGER.info("[debug_ping] manual debug ping triggered");
 				if (client.player != null) {

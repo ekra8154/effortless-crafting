@@ -3,6 +3,8 @@ package com.reachcrafting.client.mixin;
 import com.reachcrafting.client.NearbyContainerCache;
 import com.reachcrafting.client.ReachCraftingConfig;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import com.reachcrafting.client.InWorldFilterManager;
+import net.minecraft.core.BlockPos;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -101,7 +103,11 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 			int dotX = this.titleLabelX + titleWidth + 4;
 			int dotY = this.titleLabelY + 2;
 			
-			if (NearbyContainerCache.isCurrentContainerActive()) {
+			BlockPos containerPos = NearbyContainerCache.getCurrentContainerPos();
+			InWorldFilterManager.InclusionState manual = InWorldFilterManager.getManualState(client.level, containerPos);
+			if (manual == InWorldFilterManager.InclusionState.UNSET) {
+				RecipeButtonNearbyIndicator.renderGrayDot(guiGraphics, dotX, dotY);
+			} else if (manual == InWorldFilterManager.InclusionState.MANUAL_WHITELIST) {
 				RecipeButtonNearbyIndicator.renderWhiteDot(guiGraphics, dotX, dotY);
 			} else {
 				RecipeButtonNearbyIndicator.renderBlackDot(guiGraphics, dotX, dotY);
