@@ -89,15 +89,9 @@ TODO:
 shift = vanilla scroll
     scroll wheel over results slot + shift to craft that many times?
 
-scroll wraparound 64 --> 0 and vice versa
-
 alt = auto craft
 
-need to define blacklist containers / regions
-
 settings / more to make caching actually faster
-
-search radius?
 
 code cleanup - in progress
 

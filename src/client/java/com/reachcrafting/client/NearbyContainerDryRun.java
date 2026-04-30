@@ -194,6 +194,7 @@ public final class NearbyContainerDryRun {
 		if (activeSession != null) {
 			activeSession.stop(true);
 			activeSession = null;
+			RecipeBookClickCapture.refocusRecipeBookSearch(Minecraft.getInstance());
 		}
 	}
 
@@ -201,6 +202,7 @@ public final class NearbyContainerDryRun {
 		if (activeSession != null) {
 			activeSession.stop(false);
 			activeSession = null;
+			RecipeBookClickCapture.refocusRecipeBookSearch(Minecraft.getInstance());
 		}
 	}
 
@@ -1222,6 +1224,7 @@ public final class NearbyContainerDryRun {
 			}
 			stop(false);
 			NearbyContainerDryRun.activeSession = null;
+			RecipeBookClickCapture.refocusRecipeBookSearch(client);
 			return true;
 		}
 

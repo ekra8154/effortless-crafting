@@ -594,9 +594,8 @@ public final class RecipeBookClickCapture {
 		}
 	}
 
-	private static void refocusRecipeBookSearch(Minecraft minecraft) {
+	public static void refocusRecipeBookSearch(Minecraft minecraft) {
 		if (!(minecraft.screen instanceof AbstractRecipeBookScreen<?> recipeBookScreen)) {
-			wasSearchBoxFocusedByMod = false;
 			return;
 		}
 		RecipeBookComponentAccessor componentAccessor = (RecipeBookComponentAccessor) ((AbstractRecipeBookScreenAccessor) recipeBookScreen).getRecipeBookComponent();

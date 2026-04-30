@@ -76,11 +76,11 @@ public abstract class RecipeBookComponentMixin {
 	}
 
 	private void reachcrafting$applyAutoFocus() {
-		if (this.minecraft == null || this.minecraft.player == null || this.minecraft.player.isCreative()) {
+		if (this.minecraft == null || this.minecraft.player == null) {
 			return;
 		}
 
-		if (this.searchBox == null || !this.isVisible()) {
+		if (this.searchBox == null || !this.isVisible() || this.menu == null) {
 			return;
 		}
 
