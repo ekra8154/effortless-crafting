@@ -13,6 +13,7 @@ import net.fabricmc.fabric.api.client.screen.v1.ScreenMouseEvents;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.AbstractWidget;
+import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractRecipeBookScreen;
 import net.minecraft.client.gui.screens.inventory.CraftingScreen;
@@ -24,7 +25,7 @@ import net.minecraft.client.multiplayer.MultiPlayerGameMode;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
-import net.minecraft.util.Mth;
+// import net.minecraft.util.Mth;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.display.RecipeDisplayId;
 import org.lwjgl.glfw.GLFW;
@@ -34,6 +35,7 @@ public final class RecipeBookClickCapture {
 	private static ReplayBatch replayBatch;
 	private static boolean wasControlDown;
 	private static boolean wasShiftDown;
+	private static boolean wasSearchBoxFocusedByMod;
 
 	private RecipeBookClickCapture() {
 	}
@@ -42,6 +44,12 @@ public final class RecipeBookClickCapture {
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			boolean controlDown = isControlKeyDown(client);
 			boolean shiftDown = isShiftKeyDown(client);
+
+			if ((controlDown || shiftDown) && isHoveringRecipe(client)) {
+				defocusRecipeBookSearch(client);
+			} else if (wasSearchBoxFocusedByMod) {
+				refocusRecipeBookSearch(client);
+			}
 
 			if (pendingHeldRecipe != null) {
 				if (pendingHeldRecipe.allowNearby()) {
@@ -307,7 +315,12 @@ public final class RecipeBookClickCapture {
 		}
 
 		if (pendingHeldRecipe.action().sameRecipe(action)) {
-			int updatedCount = pendingHeldRecipe.clickCount() + 1;
+			int delta = isSpaceKeyDown(Minecraft.getInstance()) ? 16 : 1;
+			int updatedCount = Math.floorMod(pendingHeldRecipe.clickCount() + delta, 65);
+			if (updatedCount <= 0) {
+				pendingHeldRecipe = null;
+				return;
+			}
 			pendingHeldRecipe = new PendingHeldRecipe(action, updatedCount, updatedCount >= 2, allowNearby);
 			return;
 		}
@@ -448,16 +461,22 @@ public final class RecipeBookClickCapture {
 			return false;
 		}
 
+		int multiplier = isSpaceKeyDown(minecraft) ? 16 : 1;
+		int effectiveDelta = delta * multiplier;
+
 		if (pendingHeldRecipe == null) {
-			if (delta < 0) {
-				return false;
+			int updatedCount = Math.floorMod(effectiveDelta, 65);
+			if (updatedCount == 0) {
+				pendingHeldRecipe = null;
+				return true;
 			}
-			pendingHeldRecipe = new PendingHeldRecipe(action, 1, false, isControlKeyDown(minecraft));
+			pendingHeldRecipe = new PendingHeldRecipe(action, updatedCount, updatedCount >= 2, isControlKeyDown(minecraft));
 			return true;
 		}
 
 		if (pendingHeldRecipe.action().sameRecipe(action)) {
-			int updatedCount = Mth.clamp(pendingHeldRecipe.clickCount() + delta, 0, 64);
+			int updatedCount = Math.floorMod(pendingHeldRecipe.clickCount() + effectiveDelta, 65);
+
 			if (updatedCount <= 0) {
 				pendingHeldRecipe = null;
 				return true;
@@ -467,7 +486,12 @@ public final class RecipeBookClickCapture {
 		}
 
 		if (delta > 0 && !pendingHeldRecipe.locked()) {
-			pendingHeldRecipe = new PendingHeldRecipe(action, 1, false, isControlKeyDown(minecraft));
+			int updatedCount = Math.floorMod(effectiveDelta, 65);
+			if (updatedCount == 0) {
+				pendingHeldRecipe = null;
+				return true;
+			}
+			pendingHeldRecipe = new PendingHeldRecipe(action, updatedCount, updatedCount >= 2, isControlKeyDown(minecraft));
 			return true;
 		}
 
@@ -541,6 +565,48 @@ public final class RecipeBookClickCapture {
 	private static boolean isControlKeyDown(Minecraft minecraft) {
 		return InputConstants.isKeyDown(minecraft.getWindow(), GLFW.GLFW_KEY_LEFT_CONTROL)
 			|| InputConstants.isKeyDown(minecraft.getWindow(), GLFW.GLFW_KEY_RIGHT_CONTROL);
+	}
+	
+	private static boolean isSpaceKeyDown(Minecraft minecraft) {
+		return InputConstants.isKeyDown(minecraft.getWindow(), GLFW.GLFW_KEY_SPACE);
+	}
+
+	private static boolean isHoveringRecipe(Minecraft minecraft) {
+		if (minecraft.screen == null) {
+			return false;
+		}
+		double mouseX = minecraft.mouseHandler.xpos() * (double) minecraft.getWindow().getGuiScaledWidth() / (double) minecraft.getWindow().getWidth();
+		double mouseY = minecraft.mouseHandler.ypos() * (double) minecraft.getWindow().getGuiScaledHeight() / (double) minecraft.getWindow().getHeight();
+		return findHoveredHeldRecipeAction(minecraft.screen, mouseX, mouseY) != null;
+	}
+
+	private static void defocusRecipeBookSearch(Minecraft minecraft) {
+		if (!(minecraft.screen instanceof AbstractRecipeBookScreen<?> recipeBookScreen)) {
+			return;
+		}
+		RecipeBookComponentAccessor componentAccessor = (RecipeBookComponentAccessor) ((AbstractRecipeBookScreenAccessor) recipeBookScreen).getRecipeBookComponent();
+		if (componentAccessor != null) {
+			EditBox searchBox = componentAccessor.getSearchBox();
+			if (searchBox != null && searchBox.isFocused()) {
+				searchBox.setFocused(false);
+				wasSearchBoxFocusedByMod = true;
+			}
+		}
+	}
+
+	private static void refocusRecipeBookSearch(Minecraft minecraft) {
+		if (!(minecraft.screen instanceof AbstractRecipeBookScreen<?> recipeBookScreen)) {
+			wasSearchBoxFocusedByMod = false;
+			return;
+		}
+		RecipeBookComponentAccessor componentAccessor = (RecipeBookComponentAccessor) ((AbstractRecipeBookScreenAccessor) recipeBookScreen).getRecipeBookComponent();
+		if (componentAccessor != null) {
+			EditBox searchBox = componentAccessor.getSearchBox();
+			if (searchBox != null && !searchBox.isFocused()) {
+				searchBox.setFocused(true);
+			}
+		}
+		wasSearchBoxFocusedByMod = false;
 	}
 
 	private static int currentReservedCraftCopies(AvailableItemSnapshot availableItems) {
