@@ -13,6 +13,7 @@ import net.minecraft.world.item.ItemStack;
 public final class PulledResourcesTracker {
 	private static final List<WithdrawnItem> WITHDRAWN_ITEMS = new ArrayList<>();
 	private static final Map<String, Integer> INITIAL_COUNTS = new HashMap<>();
+	private static final Map<Integer, String> INITIAL_SLOT_TYPES = new HashMap<>();
 
 	private PulledResourcesTracker() {
 	}
@@ -28,9 +29,26 @@ public final class PulledResourcesTracker {
 			if (!stack.isEmpty()) {
 				String itemId = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
 				INITIAL_COUNTS.merge(itemId, stack.getCount(), Integer::sum);
+				INITIAL_SLOT_TYPES.put(i, itemId);
 			}
 		}
-		com.reachcrafting.ReachCraftingMod.LOGGER.info("[nearby_tracker] captured initial counts: {}", INITIAL_COUNTS);
+		com.reachcrafting.ReachCraftingMod.LOGGER.info("[nearby_tracker] captured initial counts and slot types");
+	}
+
+	public static void updateSlotType(int slotIndex, String itemId) {
+		if (itemId == null || itemId.isEmpty()) {
+			INITIAL_SLOT_TYPES.remove(slotIndex);
+		} else {
+			INITIAL_SLOT_TYPES.put(slotIndex, itemId);
+		}
+	}
+
+	public static String getInitialSlotType(int slotIndex) {
+		return INITIAL_SLOT_TYPES.get(slotIndex);
+	}
+	
+	public static Map<Integer, String> getInitialSlotTypes() {
+		return Map.copyOf(INITIAL_SLOT_TYPES);
 	}
 
 	public static int getInitialCount(String itemId) {
@@ -56,6 +74,7 @@ public final class PulledResourcesTracker {
 	public static void clear() {
 		WITHDRAWN_ITEMS.clear();
 		INITIAL_COUNTS.clear();
+		INITIAL_SLOT_TYPES.clear();
 	}
 
 	public static boolean isEmpty() {

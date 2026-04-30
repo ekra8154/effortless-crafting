@@ -31,5 +31,9 @@
 	"tooltip.reachcrafting.auto_focus_search": "Automatically focus the recipe book search bar when opening supported crafting grids if the recipe book is visible.",
 	"enum.reachcrafting.auto_focus_search.none": "None",
 	"enum.reachcrafting.auto_focus_search.crafting_3x3": "3x3",
-	"enum.reachcrafting.auto_focus_search.inventory_2x2_and_3x3": "2x2 and 3x3"
+	"enum.reachcrafting.auto_focus_search.inventory_2x2_and_3x3": "2x2 and 3x3",
+	"option.reachcrafting.put_pulled_resources_back": "Put Pulled Resources Back",
+	"tooltip.reachcrafting.put_pulled_resources_back": "When you close the crafting grid, automatically return any items pulled from nearby containers back to where they came from.",
+	"option.reachcrafting.restore_inventory_item_positions": "Restore Inventory Item Positions",
+	"tooltip.reachcrafting.restore_inventory_item_positions": "If you exit the crafting grid while items are still in it, attempt to return them to their original slots in your inventory."
 }

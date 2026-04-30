@@ -38,6 +38,7 @@ public final class ReachCraftingConfig {
 	private boolean reachCraftCloseOverlayAfterRelease;
 	private boolean reachCraftPreferInventory;
 	private boolean putPulledResourcesBack;
+	private boolean restoreInventoryItemPositions;
 	private AutoFocusSearch autoFocusSearch;
 	private Set<String> blacklistedContainerIds;
 
@@ -74,6 +75,7 @@ public final class ReachCraftingConfig {
 			instance.reachCraftCloseOverlayAfterRelease = stored.reachCraftCloseOverlayAfterRelease == null ? true : stored.reachCraftCloseOverlayAfterRelease;
 			instance.reachCraftPreferInventory = stored.reachCraftPreferInventory == null ? true : stored.reachCraftPreferInventory;
 			instance.putPulledResourcesBack = stored.putPulledResourcesBack;
+			instance.restoreInventoryItemPositions = stored.restoreInventoryItemPositions == null ? true : stored.restoreInventoryItemPositions;
 			instance.autoFocusSearch = stored.autoFocusSearch != null ? stored.autoFocusSearch : AutoFocusSearch.NONE;
 			instance.blacklistedContainerIds = stored.blacklistedContainerIds != null ? new HashSet<>(stored.blacklistedContainerIds) : new HashSet<>(DEFAULT_BLACKLIST);
 		} catch (Exception exception) {
@@ -185,6 +187,14 @@ public final class ReachCraftingConfig {
 		this.putPulledResourcesBack = putPulledResourcesBack;
 	}
 
+	public boolean restoreInventoryItemPositions() {
+		return restoreInventoryItemPositions;
+	}
+
+	public void setRestoreInventoryItemPositions(boolean restoreInventoryItemPositions) {
+		this.restoreInventoryItemPositions = restoreInventoryItemPositions;
+	}
+
 	public static String getLastSearchText() {
 		return lastSearchText;
 	}
@@ -213,6 +223,7 @@ public final class ReachCraftingConfig {
 		defaults.reachCraftCloseOverlayAfterRelease = true;
 		defaults.reachCraftPreferInventory = true;
 		defaults.putPulledResourcesBack = false;
+		defaults.restoreInventoryItemPositions = true;
 		defaults.autoFocusSearch = AutoFocusSearch.NONE;
 		defaults.blacklistedContainerIds = new HashSet<>(DEFAULT_BLACKLIST);
 		return defaults;
@@ -240,6 +251,7 @@ public final class ReachCraftingConfig {
 		private Boolean reachCraftCloseOverlayAfterRelease;
 		private Boolean reachCraftPreferInventory;
 		private boolean putPulledResourcesBack;
+		private Boolean restoreInventoryItemPositions;
 		private AutoFocusSearch autoFocusSearch;
 		private Set<String> blacklistedContainerIds;
 
@@ -253,6 +265,7 @@ public final class ReachCraftingConfig {
 			this.reachCraftCloseOverlayAfterRelease = config.reachCraftCloseOverlayAfterRelease;
 			this.reachCraftPreferInventory = config.reachCraftPreferInventory;
 			this.putPulledResourcesBack = config.putPulledResourcesBack;
+			this.restoreInventoryItemPositions = config.restoreInventoryItemPositions;
 			this.autoFocusSearch = config.autoFocusSearch;
 			this.blacklistedContainerIds = config.blacklistedContainerIds;
 		}

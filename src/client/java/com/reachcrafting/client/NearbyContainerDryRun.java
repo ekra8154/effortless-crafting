@@ -197,6 +197,13 @@ public final class NearbyContainerDryRun {
 		}
 	}
 
+	public static void abortActiveSession() {
+		if (activeSession != null) {
+			activeSession.stop(false);
+			activeSession = null;
+		}
+	}
+
 	public static boolean isActiveSessionRunning() {
 		return activeSession != null;
 	}
@@ -1461,6 +1468,7 @@ public final class NearbyContainerDryRun {
 					lastRestoreFailure = "move_failed source=" + ContainerUtils.formatStack(sourceSlot.getItem()) + " target=" + ContainerUtils.formatStack(targetSlot.getItem()) + " remaining=" + remaining;
 					return false;
 				}
+				InventoryGridRestoreTracker.recordModMove(sourceSlot.index, targetSlot.index);
 				remaining -= moved;
 			}
 
@@ -1957,7 +1965,7 @@ public final class NearbyContainerDryRun {
 
 		@Override
 		public void start() {
-			ReachCraftingMod.LOGGER.info("[nearby_return] starting return session with menu {} ({} slots)", closingMenu.getClass().getSimpleName(), closingMenu.slots.size());
+			// com.reachcrafting.ReachCraftingMod.LOGGER.info("[nearby_return] starting return session with menu {} ({} slots)", closingMenu.getClass().getSimpleName(), closingMenu.slots.size());
 			sendChat("Returning items to containers...");
 			
 			Map<String, Integer> currentCounts = new HashMap<>();
@@ -1978,11 +1986,10 @@ public final class NearbyContainerDryRun {
 			}
 
 			for (String itemId : trackedItemIds) {
-				int initial = PulledResourcesTracker.getInitialCount(itemId);
 				int current = currentCounts.getOrDefault(itemId, 0);
 				int excess = PulledResourcesTracker.getExcessCount(itemId, current);
 				
-				ReachCraftingMod.LOGGER.info("[nearby_return] item={} initial={} current={} excess={}", itemId, initial, current, excess);
+				// com.reachcrafting.ReachCraftingMod.LOGGER.info("[nearby_return] item={} current={} excess={}", itemId, current, excess);
 				
 				if (excess > 0) {
 					currentExcess.put(itemId, excess);

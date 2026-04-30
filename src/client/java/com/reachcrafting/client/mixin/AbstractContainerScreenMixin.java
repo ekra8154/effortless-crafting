@@ -17,11 +17,40 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 
 	@Inject(method = "init", at = @At("HEAD"))
 	private void reachcrafting$captureInventoryOnOpen(CallbackInfo ci) {
-		if (ReachCraftingConfig.get().putPulledResourcesBack() 
-			&& com.reachcrafting.client.PulledResourcesTracker.isEmpty()
-			&& ((Object) this instanceof net.minecraft.client.gui.screens.inventory.CraftingScreen || (Object) this instanceof net.minecraft.client.gui.screens.inventory.InventoryScreen)) {
-			com.reachcrafting.ReachCraftingMod.LOGGER.info("[nearby_return] Detected screen open, capturing snapshot...");
-			com.reachcrafting.client.PulledResourcesTracker.captureInventorySnapshot(net.minecraft.client.Minecraft.getInstance().player);
+		// ONLY clear and snapshot if we aren't in the middle of an automated session!
+		if (!com.reachcrafting.client.NearbyContainerDryRun.isActiveSessionRunning()) {
+			com.reachcrafting.client.InventoryGridRestoreTracker.clear();
+			com.reachcrafting.client.PulledResourcesTracker.clear();
+
+			if ((ReachCraftingConfig.get().putPulledResourcesBack() || ReachCraftingConfig.get().restoreInventoryItemPositions())
+				&& ((Object) this instanceof net.minecraft.client.gui.screens.inventory.CraftingScreen || (Object) this instanceof net.minecraft.client.gui.screens.inventory.InventoryScreen)) {
+				com.reachcrafting.ReachCraftingMod.LOGGER.info("[grid_restore] Capturing fresh inventory snapshot...");
+				com.reachcrafting.client.PulledResourcesTracker.captureInventorySnapshot(net.minecraft.client.Minecraft.getInstance().player);
+			}
+		}
+	}
+
+	@Inject(method = "onClose", at = @At("HEAD"))
+	private void reachcrafting$onClose(CallbackInfo ci) {
+		com.reachcrafting.ReachCraftingMod.LOGGER.info("[grid_restore] Screen onClose triggered for {}", this.getClass().getName());
+
+		if (com.reachcrafting.client.NearbyContainerDryRun.isActiveSessionRunning()) {
+			com.reachcrafting.ReachCraftingMod.LOGGER.info("[grid_restore] Aborting active session.");
+			com.reachcrafting.client.NearbyContainerDryRun.abortActiveSession();
+		}
+
+		if ((Object) this instanceof net.minecraft.client.gui.screens.inventory.CraftingScreen || (Object) this instanceof net.minecraft.client.gui.screens.inventory.InventoryScreen) {
+			if (ReachCraftingConfig.get().restoreInventoryItemPositions()) {
+				com.reachcrafting.client.InventoryGridRestoreTracker.restore(this.menu, net.minecraft.client.Minecraft.getInstance().gameMode);
+			}
+
+			if (ReachCraftingConfig.get().putPulledResourcesBack()) {
+				int withdrawnCount = com.reachcrafting.client.PulledResourcesTracker.getWithdrawnItems().size();
+				if (withdrawnCount > 0) {
+					com.reachcrafting.ReachCraftingMod.LOGGER.info("[nearby_return] Initiating return session.");
+					com.reachcrafting.client.NearbyContainerDryRun.startReturn(this.menu, com.reachcrafting.client.PulledResourcesTracker.getWithdrawnItems());
+				}
+			}
 		}
 	}
 
@@ -29,14 +58,9 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 	private void reachcrafting$cacheContainerOnClose(CallbackInfo ci) {
 		NearbyContainerCache.onContainerScreenRemoved(this.menu);
 		
-		if (ReachCraftingConfig.get().putPulledResourcesBack() 
-			&& !com.reachcrafting.client.NearbyContainerDryRun.isActiveSessionRunning()
-			&& ((Object) this instanceof net.minecraft.client.gui.screens.inventory.CraftingScreen || (Object) this instanceof net.minecraft.client.gui.screens.inventory.InventoryScreen)) {
-			int withdrawnCount = com.reachcrafting.client.PulledResourcesTracker.getWithdrawnItems().size();
-			com.reachcrafting.ReachCraftingMod.LOGGER.info("[nearby_return] Screen closed, initiating return of {} tracked withdrawals", withdrawnCount);
-			com.reachcrafting.client.NearbyContainerDryRun.startReturn(this.menu, com.reachcrafting.client.PulledResourcesTracker.getWithdrawnItems());
-		} else if (!com.reachcrafting.client.NearbyContainerDryRun.isActiveSessionRunning()) {
+		if (!com.reachcrafting.client.NearbyContainerDryRun.isActiveSessionRunning()) {
 			com.reachcrafting.client.PulledResourcesTracker.clear();
+			com.reachcrafting.client.InventoryGridRestoreTracker.clear();
 		}
 	}
 }

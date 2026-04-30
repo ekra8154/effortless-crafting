@@ -98,6 +98,15 @@ public final class ReachCraftingConfigScreen {
 			.setSaveConsumer(config::setPutPulledResourcesBack)
 			.build());
 
+		general.addEntry(entries.startBooleanToggle(
+				Component.translatable("option.reachcrafting.restore_inventory_item_positions"),
+				config.restoreInventoryItemPositions()
+			)
+			.setDefaultValue(true)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.restore_inventory_item_positions"))
+			.setSaveConsumer(config::setRestoreInventoryItemPositions)
+			.build());
+
 		general.addEntry(entries.startEnumSelector(
 				Component.translatable("option.reachcrafting.revolving_craft_handling"),
 				ReachCraftingConfig.RevolvingCraftHandling.class,
