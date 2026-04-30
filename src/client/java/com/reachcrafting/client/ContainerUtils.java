@@ -139,4 +139,25 @@ public final class ContainerUtils {
 		}
 		return minCount == Integer.MAX_VALUE ? 0 : minCount;
 	}
+
+	public static BlockPos canonicalizeContainerPos(Level level, BlockPos pos, BlockState state) {
+		if (state.getBlock() instanceof ChestBlock) {
+			Optional<BlockPos> otherHalf = ContainerUtils.getOtherHalfOfLargeChest(level, pos);
+			if (otherHalf.isPresent()) {
+				BlockPos other = otherHalf.get();
+				return compareBlockPos(pos, other) <= 0 ? pos.immutable() : other.immutable();
+			}
+		}
+		return pos.immutable();
+	}
+
+	public static int compareBlockPos(BlockPos left, BlockPos right) {
+		if (left.getX() != right.getX()) {
+			return Integer.compare(left.getX(), right.getX());
+		}
+		if (left.getY() != right.getY()) {
+			return Integer.compare(left.getY(), right.getY());
+		}
+		return Integer.compare(left.getZ(), right.getZ());
+	}
 }

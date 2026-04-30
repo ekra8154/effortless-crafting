@@ -35,5 +35,10 @@
 	"option.reachcrafting.put_pulled_resources_back": "Put Pulled Resources Back",
 	"tooltip.reachcrafting.put_pulled_resources_back": "When you close the crafting grid, automatically return any items pulled from nearby containers back to where they came from.",
 	"option.reachcrafting.restore_inventory_item_positions": "Restore Inventory Item Positions",
-	"tooltip.reachcrafting.restore_inventory_item_positions": "If you exit the crafting grid while items are still in it, attempt to return them to their original slots in your inventory."
+	"tooltip.reachcrafting.restore_inventory_item_positions": "If you exit the crafting grid while items are still in it, attempt to return them to their original slots in your inventory.",
+	"option.reachcrafting.in_world_filter_mode": "In-world Black/Whitelist",
+	"tooltip.reachcrafting.in_world_filter_mode": "Enable per-world container filtering. None: Disable UI dots. Blacklist: Show white dots unless blacklisted. Whitelist: Show black dots unless whitelisted. Holding Ctrl shows dots and clicking them toggles the state.",
+	"enum.reachcrafting.in_world_filter_mode.none": "None",
+	"enum.reachcrafting.in_world_filter_mode.blacklist": "Blacklist",
+	"enum.reachcrafting.in_world_filter_mode.whitelist": "Whitelist"
 }

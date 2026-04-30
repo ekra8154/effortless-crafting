@@ -30,6 +30,7 @@ public final class ReachCraftingConfig {
 	private static ReachCraftingConfig instance = defaults();
 
 	private boolean redistributeToCraftWhenNeeded;
+	private InWorldFilterMode inWorldFilterMode;
 	private RevolvingCraftHandling revolvingCraftHandling;
 	private IngredientPlanning.CountPreference countPreference;
 	private boolean showNearbyCraftableIndicator;
@@ -61,6 +62,7 @@ public final class ReachCraftingConfig {
 				return;
 			}
 			instance.redistributeToCraftWhenNeeded = stored.redistributeToCraftWhenNeeded;
+			instance.inWorldFilterMode = stored.inWorldFilterMode != null ? stored.inWorldFilterMode : InWorldFilterMode.NONE;
 			instance.revolvingCraftHandling = stored.revolvingCraftHandling != null
 				? stored.revolvingCraftHandling
 				: RevolvingCraftHandling.PREFER_CLICKED_TYPE_WITH_COUNT_FALLBACK;
@@ -110,6 +112,14 @@ public final class ReachCraftingConfig {
 
 	public void setRedistributeToCraftWhenNeeded(boolean redistributeToCraftWhenNeeded) {
 		this.redistributeToCraftWhenNeeded = redistributeToCraftWhenNeeded;
+	}
+
+	public InWorldFilterMode inWorldFilterMode() {
+		return inWorldFilterMode;
+	}
+
+	public void setInWorldFilterMode(InWorldFilterMode inWorldFilterMode) {
+		this.inWorldFilterMode = inWorldFilterMode;
 	}
 
 	public RevolvingCraftHandling revolvingCraftHandling() {
@@ -215,6 +225,7 @@ public final class ReachCraftingConfig {
 	private static ReachCraftingConfig defaults() {
 		ReachCraftingConfig defaults = new ReachCraftingConfig();
 		defaults.redistributeToCraftWhenNeeded = false;
+		defaults.inWorldFilterMode = InWorldFilterMode.NONE;
 		defaults.revolvingCraftHandling = RevolvingCraftHandling.PREFER_CLICKED_TYPE_WITH_COUNT_FALLBACK;
 		defaults.countPreference = IngredientPlanning.CountPreference.HIGHEST_TOTAL;
 		defaults.showNearbyCraftableIndicator = false;
@@ -235,6 +246,12 @@ public final class ReachCraftingConfig {
 		INVENTORY_2X2_AND_3X3
 	}
 
+	public enum InWorldFilterMode {
+		NONE,
+		BLACKLIST,
+		WHITELIST
+	}
+
 	public enum RevolvingCraftHandling {
 		ALWAYS_PREFER_BASED_ON_COUNT,
 		PREFER_CLICKED_TYPE_WITH_COUNT_FALLBACK,
@@ -243,6 +260,7 @@ public final class ReachCraftingConfig {
 
 	private static final class StoredConfig {
 		private boolean redistributeToCraftWhenNeeded;
+		private InWorldFilterMode inWorldFilterMode;
 		private RevolvingCraftHandling revolvingCraftHandling;
 		private IngredientPlanning.CountPreference countPreference;
 		private boolean showNearbyCraftableIndicator;
@@ -257,6 +275,7 @@ public final class ReachCraftingConfig {
 
 		private StoredConfig(ReachCraftingConfig config) {
 			this.redistributeToCraftWhenNeeded = config.redistributeToCraftWhenNeeded;
+			this.inWorldFilterMode = config.inWorldFilterMode;
 			this.revolvingCraftHandling = config.revolvingCraftHandling;
 			this.countPreference = config.countPreference;
 			this.showNearbyCraftableIndicator = config.showNearbyCraftableIndicator;

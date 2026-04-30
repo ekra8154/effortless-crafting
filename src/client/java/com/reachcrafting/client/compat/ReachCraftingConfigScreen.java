@@ -130,6 +130,18 @@ public final class ReachCraftingConfigScreen {
 			.build());
 
 		ConfigCategory containers = builder.getOrCreateCategory(Component.translatable("category.reachcrafting.containers"));
+		
+		containers.addEntry(entries.startEnumSelector(
+				Component.translatable("option.reachcrafting.in_world_filter_mode"),
+				ReachCraftingConfig.InWorldFilterMode.class,
+				config.inWorldFilterMode()
+			)
+			.setDefaultValue(ReachCraftingConfig.InWorldFilterMode.NONE)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.in_world_filter_mode"))
+			.setSaveConsumer(config::setInWorldFilterMode)
+			.setEnumNameProvider(value -> Component.translatable("enum.reachcrafting.in_world_filter_mode." + value.name().toLowerCase()))
+			.build());
+
 		containers.addEntry(entries.startStrList(
 				Component.translatable("option.reachcrafting.blacklisted_container_ids"),
 				new ArrayList<>(config.blacklistedContainerIds())

@@ -115,3 +115,9 @@ KNOWN BUGS:
 - queuing a single harness works but queuing too many results in nothing appearing at all
 
 - queuing a new item when one is in the grid ejects the first and pulls the second but both end up in the inventory instead of the second being in the grid
+
+- chests open to return items somehow even if nothing is or needs to be returned
+
+- make sure cache / search excludes out of range and blacklist
+
+- return doesn't work for hoppers

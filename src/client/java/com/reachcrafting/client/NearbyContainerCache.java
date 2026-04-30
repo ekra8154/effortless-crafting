@@ -7,7 +7,6 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.Minecraft;
@@ -29,7 +28,6 @@ import net.minecraft.util.Mth;
 
 public final class NearbyContainerCache {
 	private static final Map<ContainerKey, ContainerSnapshot> SNAPSHOTS = new LinkedHashMap<>();
-	private static final Set<ContainerKey> BLACKLISTED_KEYS = new java.util.HashSet<>();
 	private static long revision;
 	private static ViewCacheKey lastViewKey;
 	private static ReachableView lastView;
@@ -67,39 +65,20 @@ public final class NearbyContainerCache {
 		return openObservedPos != null;
 	}
 
-	public static boolean isCurrentContainerGloballyBlacklisted() {
+	public static boolean isCurrentContainerActive() {
 		if (openObservedPos == null) return false;
 		Minecraft client = Minecraft.getInstance();
 		if (client.level == null) return false;
 		BlockState state = client.level.getBlockState(openObservedPos);
-		return !ContainerUtils.isSupportedContainer(state) && ContainerUtils.isPotentiallySupportedContainer(state);
+		return InWorldFilterManager.isContainerActive(client.level, openObservedPos, state);
 	}
 
-	public static boolean isCurrentContainerBlacklisted() {
-		if (openObservedPos == null) return false;
-		Minecraft client = Minecraft.getInstance();
-		if (client.level == null) return false;
-		ContainerKey key = resolveContainerKey(client.level, openObservedPos);
-		return key != null && BLACKLISTED_KEYS.contains(key);
-	}
-
-	public static void toggleCurrentContainerBlacklist() {
+	public static void toggleCurrentContainerInclusion() {
 		if (openObservedPos == null) return;
 		Minecraft client = Minecraft.getInstance();
 		if (client.level == null) return;
-		ContainerKey key = resolveContainerKey(client.level, openObservedPos);
-		if (key == null) return;
-
-		if (isCurrentContainerGloballyBlacklisted()) {
-			return; // Cannot toggle if globally blacklisted
-		}
-
-		if (BLACKLISTED_KEYS.contains(key)) {
-			BLACKLISTED_KEYS.remove(key);
-		} else {
-			BLACKLISTED_KEYS.add(key);
-		}
-		bumpRevision();
+		BlockState state = client.level.getBlockState(openObservedPos);
+		InWorldFilterManager.toggleInclusion(client.level, openObservedPos, state);
 	}
 
 	public static ReachableView getReachableView(Level level, Entity cameraEntity, double reachDistance) {
@@ -129,7 +108,7 @@ public final class NearbyContainerCache {
 		)) {
 			BlockPos immutablePos = pos.immutable();
 			BlockState state = level.getBlockState(immutablePos);
-			if (!ContainerUtils.isSupportedContainer(state) || !ContainerUtils.canAttemptOpen(level, immutablePos, state)) {
+			if (!InWorldFilterManager.isContainerActive(level, immutablePos, state) || !ContainerUtils.canAttemptOpen(level, immutablePos, state)) {
 				continue;
 			}
 			if (ContainerUtils.squaredDistanceToBlock(eyePos, immutablePos) > Mth.square(reachDistance)) {
@@ -344,7 +323,7 @@ public final class NearbyContainerCache {
 		return Map.copyOf(normalized);
 	}
 
-	private static void bumpRevision() {
+	public static void bumpRevision() {
 		revision++;
 		lastViewKey = null;
 		lastView = null;
@@ -368,31 +347,11 @@ public final class NearbyContainerCache {
 			return new ContainerKey(dimension, "ender_chest", BlockPos.ZERO);
 		}
 
-		BlockPos anchor = canonicalizeContainerPos(level, pos, state);
+		BlockPos anchor = ContainerUtils.canonicalizeContainerPos(level, pos, state);
 		String type = state.getBlock() instanceof ChestBlock ? "chest_like" : state.getBlock().getClass().getSimpleName();
 		return new ContainerKey(dimension, type, anchor);
 	}
 
-	private static BlockPos canonicalizeContainerPos(Level level, BlockPos pos, BlockState state) {
-		if (state.getBlock() instanceof ChestBlock) {
-			Optional<BlockPos> otherHalf = ContainerUtils.getOtherHalfOfLargeChest(level, pos);
-			if (otherHalf.isPresent()) {
-				BlockPos other = otherHalf.get();
-				return compareBlockPos(pos, other) <= 0 ? pos.immutable() : other.immutable();
-			}
-		}
-		return pos.immutable();
-	}
-
-	private static int compareBlockPos(BlockPos left, BlockPos right) {
-		if (left.getX() != right.getX()) {
-			return Integer.compare(left.getX(), right.getX());
-		}
-		if (left.getY() != right.getY()) {
-			return Integer.compare(left.getY(), right.getY());
-		}
-		return Integer.compare(left.getZ(), right.getZ());
-	}
 
 
 	public record ReachableView(

@@ -89,6 +89,8 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 
 	@Inject(method = "renderLabels", at = @At("TAIL"))
 	private void reachcrafting$renderControlDot(GuiGraphics guiGraphics, int mouseX, int mouseY, CallbackInfo ci) {
+		if (ReachCraftingConfig.get().inWorldFilterMode() == ReachCraftingConfig.InWorldFilterMode.NONE) return;
+
 		Minecraft client = Minecraft.getInstance();
 		if ((InputConstants.isKeyDown(client.getWindow(), GLFW.GLFW_KEY_LEFT_CONTROL)
 			|| InputConstants.isKeyDown(client.getWindow(), GLFW.GLFW_KEY_RIGHT_CONTROL))
@@ -99,7 +101,7 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 			int dotX = this.titleLabelX + titleWidth + 4;
 			int dotY = this.titleLabelY + 2;
 			
-			if (NearbyContainerCache.isCurrentContainerBlacklisted()) {
+			if (NearbyContainerCache.isCurrentContainerActive()) {
 				RecipeButtonNearbyIndicator.renderWhiteDot(guiGraphics, dotX, dotY);
 			} else {
 				RecipeButtonNearbyIndicator.renderBlackDot(guiGraphics, dotX, dotY);
@@ -109,6 +111,7 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 
 	@Inject(method = "mouseClicked", at = @At("HEAD"), cancellable = true)
 	private void reachcrafting$onMouseClicked(MouseButtonEvent click, boolean filtering, CallbackInfoReturnable<Boolean> cir) {
+		if (ReachCraftingConfig.get().inWorldFilterMode() == ReachCraftingConfig.InWorldFilterMode.NONE) return;
 		if (click.button() != 0) return; // Only left click
 		
 		Minecraft client = Minecraft.getInstance();
@@ -128,7 +131,7 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 		double dotEndY = dotStartY + 5;
 
 		if (click.x() >= dotStartX && click.x() <= dotEndX && click.y() >= dotStartY && click.y() <= dotEndY) {
-			NearbyContainerCache.toggleCurrentContainerBlacklist();
+			NearbyContainerCache.toggleCurrentContainerInclusion();
 			cir.setReturnValue(true);
 		}
 	}

@@ -615,7 +615,7 @@ public final class NearbyContainerDryRun {
 				}
 
 				BlockState blockState = level.getBlockState(pos);
-				if (!ContainerUtils.isSupportedContainer(blockState)) {
+				if (!InWorldFilterManager.isContainerActive(level, pos, blockState)) {
 					continue;
 				}
 				if (!ContainerUtils.canAttemptOpen(level, pos, blockState)) {
@@ -1611,7 +1611,7 @@ public final class NearbyContainerDryRun {
 				center.offset(radius, radius, radius)
 			)) {
 				BlockState state = level.getBlockState(pos);
-				if (ContainerUtils.isSupportedContainer(state)) {
+				if (InWorldFilterManager.isContainerActive(level, pos, state)) {
 					candidates.add(pos.immutable());
 				}
 			}
