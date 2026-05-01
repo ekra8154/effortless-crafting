@@ -24,6 +24,8 @@ public abstract class RecipeBookComponentMixin {
 	@Shadow
 	protected EditBox searchBox;
 
+	private long lastScreenOpenTime = 0;
+
 	@Shadow
 	private String lastSearch;
 
@@ -44,6 +46,7 @@ public abstract class RecipeBookComponentMixin {
 
 	@Inject(method = "init", at = @At("TAIL"))
 	private void reachcrafting$onInit(int width, int height, Minecraft client, boolean isFiltering, CallbackInfo ci) {
+		lastScreenOpenTime = System.currentTimeMillis();
 		reachcrafting$applyAutoFocus();
 		com.reachcrafting.client.ReachCraftingModClient.forceNextInventorySearchFocus = false;
 	}
@@ -51,6 +54,7 @@ public abstract class RecipeBookComponentMixin {
 	@Inject(method = "setVisible", at = @At("TAIL"))
 	private void reachcrafting$onSetVisible(boolean visible, CallbackInfo ci) {
 		if (visible) {
+			lastScreenOpenTime = System.currentTimeMillis();
 			reachcrafting$applyAutoFocus();
 		}
 	}
@@ -67,6 +71,15 @@ public abstract class RecipeBookComponentMixin {
 		if (event.key() == GLFW.GLFW_KEY_LEFT_ALT || event.key() == GLFW.GLFW_KEY_RIGHT_ALT) {
 			ContainerUtils.toggleAutoCraftMode();
 			cir.setReturnValue(true);
+			return;
+		}
+
+		if (ReachCraftingConfig.get().typeToFocusSearch() && this.searchBox != null && this.isVisible() && !this.searchBox.isFocused()) {
+			if (reachcrafting$isEligibleKey(event)) {
+				this.searchBox.setFocused(true);
+				this.searchBox.setCursorPosition(this.searchBox.getValue().length());
+				this.searchBox.setHighlightPos(0);
+			}
 		}
 	}
 
@@ -110,6 +123,8 @@ public abstract class RecipeBookComponentMixin {
 			// This allows 'Q' and number keys to work normally in the player inventory usually.
 			if (this.minecraft.screen instanceof CraftingScreen || com.reachcrafting.client.ReachCraftingModClient.forceNextInventorySearchFocus) {
 				this.searchBox.setFocused(true);
+				this.searchBox.setCursorPosition(this.searchBox.getValue().length());
+				this.searchBox.setHighlightPos(0);
 				com.reachcrafting.client.ReachCraftingModClient.forceNextInventorySearchFocus = false;
 			}
 		}
@@ -120,5 +135,55 @@ public abstract class RecipeBookComponentMixin {
 			return false;
 		}
 		return this.minecraft.screen instanceof CraftingScreen || this.minecraft.screen instanceof InventoryScreen;
+	}
+
+	private boolean reachcrafting$isEligibleKey(KeyEvent event) {
+		if (this.minecraft == null || this.minecraft.options == null) {
+			return false;
+		}
+
+		int key = event.key();
+
+		// Exclude movement keys during 'coyote time' after opening the screen (prevents "wwww" searches)
+		if (System.currentTimeMillis() - lastScreenOpenTime < 500) {
+			if (this.minecraft.options.keyUp.matches(event) ||
+				this.minecraft.options.keyDown.matches(event) ||
+				this.minecraft.options.keyLeft.matches(event) ||
+				this.minecraft.options.keyRight.matches(event)) {
+				return false;
+			}
+		}
+
+		// Exclude modifiers and space
+		if (key == GLFW.GLFW_KEY_LEFT_SHIFT || key == GLFW.GLFW_KEY_RIGHT_SHIFT ||
+			key == GLFW.GLFW_KEY_LEFT_CONTROL || key == GLFW.GLFW_KEY_RIGHT_CONTROL ||
+			key == GLFW.GLFW_KEY_LEFT_ALT || key == GLFW.GLFW_KEY_RIGHT_ALT ||
+			key == GLFW.GLFW_KEY_LEFT_SUPER || key == GLFW.GLFW_KEY_RIGHT_SUPER ||
+			key == GLFW.GLFW_KEY_SPACE) {
+			return false;
+		}
+
+		// Exclude numbers
+		if ((key >= GLFW.GLFW_KEY_0 && key <= GLFW.GLFW_KEY_9) ||
+			(key >= GLFW.GLFW_KEY_KP_0 && key <= GLFW.GLFW_KEY_KP_9)) {
+			return false;
+		}
+
+		// Exclude drop key
+		if (this.minecraft.options.keyDrop.matches(event)) {
+			return false;
+		}
+
+		// Exclude system keys that don't produce characters
+		if (key == GLFW.GLFW_KEY_ESCAPE || key == GLFW.GLFW_KEY_TAB || 
+			key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_BACKSPACE || 
+			key == GLFW.GLFW_KEY_DELETE || key == GLFW.GLFW_KEY_INSERT ||
+			key == GLFW.GLFW_KEY_PAGE_UP || key == GLFW.GLFW_KEY_PAGE_DOWN ||
+			key == GLFW.GLFW_KEY_HOME || key == GLFW.GLFW_KEY_END ||
+			(key >= GLFW.GLFW_KEY_F1 && key <= GLFW.GLFW_KEY_F25)) {
+			return false;
+		}
+
+		return true;
 	}
 }

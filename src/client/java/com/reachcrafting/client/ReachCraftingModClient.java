@@ -9,6 +9,7 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import org.lwjgl.glfw.GLFW;
 
 public class ReachCraftingModClient implements ClientModInitializer {
@@ -24,6 +25,10 @@ public class ReachCraftingModClient implements ClientModInitializer {
 		RecipeBookClickCapture.init();
 		NearbyContainerDryRun.init();
 		ContainerFilterRenderer.init();
+		
+		ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
+			ReachCraftingConfig.get().setAutoCraftMode(false);
+		});
 
 		KeyMapping.Category reachCraftingCategory = KeyMapping.Category.register(
 			Identifier.fromNamespaceAndPath(ReachCraftingMod.MOD_ID, "debug")

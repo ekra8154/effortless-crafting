@@ -52,7 +52,6 @@ public final class ContainerUtils {
 		
 		boolean current = ReachCraftingConfig.get().autoCraftMode();
 		ReachCraftingConfig.get().setAutoCraftMode(!current);
-		ReachCraftingConfig.save();
 	}
 
 	public static void autoMoveResult(AbstractContainerMenu menu) {

@@ -613,8 +613,10 @@ public final class RecipeBookClickCapture {
 		RecipeBookComponentAccessor componentAccessor = (RecipeBookComponentAccessor) ((AbstractRecipeBookScreenAccessor) recipeBookScreen).getRecipeBookComponent();
 		if (componentAccessor != null) {
 			EditBox searchBox = componentAccessor.getSearchBox();
-			if (searchBox != null && !searchBox.isFocused()) {
+			if (searchBox != null) {
 				searchBox.setFocused(true);
+				searchBox.setCursorPosition(searchBox.getValue().length());
+				searchBox.setHighlightPos(0);
 			}
 		}
 		wasSearchBoxFocusedByMod = false;

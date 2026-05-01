@@ -52,5 +52,9 @@
 	"option.reachcrafting.scroll_to_pull": "Scroll to Pull",
 	"tooltip.reachcrafting.scroll_to_pull": "Hold Shift and scroll over the output slot to pull items into your inventory or to your cursor.",
 	"key.reachcrafting.quick_craft": "Quick Craft",
-	"message.reachcrafting.no_crafting_table_nearby": "No crafting table in reach!"
+	"message.reachcrafting.no_crafting_table_nearby": "No crafting table in reach!",
+	"option.reachcrafting.remember_previous_search": "Remember Previous Search",
+	"tooltip.reachcrafting.remember_previous_search": "Restore the last used search query when opening the recipe book.",
+	"option.reachcrafting.type_to_focus_search": "Type to Focus Search",
+	"tooltip.reachcrafting.type_to_focus_search": "Automatically focus and highlight the search bar when you start typing while the recipe book is visible."
 }

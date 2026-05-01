@@ -45,6 +45,7 @@ public final class ReachCraftingConfig {
 	private boolean autoCraftMode;
 	private boolean showTotalOutputCounts;
 	private boolean scrollToPull;
+	private boolean typeToFocusSearch;
 	private Set<String> blacklistedContainerIds;
 
 	private static String lastSearchText = "";
@@ -84,9 +85,9 @@ public final class ReachCraftingConfig {
 			instance.restoreInventoryItemPositions = stored.restoreInventoryItemPositions == null ? true : stored.restoreInventoryItemPositions;
 			instance.rememberPreviousSearch = stored.rememberPreviousSearch == null ? true : stored.rememberPreviousSearch;
 			instance.showFilterOutlines = stored.showFilterOutlines != null ? stored.showFilterOutlines : OutlineDisplayMode.OFF;
-			instance.autoCraftMode = stored.autoCraftMode != null ? stored.autoCraftMode : false;
 			instance.showTotalOutputCounts = stored.showTotalOutputCounts != null ? stored.showTotalOutputCounts : true;
 			instance.scrollToPull = stored.scrollToPull != null ? stored.scrollToPull : true;
+			instance.typeToFocusSearch = stored.typeToFocusSearch != null ? stored.typeToFocusSearch : true;
 			instance.blacklistedContainerIds = stored.blacklistedContainerIds != null ? new HashSet<>(stored.blacklistedContainerIds) : new HashSet<>(DEFAULT_BLACKLIST);
 		} catch (Exception exception) {
 			ReachCraftingMod.LOGGER.warn("Failed to load reachcrafting config from {}", CONFIG_PATH, exception);
@@ -245,6 +246,14 @@ public final class ReachCraftingConfig {
 		this.scrollToPull = scrollToPull;
 	}
 
+	public boolean typeToFocusSearch() {
+		return typeToFocusSearch;
+	}
+
+	public void setTypeToFocusSearch(boolean typeToFocusSearch) {
+		this.typeToFocusSearch = typeToFocusSearch;
+	}
+
 	public static String getLastSearchText() {
 		return lastSearchText;
 	}
@@ -280,6 +289,7 @@ public final class ReachCraftingConfig {
 		defaults.autoCraftMode = false;
 		defaults.showTotalOutputCounts = true;
 		defaults.scrollToPull = true;
+		defaults.typeToFocusSearch = true;
 		defaults.blacklistedContainerIds = new HashSet<>(DEFAULT_BLACKLIST);
 		return defaults;
 	}
@@ -311,9 +321,9 @@ public final class ReachCraftingConfig {
 		private Boolean restoreInventoryItemPositions;
 		private Boolean rememberPreviousSearch;
 		private OutlineDisplayMode showFilterOutlines;
-		private Boolean autoCraftMode;
 		private Boolean showTotalOutputCounts;
 		private Boolean scrollToPull;
+		private Boolean typeToFocusSearch;
 		private Set<String> blacklistedContainerIds;
 
 		private StoredConfig(ReachCraftingConfig config) {
@@ -330,9 +340,9 @@ public final class ReachCraftingConfig {
 			this.restoreInventoryItemPositions = config.restoreInventoryItemPositions;
 			this.rememberPreviousSearch = config.rememberPreviousSearch;
 			this.showFilterOutlines = config.showFilterOutlines;
-			this.autoCraftMode = config.autoCraftMode;
 			this.showTotalOutputCounts = config.showTotalOutputCounts;
 			this.scrollToPull = config.scrollToPull;
+			this.typeToFocusSearch = config.typeToFocusSearch;
 			this.blacklistedContainerIds = config.blacklistedContainerIds;
 		}
 	}
