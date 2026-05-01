@@ -40,7 +40,7 @@ public final class ReachCraftingConfig {
 	private boolean reachCraftPreferInventory;
 	private boolean putPulledResourcesBack;
 	private boolean restoreInventoryItemPositions;
-	private AutoFocusSearch autoFocusSearch;
+	private boolean rememberPreviousSearch;
 	private OutlineDisplayMode showFilterOutlines;
 	private Set<String> blacklistedContainerIds;
 
@@ -79,7 +79,7 @@ public final class ReachCraftingConfig {
 			instance.reachCraftPreferInventory = stored.reachCraftPreferInventory == null ? true : stored.reachCraftPreferInventory;
 			instance.putPulledResourcesBack = stored.putPulledResourcesBack;
 			instance.restoreInventoryItemPositions = stored.restoreInventoryItemPositions == null ? true : stored.restoreInventoryItemPositions;
-			instance.autoFocusSearch = stored.autoFocusSearch != null ? stored.autoFocusSearch : AutoFocusSearch.NONE;
+			instance.rememberPreviousSearch = stored.rememberPreviousSearch == null ? true : stored.rememberPreviousSearch;
 			instance.showFilterOutlines = stored.showFilterOutlines != null ? stored.showFilterOutlines : OutlineDisplayMode.OFF;
 			instance.blacklistedContainerIds = stored.blacklistedContainerIds != null ? new HashSet<>(stored.blacklistedContainerIds) : new HashSet<>(DEFAULT_BLACKLIST);
 		} catch (Exception exception) {
@@ -183,12 +183,12 @@ public final class ReachCraftingConfig {
 		this.reachCraftPreferInventory = reachCraftPreferInventory;
 	}
 
-	public AutoFocusSearch autoFocusSearch() {
-		return autoFocusSearch;
+	public boolean rememberPreviousSearch() {
+		return rememberPreviousSearch;
 	}
 
-	public void setAutoFocusSearch(AutoFocusSearch autoFocusSearch) {
-		this.autoFocusSearch = autoFocusSearch;
+	public void setRememberPreviousSearch(boolean rememberPreviousSearch) {
+		this.rememberPreviousSearch = rememberPreviousSearch;
 	}
 
 	public boolean putPulledResourcesBack() {
@@ -245,17 +245,12 @@ public final class ReachCraftingConfig {
 		defaults.reachCraftPreferInventory = true;
 		defaults.putPulledResourcesBack = false;
 		defaults.restoreInventoryItemPositions = true;
-		defaults.autoFocusSearch = AutoFocusSearch.NONE;
+		defaults.rememberPreviousSearch = true;
 		defaults.showFilterOutlines = OutlineDisplayMode.OFF;
 		defaults.blacklistedContainerIds = new HashSet<>(DEFAULT_BLACKLIST);
 		return defaults;
 	}
 
-	public enum AutoFocusSearch {
-		NONE,
-		CRAFTING_3X3,
-		INVENTORY_2X2_AND_3X3
-	}
 
 	public enum InWorldFilterMode {
 		NONE,
@@ -281,7 +276,7 @@ public final class ReachCraftingConfig {
 		private Boolean reachCraftPreferInventory;
 		private boolean putPulledResourcesBack;
 		private Boolean restoreInventoryItemPositions;
-		private AutoFocusSearch autoFocusSearch;
+		private Boolean rememberPreviousSearch;
 		private OutlineDisplayMode showFilterOutlines;
 		private Set<String> blacklistedContainerIds;
 
@@ -297,7 +292,7 @@ public final class ReachCraftingConfig {
 			this.reachCraftPreferInventory = config.reachCraftPreferInventory;
 			this.putPulledResourcesBack = config.putPulledResourcesBack;
 			this.restoreInventoryItemPositions = config.restoreInventoryItemPositions;
-			this.autoFocusSearch = config.autoFocusSearch;
+			this.rememberPreviousSearch = config.rememberPreviousSearch;
 			this.showFilterOutlines = config.showFilterOutlines;
 			this.blacklistedContainerIds = config.blacklistedContainerIds;
 		}

@@ -118,15 +118,13 @@ public final class ReachCraftingConfigScreen {
 			.setEnumNameProvider(value -> Component.translatable("enum.reachcrafting.revolving_craft_handling." + value.name().toLowerCase()))
 			.build());
 
-		general.addEntry(entries.startEnumSelector(
-				Component.translatable("option.reachcrafting.auto_focus_search"),
-				ReachCraftingConfig.AutoFocusSearch.class,
-				config.autoFocusSearch()
+		general.addEntry(entries.startBooleanToggle(
+				Component.translatable("option.reachcrafting.remember_previous_search"),
+				config.rememberPreviousSearch()
 			)
-			.setDefaultValue(ReachCraftingConfig.AutoFocusSearch.NONE)
-			.setTooltip(Component.translatable("tooltip.reachcrafting.auto_focus_search"))
-			.setSaveConsumer(config::setAutoFocusSearch)
-			.setEnumNameProvider(value -> Component.translatable("enum.reachcrafting.auto_focus_search." + value.name().toLowerCase()))
+			.setDefaultValue(true)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.remember_previous_search"))
+			.setSaveConsumer(config::setRememberPreviousSearch)
 			.build());
 
 		ConfigCategory containers = builder.getOrCreateCategory(Component.translatable("category.reachcrafting.containers"));

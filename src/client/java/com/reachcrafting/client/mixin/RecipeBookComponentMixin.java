@@ -54,14 +54,14 @@ public abstract class RecipeBookComponentMixin {
 
 	@Inject(method = "mouseClicked", at = @At("HEAD"))
 	private void reachcrafting$onMouseClicked(MouseButtonEvent click, boolean filtering, CallbackInfoReturnable<Boolean> cir) {
-		if (this.searchBox != null && this.isVisible() && reachcrafting$isAllowedByMode()) {
+		if (this.searchBox != null && this.isVisible() && reachcrafting$isSupportedScreen()) {
 			ReachCraftingConfig.setLastSearchText(this.searchBox.getValue());
 		}
 	}
 
 	@Inject(method = "keyPressed", at = @At("TAIL"))
 	private void reachcrafting$onKeyPressed(KeyEvent event, CallbackInfoReturnable<Boolean> cir) {
-		if (this.searchBox != null && this.isVisible() && reachcrafting$isAllowedByMode()) {
+		if (this.searchBox != null && this.isVisible() && reachcrafting$isSupportedScreen()) {
 			ReachCraftingConfig.setLastSearchText(this.searchBox.getValue());
 			this.checkSearchStringUpdate();
 		}
@@ -69,7 +69,7 @@ public abstract class RecipeBookComponentMixin {
 
 	@Inject(method = "charTyped", at = @At("TAIL"))
 	private void reachcrafting$onCharTyped(CharacterEvent event, CallbackInfoReturnable<Boolean> cir) {
-		if (this.searchBox != null && this.isVisible() && reachcrafting$isAllowedByMode()) {
+		if (this.searchBox != null && this.isVisible() && reachcrafting$isSupportedScreen()) {
 			ReachCraftingConfig.setLastSearchText(this.searchBox.getValue());
 			this.checkSearchStringUpdate();
 		}
@@ -84,12 +84,7 @@ public abstract class RecipeBookComponentMixin {
 			return;
 		}
 
-		ReachCraftingConfig.AutoFocusSearch mode = ReachCraftingConfig.get().autoFocusSearch();
-		if (mode == ReachCraftingConfig.AutoFocusSearch.NONE) {
-			return;
-		}
-
-		if (reachcrafting$isAllowedByMode()) {
+		if (ReachCraftingConfig.get().rememberPreviousSearch() && reachcrafting$isSupportedScreen()) {
 			String lastSearch = ReachCraftingConfig.getLastSearchText();
 			if (!lastSearch.isEmpty()) {
 				this.searchBox.setValue(lastSearch);
@@ -99,29 +94,19 @@ public abstract class RecipeBookComponentMixin {
 				this.searchBox.setHighlightPos(0);
 				this.searchBox.setCursorPosition(lastSearch.length());
 			}
-			this.searchBox.setFocused(true);
+			
+			// Only focus automatically in the 3x3 crafting grid.
+			// This allows 'Q' and number keys to work normally in the player inventory.
+			if (this.minecraft.screen instanceof CraftingScreen) {
+				this.searchBox.setFocused(true);
+			}
 		}
 	}
 
-	private boolean reachcrafting$isAllowedByMode() {
+	private boolean reachcrafting$isSupportedScreen() {
 		if (this.minecraft == null || this.minecraft.screen == null) {
 			return false;
 		}
-
-		ReachCraftingConfig.AutoFocusSearch mode = ReachCraftingConfig.get().autoFocusSearch();
-		if (mode == ReachCraftingConfig.AutoFocusSearch.NONE) {
-			return false;
-		}
-
-		boolean isCrafting = this.minecraft.screen instanceof CraftingScreen;
-		boolean isInventory = this.minecraft.screen instanceof InventoryScreen;
-
-		if (mode == ReachCraftingConfig.AutoFocusSearch.CRAFTING_3X3) {
-			return isCrafting;
-		} else if (mode == ReachCraftingConfig.AutoFocusSearch.INVENTORY_2X2_AND_3X3) {
-			return isCrafting || isInventory;
-		}
-
-		return false;
+		return this.minecraft.screen instanceof CraftingScreen || this.minecraft.screen instanceof InventoryScreen;
 	}
 }
