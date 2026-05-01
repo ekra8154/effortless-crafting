@@ -28,6 +28,11 @@ import net.minecraft.network.chat.Component;
 // import net.minecraft.util.Mth;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.display.RecipeDisplayId;
+import net.minecraft.world.item.crafting.display.RecipeDisplayEntry;
+import net.minecraft.world.item.crafting.display.SlotDisplayContext;
+import net.minecraft.util.context.ContextMap;
+import com.reachcrafting.client.mixin.ClientRecipeBookAccessor;
+import java.util.Map;
 import org.lwjgl.glfw.GLFW;
 
 public final class RecipeBookClickCapture {
@@ -153,7 +158,7 @@ public final class RecipeBookClickCapture {
 		AvailableItemSnapshot availableItems = AvailableItemSnapshot.capture(player, screen);
 		boolean allowReservedGridVariantSwitch = false;
 		int desiredVariantCopies = availableItems.hasReservedGrid() && !craftAll
-			? currentReservedCraftCopies(availableItems) + requestedClicks
+			? ContainerUtils.currentReservedCraftCopies(availableItems.gridStacks()) + requestedClicks
 			: Math.max(requestedClicks, 1);
 
 		String screenKind = screen instanceof InventoryScreen ? "inventory_2x2" : "crafting_table_3x3";
@@ -609,11 +614,27 @@ public final class RecipeBookClickCapture {
 		wasSearchBoxFocusedByMod = false;
 	}
 
-	private static int currentReservedCraftCopies(AvailableItemSnapshot availableItems) {
-		return ContainerUtils.currentReservedCraftCopies(availableItems.gridStacks());
+	public static PendingHeldRecipe getPendingHeldRecipe() {
+		return pendingHeldRecipe;
 	}
 
-	private record HeldRecipeAction(
+	public static ItemStack resolvePendingOutputStack(Minecraft minecraft) {
+		if (pendingHeldRecipe == null || minecraft.level == null) {
+			return ItemStack.EMPTY;
+		}
+
+		HeldRecipeAction action = pendingHeldRecipe.action();
+		Map<RecipeDisplayId, RecipeDisplayEntry> knownRecipes = ((ClientRecipeBookAccessor) minecraft.player.getRecipeBook()).getKnown();
+		RecipeDisplayEntry entry = knownRecipes.get(action.recipeId());
+		if (entry == null) {
+			return ItemStack.EMPTY;
+		}
+
+		ContextMap context = SlotDisplayContext.fromLevel(minecraft.level);
+		return RecipeVariantResolver.resolveDisplayStack(entry.display(), context);
+	}
+
+	public record HeldRecipeAction(
 		RecipeDisplayId recipeId,
 		RecipeCollection collection,
 		ItemStack displayStack,
@@ -634,9 +655,9 @@ public final class RecipeBookClickCapture {
 		}
 	}
 
-	private record PendingHeldRecipe(HeldRecipeAction action, int clickCount, boolean locked, boolean allowNearby) {
+	public record PendingHeldRecipe(HeldRecipeAction action, int clickCount, boolean locked, boolean allowNearby) {
 	}
 
-	private record ReplayBatch(HeldRecipeAction action, int remainingClicks, boolean allowNearby) {
+	public record ReplayBatch(HeldRecipeAction action, int remainingClicks, boolean allowNearby) {
 	}
 }

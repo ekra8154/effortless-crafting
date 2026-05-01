@@ -127,6 +127,15 @@ public final class ReachCraftingConfigScreen {
 			.setSaveConsumer(config::setRememberPreviousSearch)
 			.build());
 
+		general.addEntry(entries.startBooleanToggle(
+				Component.translatable("option.reachcrafting.show_total_output_counts"),
+				config.showTotalOutputCounts()
+			)
+			.setDefaultValue(true)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.show_total_output_counts"))
+			.setSaveConsumer(config::setShowTotalOutputCounts)
+			.build());
+
 		ConfigCategory containers = builder.getOrCreateCategory(Component.translatable("category.reachcrafting.containers"));
 		
 		containers.addEntry(entries.startEnumSelector(

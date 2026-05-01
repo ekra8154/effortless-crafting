@@ -43,6 +43,7 @@ public final class ReachCraftingConfig {
 	private boolean rememberPreviousSearch;
 	private OutlineDisplayMode showFilterOutlines;
 	private boolean autoCraftMode;
+	private boolean showTotalOutputCounts;
 	private Set<String> blacklistedContainerIds;
 
 	private static String lastSearchText = "";
@@ -83,6 +84,7 @@ public final class ReachCraftingConfig {
 			instance.rememberPreviousSearch = stored.rememberPreviousSearch == null ? true : stored.rememberPreviousSearch;
 			instance.showFilterOutlines = stored.showFilterOutlines != null ? stored.showFilterOutlines : OutlineDisplayMode.OFF;
 			instance.autoCraftMode = stored.autoCraftMode != null ? stored.autoCraftMode : false;
+			instance.showTotalOutputCounts = stored.showTotalOutputCounts != null ? stored.showTotalOutputCounts : true;
 			instance.blacklistedContainerIds = stored.blacklistedContainerIds != null ? new HashSet<>(stored.blacklistedContainerIds) : new HashSet<>(DEFAULT_BLACKLIST);
 		} catch (Exception exception) {
 			ReachCraftingMod.LOGGER.warn("Failed to load reachcrafting config from {}", CONFIG_PATH, exception);
@@ -225,6 +227,14 @@ public final class ReachCraftingConfig {
 		this.autoCraftMode = autoCraftMode;
 	}
 
+	public boolean showTotalOutputCounts() {
+		return showTotalOutputCounts;
+	}
+
+	public void setShowTotalOutputCounts(boolean showTotalOutputCounts) {
+		this.showTotalOutputCounts = showTotalOutputCounts;
+	}
+
 	public static String getLastSearchText() {
 		return lastSearchText;
 	}
@@ -258,6 +268,7 @@ public final class ReachCraftingConfig {
 		defaults.rememberPreviousSearch = true;
 		defaults.showFilterOutlines = OutlineDisplayMode.OFF;
 		defaults.autoCraftMode = false;
+		defaults.showTotalOutputCounts = true;
 		defaults.blacklistedContainerIds = new HashSet<>(DEFAULT_BLACKLIST);
 		return defaults;
 	}
@@ -290,6 +301,7 @@ public final class ReachCraftingConfig {
 		private Boolean rememberPreviousSearch;
 		private OutlineDisplayMode showFilterOutlines;
 		private Boolean autoCraftMode;
+		private Boolean showTotalOutputCounts;
 		private Set<String> blacklistedContainerIds;
 
 		private StoredConfig(ReachCraftingConfig config) {
@@ -307,6 +319,7 @@ public final class ReachCraftingConfig {
 			this.rememberPreviousSearch = config.rememberPreviousSearch;
 			this.showFilterOutlines = config.showFilterOutlines;
 			this.autoCraftMode = config.autoCraftMode;
+			this.showTotalOutputCounts = config.showTotalOutputCounts;
 			this.blacklistedContainerIds = config.blacklistedContainerIds;
 		}
 	}

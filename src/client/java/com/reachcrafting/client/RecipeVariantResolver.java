@@ -249,7 +249,7 @@ public final class RecipeVariantResolver {
 			: byPreferredCount.thenComparing(byCopies).thenComparing(Selection::outputItemId);
 	}
 
-	private static ItemStack resolveDisplayStack(RecipeDisplay display, ContextMap context) {
+	public static ItemStack resolveDisplayStack(RecipeDisplay display, ContextMap context) {
 		return display.result().resolveForStacks(context).stream()
 			.filter(stack -> !stack.isEmpty())
 			.findFirst()

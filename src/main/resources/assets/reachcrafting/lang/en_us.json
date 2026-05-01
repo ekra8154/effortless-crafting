@@ -46,5 +46,7 @@
 	"enum.reachcrafting.outline_display_mode.off": "Off",
 	"enum.reachcrafting.outline_display_mode.on": "On",
 	"enum.reachcrafting.outline_display_mode.keybind": "With Keybind",
-	"key.reachcrafting.show_filter_outlines": "Display Filtered Containers"
+	"key.reachcrafting.show_filter_outlines": "Display Filtered Containers",
+	"option.reachcrafting.show_total_output_counts": "Show Total Output Counts",
+	"tooltip.reachcrafting.show_total_output_counts": "Display the total number of items that will be produced by crafting everything currently in the grid plus any queued items."
 }

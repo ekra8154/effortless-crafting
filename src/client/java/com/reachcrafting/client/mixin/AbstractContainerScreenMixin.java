@@ -171,4 +171,9 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 			com.reachcrafting.client.ContainerUtils.autoMoveResult(Minecraft.getInstance());
 		}
 	}
+
+	@Inject(method = "renderSlot", at = @At("TAIL"))
+	private void reachcrafting$renderOutputCounter(GuiGraphics guiGraphics, Slot slot, int i, int j, CallbackInfo ci) {
+		com.reachcrafting.client.RecipeOutputCounter.render(guiGraphics, (AbstractContainerScreen<?>) (Object) this, slot);
+	}
 }
