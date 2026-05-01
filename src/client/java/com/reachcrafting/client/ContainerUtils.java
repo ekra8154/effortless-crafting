@@ -40,6 +40,19 @@ public final class ContainerUtils {
 	private static ItemStack autoMoveTargetStack = ItemStack.EMPTY;
 	private static Map<Integer, Integer> autoMoveSnapshotCounts = new HashMap<>();
 	private static boolean autoMoveOrganizing = false;
+	private static long lastAutoCraftToggleTime = 0;
+
+	public static void toggleAutoCraftMode() {
+		long now = System.currentTimeMillis();
+		if (now - lastAutoCraftToggleTime < 200) {
+			return;
+		}
+		lastAutoCraftToggleTime = now;
+		
+		boolean current = ReachCraftingConfig.get().autoCraftMode();
+		ReachCraftingConfig.get().setAutoCraftMode(!current);
+		ReachCraftingConfig.save();
+	}
 
 	public static void autoMoveResult(AbstractContainerMenu menu) {
 	}

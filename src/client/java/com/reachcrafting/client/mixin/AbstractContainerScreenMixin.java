@@ -156,12 +156,11 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 		}
 	}
 
-	@Inject(method = "keyPressed", at = @At("HEAD"))
+	@Inject(method = "keyPressed", at = @At("HEAD"), cancellable = true)
 	private void reachcrafting$onKeyPressed(KeyEvent event, CallbackInfoReturnable<Boolean> cir) {
 		if (event.key() == GLFW.GLFW_KEY_LEFT_ALT || event.key() == GLFW.GLFW_KEY_RIGHT_ALT) {
-			boolean current = ReachCraftingConfig.get().autoCraftMode();
-			ReachCraftingConfig.get().setAutoCraftMode(!current);
-			ReachCraftingConfig.save();
+			com.reachcrafting.client.ContainerUtils.toggleAutoCraftMode();
+			cir.setReturnValue(true);
 		}
 	}
 

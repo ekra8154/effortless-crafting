@@ -401,7 +401,7 @@ public final class NearbyContainerDryRun {
 		}
 
 		private boolean canStart() {
-			return !player.isSpectator() && !player.isShiftKeyDown() && !player.isHandsBusy() && player.containerMenu.getCarried().isEmpty();
+			return !player.isSpectator() && !player.isHandsBusy() && player.containerMenu.getCarried().isEmpty();
 		}
 
 		@Override
@@ -1222,7 +1222,9 @@ public final class NearbyContainerDryRun {
 			if (explicitVariantSelection) {
 				RecipeBookClickCapture.tryCloseOverlayAfterRelease();
 			}
-			ContainerUtils.scheduleAutoMove();
+			if (ReachCraftingConfig.get().autoCraftMode()) {
+				ContainerUtils.scheduleAutoMove();
+			}
 			stop(false);
 			NearbyContainerDryRun.activeSession = null;
 			RecipeBookClickCapture.refocusRecipeBookSearch(client);

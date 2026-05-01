@@ -53,7 +53,7 @@ public final class RecipeBookClickCapture {
 			if (((controlDown || shiftDown) && isHoveringRecipe(client)) 
 				|| (shiftDown && ScrollToPullHandler.isHoveringOutput(client))) {
 				defocusRecipeBookSearch(client);
-			} else if (wasSearchBoxFocusedByMod) {
+			} else if (wasSearchBoxFocusedByMod && pendingHeldRecipe == null && replayBatch == null && !NearbyContainerDryRun.isActiveSessionRunning()) {
 				refocusRecipeBookSearch(client);
 			}
 
@@ -285,7 +285,9 @@ public final class RecipeBookClickCapture {
 		MultiPlayerGameMode gameMode = minecraft.gameMode;
 		if (gameMode != null) {
 			gameMode.handlePlaceRecipe(player.containerMenu.containerId, selectedRecipe.recipeId(), craftAll);
-			ContainerUtils.scheduleAutoMove();
+			if (ReachCraftingConfig.get().autoCraftMode()) {
+				ContainerUtils.scheduleAutoMove();
+			}
 			player.displayClientMessage(
 				Component.literal("[Reach Crafting] Placed recipe: " + outputLabel)
 					.withStyle(ChatFormatting.YELLOW),

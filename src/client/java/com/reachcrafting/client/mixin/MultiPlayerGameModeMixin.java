@@ -41,6 +41,9 @@ public abstract class MultiPlayerGameModeMixin {
 		
 		AbstractContainerMenu menu = client.player.containerMenu;
 		if (menu.containerId != containerId) return;
+		
+		// Update the inventory snapshot high-water mark after every click to capture movements
+		com.reachcrafting.client.PulledResourcesTracker.updateSnapshot(client.player);
 
 		if (clickType == ClickType.PICKUP) {
 			if (menu.getCarried().isEmpty()) {

@@ -13,44 +13,55 @@ import net.minecraft.world.item.ItemStack;
 public final class PulledResourcesTracker {
 	private static final List<WithdrawnItem> WITHDRAWN_ITEMS = new ArrayList<>();
 	private static final Map<String, Integer> INITIAL_COUNTS = new HashMap<>();
-	private static final Map<Integer, String> INITIAL_SLOT_TYPES = new HashMap<>();
+	private static final Map<Integer, ItemStack> INITIAL_SLOT_SNAPSHOTS = new HashMap<>();
 
 	private PulledResourcesTracker() {
 	}
 
 	public static void captureInventorySnapshot(LocalPlayer player) {
-		if (!INITIAL_COUNTS.isEmpty()) {
+		if (!INITIAL_SLOT_SNAPSHOTS.isEmpty()) {
 			return;
 		}
+		updateSnapshot(player);
+		com.reachcrafting.ReachCraftingMod.LOGGER.info("[nearby_tracker] captured initial inventory snapshots");
+	}
+
+	/**
+	 * Updates the known 'home' for items in the inventory.
+	 * We only update a slot if it contains a DIFFERENT item or MORE of the same item.
+	 * We never decrease the snapshot count, as that usually means items were moved to the grid.
+	 */
+	public static void updateSnapshot(LocalPlayer player) {
 		Inventory inventory = player.getInventory();
-		// Count everything that isn't the crafting grid
 		for (int i = 0; i < inventory.getContainerSize(); i++) {
-			ItemStack stack = inventory.getItem(i);
-			if (!stack.isEmpty()) {
-				String itemId = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
-				INITIAL_COUNTS.merge(itemId, stack.getCount(), Integer::sum);
-				INITIAL_SLOT_TYPES.put(i, itemId);
+			ItemStack current = inventory.getItem(i);
+			if (current.isEmpty()) continue;
+
+			ItemStack existing = INITIAL_SLOT_SNAPSHOTS.get(i);
+			boolean shouldUpdate = false;
+			
+			if (existing == null || existing.isEmpty()) {
+				shouldUpdate = true;
+			} else if (!ItemStack.isSameItemSameComponents(existing, current)) {
+				shouldUpdate = true;
+			} else if (current.getCount() > existing.getCount()) {
+				shouldUpdate = true;
+			}
+
+			if (shouldUpdate) {
+				INITIAL_SLOT_SNAPSHOTS.put(i, current.copy());
+				
+				// Also update the global count tracker for nearby pull logic
+				String itemId = BuiltInRegistries.ITEM.getKey(current.getItem()).toString();
+				INITIAL_COUNTS.merge(itemId, current.getCount(), Integer::max);
 			}
 		}
-		com.reachcrafting.ReachCraftingMod.LOGGER.info("[nearby_tracker] captured initial counts and slot types");
 	}
 
-	public static void updateSlotType(int slotIndex, String itemId) {
-		if (itemId == null || itemId.isEmpty()) {
-			INITIAL_SLOT_TYPES.remove(slotIndex);
-		} else {
-			INITIAL_SLOT_TYPES.put(slotIndex, itemId);
-		}
-	}
-
-	public static String getInitialSlotType(int slotIndex) {
-		return INITIAL_SLOT_TYPES.get(slotIndex);
+	public static Map<Integer, ItemStack> getInitialSlotSnapshots() {
+		return Map.copyOf(INITIAL_SLOT_SNAPSHOTS);
 	}
 	
-	public static Map<Integer, String> getInitialSlotTypes() {
-		return Map.copyOf(INITIAL_SLOT_TYPES);
-	}
-
 	public static int getInitialCount(String itemId) {
 		return INITIAL_COUNTS.getOrDefault(itemId, 0);
 	}
@@ -74,7 +85,7 @@ public final class PulledResourcesTracker {
 	public static void clear() {
 		WITHDRAWN_ITEMS.clear();
 		INITIAL_COUNTS.clear();
-		INITIAL_SLOT_TYPES.clear();
+		INITIAL_SLOT_SNAPSHOTS.clear();
 	}
 
 	public static boolean isEmpty() {

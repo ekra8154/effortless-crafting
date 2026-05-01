@@ -13,7 +13,6 @@ import net.minecraft.world.inventory.InventoryMenu;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.core.registries.BuiltInRegistries;
-import org.lwjgl.glfw.GLFW;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -63,19 +62,6 @@ public final class InventoryGridRestoreTracker {
 			if (clickType == ClickType.PICKUP) {
 				// Moving between inventory slots.
 				if (lastInventorySlotClicked != -1) {
-					ItemStack carried = menu.getCarried();
-					if (!carried.isEmpty()) {
-						String carriedId = BuiltInRegistries.ITEM.getKey(carried.getItem()).toString();
-						
-						// Important: snapshot uses INVENTORY indices, not MENU indices
-						int destInvIdx = slot.getContainerSlot();
-						int sourceInvIdx = menu.getSlot(lastInventorySlotClicked).getContainerSlot();
-						
-						PulledResourcesTracker.updateSlotType(destInvIdx, carriedId);
-						PulledResourcesTracker.updateSlotType(sourceInvIdx, null);
-						ReachCraftingMod.LOGGER.info("[grid_restore] Re-captured manual movement: {} from inv_slot {} to inv_slot {}", carriedId, sourceInvIdx, destInvIdx);
-					}
-
 					updateOriginalSlotMappings(lastInventorySlotClicked, slotId);
 				}
 				lastInventorySlotClicked = -1;
@@ -111,56 +97,52 @@ public final class InventoryGridRestoreTracker {
 				return;
 			}
 
-			// Check if we have anything at all to restore
-			if (GRID_TO_ORIGINAL_SLOT.isEmpty() && PulledResourcesTracker.getInitialSlotTypes().isEmpty()) {
+			Map<Integer, ItemStack> snapshots = PulledResourcesTracker.getInitialSlotSnapshots();
+			if (GRID_TO_ORIGINAL_SLOT.isEmpty() && snapshots.isEmpty()) {
 				return;
 			}
 
 			Minecraft client = Minecraft.getInstance();
 			if (client.player == null) return;
 
-			// 1. Identify all item types currently in the grid
-			Set<String> gridItemTypes = new HashSet<>();
+			// PASS 1: Direct Mapping Restoration
+			// Use explicit mappings from GRID_TO_ORIGINAL_SLOT (for items the mod moved or the user clicked)
+			Set<Integer> processedGridSlots = new HashSet<>();
+			for (int gridIdx = 0; gridIdx < menu.slots.size(); gridIdx++) {
+				if (isGridSlot(menu, gridIdx)) {
+					Slot gridSlot = menu.getSlot(gridIdx);
+					if (gridSlot.hasItem()) {
+						int targetMenuIdx = GRID_TO_ORIGINAL_SLOT.getOrDefault(gridIdx, -1);
+						if (targetMenuIdx != -1) {
+							moveItems(menu, gameMode, gridIdx, targetMenuIdx);
+							if (!gridSlot.hasItem()) {
+								processedGridSlots.add(gridIdx);
+							}
+						}
+					}
+				}
+			}
+
+			// PASS 2: Snapshot-Based Distributed Restoration
+			// For each slot that had an item in the snapshot, try to fill it back to its original count
+			for (Map.Entry<Integer, ItemStack> entry : snapshots.entrySet()) {
+				int invIdx = entry.getKey();
+				ItemStack snapshot = entry.getValue();
+				String itemId = BuiltInRegistries.ITEM.getKey(snapshot.getItem()).toString();
+				int targetMenuIdx = inventoryIndexToMenuIndex(menu, invIdx);
+				
+				if (targetMenuIdx != -1) {
+					fillSlotFromGrid(menu, gameMode, targetMenuIdx, snapshot.getCount(), itemId, processedGridSlots);
+				}
+			}
+
+			// PASS 3: Leftover Consolidation
+			// Anything still in the grid (e.g. newly crafted items or extras) gets Shift-Clicked
 			for (int gridIdx = 0; gridIdx < menu.slots.size(); gridIdx++) {
 				if (isGridSlot(menu, gridIdx)) {
 					Slot s = menu.getSlot(gridIdx);
 					if (s.hasItem()) {
-						String itemId = BuiltInRegistries.ITEM.getKey(s.getItem().getItem()).toString();
-						gridItemTypes.add(itemId);
-					}
-				}
-			}
-
-			if (gridItemTypes.isEmpty()) {
-				clear();
-				return;
-			}
-
-			// 2. For each grid item type, "sweep" all instances back to its primary home
-			for (String itemId : gridItemTypes) {
-				int homeMenuIdx = findHomeMenuIdx(menu, itemId);
-				if (homeMenuIdx == -1) continue;
-
-				// Sweep from inventory first (to consolidate existing stacks)
-				for (Slot s : menu.slots) {
-					if (s.container instanceof Inventory && s.index != homeMenuIdx && s.hasItem()) {
-						String slotItemId = BuiltInRegistries.ITEM.getKey(s.getItem().getItem()).toString();
-						if (slotItemId.equals(itemId)) {
-							moveItems(menu, gameMode, s.index, homeMenuIdx);
-						}
-					}
-				}
-
-				// Sweep from grid
-				for (int gridIdx = 0; gridIdx < menu.slots.size(); gridIdx++) {
-					if (isGridSlot(menu, gridIdx)) {
-						Slot s = menu.getSlot(gridIdx);
-						if (s.hasItem()) {
-							String slotItemId = BuiltInRegistries.ITEM.getKey(s.getItem().getItem()).toString();
-							if (slotItemId.equals(itemId)) {
-								moveItems(menu, gameMode, gridIdx, homeMenuIdx);
-							}
-						}
+						gameMode.handleInventoryMouseClick(menu.containerId, gridIdx, 0, ClickType.QUICK_MOVE, client.player);
 					}
 				}
 			}
@@ -170,31 +152,50 @@ public final class InventoryGridRestoreTracker {
 		clear();
 	}
 
-	private static int findHomeMenuIdx(AbstractContainerMenu menu, String itemId) {
-		// First priority: Exact mapping from a current grid slot
+	private static void fillSlotFromGrid(AbstractContainerMenu menu, MultiPlayerGameMode gameMode, int targetMenuIdx, int targetCount, String itemId, Set<Integer> excludedGridSlots) {
+		Minecraft client = Minecraft.getInstance();
+		Slot target = menu.getSlot(targetMenuIdx);
+		
+		// Only fill if it's the right item type or empty
+		if (target.hasItem()) {
+			String currentId = BuiltInRegistries.ITEM.getKey(target.getItem().getItem()).toString();
+			if (!currentId.equals(itemId)) return;
+		}
+
 		for (int gridIdx = 0; gridIdx < menu.slots.size(); gridIdx++) {
-			if (isGridSlot(menu, gridIdx)) {
-				Slot s = menu.getSlot(gridIdx);
-				if (s.hasItem() && BuiltInRegistries.ITEM.getKey(s.getItem().getItem()).toString().equals(itemId)) {
-					int originalMenuIdx = GRID_TO_ORIGINAL_SLOT.getOrDefault(gridIdx, -1);
-					if (originalMenuIdx != -1) {
-						ReachCraftingMod.LOGGER.info("[grid_restore] Using exact mapping for {}: GridSlot {} -> HomeSlot {}", itemId, gridIdx, originalMenuIdx);
-						return originalMenuIdx;
+			if (isGridSlot(menu, gridIdx) && !excludedGridSlots.contains(gridIdx)) {
+				Slot gridSlot = menu.getSlot(gridIdx);
+				if (gridSlot.hasItem()) {
+					String gridItemId = BuiltInRegistries.ITEM.getKey(gridSlot.getItem().getItem()).toString();
+					if (gridItemId.equals(itemId)) {
+						int currentCount = target.hasItem() ? target.getItem().getCount() : 0;
+						if (currentCount >= targetCount) return;
+
+						// Pick up from grid
+						gameMode.handleInventoryMouseClick(menu.containerId, gridIdx, 0, ClickType.PICKUP, client.player);
+						
+						// Try to place into target
+						// Note: Minecraft will only place as many as fit/needed for a stack merge
+						gameMode.handleInventoryMouseClick(menu.containerId, targetMenuIdx, 0, ClickType.PICKUP, client.player);
+						
+						// If still carrying (target was full or perfect), put back in grid
+						if (!client.player.containerMenu.getCarried().isEmpty()) {
+							gameMode.handleInventoryMouseClick(menu.containerId, gridIdx, 0, ClickType.PICKUP, client.player);
+						}
+						
+						if (!gridSlot.hasItem()) {
+							excludedGridSlots.add(gridIdx);
+						}
 					}
 				}
 			}
 		}
+	}
 
-		// Second priority: Snapshot home
-		for (Map.Entry<Integer, String> entry : PulledResourcesTracker.getInitialSlotTypes().entrySet()) {
-			if (itemId.equals(entry.getValue())) {
-				int targetInvIdx = entry.getKey();
-				for (Slot s : menu.slots) {
-					if (s.container instanceof Inventory && s.getContainerSlot() == targetInvIdx) {
-						ReachCraftingMod.LOGGER.info("[grid_restore] Using snapshot mapping for {}: InvSlot {} -> HomeSlot {}", itemId, targetInvIdx, s.index);
-						return s.index;
-					}
-				}
+	private static int inventoryIndexToMenuIndex(AbstractContainerMenu menu, int invIdx) {
+		for (Slot s : menu.slots) {
+			if (s.container instanceof Inventory && s.getContainerSlot() == invIdx) {
+				return s.index;
 			}
 		}
 		return -1;
@@ -205,35 +206,27 @@ public final class InventoryGridRestoreTracker {
 		if (client.player == null) return;
 		
 		Slot source = menu.getSlot(sourceIdx);
-		
 		if (!source.hasItem()) return;
 
-		// Pick up from source
-		gameMode.handleInventoryMouseClick(menu.containerId, sourceIdx, GLFW.GLFW_MOUSE_BUTTON_LEFT, ClickType.PICKUP, client.player);
+		// 1. Pick up from source
+		gameMode.handleInventoryMouseClick(menu.containerId, sourceIdx, 0, ClickType.PICKUP, client.player);
 		
-		// Place into target
+		// 2. Try to place into target (only if it won't cause a swap)
 		if (!client.player.containerMenu.getCarried().isEmpty()) {
-			gameMode.handleInventoryMouseClick(menu.containerId, targetIdx, GLFW.GLFW_MOUSE_BUTTON_LEFT, ClickType.PICKUP, client.player);
+			Slot target = menu.getSlot(targetIdx);
+			boolean canMerge = !target.hasItem() || 
+				(ItemStack.isSameItemSameComponents(target.getItem(), client.player.containerMenu.getCarried()) 
+				 && target.getItem().getCount() < target.getItem().getMaxStackSize());
+            
+			if (canMerge) {
+				gameMode.handleInventoryMouseClick(menu.containerId, targetIdx, 0, ClickType.PICKUP, client.player);
+			}
 		}
 		
-		// If still carrying (target was full or swapped), find an empty inventory slot
+		// 3. If still carrying (target was full), put back in source and Shift-Click it to consolidate
 		if (!client.player.containerMenu.getCarried().isEmpty()) {
-			int emptySlotIdx = -1;
-			for (Slot s : menu.slots) {
-				if (s.container instanceof Inventory && !s.hasItem() && s.mayPlace(client.player.containerMenu.getCarried())) {
-					emptySlotIdx = s.index;
-					break;
-				}
-			}
-			
-			if (emptySlotIdx != -1) {
-				// com.reachcrafting.ReachCraftingMod.LOGGER.info("[grid_restore] Placing overflow into empty inventory slot {}", emptySlotIdx);
-				gameMode.handleInventoryMouseClick(menu.containerId, emptySlotIdx, GLFW.GLFW_MOUSE_BUTTON_LEFT, ClickType.PICKUP, client.player);
-			} else {
-				// Absolute fallback: put back in source
-				// com.reachcrafting.ReachCraftingMod.LOGGER.warn("[grid_restore] No empty slot for overflow! Putting back in {}", sourceIdx);
-				gameMode.handleInventoryMouseClick(menu.containerId, sourceIdx, GLFW.GLFW_MOUSE_BUTTON_LEFT, ClickType.PICKUP, client.player);
-			}
+			gameMode.handleInventoryMouseClick(menu.containerId, sourceIdx, 0, ClickType.PICKUP, client.player);
+			gameMode.handleInventoryMouseClick(menu.containerId, sourceIdx, 0, ClickType.QUICK_MOVE, client.player);
 		}
 	}
 
