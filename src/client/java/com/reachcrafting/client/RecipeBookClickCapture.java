@@ -276,6 +276,7 @@ public final class RecipeBookClickCapture {
 		MultiPlayerGameMode gameMode = minecraft.gameMode;
 		if (gameMode != null) {
 			gameMode.handlePlaceRecipe(player.containerMenu.containerId, selectedRecipe.recipeId(), craftAll);
+			ContainerUtils.scheduleAutoMove();
 			player.displayClientMessage(
 				Component.literal("[Reach Crafting] Placed recipe: " + outputLabel)
 					.withStyle(ChatFormatting.YELLOW),

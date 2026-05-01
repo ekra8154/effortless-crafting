@@ -42,6 +42,7 @@ public final class ReachCraftingConfig {
 	private boolean restoreInventoryItemPositions;
 	private boolean rememberPreviousSearch;
 	private OutlineDisplayMode showFilterOutlines;
+	private boolean autoCraftMode;
 	private Set<String> blacklistedContainerIds;
 
 	private static String lastSearchText = "";
@@ -81,6 +82,7 @@ public final class ReachCraftingConfig {
 			instance.restoreInventoryItemPositions = stored.restoreInventoryItemPositions == null ? true : stored.restoreInventoryItemPositions;
 			instance.rememberPreviousSearch = stored.rememberPreviousSearch == null ? true : stored.rememberPreviousSearch;
 			instance.showFilterOutlines = stored.showFilterOutlines != null ? stored.showFilterOutlines : OutlineDisplayMode.OFF;
+			instance.autoCraftMode = stored.autoCraftMode != null ? stored.autoCraftMode : false;
 			instance.blacklistedContainerIds = stored.blacklistedContainerIds != null ? new HashSet<>(stored.blacklistedContainerIds) : new HashSet<>(DEFAULT_BLACKLIST);
 		} catch (Exception exception) {
 			ReachCraftingMod.LOGGER.warn("Failed to load reachcrafting config from {}", CONFIG_PATH, exception);
@@ -215,6 +217,14 @@ public final class ReachCraftingConfig {
 		this.showFilterOutlines = showFilterOutlines;
 	}
 
+	public boolean autoCraftMode() {
+		return autoCraftMode;
+	}
+
+	public void setAutoCraftMode(boolean autoCraftMode) {
+		this.autoCraftMode = autoCraftMode;
+	}
+
 	public static String getLastSearchText() {
 		return lastSearchText;
 	}
@@ -247,6 +257,7 @@ public final class ReachCraftingConfig {
 		defaults.restoreInventoryItemPositions = true;
 		defaults.rememberPreviousSearch = true;
 		defaults.showFilterOutlines = OutlineDisplayMode.OFF;
+		defaults.autoCraftMode = false;
 		defaults.blacklistedContainerIds = new HashSet<>(DEFAULT_BLACKLIST);
 		return defaults;
 	}
@@ -278,6 +289,7 @@ public final class ReachCraftingConfig {
 		private Boolean restoreInventoryItemPositions;
 		private Boolean rememberPreviousSearch;
 		private OutlineDisplayMode showFilterOutlines;
+		private Boolean autoCraftMode;
 		private Set<String> blacklistedContainerIds;
 
 		private StoredConfig(ReachCraftingConfig config) {
@@ -294,6 +306,7 @@ public final class ReachCraftingConfig {
 			this.restoreInventoryItemPositions = config.restoreInventoryItemPositions;
 			this.rememberPreviousSearch = config.rememberPreviousSearch;
 			this.showFilterOutlines = config.showFilterOutlines;
+			this.autoCraftMode = config.autoCraftMode;
 			this.blacklistedContainerIds = config.blacklistedContainerIds;
 		}
 	}

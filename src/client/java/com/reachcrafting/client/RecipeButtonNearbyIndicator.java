@@ -166,4 +166,19 @@ public final class RecipeButtonNearbyIndicator {
 
 		guiGraphics.fill(x + 1, y + 1, x + 4, y + 4, inner);
 	}
+
+	public static void renderGrayArrow(net.minecraft.client.gui.GuiGraphics guiGraphics, int x, int y) {
+		int color = 0xFF3D3D3D;
+		// Stylized arrow with tail:
+		//   ###
+		//   ###
+		//   ###
+		//  #####
+		//   ###
+		//    #
+		guiGraphics.fill(x + 0, y,     x + 3, y + 3, color);     // Tail (3x3)
+		guiGraphics.fill(x - 1, y + 3, x + 4, y + 4, color); // Cross (5x1)
+		guiGraphics.fill(x + 0, y + 4, x + 3, y + 5, color); // Point mid (3x1)
+		guiGraphics.fill(x + 1, y + 5, x + 2, y + 6, color); // Point tip (1x1)
+	}
 }

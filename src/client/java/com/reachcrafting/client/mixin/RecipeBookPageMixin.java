@@ -64,10 +64,7 @@ public abstract class RecipeBookPageMixin {
 		boolean ctrlDown = (click.modifiers() & GLFW.GLFW_MOD_CONTROL) != 0;
 		boolean shiftDown = (click.modifiers() & GLFW.GLFW_MOD_SHIFT) != 0;
 
-		// Only intercept if we have a mod trigger (Ctrl or Shift)
-		if (!ctrlDown && !shiftDown) {
-			return;
-		}
+		// Intercept clicks to handle auto-crafting movement even for single clicks
 
 		OverlayRecipeComponent overlay = ((RecipeBookPageAccessor) (Object) this).getOverlay();
 		if (overlay != null && overlay.isVisible()) {

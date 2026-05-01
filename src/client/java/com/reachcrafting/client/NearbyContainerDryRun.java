@@ -1222,6 +1222,7 @@ public final class NearbyContainerDryRun {
 			if (explicitVariantSelection) {
 				RecipeBookClickCapture.tryCloseOverlayAfterRelease();
 			}
+			ContainerUtils.scheduleAutoMove();
 			stop(false);
 			NearbyContainerDryRun.activeSession = null;
 			RecipeBookClickCapture.refocusRecipeBookSearch(client);

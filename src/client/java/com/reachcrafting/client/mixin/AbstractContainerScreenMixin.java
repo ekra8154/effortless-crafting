@@ -19,7 +19,12 @@ import com.mojang.blaze3d.platform.InputConstants;
 import org.lwjgl.glfw.GLFW;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.client.input.KeyEvent;
 import com.reachcrafting.client.RecipeButtonNearbyIndicator;
+import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.inventory.ResultSlot;
+import net.minecraft.client.gui.screens.inventory.CraftingScreen;
+import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 
 @Mixin(AbstractContainerScreen.class)
 public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMenu> {
@@ -139,6 +144,31 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 		if (click.x() >= dotStartX && click.x() <= dotEndX && click.y() >= dotStartY && click.y() <= dotEndY) {
 			NearbyContainerCache.toggleCurrentContainerInclusion();
 			cir.setReturnValue(true);
+		}
+	}
+
+	@Inject(method = "renderSlot", at = @At("HEAD"))
+	private void reachcrafting$renderResultArrow(GuiGraphics guiGraphics, Slot slot, int i, int j, CallbackInfo ci) {
+		if (ReachCraftingConfig.get().autoCraftMode() && slot instanceof ResultSlot) {
+			if ((Object) this instanceof CraftingScreen || (Object) this instanceof InventoryScreen) {
+				RecipeButtonNearbyIndicator.renderGrayArrow(guiGraphics, slot.x + 6, slot.y + 6);
+			}
+		}
+	}
+
+	@Inject(method = "keyPressed", at = @At("HEAD"))
+	private void reachcrafting$onKeyPressed(KeyEvent event, CallbackInfoReturnable<Boolean> cir) {
+		if (event.key() == GLFW.GLFW_KEY_LEFT_ALT || event.key() == GLFW.GLFW_KEY_RIGHT_ALT) {
+			boolean current = ReachCraftingConfig.get().autoCraftMode();
+			ReachCraftingConfig.get().setAutoCraftMode(!current);
+			ReachCraftingConfig.save();
+		}
+	}
+
+	@Inject(method = "containerTick", at = @At("TAIL"))
+	private void reachcrafting$onContainerTick(CallbackInfo ci) {
+		if (com.reachcrafting.client.ContainerUtils.isAutoMovePending()) {
+			com.reachcrafting.client.ContainerUtils.autoMoveResult(Minecraft.getInstance());
 		}
 	}
 }
