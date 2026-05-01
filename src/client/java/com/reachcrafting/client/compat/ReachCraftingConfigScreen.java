@@ -136,6 +136,15 @@ public final class ReachCraftingConfigScreen {
 			.setSaveConsumer(config::setShowTotalOutputCounts)
 			.build());
 
+		general.addEntry(entries.startBooleanToggle(
+				Component.translatable("option.reachcrafting.scroll_to_pull"),
+				config.scrollToPull()
+			)
+			.setDefaultValue(true)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.scroll_to_pull"))
+			.setSaveConsumer(config::setScrollToPull)
+			.build());
+
 		ConfigCategory containers = builder.getOrCreateCategory(Component.translatable("category.reachcrafting.containers"));
 		
 		containers.addEntry(entries.startEnumSelector(

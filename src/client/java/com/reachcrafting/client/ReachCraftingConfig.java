@@ -44,6 +44,7 @@ public final class ReachCraftingConfig {
 	private OutlineDisplayMode showFilterOutlines;
 	private boolean autoCraftMode;
 	private boolean showTotalOutputCounts;
+	private boolean scrollToPull;
 	private Set<String> blacklistedContainerIds;
 
 	private static String lastSearchText = "";
@@ -85,6 +86,7 @@ public final class ReachCraftingConfig {
 			instance.showFilterOutlines = stored.showFilterOutlines != null ? stored.showFilterOutlines : OutlineDisplayMode.OFF;
 			instance.autoCraftMode = stored.autoCraftMode != null ? stored.autoCraftMode : false;
 			instance.showTotalOutputCounts = stored.showTotalOutputCounts != null ? stored.showTotalOutputCounts : true;
+			instance.scrollToPull = stored.scrollToPull != null ? stored.scrollToPull : true;
 			instance.blacklistedContainerIds = stored.blacklistedContainerIds != null ? new HashSet<>(stored.blacklistedContainerIds) : new HashSet<>(DEFAULT_BLACKLIST);
 		} catch (Exception exception) {
 			ReachCraftingMod.LOGGER.warn("Failed to load reachcrafting config from {}", CONFIG_PATH, exception);
@@ -235,6 +237,14 @@ public final class ReachCraftingConfig {
 		this.showTotalOutputCounts = showTotalOutputCounts;
 	}
 
+	public boolean scrollToPull() {
+		return scrollToPull;
+	}
+
+	public void setScrollToPull(boolean scrollToPull) {
+		this.scrollToPull = scrollToPull;
+	}
+
 	public static String getLastSearchText() {
 		return lastSearchText;
 	}
@@ -269,6 +279,7 @@ public final class ReachCraftingConfig {
 		defaults.showFilterOutlines = OutlineDisplayMode.OFF;
 		defaults.autoCraftMode = false;
 		defaults.showTotalOutputCounts = true;
+		defaults.scrollToPull = true;
 		defaults.blacklistedContainerIds = new HashSet<>(DEFAULT_BLACKLIST);
 		return defaults;
 	}
@@ -302,6 +313,7 @@ public final class ReachCraftingConfig {
 		private OutlineDisplayMode showFilterOutlines;
 		private Boolean autoCraftMode;
 		private Boolean showTotalOutputCounts;
+		private Boolean scrollToPull;
 		private Set<String> blacklistedContainerIds;
 
 		private StoredConfig(ReachCraftingConfig config) {
@@ -320,6 +332,7 @@ public final class ReachCraftingConfig {
 			this.showFilterOutlines = config.showFilterOutlines;
 			this.autoCraftMode = config.autoCraftMode;
 			this.showTotalOutputCounts = config.showTotalOutputCounts;
+			this.scrollToPull = config.scrollToPull;
 			this.blacklistedContainerIds = config.blacklistedContainerIds;
 		}
 	}

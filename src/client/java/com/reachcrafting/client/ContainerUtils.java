@@ -45,10 +45,8 @@ public final class ContainerUtils {
 	}
 
 	public static void scheduleAutoMove() {
-		if (ReachCraftingConfig.get().autoCraftMode()) {
-			pendingAutoMove = true;
-			autoMoveWaitingTicks = 0;
-		}
+		pendingAutoMove = true;
+		autoMoveWaitingTicks = 0;
 	}
 
 	public static boolean isAutoMovePending() {
@@ -185,9 +183,6 @@ public final class ContainerUtils {
 	}
 
 	public static void autoMoveResult(net.minecraft.client.Minecraft client) {
-		if (!ReachCraftingConfig.get().autoCraftMode()) {
-			return;
-		}
 		if (client.player == null || client.player.containerMenu == null || client.screen == null) {
 			return;
 		}

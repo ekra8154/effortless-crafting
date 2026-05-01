@@ -48,5 +48,7 @@
 	"enum.reachcrafting.outline_display_mode.keybind": "With Keybind",
 	"key.reachcrafting.show_filter_outlines": "Display Filtered Containers",
 	"option.reachcrafting.show_total_output_counts": "Show Total Output Counts",
-	"tooltip.reachcrafting.show_total_output_counts": "Display the total number of items that will be produced by crafting everything currently in the grid plus any queued items."
+	"tooltip.reachcrafting.show_total_output_counts": "Display the total number of items that will be produced by crafting everything currently in the grid plus any queued items.",
+	"option.reachcrafting.scroll_to_pull": "Scroll to Pull",
+	"tooltip.reachcrafting.scroll_to_pull": "Hold Shift and scroll over the output slot to pull items into your inventory or to your cursor."
 }

@@ -86,29 +86,24 @@ This project is licensed under **LGPL-3.0-or-later**. It draws inspiration and c
 
 TODO:
 
-scroll wheel over results slot + shift to craft that many times?
-
-alt = auto craft
-
 settings / more to make caching actually faster
-
-code cleanup - in progress
 
 clear grid ui button (hold ctrl makes pulled items return?) otherwise eject into inventory (try to remember slots - maybe do this after adding the eject setting mentioned above)
 
 shift craft does not rewrite grid if changing recipes
+ - allow hover scrolling over new item to start a new queue
 
 should add setting to switch between append mode and set mode
 
 normal clicking cycling items that should be craftable should craft them
-
-add a show output counter setting (calculates how many items based on grid counts)
 
 quick craft keybind that opens crafting menu if one is close enough. otherwise falls back to auto search in 2x2 grid
 
 make it so keys that are not q or numkeys start search. 
 
 up arrow to restore searches instead of auto loaded in
+
+coyote time for releasing ctrl before spacebar to craft
 
 
 KNOWN BUGS:

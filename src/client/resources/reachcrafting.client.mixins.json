@@ -18,7 +18,8 @@
 		"RecipeBookComponentAccessor",
 		"RecipeBookPageAccessor",
 		"RecipeBookPageMixin",
-		"RecipeBookComponentMixin"
+		"RecipeBookComponentMixin",
+		"AbstractContainerScreenAccessor"
 	],
 	"injectors": {
 		"defaultRequire": 1

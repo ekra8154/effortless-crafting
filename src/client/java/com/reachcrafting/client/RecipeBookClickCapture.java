@@ -50,7 +50,8 @@ public final class RecipeBookClickCapture {
 			boolean controlDown = isControlKeyDown(client);
 			boolean shiftDown = isShiftKeyDown(client);
 
-			if ((controlDown || shiftDown) && isHoveringRecipe(client)) {
+			if (((controlDown || shiftDown) && isHoveringRecipe(client)) 
+				|| (shiftDown && ScrollToPullHandler.isHoveringOutput(client))) {
 				defocusRecipeBookSearch(client);
 			} else if (wasSearchBoxFocusedByMod) {
 				refocusRecipeBookSearch(client);
@@ -89,6 +90,9 @@ public final class RecipeBookClickCapture {
 			});
 			ScreenMouseEvents.allowMouseScroll(screen).register((currentScreen, mouseX, mouseY, horizontalAmount, verticalAmount) -> {
 				if (handleHeldRecipeScroll(currentScreen, mouseX, mouseY, verticalAmount)) {
+					return false;
+				}
+				if (ScrollToPullHandler.handleScroll(currentScreen, mouseX, mouseY, verticalAmount)) {
 					return false;
 				}
 				return true;
