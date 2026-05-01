@@ -103,8 +103,7 @@ make it so keys that are not q or numkeys start search.
 
 up arrow to restore searches instead of auto loaded in
 
-coyote time for releasing ctrl before spacebar to craft
-
+remove option to turn off hold and release style - its just better
 
 KNOWN BUGS:
 - queuing a single harness works but queuing too many results in nothing appearing at all

@@ -45,6 +45,7 @@ public abstract class RecipeBookComponentMixin {
 	@Inject(method = "init", at = @At("TAIL"))
 	private void reachcrafting$onInit(int width, int height, Minecraft client, boolean isFiltering, CallbackInfo ci) {
 		reachcrafting$applyAutoFocus();
+		com.reachcrafting.client.ReachCraftingModClient.forceNextInventorySearchFocus = false;
 	}
 
 	@Inject(method = "setVisible", at = @At("TAIL"))
@@ -105,10 +106,11 @@ public abstract class RecipeBookComponentMixin {
 				this.searchBox.setCursorPosition(lastSearch.length());
 			}
 			
-			// Only focus automatically in the 3x3 crafting grid.
-			// This allows 'Q' and number keys to work normally in the player inventory.
-			if (this.minecraft.screen instanceof CraftingScreen) {
+			// Only focus automatically in the 3x3 crafting grid or if forced by a Quick Craft fallback.
+			// This allows 'Q' and number keys to work normally in the player inventory usually.
+			if (this.minecraft.screen instanceof CraftingScreen || com.reachcrafting.client.ReachCraftingModClient.forceNextInventorySearchFocus) {
 				this.searchBox.setFocused(true);
+				com.reachcrafting.client.ReachCraftingModClient.forceNextInventorySearchFocus = false;
 			}
 		}
 	}

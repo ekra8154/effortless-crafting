@@ -17,6 +17,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.BarrelBlock;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.ChestBlock;
 import net.minecraft.world.level.block.EnderChestBlock;
 import net.minecraft.world.level.block.HopperBlock;
@@ -143,6 +144,28 @@ public final class ContainerUtils {
 		double y = Mth.clamp(origin.y, pos.getY(), pos.getY() + 1.0D);
 		double z = Mth.clamp(origin.z, pos.getZ(), pos.getZ() + 1.0D);
 		return new Vec3(x, y, z);
+	}
+
+	public static BlockPos findNearestCraftingTable(Level level, Vec3 eyePos, double reach) {
+		double minSqDist = reach * reach;
+		BlockPos nearest = null;
+		int radius = Mth.ceil(reach);
+		BlockPos center = BlockPos.containing(eyePos);
+
+		for (BlockPos pos : BlockPos.betweenClosed(
+			center.offset(-radius, -radius, -radius),
+			center.offset(radius, radius, radius)
+		)) {
+			BlockState state = level.getBlockState(pos);
+			if (state.is(Blocks.CRAFTING_TABLE)) {
+				double distSq = squaredDistanceToBlock(eyePos, pos);
+				if (distSq <= minSqDist) {
+					minSqDist = distSq;
+					nearest = pos.immutable();
+				}
+			}
+		}
+		return nearest;
 	}
 
 	public static String formatPos(BlockPos pos) {

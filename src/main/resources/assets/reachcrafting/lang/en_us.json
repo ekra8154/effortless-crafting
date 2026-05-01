@@ -50,5 +50,7 @@
 	"option.reachcrafting.show_total_output_counts": "Show Total Output Counts",
 	"tooltip.reachcrafting.show_total_output_counts": "Display the total number of items that will be produced by crafting everything currently in the grid plus any queued items.",
 	"option.reachcrafting.scroll_to_pull": "Scroll to Pull",
-	"tooltip.reachcrafting.scroll_to_pull": "Hold Shift and scroll over the output slot to pull items into your inventory or to your cursor."
+	"tooltip.reachcrafting.scroll_to_pull": "Hold Shift and scroll over the output slot to pull items into your inventory or to your cursor.",
+	"key.reachcrafting.quick_craft": "Quick Craft",
+	"message.reachcrafting.no_crafting_table_nearby": "No crafting table in reach!"
 }

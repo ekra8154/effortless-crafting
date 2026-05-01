@@ -14,6 +14,8 @@ import org.lwjgl.glfw.GLFW;
 public class ReachCraftingModClient implements ClientModInitializer {
 	private static KeyMapping debugPingKey;
 	public static KeyMapping showFilterOutlinesKey;
+	public static KeyMapping quickCraftKey;
+	public static boolean forceNextInventorySearchFocus = false;
 
 	@Override
 	public void onInitializeClient() {
@@ -41,6 +43,13 @@ public class ReachCraftingModClient implements ClientModInitializer {
 			reachCraftingCategory
 		));
 
+		quickCraftKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
+			"key.reachcrafting.quick_craft",
+			InputConstants.Type.KEYSYM,
+			GLFW.GLFW_KEY_B,
+			reachCraftingCategory
+		));
+
 		int[] tickCounter = {0};
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			tickCounter[0]++;
@@ -60,6 +69,28 @@ public class ReachCraftingModClient implements ClientModInitializer {
 					);
 				}
 			}
+
+			while (quickCraftKey.consumeClick()) {
+				attemptQuickCraft(client);
+			}
 		});
+	}
+
+	private void attemptQuickCraft(net.minecraft.client.Minecraft client) {
+		if (client.player == null || client.level == null) return;
+
+		net.minecraft.world.phys.Vec3 eyePos = client.player.getEyePosition(0);
+		double reach = client.player.blockInteractionRange();
+		net.minecraft.core.BlockPos tablePos = ContainerUtils.findNearestCraftingTable(client.level, eyePos, reach);
+
+		if (tablePos != null) {
+			net.minecraft.world.phys.Vec3 hitPos = ContainerUtils.closestPointOnUnitBlock(eyePos, tablePos);
+			net.minecraft.core.Direction face = net.minecraft.core.Direction.getApproximateNearest(hitPos.subtract(eyePos)).getOpposite();
+			net.minecraft.world.phys.BlockHitResult hitResult = new net.minecraft.world.phys.BlockHitResult(hitPos, face, tablePos, false);
+			client.gameMode.useItemOn(client.player, net.minecraft.world.InteractionHand.MAIN_HAND, hitResult);
+		} else {
+			forceNextInventorySearchFocus = true;
+			client.setScreen(new net.minecraft.client.gui.screens.inventory.InventoryScreen(client.player));
+		}
 	}
 }
