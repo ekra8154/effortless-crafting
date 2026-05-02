@@ -70,17 +70,7 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 		}
 
 		if ((Object) this instanceof net.minecraft.client.gui.screens.inventory.CraftingScreen || (Object) this instanceof net.minecraft.client.gui.screens.inventory.InventoryScreen) {
-			if (ReachCraftingConfig.get().restoreInventoryItemPositions()) {
-				com.reachcrafting.client.InventoryGridRestoreTracker.restore(this.menu, net.minecraft.client.Minecraft.getInstance().gameMode);
-			}
-
-			if (ReachCraftingConfig.get().putPulledResourcesBack()) {
-				int withdrawnCount = com.reachcrafting.client.PulledResourcesTracker.getWithdrawnItems().size();
-				if (withdrawnCount > 0) {
-					com.reachcrafting.ReachCraftingMod.LOGGER.info("[nearby_return] Initiating return session.");
-					com.reachcrafting.client.NearbyContainerDryRun.startReturn(this.menu, com.reachcrafting.client.PulledResourcesTracker.getWithdrawnItems());
-				}
-			}
+			com.reachcrafting.client.ContainerUtils.flushCraftingGrid(net.minecraft.client.Minecraft.getInstance(), true, false);
 		}
 	}
 
@@ -156,16 +146,31 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 		}
 	}
 
+
 	@Inject(method = "keyPressed", at = @At("HEAD"), cancellable = true)
 	private void reachcrafting$onKeyPressed(KeyEvent event, CallbackInfoReturnable<Boolean> cir) {
 		if (event.key() == GLFW.GLFW_KEY_LEFT_ALT || event.key() == GLFW.GLFW_KEY_RIGHT_ALT) {
-			com.reachcrafting.client.ContainerUtils.toggleAutoCraftMode();
+			com.reachcrafting.client.ContainerUtils.handleAutoCraftKeyPress();
 			cir.setReturnValue(true);
+		} else if (com.reachcrafting.client.ContainerUtils.isAutoCraftTogglePending()) {
+			com.reachcrafting.client.ContainerUtils.cancelAutoCraftToggle();
 		}
 	}
 
 	@Inject(method = "containerTick", at = @At("TAIL"))
 	private void reachcrafting$onContainerTick(CallbackInfo ci) {
+		// Detect Alt release via polling to avoid Mixin remapping issues with inherited methods
+		boolean altDown = InputConstants.isKeyDown(Minecraft.getInstance().getWindow(), GLFW.GLFW_KEY_LEFT_ALT) 
+					   || InputConstants.isKeyDown(Minecraft.getInstance().getWindow(), GLFW.GLFW_KEY_RIGHT_ALT);
+		
+		if (!Minecraft.getInstance().isWindowActive() && com.reachcrafting.client.ContainerUtils.isAutoCraftTogglePending()) {
+			com.reachcrafting.client.ContainerUtils.cancelAutoCraftToggle();
+		}
+
+		if (!altDown && com.reachcrafting.client.ContainerUtils.isAutoCraftTogglePending()) {
+			com.reachcrafting.client.ContainerUtils.handleAutoCraftKeyReleased();
+		}
+
 		if (com.reachcrafting.client.ContainerUtils.isAutoMovePending()) {
 			com.reachcrafting.client.ContainerUtils.autoMoveResult(Minecraft.getInstance());
 		} else if (ReachCraftingConfig.get().autoCraftMode() 

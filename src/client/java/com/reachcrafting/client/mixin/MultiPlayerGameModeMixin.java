@@ -43,7 +43,10 @@ public abstract class MultiPlayerGameModeMixin {
 		if (menu.containerId != containerId) return;
 		
 		// Update the inventory snapshot high-water mark after every click to capture movements
-		com.reachcrafting.client.PulledResourcesTracker.updateSnapshot(client.player);
+		// BUT only if we aren't in an automated session, otherwise we'll "capture" the withdrawn items as initial state!
+		if (!com.reachcrafting.client.NearbyContainerDryRun.isActiveSessionRunning()) {
+			com.reachcrafting.client.PulledResourcesTracker.updateSnapshot(client.player);
+		}
 
 		if (clickType == ClickType.PICKUP) {
 			if (menu.getCarried().isEmpty()) {

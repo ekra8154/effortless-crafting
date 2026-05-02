@@ -23,7 +23,7 @@ public final class PulledResourcesTracker {
 			return;
 		}
 		updateSnapshot(player);
-		com.reachcrafting.ReachCraftingMod.LOGGER.info("[nearby_tracker] captured initial inventory snapshots");
+		com.reachcrafting.ReachCraftingMod.LOGGER.info("[nearby_tracker] captured initial inventory snapshots: {}", AvailableItemSnapshot.formatCounts(INITIAL_COUNTS));
 	}
 
 	/**
@@ -75,6 +75,17 @@ public final class PulledResourcesTracker {
 		if (stack.isEmpty()) {
 			return;
 		}
+		
+		// Consolidate with previous entry if same pos/slot to avoid 1-by-1 return overhead
+		if (!WITHDRAWN_ITEMS.isEmpty()) {
+			WithdrawnItem last = WITHDRAWN_ITEMS.get(WITHDRAWN_ITEMS.size() - 1);
+			if (last.containerPos().equals(containerPos) && last.slotIndex() == slotIndex && ItemStack.isSameItemSameComponents(last.stack(), stack)) {
+				last.stack().grow(stack.getCount());
+				return;
+			}
+		}
+
+		com.reachcrafting.ReachCraftingMod.LOGGER.info("[nearby_tracker] Recording withdrawal: {} at {} slot {}", ContainerUtils.formatStack(stack), ContainerUtils.formatPos(containerPos), slotIndex);
 		WITHDRAWN_ITEMS.add(new WithdrawnItem(containerPos, slotIndex, stack.copy()));
 	}
 

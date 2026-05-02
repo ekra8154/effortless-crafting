@@ -69,9 +69,10 @@ public abstract class RecipeBookComponentMixin {
 	@Inject(method = "keyPressed", at = @At("HEAD"), cancellable = true)
 	private void reachcrafting$onKeyPressedHead(KeyEvent event, CallbackInfoReturnable<Boolean> cir) {
 		if (event.key() == GLFW.GLFW_KEY_LEFT_ALT || event.key() == GLFW.GLFW_KEY_RIGHT_ALT) {
-			ContainerUtils.toggleAutoCraftMode();
+			ContainerUtils.handleAutoCraftKeyPress();
 			cir.setReturnValue(true);
-			return;
+		} else if (ContainerUtils.isAutoCraftTogglePending()) {
+			ContainerUtils.cancelAutoCraftToggle();
 		}
 
 		if (ReachCraftingConfig.get().typeToFocusSearch() && this.searchBox != null && this.isVisible() && !this.searchBox.isFocused()) {
@@ -80,6 +81,14 @@ public abstract class RecipeBookComponentMixin {
 				this.searchBox.setCursorPosition(this.searchBox.getValue().length());
 				this.searchBox.setHighlightPos(0);
 			}
+		}
+	}
+
+	@Inject(method = "keyReleased", at = @At("HEAD"), cancellable = true)
+	private void reachcrafting$onKeyReleased(KeyEvent event, CallbackInfoReturnable<Boolean> cir) {
+		if (event.key() == GLFW.GLFW_KEY_LEFT_ALT || event.key() == GLFW.GLFW_KEY_RIGHT_ALT) {
+			ContainerUtils.handleAutoCraftKeyReleased();
+			cir.setReturnValue(true);
 		}
 	}
 

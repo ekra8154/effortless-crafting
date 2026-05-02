@@ -1,4 +1,4 @@
-# Reach Crafting 🛠️
+# Reach Crafting
 
 **Reach Crafting** is a high-performance, client-side Fabric mod for Minecraft 1.21.11 that eliminates the friction of survival crafting. It treats nearby storage as a seamless extension of your own inventory, allowing you to craft complex, high-volume recipes directly from your chests without the "inventory shuffle."
 
@@ -14,26 +14,26 @@ Stop running back and forth to your chests. Reach Crafting automatically scans n
 * **Automatic Withdrawal**: Fetches ingredients in a single, fluid motion.
 * **Lag Resistant**: Built with a robust state machine to handle server latency and container synchronization.
 
-### 🔄 Smart Redistribution Engine
+### Smart Redistribution Engine
 The heart of the mod is an atomic planning engine that re-balances your crafting grid on the fly.
 * **Multi-Material Support**: Crafting a recipe with mixed ingredients (like different types of wood for chests)? The mod intelligently partitions your available materials into the grid.
 * **Batch Expansion**: Already have 20 items on the table but need 64? The mod calculates the "top-up" requirements and fills the grid to your target count.
 * **Material Prioritization**: Choose whether to use your inventory first or pull from nearby containers to keep your pockets clean.
 
-### 🎨 Intelligent Family Logic
+### Intelligent Family Logic
 Reach Crafting understands "Recipe Families" (Concrete, Wool, Glass, Wood, etc.).
 * **Family-Aware Indicators**: The recipe book shows a "Nearby Craftable" dot if *any* variant of a family is available.
 * **Variant Menu Integration**: Long-click a recipe to see specific craftability indicators for every color and variant.
 * **Locked Expansions**: If you have a specific variant on the table (e.g., Yellow Concrete), expanding the craft via the generic recipe button will automatically lock to your current color.
 
-### 🛡️ Vanilla Compatible & Safe
+### Vanilla Compatible & Safe
 * **Client-Side Only**: No server-side mod required.
 * **Legal Movements**: Only performs standard slot clicks and container interactions.
 * **Anti-Desync**: Aggressive cursor sanitation and grid clearing ensure you never get items "stuck" to your mouse.
 
 ---
 
-## 🚀 Usage
+## Usage
 
 | Action | Result |
 | :--- | :--- |
@@ -45,7 +45,7 @@ Reach Crafting understands "Recipe Families" (Concrete, Wool, Glass, Wood, etc.)
 
 ---
 
-## ⚙️ Configuration & Policy Logic
+## Configuration & Policy Logic
 
 Reach Crafting is highly customizable, and its planning engine intelligently combines your settings to match your workflow:
 
@@ -63,7 +63,7 @@ Reach Crafting is highly customizable, and its planning engine intelligently com
 
 ---
 
-## 🛠️ Development
+## Development
 
 Building the project locally:
 ```powershell
@@ -76,7 +76,7 @@ Building the project locally:
 
 ---
 
-## 📜 Credits & License
+## Credits & License
 
 This project is licensed under **LGPL-3.0-or-later**. It draws inspiration and certain implementation patterns from the following excellent projects:
 * [OneClickCrafting](https://github.com/BreadMoirai/OneClickCrafting) by BreadMoirai (MIT)
@@ -103,6 +103,7 @@ up arrow to restore searches instead of auto loaded in
 
 remove option to turn off hold and release style - its just better
 
+on release, input number count should stay there, and allow the user to decrease or increase it as needed (or change it to a different recipe)
 
 KNOWN BUGS:
 - queuing a single harness works but queuing too many results in nothing appearing at all

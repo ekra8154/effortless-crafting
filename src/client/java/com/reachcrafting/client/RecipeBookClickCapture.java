@@ -41,6 +41,7 @@ public final class RecipeBookClickCapture {
 	private static boolean wasControlDown;
 	private static boolean wasShiftDown;
 	private static boolean wasSearchBoxFocusedByMod;
+	private static int replayDelayTicks = 0;
 
 	private RecipeBookClickCapture() {
 	}
@@ -72,7 +73,12 @@ public final class RecipeBookClickCapture {
 			wasControlDown = controlDown;
 			wasShiftDown = shiftDown;
 
-			processReplayBatch(client);
+			if (replayDelayTicks > 0) {
+				replayDelayTicks--;
+			} else {
+				processReplayBatch(client);
+			}
+
 			if (!controlDown && !shiftDown && !ReachCraftingConfig.get().reachCraftHoldAndRelease()) {
 				pendingHeldRecipe = null;
 			}
@@ -123,9 +129,18 @@ public final class RecipeBookClickCapture {
 		}
 
 		boolean craftAll = shiftModifierDown || isShiftKeyDown(minecraft);
-		boolean allowNearbyFallback = ctrlModifierDown || isControlKeyDown(minecraft);
-		if (shouldQueueHeldRecipe(minecraft, allowNearbyFallback, craftAll) && replayBatch == null) {
-			queueHeldRecipe(recipeId, collection, displayStack, mouseButton, explicitVariantSelection, allowNearbyFallback);
+		boolean allowNearbyChests = ctrlModifierDown || isControlKeyDown(minecraft);
+
+		if (shouldQueueHeldRecipe(minecraft, allowNearbyChests, craftAll) && replayBatch == null) {
+			queueHeldRecipe(recipeId, collection, displayStack, mouseButton, explicitVariantSelection, allowNearbyChests);
+			return;
+		}
+
+		if (!ContainerUtils.isGridEmpty(player.containerMenu)) {
+			ContainerUtils.flushCraftingGrid(minecraft, allowNearbyChests, true);
+			replayDelayTicks = 1;
+			HeldRecipeAction action = new HeldRecipeAction(recipeId, collection, displayStack != null ? displayStack.copy() : ItemStack.EMPTY, mouseButton, explicitVariantSelection);
+			replayBatch = new ReplayBatch(action, 1, allowNearbyChests);
 			return;
 		}
 
@@ -138,7 +153,7 @@ public final class RecipeBookClickCapture {
 			displayStack,
 			mouseButton,
 			craftAll,
-			allowNearbyFallback,
+			allowNearbyChests,
 			false,
 			explicitVariantSelection,
 			1
@@ -154,7 +169,7 @@ public final class RecipeBookClickCapture {
 		ItemStack displayStack,
 		int mouseButton,
 		boolean craftAll,
-		boolean allowNearbyFallback,
+		boolean allowNearbyChests,
 		boolean forceDryRun,
 		boolean explicitVariantSelection,
 		int requestedClicks
@@ -165,6 +180,8 @@ public final class RecipeBookClickCapture {
 			? ContainerUtils.currentReservedCraftCopies(availableItems.gridStacks()) + requestedClicks
 			: Math.max(requestedClicks, 1);
 
+		boolean allowVariantSwitching = allowNearbyChests || forceDryRun;
+
 		String screenKind = screen instanceof InventoryScreen ? "inventory_2x2" : "crafting_table_3x3";
 		RecipeVariantResolver.Selection selectedRecipe = RecipeVariantResolver.resolve(
 			minecraft,
@@ -173,7 +190,7 @@ public final class RecipeBookClickCapture {
 			collection,
 			displayStack != null ? displayStack.copy() : ItemStack.EMPTY,
 			explicitVariantSelection,
-			allowNearbyFallback,
+			allowVariantSwitching,
 			availableItems,
 			availableItems.inventoryCounts(),
 			availableItems.inventoryCounts(),
@@ -225,7 +242,7 @@ public final class RecipeBookClickCapture {
 			recipeIndex,
 			craftable,
 			craftAll,
-			allowNearbyFallback,
+			allowNearbyChests,
 			outputLabel
 		);
 		ReachCraftingMod.LOGGER.info(
@@ -248,7 +265,7 @@ public final class RecipeBookClickCapture {
 			false
 		);
 
-		boolean useDryRun = forceDryRun || allowNearbyFallback;
+		boolean useDryRun = forceDryRun || allowNearbyChests;
 
 		if (useDryRun) {
 			if (!deficitReport.hasMissingIngredients() && availableItems.hasReservedGrid()) {
@@ -262,7 +279,7 @@ public final class RecipeBookClickCapture {
 					availableItems,
 					craftAll,
 					requestedClicks,
-					allowNearbyFallback
+					allowNearbyChests
 				)) {
 					return;
 				}
@@ -277,7 +294,7 @@ public final class RecipeBookClickCapture {
 				availableItems,
 				craftAll,
 				requestedClicks,
-				allowNearbyFallback
+				allowNearbyChests
 			);
 			return;
 		}
@@ -364,6 +381,15 @@ public final class RecipeBookClickCapture {
 		if (pendingHeldRecipe == null) {
 			return;
 		}
+		
+		Minecraft minecraft = Minecraft.getInstance();
+		if (!ContainerUtils.isGridEmpty(minecraft.player.containerMenu)) {
+			ContainerUtils.flushCraftingGrid(minecraft, pendingHeldRecipe.allowNearby(), true);
+		}
+		
+		// Always delay by at least 1 tick to ensure server/client state sync after key release
+		replayDelayTicks = 1;
+
 		replayBatch = new ReplayBatch(pendingHeldRecipe.action(), pendingHeldRecipe.clickCount(), pendingHeldRecipe.allowNearby());
 		pendingHeldRecipe = null;
 	}

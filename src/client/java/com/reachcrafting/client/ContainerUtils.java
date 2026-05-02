@@ -41,11 +41,31 @@ public final class ContainerUtils {
 	private static ItemStack autoMoveTargetStack = ItemStack.EMPTY;
 	private static Map<Integer, Integer> autoMoveSnapshotCounts = new HashMap<>();
 	private static boolean autoMoveOrganizing = false;
+	private static boolean autoCraftKeyHeld = false;
 	private static long lastAutoCraftToggleTime = 0;
 
-	public static void toggleAutoCraftMode() {
+	public static void handleAutoCraftKeyPress() {
+		autoCraftKeyHeld = true;
+	}
+
+	public static void handleAutoCraftKeyReleased() {
+		if (autoCraftKeyHeld) {
+			autoCraftKeyHeld = false;
+			toggleAutoCraftMode();
+		}
+	}
+
+	public static void cancelAutoCraftToggle() {
+		autoCraftKeyHeld = false;
+	}
+
+	public static boolean isAutoCraftTogglePending() {
+		return autoCraftKeyHeld;
+	}
+
+	private static void toggleAutoCraftMode() {
 		long now = System.currentTimeMillis();
-		if (now - lastAutoCraftToggleTime < 200) {
+		if (now - lastAutoCraftToggleTime < 50) {
 			return;
 		}
 		lastAutoCraftToggleTime = now;
@@ -54,8 +74,7 @@ public final class ContainerUtils {
 		ReachCraftingConfig.get().setAutoCraftMode(!current);
 	}
 
-	public static void autoMoveResult(AbstractContainerMenu menu) {
-	}
+
 
 	public static void scheduleAutoMove() {
 		pendingAutoMove = true;
@@ -326,6 +345,38 @@ public final class ContainerUtils {
 				autoMoveTargetStack = ItemStack.EMPTY;
 			}
 		}
+	}
+
+	public static boolean isGridEmpty(AbstractContainerMenu menu) {
+		for (int i = 0; i < menu.slots.size(); i++) {
+			if (InventoryGridRestoreTracker.isGridSlot(menu, i)) {
+				if (menu.getSlot(i).hasItem()) {
+					return false;
+				}
+			}
+		}
+		return true;
+	}
+
+	public static void flushCraftingGrid(net.minecraft.client.Minecraft client, boolean allowScreenChange, boolean isStartingNewCraft) {
+		if (client.player == null || client.player.containerMenu == null) return;
+		if (!(client.screen instanceof net.minecraft.client.gui.screens.inventory.CraftingScreen) 
+			&& !(client.screen instanceof net.minecraft.client.gui.screens.inventory.InventoryScreen)) {
+			return;
+		}
+		
+		AbstractContainerMenu menu = client.player.containerMenu;
+
+		if (allowScreenChange && ReachCraftingConfig.get().putPulledResourcesBack() && !PulledResourcesTracker.isEmpty()) {
+			com.reachcrafting.ReachCraftingMod.LOGGER.info("[grid_flush] Initiating return to chests (items={})", PulledResourcesTracker.getWithdrawnItems().size());
+			NearbyContainerDryRun.startReturn(menu, PulledResourcesTracker.getWithdrawnItems(), isStartingNewCraft);
+		} else if (allowScreenChange && ReachCraftingConfig.get().putPulledResourcesBack()) {
+			com.reachcrafting.ReachCraftingMod.LOGGER.info("[grid_flush] Skipping return to chests: PulledResourcesTracker is empty");
+		}
+
+		// 2. Return Grid Items to Inventory (Smart or Shift-Click)
+		// This will handle restoreInventoryItemPositions internally because we updated it.
+		InventoryGridRestoreTracker.restore(menu, client.gameMode);
 	}
 
 	private static Slot findInventorySlot(AbstractContainerMenu menu, int inventoryIndex) {

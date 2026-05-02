@@ -26,7 +26,7 @@ public final class RecipeVariantResolver {
 		RecipeCollection collection,
 		ItemStack clickedDisplayStack,
 		boolean explicitVariantSelection,
-		boolean allowNearbyFallback,
+		boolean allowVariantSwitching,
 		AvailableItemSnapshot availableItems,
 		Map<String, Integer> usableCounts,
 		Map<String, Integer> preferenceTotals,
@@ -39,7 +39,7 @@ public final class RecipeVariantResolver {
 			collection,
 			clickedDisplayStack,
 			explicitVariantSelection,
-			allowNearbyFallback,
+			allowVariantSwitching,
 			availableItems,
 			usableCounts,
 			preferenceTotals,
@@ -56,7 +56,7 @@ public final class RecipeVariantResolver {
 		RecipeCollection collection,
 		ItemStack clickedDisplayStack,
 		boolean explicitVariantSelection,
-		boolean allowNearbyFallback,
+		boolean allowVariantSwitching,
 		AvailableItemSnapshot availableItems,
 		Map<String, Integer> usableCounts,
 		Map<String, Integer> preferenceTotals,
@@ -85,7 +85,7 @@ public final class RecipeVariantResolver {
 			craftAll,
 			desiredCopiesPerSlot
 		);
-		if (!shouldResolveCollectionVariant(collection, explicitVariantSelection, allowNearbyFallback, availableItems, allowReservedGridVariantSwitch)) {
+		if (!shouldResolveCollectionVariant(collection, explicitVariantSelection, allowVariantSwitching, availableItems, allowReservedGridVariantSwitch)) {
 			return exactSelection;
 		}
 
@@ -170,13 +170,13 @@ public final class RecipeVariantResolver {
 	private static boolean shouldResolveCollectionVariant(
 		RecipeCollection collection,
 		boolean explicitVariantSelection,
-		boolean allowNearbyFallback,
+		boolean allowVariantSwitching,
 		AvailableItemSnapshot availableItems,
 		boolean allowReservedGridVariantSwitch
 	) {
 		return collection != null
 			&& collection.getRecipes().size() > 1
-			&& allowNearbyFallback
+			&& allowVariantSwitching
 			&& !explicitVariantSelection
 			&& (!availableItems.hasReservedGrid() || allowReservedGridVariantSwitch);
 	}

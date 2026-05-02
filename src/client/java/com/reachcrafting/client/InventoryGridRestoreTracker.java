@@ -91,53 +91,54 @@ public final class InventoryGridRestoreTracker {
 	}
 
 	public static void restore(AbstractContainerMenu menu, MultiPlayerGameMode gameMode) {
+		com.reachcrafting.ReachCraftingMod.LOGGER.info("[grid_restore] Starting restoration sequence for menu {}", menu.getClass().getSimpleName());
 		try {
-			if (menu == null || gameMode == null || !ReachCraftingConfig.get().restoreInventoryItemPositions()) {
+			if (menu == null || gameMode == null) {
 				clear();
 				return;
 			}
 
+			boolean useSmartRestore = ReachCraftingConfig.get().restoreInventoryItemPositions();
 			Map<Integer, ItemStack> snapshots = PulledResourcesTracker.getInitialSlotSnapshots();
-			if (GRID_TO_ORIGINAL_SLOT.isEmpty() && snapshots.isEmpty()) {
-				return;
-			}
+			if (useSmartRestore && !GRID_TO_ORIGINAL_SLOT.isEmpty() || !snapshots.isEmpty()) {
+				Minecraft client = Minecraft.getInstance();
+				if (client.player == null) return;
 
-			Minecraft client = Minecraft.getInstance();
-			if (client.player == null) return;
-
-			// PASS 1: Direct Mapping Restoration
-			// Use explicit mappings from GRID_TO_ORIGINAL_SLOT (for items the mod moved or the user clicked)
-			Set<Integer> processedGridSlots = new HashSet<>();
-			for (int gridIdx = 0; gridIdx < menu.slots.size(); gridIdx++) {
-				if (isGridSlot(menu, gridIdx)) {
-					Slot gridSlot = menu.getSlot(gridIdx);
-					if (gridSlot.hasItem()) {
-						int targetMenuIdx = GRID_TO_ORIGINAL_SLOT.getOrDefault(gridIdx, -1);
-						if (targetMenuIdx != -1) {
-							moveItems(menu, gameMode, gridIdx, targetMenuIdx);
-							if (!gridSlot.hasItem()) {
-								processedGridSlots.add(gridIdx);
+				// PASS 1: Direct Mapping Restoration
+				// Use explicit mappings from GRID_TO_ORIGINAL_SLOT (for items the mod moved or the user clicked)
+				Set<Integer> processedGridSlots = new HashSet<>();
+				for (int gridIdx = 0; gridIdx < menu.slots.size(); gridIdx++) {
+					if (isGridSlot(menu, gridIdx)) {
+						Slot gridSlot = menu.getSlot(gridIdx);
+						if (gridSlot.hasItem()) {
+							int targetMenuIdx = GRID_TO_ORIGINAL_SLOT.getOrDefault(gridIdx, -1);
+							if (targetMenuIdx != -1) {
+								moveItems(menu, gameMode, gridIdx, targetMenuIdx);
+								if (!gridSlot.hasItem()) {
+									processedGridSlots.add(gridIdx);
+								}
 							}
 						}
 					}
 				}
-			}
 
-			// PASS 2: Snapshot-Based Distributed Restoration
-			// For each slot that had an item in the snapshot, try to fill it back to its original count
-			for (Map.Entry<Integer, ItemStack> entry : snapshots.entrySet()) {
-				int invIdx = entry.getKey();
-				ItemStack snapshot = entry.getValue();
-				String itemId = BuiltInRegistries.ITEM.getKey(snapshot.getItem()).toString();
-				int targetMenuIdx = inventoryIndexToMenuIndex(menu, invIdx);
-				
-				if (targetMenuIdx != -1) {
-					fillSlotFromGrid(menu, gameMode, targetMenuIdx, snapshot.getCount(), itemId, processedGridSlots);
+				// PASS 2: Snapshot-Based Distributed Restoration
+				// For each slot that had an item in the snapshot, try to fill it back to its original count
+				for (Map.Entry<Integer, ItemStack> entry : snapshots.entrySet()) {
+					int invIdx = entry.getKey();
+					ItemStack snapshot = entry.getValue();
+					String itemId = BuiltInRegistries.ITEM.getKey(snapshot.getItem()).toString();
+					int targetMenuIdx = inventoryIndexToMenuIndex(menu, invIdx);
+					
+					if (targetMenuIdx != -1) {
+						fillSlotFromGrid(menu, gameMode, targetMenuIdx, snapshot.getCount(), itemId, processedGridSlots);
+					}
 				}
 			}
 
 			// PASS 3: Leftover Consolidation
 			// Anything still in the grid (e.g. newly crafted items or extras) gets Shift-Clicked
+			Minecraft client = Minecraft.getInstance();
 			for (int gridIdx = 0; gridIdx < menu.slots.size(); gridIdx++) {
 				if (isGridSlot(menu, gridIdx)) {
 					Slot s = menu.getSlot(gridIdx);
