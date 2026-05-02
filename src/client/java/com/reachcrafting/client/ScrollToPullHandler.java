@@ -18,7 +18,7 @@ public final class ScrollToPullHandler {
     }
 
     public static boolean handleScroll(Screen screen, double mouseX, double mouseY, double amount) {
-        if (!ReachCraftingConfig.get().scrollToPull()) {
+        if (!ReachCraftingConfig.get().enabled() || !ReachCraftingConfig.get().scrollToPull()) {
             return false;
         }
 

@@ -1,5 +1,6 @@
 package com.reachcrafting.client.mixin;
 
+import com.reachcrafting.client.ReachCraftingConfig;
 import com.reachcrafting.client.RecipeButtonQueuedCountIndicator;
 import com.reachcrafting.client.RecipeButtonNearbyIndicator;
 import net.minecraft.client.gui.GuiGraphics;
@@ -26,6 +27,7 @@ public abstract class OverlayRecipeButtonMixin {
 
 	@Inject(method = "renderWidget", at = @At("TAIL"))
 	private void reachcrafting$renderQueuedCount(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick, CallbackInfo ci) {
+		if (!ReachCraftingConfig.get().enabled()) return;
 		RecipeCollection collection = field_3113.getRecipeCollection();
 		if (collection == null) {
 			return;

@@ -68,6 +68,12 @@ public final class NearbyContainerDryRun {
 
 	public static void init() {
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
+			if (!ReachCraftingConfig.get().enabled()) {
+				if (activeSession != null) {
+					abortActiveSession();
+				}
+				return;
+			}
 			if (interactionBlockTicks > 0) {
 				interactionBlockTicks--;
 			}

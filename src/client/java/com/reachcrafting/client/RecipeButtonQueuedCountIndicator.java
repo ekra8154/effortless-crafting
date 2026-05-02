@@ -19,6 +19,9 @@ public final class RecipeButtonQueuedCountIndicator {
 	}
 
 	public static void render(GuiGraphics guiGraphics, RecipeButton button) {
+		if (!ReachCraftingConfig.get().enabled()) {
+			return;
+		}
 		int queuedCount = RecipeBookClickCapture.getHeldQueuedCount(button);
 		if (queuedCount < 1) {
 			return;
@@ -50,6 +53,9 @@ public final class RecipeButtonQueuedCountIndicator {
 		RecipeDisplayId recipeId,
 		RecipeCollection collection
 	) {
+		if (!ReachCraftingConfig.get().enabled()) {
+			return;
+		}
 		int queuedCount = RecipeBookClickCapture.getHeldQueuedCount(recipeId, collection, true);
 		if (queuedCount < 1) {
 			return;

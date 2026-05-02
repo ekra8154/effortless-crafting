@@ -62,6 +62,13 @@ public class ReachCraftingModClient implements ClientModInitializer {
 				InWorldFilterManager.saveIfDirty();
 			}
 
+			if (!ReachCraftingConfig.get().enabled()) {
+				// Flush any pending clicks/keys just in case
+				while (debugPingKey.consumeClick());
+				while (quickCraftKey.consumeClick());
+				return;
+			}
+
 			while (debugPingKey.consumeClick()) {
 				ReachCraftingMod.LOGGER.info("[debug_ping] manual debug ping triggered");
 				if (client.player != null) {

@@ -47,6 +47,7 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 
 	@Inject(method = "init", at = @At("HEAD"))
 	private void reachcrafting$captureInventoryOnOpen(CallbackInfo ci) {
+		if (!ReachCraftingConfig.get().enabled()) return;
 		// ONLY clear and snapshot if we aren't in the middle of an automated session!
 		if (!com.reachcrafting.client.NearbyContainerDryRun.isActiveSessionRunning()) {
 			com.reachcrafting.client.InventoryGridRestoreTracker.clear();
@@ -62,6 +63,7 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 
 	@Inject(method = "onClose", at = @At("HEAD"))
 	private void reachcrafting$onClose(CallbackInfo ci) {
+		if (!ReachCraftingConfig.get().enabled()) return;
 		com.reachcrafting.ReachCraftingMod.LOGGER.info("[grid_restore] Screen onClose triggered for {}", this.getClass().getName());
 
 		if (com.reachcrafting.client.NearbyContainerDryRun.isActiveSessionRunning()) {
@@ -76,6 +78,7 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 
 	@Inject(method = "removed", at = @At("HEAD"))
 	private void reachcrafting$cacheContainerOnClose(CallbackInfo ci) {
+		if (!ReachCraftingConfig.get().enabled()) return;
 		NearbyContainerCache.onContainerScreenRemoved(this.menu);
 		
 		if (!com.reachcrafting.client.NearbyContainerDryRun.isActiveSessionRunning()) {
@@ -86,6 +89,7 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 
 	@Inject(method = "renderLabels", at = @At("TAIL"))
 	private void reachcrafting$renderControlDot(GuiGraphics guiGraphics, int mouseX, int mouseY, CallbackInfo ci) {
+		if (!ReachCraftingConfig.get().enabled()) return;
 		if (ReachCraftingConfig.get().inWorldFilterMode() == ReachCraftingConfig.InWorldFilterMode.NONE) return;
 
 		Minecraft client = Minecraft.getInstance();
@@ -112,6 +116,7 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 
 	@Inject(method = "mouseClicked", at = @At("HEAD"), cancellable = true)
 	private void reachcrafting$onMouseClicked(MouseButtonEvent click, boolean filtering, CallbackInfoReturnable<Boolean> cir) {
+		if (!ReachCraftingConfig.get().enabled()) return;
 		if (ReachCraftingConfig.get().inWorldFilterMode() == ReachCraftingConfig.InWorldFilterMode.NONE) return;
 		if (click.button() != 0) return; // Only left click
 		
@@ -139,6 +144,7 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 
 	@Inject(method = "renderSlot", at = @At("HEAD"))
 	private void reachcrafting$renderResultArrow(GuiGraphics guiGraphics, Slot slot, int i, int j, CallbackInfo ci) {
+		if (!ReachCraftingConfig.get().enabled()) return;
 		if (ReachCraftingConfig.get().autoCraftMode() && slot instanceof ResultSlot) {
 			if ((Object) this instanceof CraftingScreen || (Object) this instanceof InventoryScreen) {
 				RecipeButtonNearbyIndicator.renderGrayArrow(guiGraphics, slot.x + 6, slot.y + 6);
@@ -149,6 +155,7 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 
 	@Inject(method = "keyPressed", at = @At("HEAD"), cancellable = true)
 	private void reachcrafting$onKeyPressed(KeyEvent event, CallbackInfoReturnable<Boolean> cir) {
+		if (!ReachCraftingConfig.get().enabled()) return;
 		if (event.key() == GLFW.GLFW_KEY_LEFT_ALT || event.key() == GLFW.GLFW_KEY_RIGHT_ALT) {
 			com.reachcrafting.client.ContainerUtils.handleAutoCraftKeyPress();
 			cir.setReturnValue(true);
@@ -159,6 +166,7 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 
 	@Inject(method = "containerTick", at = @At("TAIL"))
 	private void reachcrafting$onContainerTick(CallbackInfo ci) {
+		if (!ReachCraftingConfig.get().enabled()) return;
 		// Detect Alt release via polling to avoid Mixin remapping issues with inherited methods
 		boolean altDown = InputConstants.isKeyDown(Minecraft.getInstance().getWindow(), GLFW.GLFW_KEY_LEFT_ALT) 
 					   || InputConstants.isKeyDown(Minecraft.getInstance().getWindow(), GLFW.GLFW_KEY_RIGHT_ALT);
@@ -178,6 +186,7 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 
 	@Inject(method = "renderSlot", at = @At("TAIL"))
 	private void reachcrafting$renderOutputCounter(GuiGraphics guiGraphics, Slot slot, int i, int j, CallbackInfo ci) {
+		if (!ReachCraftingConfig.get().enabled()) return;
 		com.reachcrafting.client.RecipeOutputCounter.render(guiGraphics, (AbstractContainerScreen<?>) (Object) this, slot);
 	}
 }

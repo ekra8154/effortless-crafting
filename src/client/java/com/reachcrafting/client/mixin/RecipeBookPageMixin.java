@@ -1,5 +1,6 @@
 package com.reachcrafting.client.mixin;
 
+import com.reachcrafting.client.ReachCraftingConfig;
 import com.reachcrafting.client.RecipeBookClickCapture;
 import java.util.List;
 import net.minecraft.client.gui.screens.recipebook.OverlayRecipeComponent;
@@ -34,6 +35,9 @@ public abstract class RecipeBookPageMixin {
 		boolean filtering,
 		CallbackInfoReturnable<Boolean> cir
 	) {
+		if (!ReachCraftingConfig.get().enabled()) {
+			return;
+		}
 		if (click.button() == GLFW.GLFW_MOUSE_BUTTON_RIGHT) {
 			OverlayRecipeComponent overlay = ((RecipeBookPageAccessor) (Object) this).getOverlay();
 			if (overlay != null && overlay.isVisible()) {

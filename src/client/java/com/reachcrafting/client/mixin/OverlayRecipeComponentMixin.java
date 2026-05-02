@@ -1,5 +1,6 @@
 package com.reachcrafting.client.mixin;
 
+import com.reachcrafting.client.ReachCraftingConfig;
 import com.reachcrafting.client.RecipeBookClickCapture;
 import net.minecraft.client.gui.screens.recipebook.OverlayRecipeComponent;
 import net.minecraft.client.gui.screens.recipebook.RecipeCollection;
@@ -18,6 +19,9 @@ public abstract class OverlayRecipeComponentMixin {
 		at = @At("RETURN")
 	)
 	private void reachcrafting$onOverlayRecipeClicked(MouseButtonEvent click, boolean filtering, CallbackInfoReturnable<Boolean> cir) {
+		if (!ReachCraftingConfig.get().enabled()) {
+			return;
+		}
 		OverlayRecipeComponent overlay = (OverlayRecipeComponent) (Object) this;
 		RecipeDisplayId recipeId = overlay.getLastRecipeClicked();
 		RecipeCollection collection = overlay.getRecipeCollection();

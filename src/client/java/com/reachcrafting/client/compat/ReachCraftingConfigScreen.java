@@ -27,6 +27,15 @@ public final class ReachCraftingConfigScreen {
 		ConfigCategory craftingUi = builder.getOrCreateCategory(Component.translatable("category.reachcrafting.crafting_ui"));
 
 		craftingUi.addEntry(entries.startBooleanToggle(
+				Component.translatable("option.reachcrafting.enabled"),
+				config.enabled()
+			)
+			.setDefaultValue(true)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.enabled"))
+			.setSaveConsumer(config::setEnabled)
+			.build());
+
+		craftingUi.addEntry(entries.startBooleanToggle(
 				Component.translatable("option.reachcrafting.show_total_output_counts"),
 				config.showTotalOutputCounts()
 			)

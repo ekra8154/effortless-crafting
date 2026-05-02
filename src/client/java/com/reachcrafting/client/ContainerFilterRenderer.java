@@ -23,6 +23,9 @@ public final class ContainerFilterRenderer {
 		// Use AFTER_ENTITIES as AFTER_TRANSLUCENT doesn't provide vertex consumers in modern Fabric/MC
 		WorldRenderEvents.AFTER_ENTITIES.register(context -> {
 			ReachCraftingConfig config = ReachCraftingConfig.get();
+			if (!config.enabled()) {
+				return;
+			}
 			ReachCraftingConfig.OutlineDisplayMode mode = config.showFilterOutlines();
 			
 			if (mode == ReachCraftingConfig.OutlineDisplayMode.OFF) {

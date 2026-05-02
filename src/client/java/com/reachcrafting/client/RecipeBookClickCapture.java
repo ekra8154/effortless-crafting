@@ -49,6 +49,13 @@ public final class RecipeBookClickCapture {
 
 	public static void init() {
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
+			if (!ReachCraftingConfig.get().enabled()) {
+				pendingHeldRecipe = null;
+				replayBatch = null;
+				wasSearchBoxFocusedByMod = false;
+				wasModifierReleasedWhileSpaceHeld = false;
+				return;
+			}
 			boolean controlDown = isControlKeyDown(client);
 			boolean shiftDown = isShiftKeyDown(client);
 			boolean spaceDown = isSpaceKeyDown(client);
@@ -94,6 +101,9 @@ public final class RecipeBookClickCapture {
 		});
 		ScreenEvents.AFTER_INIT.register((client, screen, scaledWidth, scaledHeight) -> {
 			ScreenMouseEvents.allowMouseClick(screen).register((currentScreen, event) -> {
+				if (!ReachCraftingConfig.get().enabled()) {
+					return true;
+				}
 				if (event.button() != GLFW.GLFW_MOUSE_BUTTON_RIGHT) {
 					return true;
 				}
@@ -104,6 +114,9 @@ public final class RecipeBookClickCapture {
 				return true;
 			});
 			ScreenMouseEvents.allowMouseScroll(screen).register((currentScreen, mouseX, mouseY, horizontalAmount, verticalAmount) -> {
+				if (!ReachCraftingConfig.get().enabled()) {
+					return true;
+				}
 				if (handleHeldRecipeScroll(currentScreen, mouseX, mouseY, verticalAmount)) {
 					return false;
 				}
@@ -124,6 +137,9 @@ public final class RecipeBookClickCapture {
 		boolean ctrlModifierDown,
 		boolean explicitVariantSelection
 	) {
+		if (!ReachCraftingConfig.get().enabled()) {
+			return;
+		}
 		Minecraft minecraft = Minecraft.getInstance();
 		Screen screen = minecraft.screen;
 		if (!(screen instanceof InventoryScreen) && !(screen instanceof CraftingScreen)) {
@@ -386,6 +402,9 @@ public final class RecipeBookClickCapture {
 		ItemStack displayStack,
 		boolean explicitVariantSelection
 	) {
+		if (!ReachCraftingConfig.get().enabled()) {
+			return false;
+		}
 		if (!canUseHeldQueueControls(Minecraft.getInstance()) || recipeId == null || collection == null) {
 			return false;
 		}
@@ -399,7 +418,7 @@ public final class RecipeBookClickCapture {
 	}
 
 	private static void releasePendingHeldRecipe() {
-		if (pendingHeldRecipe == null) {
+		if (!ReachCraftingConfig.get().enabled() || pendingHeldRecipe == null) {
 			return;
 		}
 		
@@ -416,7 +435,7 @@ public final class RecipeBookClickCapture {
 	}
 
 	private static void processReplayBatch(Minecraft minecraft) {
-		if (replayBatch == null) {
+		if (!ReachCraftingConfig.get().enabled() || replayBatch == null) {
 			return;
 		}
 		if (NearbyContainerDryRun.isActiveSessionRunning()) {
@@ -463,6 +482,9 @@ public final class RecipeBookClickCapture {
 	}
 
 	private static boolean handleHeldRecipeScroll(Screen screen, double mouseX, double mouseY, double verticalAmount) {
+		if (!ReachCraftingConfig.get().enabled()) {
+			return false;
+		}
 		Minecraft minecraft = Minecraft.getInstance();
 		if (!canUseHeldQueueControls(minecraft) || verticalAmount == 0.0D) {
 			return false;

@@ -46,6 +46,7 @@ public abstract class RecipeBookComponentMixin {
 
 	@Inject(method = "init", at = @At("TAIL"))
 	private void reachcrafting$onInit(int width, int height, Minecraft client, boolean isFiltering, CallbackInfo ci) {
+		if (!ReachCraftingConfig.get().enabled()) return;
 		lastScreenOpenTime = System.currentTimeMillis();
 		reachcrafting$applyAutoFocus();
 		com.reachcrafting.client.ReachCraftingModClient.forceNextInventorySearchFocus = false;
@@ -53,6 +54,7 @@ public abstract class RecipeBookComponentMixin {
 
 	@Inject(method = "setVisible", at = @At("TAIL"))
 	private void reachcrafting$onSetVisible(boolean visible, CallbackInfo ci) {
+		if (!ReachCraftingConfig.get().enabled()) return;
 		if (visible) {
 			lastScreenOpenTime = System.currentTimeMillis();
 			reachcrafting$applyAutoFocus();
@@ -61,6 +63,7 @@ public abstract class RecipeBookComponentMixin {
 
 	@Inject(method = "mouseClicked", at = @At("HEAD"))
 	private void reachcrafting$onMouseClicked(MouseButtonEvent click, boolean filtering, CallbackInfoReturnable<Boolean> cir) {
+		if (!ReachCraftingConfig.get().enabled()) return;
 		if (this.searchBox != null && this.isVisible() && reachcrafting$isSupportedScreen()) {
 			ReachCraftingConfig.setLastSearchText(this.searchBox.getValue());
 		}
@@ -68,6 +71,7 @@ public abstract class RecipeBookComponentMixin {
 
 	@Inject(method = "keyPressed", at = @At("HEAD"), cancellable = true)
 	private void reachcrafting$onKeyPressedHead(KeyEvent event, CallbackInfoReturnable<Boolean> cir) {
+		if (!ReachCraftingConfig.get().enabled()) return;
 		if (event.key() == GLFW.GLFW_KEY_LEFT_ALT || event.key() == GLFW.GLFW_KEY_RIGHT_ALT) {
 			ContainerUtils.handleAutoCraftKeyPress();
 			cir.setReturnValue(true);
@@ -86,6 +90,7 @@ public abstract class RecipeBookComponentMixin {
 
 	@Inject(method = "keyReleased", at = @At("HEAD"), cancellable = true)
 	private void reachcrafting$onKeyReleased(KeyEvent event, CallbackInfoReturnable<Boolean> cir) {
+		if (!ReachCraftingConfig.get().enabled()) return;
 		if (event.key() == GLFW.GLFW_KEY_LEFT_ALT || event.key() == GLFW.GLFW_KEY_RIGHT_ALT) {
 			ContainerUtils.handleAutoCraftKeyReleased();
 			cir.setReturnValue(true);
@@ -94,6 +99,7 @@ public abstract class RecipeBookComponentMixin {
 
 	@Inject(method = "keyPressed", at = @At("TAIL"))
 	private void reachcrafting$onKeyPressed(KeyEvent event, CallbackInfoReturnable<Boolean> cir) {
+		if (!ReachCraftingConfig.get().enabled()) return;
 		if (this.searchBox != null && this.isVisible() && reachcrafting$isSupportedScreen()) {
 			ReachCraftingConfig.setLastSearchText(this.searchBox.getValue());
 			this.checkSearchStringUpdate();
@@ -102,6 +108,7 @@ public abstract class RecipeBookComponentMixin {
 
 	@Inject(method = "charTyped", at = @At("TAIL"))
 	private void reachcrafting$onCharTyped(CharacterEvent event, CallbackInfoReturnable<Boolean> cir) {
+		if (!ReachCraftingConfig.get().enabled()) return;
 		if (this.searchBox != null && this.isVisible() && reachcrafting$isSupportedScreen()) {
 			ReachCraftingConfig.setLastSearchText(this.searchBox.getValue());
 			this.checkSearchStringUpdate();

@@ -1,5 +1,5 @@
 package com.reachcrafting.client.mixin;
-
+import com.reachcrafting.client.ReachCraftingConfig;
 import com.reachcrafting.client.InventoryGridRestoreTracker;
 import com.reachcrafting.client.NearbyContainerCache;
 import net.minecraft.client.Minecraft;
@@ -28,6 +28,7 @@ public abstract class MultiPlayerGameModeMixin {
 		BlockHitResult hitResult,
 		CallbackInfoReturnable<InteractionResult> cir
 	) {
+		if (!ReachCraftingConfig.get().enabled()) return;
 		if (player == null || player.level() == null || hitResult == null) {
 			return;
 		}
@@ -36,6 +37,7 @@ public abstract class MultiPlayerGameModeMixin {
 
 	@Inject(method = "handleInventoryMouseClick", at = @At("HEAD"))
 	private void reachcrafting$onHandleInventoryMouseClick(int containerId, int slotId, int button, ClickType clickType, net.minecraft.world.entity.player.Player player, CallbackInfo ci) {
+		if (!ReachCraftingConfig.get().enabled()) return;
 		Minecraft client = Minecraft.getInstance();
 		if (client.player == null || client.player.containerMenu == null) return;
 		

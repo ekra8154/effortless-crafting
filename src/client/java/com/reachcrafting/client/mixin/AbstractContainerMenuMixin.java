@@ -1,5 +1,6 @@
 package com.reachcrafting.client.mixin;
 
+import com.reachcrafting.client.ReachCraftingConfig;
 import com.reachcrafting.client.NearbyContainerCache;
 import com.reachcrafting.client.NearbyContainerDryRun;
 import java.util.List;
@@ -14,6 +15,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class AbstractContainerMenuMixin {
 	@Inject(method = "initializeContents(ILjava/util/List;Lnet/minecraft/world/item/ItemStack;)V", at = @At("TAIL"))
 	private void reachcrafting$onInitializeContents(int revision, List<ItemStack> stacks, ItemStack cursorStack, CallbackInfo ci) {
+		if (!ReachCraftingConfig.get().enabled()) return;
 		NearbyContainerDryRun.onContainerContentsInitialized((AbstractContainerMenu) (Object) this);
 		NearbyContainerCache.onContainerContentsInitialized((AbstractContainerMenu) (Object) this);
 	}

@@ -20,7 +20,8 @@ public final class RecipeButtonNearbyIndicator {
 	}
 
 	public static boolean shouldShow(RecipeDisplayId recipe, RecipeCollection collection, ItemStack displayStack, boolean explicitVariantSelection) {
-		if (!ReachCraftingConfig.get().showNearbyCraftableIndicator()
+		if (!ReachCraftingConfig.get().enabled()
+			|| !ReachCraftingConfig.get().showNearbyCraftableIndicator()
 			|| !ReachCraftingConfig.get().cacheContainersForFasterSearch()) {
 			return false;
 		}

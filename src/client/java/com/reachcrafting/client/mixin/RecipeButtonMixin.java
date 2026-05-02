@@ -1,5 +1,6 @@
 package com.reachcrafting.client.mixin;
 
+import com.reachcrafting.client.ReachCraftingConfig;
 import com.reachcrafting.client.RecipeButtonNearbyIndicator;
 import com.reachcrafting.client.RecipeButtonQueuedCountIndicator;
 import net.minecraft.client.gui.GuiGraphics;
@@ -14,6 +15,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class RecipeButtonMixin {
 	@Inject(method = "renderWidget", at = @At("TAIL"))
 	private void reachcrafting$renderNearbyIndicator(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick, CallbackInfo ci) {
+		if (!ReachCraftingConfig.get().enabled()) return;
 		RecipeButton button = (RecipeButton) (Object) this;
 		if (RecipeButtonNearbyIndicator.shouldShow(button)) {
 			AbstractWidget widget = (AbstractWidget) (Object) this;

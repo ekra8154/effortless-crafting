@@ -3,6 +3,8 @@
 	"key.category.reachcrafting.debug": "Reach Crafting",
 	"title.reachcrafting.config": "Reach Crafting Settings",
 	"category.reachcrafting.crafting_ui": "Crafting & UI",
+	"option.reachcrafting.enabled": "Mod Enabled",
+	"tooltip.reachcrafting.enabled": "Whether any of the mod's features are enabled.",
 	"category.reachcrafting.logic_planning": "Logic & Planning",
 	"category.reachcrafting.nearby_containers": "Nearby Containers",
 	"category.reachcrafting.filtering_highlighting": "Filtering & Highlighting",

@@ -53,6 +53,7 @@ public final class InWorldFilterManager {
 	}
 
 	public static boolean isContainerActive(Level level, BlockPos pos, BlockState state) {
+		if (!ReachCraftingConfig.get().enabled()) return false;
 		InclusionState manual = getManualState(level, pos);
 		if (manual == InclusionState.MANUAL_WHITELIST) return true;
 		if (manual == InclusionState.MANUAL_BLACKLIST) return false;
