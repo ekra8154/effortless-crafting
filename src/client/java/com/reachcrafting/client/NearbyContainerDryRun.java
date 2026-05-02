@@ -1271,7 +1271,13 @@ public final class NearbyContainerDryRun {
 				RecipeBookClickCapture.tryCloseOverlayAfterRelease();
 			}
 			if (ReachCraftingConfig.get().autoCraftMode()) {
-				ContainerUtils.scheduleAutoMove();
+				ItemStack expectedStack = ItemStack.EMPTY;
+				var knownRecipes = ((com.reachcrafting.client.mixin.ClientRecipeBookAccessor) player.getRecipeBook()).getKnown();
+				var entry = knownRecipes.get(recipeId);
+				if (entry != null) {
+					expectedStack = RecipeVariantResolver.resolveDisplayStack(entry.display(), net.minecraft.world.item.crafting.display.SlotDisplayContext.fromLevel(level));
+				}
+				ContainerUtils.scheduleAutoMove(expectedStack);
 			}
 			stop(false);
 			NearbyContainerDryRun.activeSession = null;

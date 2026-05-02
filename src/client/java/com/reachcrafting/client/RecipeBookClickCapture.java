@@ -300,7 +300,7 @@ public final class RecipeBookClickCapture {
 					allowNearbyChests
 				)) {
 					if (ReachCraftingConfig.get().autoCraftMode()) {
-						ContainerUtils.scheduleAutoMove();
+						ContainerUtils.scheduleAutoMove(selectedRecipe.displayStack());
 					}
 					return;
 				}
@@ -324,7 +324,7 @@ public final class RecipeBookClickCapture {
 		if (gameMode != null) {
 			gameMode.handlePlaceRecipe(player.containerMenu.containerId, selectedRecipe.recipeId(), craftAll);
 			if (ReachCraftingConfig.get().autoCraftMode()) {
-				ContainerUtils.scheduleAutoMove();
+				ContainerUtils.scheduleAutoMove(selectedRecipe.displayStack());
 			}
 			player.displayClientMessage(
 				Component.literal("[Reach Crafting] Placed recipe: " + outputLabel)

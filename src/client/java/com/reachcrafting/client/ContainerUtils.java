@@ -39,6 +39,7 @@ public final class ContainerUtils {
 	private static int autoMoveWaitingTicks = 0;
 	private static boolean pendingAutoMove = false;
 	private static ItemStack autoMoveTargetStack = ItemStack.EMPTY;
+	private static ItemStack autoMoveExpectedStack = ItemStack.EMPTY;
 	private static Map<Integer, Integer> autoMoveSnapshotCounts = new HashMap<>();
 	private static boolean autoMoveOrganizing = false;
 	private static boolean autoCraftKeyHeld = false;
@@ -74,16 +75,17 @@ public final class ContainerUtils {
 		boolean next = !current;
 		ReachCraftingConfig.get().setAutoCraftMode(next);
 		if (next) {
-			scheduleAutoMove();
+			scheduleAutoMove(ItemStack.EMPTY);
 		}
 		ReachCraftingConfig.save();
 	}
 
 
 
-	public static void scheduleAutoMove() {
+	public static void scheduleAutoMove(ItemStack expectedStack) {
 		pendingAutoMove = true;
 		autoMoveWaitingTicks = 0;
+		autoMoveExpectedStack = expectedStack != null ? expectedStack.copy() : ItemStack.EMPTY;
 	}
 
 	public static boolean isAutoMovePending() {
@@ -261,7 +263,16 @@ public final class ContainerUtils {
 		// Phase 1: Initiation
 		if (!autoMoveOrganizing) {
 			if (resultSlot.hasItem() && resultSlot.mayPickup(client.player)) {
-				autoMoveTargetStack = resultSlot.getItem().copy();
+				ItemStack currentResult = resultSlot.getItem();
+				
+				// If we have an expected stack, verify it matches
+				if (!autoMoveExpectedStack.isEmpty() && !ItemStack.isSameItemSameComponents(currentResult, autoMoveExpectedStack)) {
+					com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] Recipe changed! Expected: {}, Found: {}. Stopping.", formatStack(autoMoveExpectedStack), formatStack(currentResult));
+					pendingAutoMove = false;
+					return;
+				}
+
+				autoMoveTargetStack = currentResult.copy();
 				autoMoveWaitingTicks = 0;
 				autoMoveOrganizing = true;
 				
