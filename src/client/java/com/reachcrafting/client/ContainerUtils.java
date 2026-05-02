@@ -71,7 +71,12 @@ public final class ContainerUtils {
 		lastAutoCraftToggleTime = now;
 		
 		boolean current = ReachCraftingConfig.get().autoCraftMode();
-		ReachCraftingConfig.get().setAutoCraftMode(!current);
+		boolean next = !current;
+		ReachCraftingConfig.get().setAutoCraftMode(next);
+		if (next) {
+			scheduleAutoMove();
+		}
+		ReachCraftingConfig.save();
 	}
 
 

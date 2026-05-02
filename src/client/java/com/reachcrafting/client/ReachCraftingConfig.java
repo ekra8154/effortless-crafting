@@ -88,6 +88,7 @@ public final class ReachCraftingConfig {
 			instance.showTotalOutputCounts = stored.showTotalOutputCounts != null ? stored.showTotalOutputCounts : true;
 			instance.scrollToPull = stored.scrollToPull != null ? stored.scrollToPull : true;
 			instance.typeToFocusSearch = stored.typeToFocusSearch != null ? stored.typeToFocusSearch : true;
+			instance.autoCraftMode = stored.autoCraftMode != null ? stored.autoCraftMode : false;
 			instance.blacklistedContainerIds = stored.blacklistedContainerIds != null ? new HashSet<>(stored.blacklistedContainerIds) : new HashSet<>(DEFAULT_BLACKLIST);
 		} catch (Exception exception) {
 			ReachCraftingMod.LOGGER.warn("Failed to load reachcrafting config from {}", CONFIG_PATH, exception);
@@ -324,6 +325,7 @@ public final class ReachCraftingConfig {
 		private Boolean showTotalOutputCounts;
 		private Boolean scrollToPull;
 		private Boolean typeToFocusSearch;
+		private Boolean autoCraftMode;
 		private Set<String> blacklistedContainerIds;
 
 		private StoredConfig(ReachCraftingConfig config) {
@@ -343,6 +345,7 @@ public final class ReachCraftingConfig {
 			this.showTotalOutputCounts = config.showTotalOutputCounts;
 			this.scrollToPull = config.scrollToPull;
 			this.typeToFocusSearch = config.typeToFocusSearch;
+			this.autoCraftMode = config.autoCraftMode;
 			this.blacklistedContainerIds = config.blacklistedContainerIds;
 		}
 	}

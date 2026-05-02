@@ -90,10 +90,7 @@ settings / more to make caching actually faster
 
 clear grid ui button (hold ctrl makes pulled items return?) otherwise eject into inventory (try to remember slots - maybe do this after adding the eject setting mentioned above)
 
-shift craft does not rewrite grid if changing recipes
- - allow hover scrolling over new item to start a new queue
-
-should add setting to switch between append mode and set mode
+allow hover scrolling over new item to start a new queue
 
 normal clicking cycling items that should be craftable should craft them
 
@@ -103,11 +100,6 @@ remove option to turn off hold and release style - its just better
 
 on release, input number count should stay there, and allow the user to decrease or increase it as needed (or change it to a different recipe)
 
-if ctrl or shift is released but spacebar is still held the searchbox doesn't refocus until spacebar is released? on the temporary defocus thing
-
 KNOWN BUGS:
-- queuing a new item when one is in the grid ejects the first and pulls the second but both end up in the inventory instead of the second being in the grid
 
-- chests open to return items somehow even if nothing is or needs to be returned
-
-- make sure cache / search excludes out of range and blacklist
+with auto craft on, request 5 compass. they get put at earliest hotbar slot. but then on esc, 1 teleports to slot 9.

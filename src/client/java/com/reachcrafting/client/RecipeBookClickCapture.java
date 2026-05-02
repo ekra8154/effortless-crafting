@@ -41,6 +41,7 @@ public final class RecipeBookClickCapture {
 	private static boolean wasControlDown;
 	private static boolean wasShiftDown;
 	private static boolean wasSearchBoxFocusedByMod;
+	private static boolean wasModifierReleasedWhileSpaceHeld;
 	private static int replayDelayTicks = 0;
 
 	private RecipeBookClickCapture() {
@@ -50,23 +51,32 @@ public final class RecipeBookClickCapture {
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			boolean controlDown = isControlKeyDown(client);
 			boolean shiftDown = isShiftKeyDown(client);
+			boolean spaceDown = isSpaceKeyDown(client);
 
 			if (controlDown || shiftDown) {
 				defocusRecipeBookSearch(client);
-			} else if (wasSearchBoxFocusedByMod && pendingHeldRecipe == null && replayBatch == null && !NearbyContainerDryRun.isActiveSessionRunning()) {
+			} else if (wasSearchBoxFocusedByMod && !spaceDown && pendingHeldRecipe == null && replayBatch == null && !NearbyContainerDryRun.isActiveSessionRunning()) {
 				refocusRecipeBookSearch(client);
 			}
 
 			if (pendingHeldRecipe != null) {
-				if (pendingHeldRecipe.allowNearby()) {
-					if (wasControlDown && !controlDown) {
-						releasePendingHeldRecipe();
-					}
-				} else {
-					if (wasShiftDown && !shiftDown) {
-						releasePendingHeldRecipe();
-					}
+				boolean modifierDown = pendingHeldRecipe.allowNearby() ? controlDown : shiftDown;
+				boolean modifierJustReleased = pendingHeldRecipe.allowNearby() ? (wasControlDown && !controlDown) : (wasShiftDown && !shiftDown);
+
+				if (modifierJustReleased) {
+					wasModifierReleasedWhileSpaceHeld = true;
 				}
+
+				if (wasModifierReleasedWhileSpaceHeld && !modifierDown && !spaceDown) {
+					releasePendingHeldRecipe();
+					wasModifierReleasedWhileSpaceHeld = false;
+				}
+
+				if (modifierDown) {
+					wasModifierReleasedWhileSpaceHeld = false;
+				}
+			} else {
+				wasModifierReleasedWhileSpaceHeld = false;
 			}
 
 			wasControlDown = controlDown;
@@ -289,6 +299,9 @@ public final class RecipeBookClickCapture {
 					requestedClicks,
 					allowNearbyChests
 				)) {
+					if (ReachCraftingConfig.get().autoCraftMode()) {
+						ContainerUtils.scheduleAutoMove();
+					}
 					return;
 				}
 			}
@@ -542,7 +555,7 @@ public final class RecipeBookClickCapture {
 			return true;
 		}
 
-		if (delta > 0 && !pendingHeldRecipe.locked()) {
+		if (delta > 0) {
 			int updatedCount = Math.floorMod(effectiveDelta, 65);
 			if (updatedCount == 0) {
 				pendingHeldRecipe = null;

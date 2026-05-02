@@ -173,14 +173,6 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 
 		if (com.reachcrafting.client.ContainerUtils.isAutoMovePending()) {
 			com.reachcrafting.client.ContainerUtils.autoMoveResult(Minecraft.getInstance());
-		} else if (ReachCraftingConfig.get().autoCraftMode() 
-				&& !com.reachcrafting.client.NearbyContainerDryRun.isActiveSessionRunning()
-				&& ((Object) this instanceof CraftingScreen || (Object) this instanceof InventoryScreen)) {
-			Slot resultSlot = this.menu.slots.size() > 0 ? this.menu.getSlot(0) : null;
-			if (resultSlot != null && resultSlot.hasItem() && resultSlot.mayPickup(Minecraft.getInstance().player)) {
-				com.reachcrafting.client.ContainerUtils.scheduleAutoMove();
-				com.reachcrafting.client.ContainerUtils.autoMoveResult(Minecraft.getInstance());
-			}
 		}
 	}
 

@@ -154,6 +154,15 @@ public final class ReachCraftingConfigScreen {
 			.setSaveConsumer(config::setTypeToFocusSearch)
 			.build());
 
+		general.addEntry(entries.startBooleanToggle(
+				Component.translatable("option.reachcrafting.auto_craft_mode"),
+				config.autoCraftMode()
+			)
+			.setDefaultValue(false)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.auto_craft_mode"))
+			.setSaveConsumer(config::setAutoCraftMode)
+			.build());
+
 		ConfigCategory containers = builder.getOrCreateCategory(Component.translatable("category.reachcrafting.containers"));
 		
 		containers.addEntry(entries.startEnumSelector(
