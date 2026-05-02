@@ -88,7 +88,7 @@ public final class ReachCraftingConfig {
 			instance.showTotalOutputCounts = stored.showTotalOutputCounts != null ? stored.showTotalOutputCounts : true;
 			instance.scrollToPull = stored.scrollToPull != null ? stored.scrollToPull : true;
 			instance.typeToFocusSearch = stored.typeToFocusSearch != null ? stored.typeToFocusSearch : true;
-			instance.autoCraftMode = stored.autoCraftMode != null ? stored.autoCraftMode : false;
+			instance.autoCraftMode = stored.autoCraftMode != null ? stored.autoCraftMode : true;
 			instance.blacklistedContainerIds = stored.blacklistedContainerIds != null ? new HashSet<>(stored.blacklistedContainerIds) : new HashSet<>(DEFAULT_BLACKLIST);
 		} catch (Exception exception) {
 			ReachCraftingMod.LOGGER.warn("Failed to load reachcrafting config from {}", CONFIG_PATH, exception);
@@ -274,20 +274,20 @@ public final class ReachCraftingConfig {
 
 	private static ReachCraftingConfig defaults() {
 		ReachCraftingConfig defaults = new ReachCraftingConfig();
-		defaults.redistributeToCraftWhenNeeded = false;
+		defaults.redistributeToCraftWhenNeeded = true;
 		defaults.inWorldFilterMode = InWorldFilterMode.NONE;
 		defaults.revolvingCraftHandling = RevolvingCraftHandling.PREFER_CLICKED_TYPE_WITH_COUNT_FALLBACK;
 		defaults.countPreference = IngredientPlanning.CountPreference.HIGHEST_TOTAL;
-		defaults.showNearbyCraftableIndicator = false;
+		defaults.showNearbyCraftableIndicator = true;
 		defaults.cacheContainersForFasterSearch = true;
-		defaults.reachCraftHoldAndRelease = false;
+		defaults.reachCraftHoldAndRelease = true;
 		defaults.reachCraftCloseOverlayAfterRelease = true;
 		defaults.reachCraftPreferInventory = true;
-		defaults.putPulledResourcesBack = false;
+		defaults.putPulledResourcesBack = true;
 		defaults.restoreInventoryItemPositions = true;
 		defaults.rememberPreviousSearch = true;
 		defaults.showFilterOutlines = OutlineDisplayMode.OFF;
-		defaults.autoCraftMode = false;
+		defaults.autoCraftMode = true;
 		defaults.showTotalOutputCounts = true;
 		defaults.scrollToPull = true;
 		defaults.typeToFocusSearch = true;
