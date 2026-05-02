@@ -78,8 +78,7 @@ Building the project locally:
 
 ## Credits & License
 
-This project is licensed under **LGPL-3.0-or-later**. It draws inspiration and certain implementation patterns from the following excellent projects:
-* [OneClickCrafting](https://github.com/BreadMoirai/OneClickCrafting) by BreadMoirai (MIT)
+This project is licensed under **LGPL-3.0-or-later**. It draws inspiration and certain implementation patterns from the following excellent project:
 * [stack-to-nearby-chests](https://github.com/xiaocihua/stack-to-nearby-chests) by xiaocihua (LGPL-3.0)
 
 
@@ -88,17 +87,11 @@ TODO:
 
 settings / more to make caching actually faster
 
-clear grid ui button (hold ctrl makes pulled items return?) otherwise eject into inventory (try to remember slots - maybe do this after adding the eject setting mentioned above)
+normal clicking cycling items that should be craftable should craft them?
 
-allow hover scrolling over new item to start a new queue
+up arrow to restore searches?
 
-normal clicking cycling items that should be craftable should craft them
-
-up arrow to restore searches instead of auto loaded in
-
-remove option to turn off hold and release style - its just better
-
-on release, input number count should stay there, and allow the user to decrease or increase it as needed (or change it to a different recipe)
+on release, input number count should stay there?
 
 KNOWN BUGS:
 
