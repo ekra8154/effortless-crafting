@@ -33,6 +33,7 @@ public final class PulledResourcesTracker {
 	 */
 	public static void updateSnapshot(LocalPlayer player) {
 		Inventory inventory = player.getInventory();
+		boolean changed = false;
 		for (int i = 0; i < inventory.getContainerSize(); i++) {
 			ItemStack current = inventory.getItem(i);
 			if (current.isEmpty()) continue;
@@ -50,11 +51,11 @@ public final class PulledResourcesTracker {
 
 			if (shouldUpdate) {
 				INITIAL_SLOT_SNAPSHOTS.put(i, current.copy());
-				
-				// Also update the global count tracker for nearby pull logic
-				String itemId = BuiltInRegistries.ITEM.getKey(current.getItem()).toString();
-				INITIAL_COUNTS.merge(itemId, current.getCount(), Integer::max);
+				changed = true;
 			}
+		}
+		if (changed) {
+			rebuildInitialCounts();
 		}
 	}
 
@@ -66,9 +67,35 @@ public final class PulledResourcesTracker {
 		return INITIAL_COUNTS.getOrDefault(itemId, 0);
 	}
 
+	public static int getProtectedSlotCount(int inventorySlot, ItemStack currentStack) {
+		if (currentStack.isEmpty()) {
+			return 0;
+		}
+
+		ItemStack snapshot = INITIAL_SLOT_SNAPSHOTS.get(inventorySlot);
+		if (snapshot == null || snapshot.isEmpty()) {
+			return 0;
+		}
+		if (!ItemStack.isSameItemSameComponents(snapshot, currentStack)) {
+			return 0;
+		}
+		return snapshot.getCount();
+	}
+
 	public static int getExcessCount(String itemId, int currentCount) {
 		int initial = INITIAL_COUNTS.getOrDefault(itemId, 0);
 		return Math.max(0, currentCount - initial);
+	}
+
+	private static void rebuildInitialCounts() {
+		INITIAL_COUNTS.clear();
+		for (ItemStack snapshot : INITIAL_SLOT_SNAPSHOTS.values()) {
+			if (snapshot.isEmpty()) {
+				continue;
+			}
+			String itemId = BuiltInRegistries.ITEM.getKey(snapshot.getItem()).toString();
+			INITIAL_COUNTS.merge(itemId, snapshot.getCount(), Integer::sum);
+		}
 	}
 
 	public static void recordWithdrawal(BlockPos containerPos, int slotIndex, ItemStack stack) {
@@ -94,7 +121,15 @@ public final class PulledResourcesTracker {
 	}
 
 	public static void clear() {
+		clearWithdrawals();
+		clearSnapshot();
+	}
+
+	public static void clearWithdrawals() {
 		WITHDRAWN_ITEMS.clear();
+	}
+
+	public static void clearSnapshot() {
 		INITIAL_COUNTS.clear();
 		INITIAL_SLOT_SNAPSHOTS.clear();
 	}

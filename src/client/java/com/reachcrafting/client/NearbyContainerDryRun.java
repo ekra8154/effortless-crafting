@@ -456,7 +456,7 @@ public final class NearbyContainerDryRun {
 				summarizeRemainingItems(remainingItemIds)
 			);
 
-			PulledResourcesTracker.clear(); // Safety: clear any stale data from previous sessions
+			PulledResourcesTracker.clearWithdrawals(); // Safety: clear stale withdrawals, but keep the baseline inventory snapshot for return planning
 
 			if (allowNearby) {
 				sendChat("Scanning nearby containers...");
@@ -2214,19 +2214,42 @@ public final class NearbyContainerDryRun {
 		private int getAvailableCountInSlot(Slot slot, List<PlannedMove> plan) {
 			int planned = 0;
 			for (PlannedMove p : plan) if (p.source == slot) planned += p.count;
-			return slot.getItem().getCount() - planned;
+			if (!(slot.container instanceof Inventory) || !slot.hasItem()) {
+				return 0;
+			}
+
+			int protectedCount = PulledResourcesTracker.getProtectedSlotCount(slot.getContainerSlot(), slot.getItem());
+			int returnableCount = Math.max(0, slot.getItem().getCount() - protectedCount);
+			return Math.max(0, returnableCount - planned);
 		}
 
 		private Slot findAvailableInventorySlot(AbstractContainerMenu menu, String itemId, List<PlannedMove> plan) {
+			Slot bestSlot = null;
+			int bestAvailable = 0;
+			int bestProtectedCount = Integer.MAX_VALUE;
 			for (Slot slot : menu.slots) {
 				if (slot.container instanceof net.minecraft.world.entity.player.Inventory && slot.hasItem()) {
 					String id = BuiltInRegistries.ITEM.getKey(slot.getItem().getItem()).toString();
-					if (id.equals(itemId) && getAvailableCountInSlot(slot, plan) > 0) {
-						return slot;
+					if (!id.equals(itemId)) {
+						continue;
+					}
+
+					int available = getAvailableCountInSlot(slot, plan);
+					if (available <= 0) {
+						continue;
+					}
+
+					int protectedCount = PulledResourcesTracker.getProtectedSlotCount(slot.getContainerSlot(), slot.getItem());
+					if (bestSlot == null
+						|| protectedCount < bestProtectedCount
+						|| (protectedCount == bestProtectedCount && available > bestAvailable)) {
+						bestSlot = slot;
+						bestAvailable = available;
+						bestProtectedCount = protectedCount;
 					}
 				}
 			}
-			return null;
+			return bestSlot;
 		}
 
 		private Slot findBestTargetSlot(AbstractContainerMenu menu, String itemId, ItemStack stack, Map<Integer, Integer> simulatedOccupancy) {
@@ -2279,15 +2302,36 @@ public final class NearbyContainerDryRun {
 			int sourceCount = sourceStack.getCount();
 			
 			if (count <= 0) return;
+
+			ItemStack targetStack = target.getItem();
+			int maxTargetCount = Math.min(target.getMaxStackSize(), sourceStack.getMaxStackSize());
+			int roomInTarget;
+			if (targetStack.isEmpty()) {
+				roomInTarget = maxTargetCount;
+			} else if (ItemStack.isSameItemSameComponents(targetStack, sourceStack)) {
+				roomInTarget = maxTargetCount - targetStack.getCount();
+			} else {
+				roomInTarget = 0;
+			}
 			
 			if (count == sourceCount) {
 				// Move full stack: 2 clicks
 				gameMode.handleInventoryMouseClick(menu.containerId, source.index, GLFW.GLFW_MOUSE_BUTTON_LEFT, ClickType.PICKUP, player);
 				gameMode.handleInventoryMouseClick(menu.containerId, target.index, GLFW.GLFW_MOUSE_BUTTON_LEFT, ClickType.PICKUP, player);
-			} else if (count == (sourceCount + 1) / 2) {
+			} else if (count == (sourceCount + 1) / 2 && roomInTarget >= count) {
 				// Move exactly half: 2 clicks (right click picks up half rounded up)
 				gameMode.handleInventoryMouseClick(menu.containerId, source.index, GLFW.GLFW_MOUSE_BUTTON_RIGHT, ClickType.PICKUP, player);
 				gameMode.handleInventoryMouseClick(menu.containerId, target.index, GLFW.GLFW_MOUSE_BUTTON_LEFT, ClickType.PICKUP, player);
+			} else if (roomInTarget >= count && (sourceCount - count) > 0 && (sourceCount - count) < count) {
+				// Cheaper exact partial move: leave the smaller remainder behind, then move the kept cursor stack in one click.
+				gameMode.handleInventoryMouseClick(menu.containerId, source.index, GLFW.GLFW_MOUSE_BUTTON_LEFT, ClickType.PICKUP, player);
+				for (int i = 0; i < sourceCount - count; i++) {
+					gameMode.handleInventoryMouseClick(menu.containerId, source.index, GLFW.GLFW_MOUSE_BUTTON_RIGHT, ClickType.PICKUP, player);
+				}
+				gameMode.handleInventoryMouseClick(menu.containerId, target.index, GLFW.GLFW_MOUSE_BUTTON_LEFT, ClickType.PICKUP, player);
+				if (!player.containerMenu.getCarried().isEmpty()) {
+					gameMode.handleInventoryMouseClick(menu.containerId, source.index, GLFW.GLFW_MOUSE_BUTTON_LEFT, ClickType.PICKUP, player);
+				}
 			} else {
 				// Generic move: Pickup all, drop N, put back rest
 				gameMode.handleInventoryMouseClick(menu.containerId, source.index, GLFW.GLFW_MOUSE_BUTTON_LEFT, ClickType.PICKUP, player);
