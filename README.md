@@ -97,8 +97,6 @@ should add setting to switch between append mode and set mode
 
 normal clicking cycling items that should be craftable should craft them
 
-quick craft keybind that opens crafting menu if one is close enough. otherwise falls back to auto search in 2x2 grid
-
 up arrow to restore searches instead of auto loaded in
 
 remove option to turn off hold and release style - its just better
@@ -106,12 +104,8 @@ remove option to turn off hold and release style - its just better
 on release, input number count should stay there, and allow the user to decrease or increase it as needed (or change it to a different recipe)
 
 KNOWN BUGS:
-- queuing a single harness works but queuing too many results in nothing appearing at all
-
 - queuing a new item when one is in the grid ejects the first and pulls the second but both end up in the inventory instead of the second being in the grid
 
 - chests open to return items somehow even if nothing is or needs to be returned
 
 - make sure cache / search excludes out of range and blacklist
-
-- return doesn't work for hoppers

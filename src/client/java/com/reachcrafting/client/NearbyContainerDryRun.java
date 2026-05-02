@@ -338,7 +338,7 @@ public final class NearbyContainerDryRun {
 
 	private static final class SearchSession extends BaseSession {
 		private static final int OPEN_TIMEOUT_TICKS = 40;
-		private static final int RESUME_DELAY_TICKS = 2;
+		private static final int RESUME_DELAY_TICKS = 10; // Increased from 2 to 10 to prevent race conditions
 		private static final int REOPEN_TIMEOUT_TICKS = 20;
 		private static final int RESTORE_TIMEOUT_TICKS = 10;
 		private static final int MAX_REOPEN_ATTEMPTS = 3;
@@ -1107,53 +1107,57 @@ public final class NearbyContainerDryRun {
 		}
 
 		private boolean tryFinishAfterResume() {
-			boolean contextReady = isOriginalContextReady();
+			if (!isOriginalContextReady()) {
+				lastRestoreFailure = "context_not_ready";
+				return false;
+			}
+
 			boolean gridRestored = false;
-			boolean reservedGridMatchesRecipe = false;
+			restoreRecipeBookState();
+			restoreMousePosition();
+			gridRestored = redistributeThisRun || restoreReservedGrid();
+			
+			if (!gridRestored && originalContext.hasReservedGrid() && restoreTicksRemaining > 0) {
+				restoreTicksRemaining--;
+				ReachCraftingMod.LOGGER.info(
+					"[nearby_restore] idx={} waiting_for_grid_restore remaining_ticks={}",
+					recipeIndex,
+					restoreTicksRemaining
+				);
+				return false;
+			}
+
+			boolean reservedGridMatchesRecipe = redistributeThisRun
+				? originalContext.hasReservedGrid() && originalContext.reservedGridMatchesCollection(client.level, recipeCollection)
+				: originalContext.reservedGridMatches(ingredientSummary);
+
 			boolean reservedGridExpanded = false;
+			if (gridRestored && reservedGridMatchesRecipe && targetCopiesPerSlot > 0) {
+				reservedGridExpanded = redistributeThisRun
+					? applyPlannedTargetsToGrid(originalOccupiedGridSlotIndices())
+					: expandReservedGrid();
+			}
+
 			boolean placedPlannedGrid = false;
-			lastRestoreFailure = contextReady ? "<none>" : "context_not_ready";
-			if (contextReady) {
-				restoreRecipeBookState();
-				restoreMousePosition();
-				gridRestored = redistributeThisRun || restoreReservedGrid();
-				if (!gridRestored && originalContext.hasReservedGrid() && restoreTicksRemaining > 0) {
-					restoreTicksRemaining--;
-					ReachCraftingMod.LOGGER.info(
-						"[nearby_restore] idx={} waiting_for_grid_restore remaining_ticks={}",
-						recipeIndex,
-						restoreTicksRemaining
-					);
-					return false;
-				}
-				reservedGridMatchesRecipe = redistributeThisRun
-					? originalContext.hasReservedGrid() && originalContext.reservedGridMatchesCollection(client.level, recipeCollection)
-					: originalContext.reservedGridMatches(ingredientSummary);
-				if (gridRestored && reservedGridMatchesRecipe && targetCopiesPerSlot > 0) {
-					reservedGridExpanded = redistributeThisRun
-						? applyPlannedTargetsToGrid(originalOccupiedGridSlotIndices())
-						: expandReservedGrid();
-				}
-				if (!originalContext.hasReservedGrid()
-					&& !craftAll
-					&& requestedSingleClicks > 1
-					&& targetCopiesPerSlot > 0
-					&& !plannedTargets.isEmpty()) {
-					PlacementAttempt seededPlacement = placePlannedGridWithVanillaShape();
-					if (seededPlacement == PlacementAttempt.WAITING_FOR_SEED) {
-						if (seedWaitTicksRemaining > 0) {
-							seedWaitTicksRemaining--;
-							ReachCraftingMod.LOGGER.info(
-								"[nearby_restore] idx={} waiting_for_seeded_shape remaining_ticks={}",
-								recipeIndex,
-								seedWaitTicksRemaining
-							);
-							return false;
-						}
-						lastRestoreFailure = "vanilla_shape_seed_timeout";
-					} else {
-						placedPlannedGrid = seededPlacement == PlacementAttempt.SUCCESS;
+			if (!originalContext.hasReservedGrid()
+				&& !craftAll
+				&& requestedSingleClicks > 1
+				&& targetCopiesPerSlot > 0
+				&& !plannedTargets.isEmpty()) {
+				PlacementAttempt seededPlacement = placePlannedGridWithVanillaShape();
+				if (seededPlacement == PlacementAttempt.WAITING_FOR_SEED) {
+					if (seedWaitTicksRemaining > 0) {
+						seedWaitTicksRemaining--;
+						ReachCraftingMod.LOGGER.info(
+							"[nearby_restore] idx={} waiting_for_seeded_shape remaining_ticks={}",
+							recipeIndex,
+							seedWaitTicksRemaining
+						);
+						return false;
 					}
+					lastRestoreFailure = "vanilla_shape_seed_timeout";
+				} else {
+					placedPlannedGrid = seededPlacement == PlacementAttempt.SUCCESS;
 				}
 			}
 
@@ -1211,7 +1215,7 @@ public final class NearbyContainerDryRun {
 						lastRestoreFailure
 					);
 					sendChat("Fetched items, but couldn't fully restore the crafting grid.");
-				} else if (targetCopiesPerSlot > 0 && !updatedDeficit.hasMissingIngredients() && contextReady && reservedGridMatchesRecipe && reservedGridExpanded) {
+				} else if (targetCopiesPerSlot > 0 && !updatedDeficit.hasMissingIngredients() && reservedGridMatchesRecipe && reservedGridExpanded) {
 					sendChat("Updated grid: " + outputLabel);
 				} else if (updatedDeficit.hasMissingIngredients()) {
 					sendChat("Fetched what I could. Missing now: " + updatedDeficit.compactMissingSummary());
@@ -1220,7 +1224,7 @@ public final class NearbyContainerDryRun {
 				}
 			} else if (placedPlannedGrid) {
 				sendChat("Updated grid: " + outputLabel);
-			} else if (targetCopiesPerSlot > 0 && !updatedDeficit.hasMissingIngredients() && contextReady && player.containerMenu != null) {
+			} else if (targetCopiesPerSlot > 0 && !updatedDeficit.hasMissingIngredients() && player.containerMenu != null) {
 				gameMode.handlePlaceRecipe(player.containerMenu.containerId, recipeId, craftAll);
 				sendChat("Placed recipe: " + outputLabel);
 			} else if (!remainingItemIds.isEmpty() || inventorySpaceBlocked) {
@@ -1345,11 +1349,13 @@ public final class NearbyContainerDryRun {
 				return PlacementAttempt.SUCCESS;
 			}
 
+			int totalFound = 0;
 			for (int i = 0; i < targetCopiesPerSlot; i++) {
 				gameMode.handlePlaceRecipe(player.containerMenu.containerId, recipeId, false);
+				totalFound++;
 			}
 
-			ReachCraftingMod.LOGGER.info("[nearby_restore] idx={} placed_via_vanilla_calls count={}", recipeIndex, targetCopiesPerSlot);
+			ReachCraftingMod.LOGGER.info("[nearby_restore] idx={} placed_via_vanilla_calls count={} target={}", recipeIndex, totalFound, targetCopiesPerSlot);
 			return PlacementAttempt.SUCCESS;
 		}
 
@@ -1830,6 +1836,7 @@ public final class NearbyContainerDryRun {
 		boolean visible,
 		boolean filtering,
 		String searchText,
+		boolean focused,
 		ExtendedRecipeBookCategory selectedCategory,
 		int currentPage,
 		boolean overlayVisible,
@@ -1843,10 +1850,13 @@ public final class NearbyContainerDryRun {
 			EditBox searchBox = accessor.getSearchBox();
 			RecipeBookPageAccessor pageAccessor = (RecipeBookPageAccessor) accessor.getRecipeBookPage();
 			OverlayRecipeComponent overlay = pageAccessor.getOverlay();
+			String text = searchBox != null ? searchBox.getValue() : "";
+			ReachCraftingMod.LOGGER.info("[nearby_capture] Captured search text: '{}' (focused={})", text, searchBox != null && searchBox.isFocused());
 			return new RecipeBookState(
 				component.isVisible(),
 				filterButton != null && Boolean.TRUE.equals(filterButton.getValue()),
-				searchBox != null ? searchBox.getValue() : "",
+				text,
+				searchBox != null && searchBox.isFocused(),
 				selectedTab != null ? selectedTab.getCategory() : null,
 				pageAccessor.getCurrentPage(),
 				overlay != null && overlay.isVisible(),
@@ -1855,7 +1865,7 @@ public final class NearbyContainerDryRun {
 		}
 
 		private static RecipeBookState empty() {
-			return new RecipeBookState(false, false, "", null, 0, false, null);
+			return new RecipeBookState(false, false, "", false, null, 0, false, null);
 		}
 
 		private void restore(AbstractRecipeBookScreen<?> screen) {
@@ -1871,8 +1881,16 @@ public final class NearbyContainerDryRun {
 			}
 
 			EditBox searchBox = accessor.getSearchBox();
-			if (searchBox != null && !searchText.equals(searchBox.getValue())) {
-				searchBox.setValue(searchText);
+			if (searchBox != null) {
+				if (!searchText.equals(searchBox.getValue())) {
+					ReachCraftingMod.LOGGER.info("[nearby_restore] Restoring search text: '{}' (was: '{}')", searchText, searchBox.getValue());
+					searchBox.setValue(searchText);
+				}
+				if (focused) {
+					searchBox.setFocused(true);
+					searchBox.setCursorPosition(searchBox.getValue().length());
+					searchBox.setHighlightPos(0);
+				}
 			}
 
 			if (selectedCategory != null) {
@@ -2075,7 +2093,7 @@ public final class NearbyContainerDryRun {
 			while (nextPositionIndex < uniquePositions.size()) {
 				BlockPos pos = uniquePositions.get(nextPositionIndex++);
 				BlockState blockState = level.getBlockState(pos);
-				if (!ContainerUtils.isSupportedContainer(blockState)) continue;
+				if (!InWorldFilterManager.isContainerActive(level, pos, blockState)) continue;
 				if (!ContainerUtils.canAttemptOpen(level, pos, blockState)) continue;
 				if (ContainerUtils.squaredDistanceToBlock(eyePos, pos) > net.minecraft.util.Mth.square(player.blockInteractionRange())) continue;
 

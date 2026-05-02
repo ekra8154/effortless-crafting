@@ -51,8 +51,7 @@ public final class RecipeBookClickCapture {
 			boolean controlDown = isControlKeyDown(client);
 			boolean shiftDown = isShiftKeyDown(client);
 
-			if (((controlDown || shiftDown) && isHoveringRecipe(client)) 
-				|| (shiftDown && ScrollToPullHandler.isHoveringOutput(client))) {
+			if (controlDown || shiftDown) {
 				defocusRecipeBookSearch(client);
 			} else if (wasSearchBoxFocusedByMod && pendingHeldRecipe == null && replayBatch == null && !NearbyContainerDryRun.isActiveSessionRunning()) {
 				refocusRecipeBookSearch(client);
@@ -140,7 +139,7 @@ public final class RecipeBookClickCapture {
 			ContainerUtils.flushCraftingGrid(minecraft, allowNearbyChests, true);
 			replayDelayTicks = 1;
 			HeldRecipeAction action = new HeldRecipeAction(recipeId, collection, displayStack != null ? displayStack.copy() : ItemStack.EMPTY, mouseButton, explicitVariantSelection);
-			replayBatch = new ReplayBatch(action, 1, allowNearbyChests);
+			replayBatch = new ReplayBatch(action, 1, allowNearbyChests, craftAll);
 			return;
 		}
 
@@ -265,7 +264,7 @@ public final class RecipeBookClickCapture {
 			false
 		);
 
-		boolean useDryRun = forceDryRun || allowNearbyChests;
+		boolean useDryRun = forceDryRun || allowNearbyChests || craftAll;
 
 		if (useDryRun) {
 			if (!deficitReport.hasMissingIngredients() && availableItems.hasReservedGrid()) {
@@ -390,7 +389,7 @@ public final class RecipeBookClickCapture {
 		// Always delay by at least 1 tick to ensure server/client state sync after key release
 		replayDelayTicks = 1;
 
-		replayBatch = new ReplayBatch(pendingHeldRecipe.action(), pendingHeldRecipe.clickCount(), pendingHeldRecipe.allowNearby());
+		replayBatch = new ReplayBatch(pendingHeldRecipe.action(), pendingHeldRecipe.clickCount(), pendingHeldRecipe.allowNearby(), false);
 		pendingHeldRecipe = null;
 	}
 
@@ -421,7 +420,7 @@ public final class RecipeBookClickCapture {
 			replayBatch.action().collection(),
 			replayBatch.action().displayStack().copy(),
 			replayBatch.action().mouseButton(),
-			false,
+			replayBatch.craftAll(),
 			replayBatch.allowNearby(),
 			true,
 			replayBatch.action().explicitVariantSelection(),
@@ -609,14 +608,6 @@ public final class RecipeBookClickCapture {
 		return InputConstants.isKeyDown(minecraft.getWindow(), GLFW.GLFW_KEY_SPACE);
 	}
 
-	private static boolean isHoveringRecipe(Minecraft minecraft) {
-		if (minecraft.screen == null) {
-			return false;
-		}
-		double mouseX = minecraft.mouseHandler.xpos() * (double) minecraft.getWindow().getGuiScaledWidth() / (double) minecraft.getWindow().getWidth();
-		double mouseY = minecraft.mouseHandler.ypos() * (double) minecraft.getWindow().getGuiScaledHeight() / (double) minecraft.getWindow().getHeight();
-		return findHoveredHeldRecipeAction(minecraft.screen, mouseX, mouseY) != null;
-	}
 
 	private static void defocusRecipeBookSearch(Minecraft minecraft) {
 		if (!(minecraft.screen instanceof AbstractRecipeBookScreen<?> recipeBookScreen)) {
@@ -692,6 +683,6 @@ public final class RecipeBookClickCapture {
 	public record PendingHeldRecipe(HeldRecipeAction action, int clickCount, boolean locked, boolean allowNearby) {
 	}
 
-	public record ReplayBatch(HeldRecipeAction action, int remainingClicks, boolean allowNearby) {
+	public record ReplayBatch(HeldRecipeAction action, int remainingClicks, boolean allowNearby, boolean craftAll) {
 	}
 }

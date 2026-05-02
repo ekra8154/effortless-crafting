@@ -94,14 +94,13 @@ public final class ContainerUtils {
 	}
 
 	public static boolean isPotentiallySupportedContainer(BlockState state) {
-		String blockId = BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
 		Block block = state.getBlock();
-		return block instanceof ChestBlock
-			|| block instanceof BarrelBlock
-			|| block instanceof ShulkerBoxBlock
-			|| block instanceof EnderChestBlock
-			|| block instanceof HopperBlock
-			|| (blockId.startsWith("minecraft:") && blockId.endsWith("copper_chest"));
+		if (block instanceof ChestBlock || block instanceof BarrelBlock || block instanceof ShulkerBoxBlock || block instanceof EnderChestBlock || block instanceof HopperBlock) {
+			return true;
+		}
+		
+		String blockId = BuiltInRegistries.BLOCK.getKey(block).toString();
+		return blockId.endsWith("chest") || blockId.endsWith("barrel") || blockId.endsWith("shulker_box") || blockId.endsWith("hopper") || blockId.contains("container");
 	}
 
 	public static boolean canAttemptOpen(Level level, BlockPos pos, BlockState state) {

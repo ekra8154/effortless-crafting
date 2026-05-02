@@ -208,24 +208,15 @@ public final class RecipeVariantResolver {
 	) {
 		RecipeIngredientSummary ingredientSummary = RecipeIngredientSummary.fromDisplay(entry.display(), context);
 		IngredientPlanning.Policy policy = ReachCraftingConfig.get().toPlanningPolicy();
-		int copiesAvailable = craftAll
-			? IngredientPlanning.computeMaxCraftCopies(
-				ingredientSummary,
-				availableItems.inventoryCounts(),
-				availableItems.gridStacks(),
-				usableCounts,
-				preferenceTotals,
-				policy
-			)
-			: IngredientPlanning.plan(
-				ingredientSummary,
-				availableItems.inventoryCounts(),
-				availableItems.gridStacks(),
-				usableCounts,
-				preferenceTotals,
-				Math.max(desiredCopiesPerSlot, 1),
-				policy
-			).hasMissingIngredients() ? 0 : Math.max(desiredCopiesPerSlot, 1);
+		int maxPossible = IngredientPlanning.computeMaxCraftCopies(
+			ingredientSummary,
+			availableItems.inventoryCounts(),
+			availableItems.gridStacks(),
+			usableCounts,
+			preferenceTotals,
+			policy
+		);
+		int copiesAvailable = craftAll ? maxPossible : Math.min(maxPossible, Math.max(desiredCopiesPerSlot, 1));
 
 		ItemStack displayStack = !preferredDisplayStack.isEmpty()
 			? preferredDisplayStack.copy()

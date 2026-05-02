@@ -243,7 +243,7 @@ public final class NearbyContainerCache {
 	}
 
 	public static void notePotentialContainerInteraction(Level level, BlockPos pos) {
-		if (!ReachCraftingConfig.get().cacheContainersForFasterSearch() || level == null || pos == null) {
+		if (level == null || pos == null) {
 			return;
 		}
 
@@ -257,11 +257,6 @@ public final class NearbyContainerCache {
 	}
 
 	public static void onContainerContentsInitialized(AbstractContainerMenu menu) {
-		if (!ReachCraftingConfig.get().cacheContainersForFasterSearch()) {
-			pendingObservedPos = null;
-			pendingObservedTicks = 0;
-			return;
-		}
 		if (NearbyContainerDryRun.isActiveSessionRunning()) {
 			return;
 		}
@@ -299,9 +294,6 @@ public final class NearbyContainerCache {
 	}
 
 	public static void onContainerScreenRemoved(AbstractContainerMenu menu) {
-		if (!ReachCraftingConfig.get().cacheContainersForFasterSearch()) {
-			return;
-		}
 		if (NearbyContainerDryRun.isActiveSessionRunning()) {
 			return;
 		}
