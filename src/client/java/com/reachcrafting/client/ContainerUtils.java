@@ -367,8 +367,16 @@ public final class ContainerUtils {
 		AbstractContainerMenu menu = client.player.containerMenu;
 
 		if (allowScreenChange && ReachCraftingConfig.get().putPulledResourcesBack() && !PulledResourcesTracker.isEmpty()) {
-			com.reachcrafting.ReachCraftingMod.LOGGER.info("[grid_flush] Initiating return to chests (items={})", PulledResourcesTracker.getWithdrawnItems().size());
+			com.reachcrafting.ReachCraftingMod.LOGGER.info(
+				"[grid_flush] Initiating return to chests (items={}, starting_new_craft={}, screen={})",
+				PulledResourcesTracker.getWithdrawnItems().size(),
+				isStartingNewCraft,
+				client.screen != null ? client.screen.getClass().getSimpleName() : "<none>"
+			);
 			NearbyContainerDryRun.startReturn(menu, PulledResourcesTracker.getWithdrawnItems(), isStartingNewCraft);
+			if (NearbyContainerDryRun.isActiveSessionRunning()) {
+				return;
+			}
 		} else if (allowScreenChange && ReachCraftingConfig.get().putPulledResourcesBack()) {
 			com.reachcrafting.ReachCraftingMod.LOGGER.info("[grid_flush] Skipping return to chests: PulledResourcesTracker is empty");
 		}

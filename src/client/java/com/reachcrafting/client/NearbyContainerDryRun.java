@@ -61,6 +61,7 @@ import org.lwjgl.glfw.GLFW;
 public final class NearbyContainerDryRun {
 	private static int interactionBlockTicks;
 	private static boolean suppressSecondaryUse;
+	private static Set<String> pendingPostReturnCompactionItemIds = Set.of();
 
 	private NearbyContainerDryRun() {
 	}
@@ -188,6 +189,9 @@ public final class NearbyContainerDryRun {
 		cancelCurrent();
 		AvailableItemSnapshot localItems = AvailableItemSnapshot.capture(player, client.screen);
 		ScreenContext context = ScreenContext.capture(client, cameraEntity, player.blockInteractionRange(), localItems);
+		if (reopenScreen) {
+			context = context.withClearedGrid();
+		}
 		activeSession = new ReturnSession(client, player, level, gameMode, cameraEntity, closingMenu, items, context, reopenScreen);
 		activeSession.start();
 	}
@@ -218,6 +222,18 @@ public final class NearbyContainerDryRun {
 
 	public static boolean shouldSuppressSecondaryUse() {
 		return suppressSecondaryUse;
+	}
+
+	public static void runPendingPostReturnCompaction(Minecraft client) {
+		if (pendingPostReturnCompactionItemIds.isEmpty() || client == null || client.player == null || client.gameMode == null) {
+			return;
+		}
+		InventoryGridRestoreTracker.compactTrackedInventoryStacks(client.player.containerMenu, client.gameMode, pendingPostReturnCompactionItemIds);
+		ReachCraftingMod.LOGGER.info(
+			"[nearby_return] Deferred compaction applied: {}",
+			AvailableItemSnapshot.formatInventorySlots(client.player, pendingPostReturnCompactionItemIds)
+		);
+		pendingPostReturnCompactionItemIds = Set.of();
 	}
 
 	private static void armInteractionBlock() {
@@ -296,6 +312,21 @@ public final class NearbyContainerDryRun {
 		}
 
 		protected void resumeOriginalContext(ScreenContext context) {
+			Map<String, Integer> reservedGridCounts = new LinkedHashMap<>();
+			for (ItemStack stack : context.gridStacks()) {
+				if (stack.isEmpty()) {
+					continue;
+				}
+				String itemId = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+				reservedGridCounts.merge(itemId, stack.getCount(), Integer::sum);
+			}
+			ReachCraftingMod.LOGGER.info(
+				"[nearby_resume] kind={} grid={} mouse=({}, {})",
+				context.kind(),
+				AvailableItemSnapshot.formatCounts(reservedGridCounts),
+				String.format(java.util.Locale.ROOT, "%.1f", context.mouseX()),
+				String.format(java.util.Locale.ROOT, "%.1f", context.mouseY())
+			);
 			if (context.kind() == ScreenKind.INVENTORY_2X2) {
 				client.setScreen(new InventoryScreen(player));
 				return;
@@ -1712,6 +1743,14 @@ public final class NearbyContainerDryRun {
 			return gridStacks.stream().anyMatch(stack -> !stack.isEmpty());
 		}
 
+		private ScreenContext withClearedGrid() {
+			List<ItemStack> cleared = new ArrayList<>(gridStacks.size());
+			for (int i = 0; i < gridStacks.size(); i++) {
+				cleared.add(ItemStack.EMPTY);
+			}
+			return new ScreenContext(kind, craftingTablePos, recipeBookState, List.copyOf(cleared), mouseX, mouseY);
+		}
+
 		private boolean reservedGridMatches(RecipeIngredientSummary ingredientSummary) {
 			List<RecipeIngredientSummary.IngredientSlot> ingredientSlots = ingredientSummary.slots();
 			List<ItemStack> occupiedGridStacks = gridStacks.stream()
@@ -2198,6 +2237,9 @@ public final class NearbyContainerDryRun {
 				ReachCraftingMod.LOGGER.info("[nearby_return]   Executing: {}x {} (slot {} -> {})", move.count, itemId, move.source.index, move.target.index);
 				moveItem(menu, move.source, move.target, move.count);
 			}
+			if (ReachCraftingConfig.get().restoreInventoryItemPositions()) {
+				restoreProtectedInventoryLayout(menu);
+			}
 
 			player.closeContainer();
 			pendingContainerPos = null;
@@ -2282,6 +2324,103 @@ public final class NearbyContainerDryRun {
 			return null;
 		}
 
+		private void restoreProtectedInventoryLayout(AbstractContainerMenu menu) {
+			Map<Integer, ItemStack> snapshots = PulledResourcesTracker.getInitialSlotSnapshots();
+			if (snapshots.isEmpty()) {
+				return;
+			}
+
+			for (Map.Entry<Integer, ItemStack> entry : snapshots.entrySet()) {
+				int inventorySlot = entry.getKey();
+				ItemStack snapshot = entry.getValue();
+				if (snapshot.isEmpty()) {
+					continue;
+				}
+
+				Slot targetSlot = findInventoryMenuSlot(menu, inventorySlot);
+				if (targetSlot == null) {
+					continue;
+				}
+
+				ItemStack current = targetSlot.getItem();
+				if (!current.isEmpty() && !ItemStack.isSameItemSameComponents(current, snapshot)) {
+					continue;
+				}
+
+				int currentCount = current.isEmpty() ? 0 : current.getCount();
+				int missing = snapshot.getCount() - currentCount;
+				if (missing <= 0) {
+					continue;
+				}
+
+				while (missing > 0) {
+					Slot donor = findProtectedLayoutDonor(menu, inventorySlot, snapshot, missing);
+					if (donor == null) {
+						ReachCraftingMod.LOGGER.info(
+							"[nearby_return]   Layout restore stalled for invSlot {}: missing {}x {}",
+							inventorySlot,
+							missing,
+							BuiltInRegistries.ITEM.getKey(snapshot.getItem())
+						);
+						break;
+					}
+
+					int donorProtected = PulledResourcesTracker.getProtectedSlotCount(donor.getContainerSlot(), donor.getItem());
+					int donorAvailable = donor.getItem().getCount() - donorProtected;
+					int toMove = Math.min(missing, donorAvailable);
+					if (toMove <= 0) {
+						break;
+					}
+
+					ReachCraftingMod.LOGGER.info(
+						"[nearby_return]   Restoring layout: {}x {} from inv {} to inv {}",
+						toMove,
+						BuiltInRegistries.ITEM.getKey(snapshot.getItem()),
+						donor.getContainerSlot(),
+						inventorySlot
+					);
+					moveItem(menu, donor, targetSlot, toMove);
+					missing -= toMove;
+				}
+			}
+		}
+
+		private Slot findInventoryMenuSlot(AbstractContainerMenu menu, int inventorySlot) {
+			for (Slot slot : menu.slots) {
+				if (slot.container instanceof Inventory && slot.getContainerSlot() == inventorySlot) {
+					return slot;
+				}
+			}
+			return null;
+		}
+
+		private Slot findProtectedLayoutDonor(AbstractContainerMenu menu, int excludedInventorySlot, ItemStack desiredStack, int needed) {
+			Slot bestSlot = null;
+			int bestAvailable = 0;
+			for (Slot slot : menu.slots) {
+				if (!(slot.container instanceof Inventory) || !slot.hasItem()) {
+					continue;
+				}
+				if (slot.getContainerSlot() == excludedInventorySlot) {
+					continue;
+				}
+				if (!ItemStack.isSameItemSameComponents(slot.getItem(), desiredStack)) {
+					continue;
+				}
+
+				int protectedCount = PulledResourcesTracker.getProtectedSlotCount(slot.getContainerSlot(), slot.getItem());
+				int available = slot.getItem().getCount() - protectedCount;
+				if (available <= 0) {
+					continue;
+				}
+				if (bestSlot == null || available < bestAvailable || (available == bestAvailable && available >= needed)) {
+					bestSlot = slot;
+					bestAvailable = available;
+				}
+			}
+			return bestSlot;
+		}
+
 		private boolean canAcceptMore(Slot slot, ItemStack stack, Map<Integer, Integer> simulatedOccupancy) {
 			if (slot.container instanceof net.minecraft.world.entity.player.Inventory) return false;
 			if (!slot.mayPlace(stack)) return false;
@@ -2349,6 +2488,36 @@ public final class NearbyContainerDryRun {
 			if (closeContainer) {
 				player.closeContainer();
 			}
+
+			if (!ReachCraftingConfig.get().restoreInventoryItemPositions()) {
+				Set<String> trackedItemIds = new LinkedHashSet<>();
+				for (PulledResourcesTracker.WithdrawnItem item : itemsToReturn) {
+					trackedItemIds.add(BuiltInRegistries.ITEM.getKey(item.stack().getItem()).toString());
+				}
+				if (reopenScreen) {
+					pendingPostReturnCompactionItemIds = Set.copyOf(trackedItemIds);
+					ReachCraftingMod.LOGGER.info("[nearby_return] Deferred compaction queued for {}", trackedItemIds);
+				} else {
+					InventoryGridRestoreTracker.compactTrackedInventoryStacks(player.containerMenu, gameMode, trackedItemIds);
+					ReachCraftingMod.LOGGER.info(
+						"[nearby_return] Post-stop tracked slots={}",
+						AvailableItemSnapshot.formatInventorySlots(player, trackedItemIds)
+					);
+				}
+			}
+
+			Map<String, Integer> inventoryCounts = new LinkedHashMap<>();
+			for (Slot slot : player.inventoryMenu.slots) {
+				if (slot.hasItem()) {
+					String itemId = BuiltInRegistries.ITEM.getKey(slot.getItem().getItem()).toString();
+					inventoryCounts.merge(itemId, slot.getItem().getCount(), Integer::sum);
+				}
+			}
+			ReachCraftingMod.LOGGER.info(
+				"[nearby_return] Post-stop inventory summary={} reopen_screen={}",
+				AvailableItemSnapshot.formatCounts(inventoryCounts),
+				reopenScreen
+			);
 			
 			// Log final inventory state for debugging
 			ReachCraftingMod.LOGGER.info("[nearby_return] Session stopped. Final inventory state:");

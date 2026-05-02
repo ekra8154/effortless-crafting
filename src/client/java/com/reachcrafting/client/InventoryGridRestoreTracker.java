@@ -14,6 +14,7 @@ import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.core.registries.BuiltInRegistries;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.Set;
 
 public final class InventoryGridRestoreTracker {
@@ -99,8 +100,14 @@ public final class InventoryGridRestoreTracker {
 			}
 
 			boolean useSmartRestore = ReachCraftingConfig.get().restoreInventoryItemPositions();
+			if (!useSmartRestore) {
+				compactGridIntoInventory(menu, gameMode);
+				clear();
+				return;
+			}
+
 			Map<Integer, ItemStack> snapshots = PulledResourcesTracker.getInitialSlotSnapshots();
-			if (useSmartRestore && !GRID_TO_ORIGINAL_SLOT.isEmpty() || !snapshots.isEmpty()) {
+			if (!GRID_TO_ORIGINAL_SLOT.isEmpty() || !snapshots.isEmpty()) {
 				Minecraft client = Minecraft.getInstance();
 				if (client.player == null) return;
 
@@ -151,6 +158,141 @@ public final class InventoryGridRestoreTracker {
 			com.reachcrafting.ReachCraftingMod.LOGGER.error("[grid_restore] Error during restore: ", e);
 		}
 		clear();
+	}
+
+	public static void compactTrackedInventoryStacks(AbstractContainerMenu menu, MultiPlayerGameMode gameMode, Set<String> trackedItemIds) {
+		Minecraft client = Minecraft.getInstance();
+		if (client.player == null || menu == null || gameMode == null || trackedItemIds == null || trackedItemIds.isEmpty()) {
+			return;
+		}
+
+		Set<String> remainingIds = new LinkedHashSet<>(trackedItemIds);
+		boolean moved;
+		do {
+			moved = false;
+			for (String itemId : remainingIds) {
+				if (compactOneInventoryStack(menu, gameMode, client, itemId)) {
+					moved = true;
+				}
+			}
+		} while (moved);
+	}
+
+	private static boolean compactOneInventoryStack(AbstractContainerMenu menu, MultiPlayerGameMode gameMode, Minecraft client, String itemId) {
+		Slot target = null;
+		int targetSpace = 0;
+		Slot source = null;
+		int sourceCount = 0;
+
+		for (Slot slot : menu.slots) {
+			if (!(slot.container instanceof Inventory) || !slot.hasItem()) {
+				continue;
+			}
+			String slotItemId = BuiltInRegistries.ITEM.getKey(slot.getItem().getItem()).toString();
+			if (!itemId.equals(slotItemId)) {
+				continue;
+			}
+
+			int max = Math.min(slot.getMaxStackSize(), slot.getItem().getMaxStackSize());
+			int count = slot.getItem().getCount();
+			if (count < max) {
+				int space = max - count;
+				if (target == null || count > target.getItem().getCount()) {
+					target = slot;
+					targetSpace = space;
+				}
+			}
+
+			if (source == null || count < sourceCount) {
+				source = slot;
+				sourceCount = count;
+			}
+		}
+
+		if (target == null || source == null || target == source) {
+			return false;
+		}
+
+		int moveCount = Math.min(targetSpace, sourceCount);
+		if (moveCount <= 0) {
+			return false;
+		}
+
+		gameMode.handleInventoryMouseClick(menu.containerId, source.index, 0, ClickType.PICKUP, client.player);
+		int remainder = sourceCount - moveCount;
+		for (int i = 0; i < remainder; i++) {
+			gameMode.handleInventoryMouseClick(menu.containerId, source.index, 1, ClickType.PICKUP, client.player);
+		}
+		gameMode.handleInventoryMouseClick(menu.containerId, target.index, 0, ClickType.PICKUP, client.player);
+		if (!client.player.containerMenu.getCarried().isEmpty()) {
+			gameMode.handleInventoryMouseClick(menu.containerId, source.index, 0, ClickType.PICKUP, client.player);
+		}
+		return true;
+	}
+
+	private static void compactGridIntoInventory(AbstractContainerMenu menu, MultiPlayerGameMode gameMode) {
+		Minecraft client = Minecraft.getInstance();
+		if (client.player == null) {
+			return;
+		}
+
+		for (int gridIdx = 0; gridIdx < menu.slots.size(); gridIdx++) {
+			if (!isGridSlot(menu, gridIdx)) {
+				continue;
+			}
+
+			Slot gridSlot = menu.getSlot(gridIdx);
+			if (!gridSlot.hasItem()) {
+				continue;
+			}
+
+			gameMode.handleInventoryMouseClick(menu.containerId, gridIdx, 0, ClickType.PICKUP, client.player);
+			while (!client.player.containerMenu.getCarried().isEmpty()) {
+				ItemStack carried = client.player.containerMenu.getCarried();
+				Slot targetSlot = findBestCompactionTarget(menu, carried);
+				if (targetSlot == null) {
+					break;
+				}
+				gameMode.handleInventoryMouseClick(menu.containerId, targetSlot.index, 0, ClickType.PICKUP, client.player);
+			}
+
+			if (!client.player.containerMenu.getCarried().isEmpty()) {
+				gameMode.handleInventoryMouseClick(menu.containerId, gridIdx, 0, ClickType.PICKUP, client.player);
+				if (menu.getSlot(gridIdx).hasItem()) {
+					gameMode.handleInventoryMouseClick(menu.containerId, gridIdx, 0, ClickType.QUICK_MOVE, client.player);
+				}
+			}
+		}
+	}
+
+	private static Slot findBestCompactionTarget(AbstractContainerMenu menu, ItemStack carried) {
+		Slot bestMerge = null;
+		int bestMergeCount = -1;
+		Slot bestEmpty = null;
+
+		for (Slot slot : menu.slots) {
+			if (!(slot.container instanceof Inventory) || !slot.mayPlace(carried)) {
+				continue;
+			}
+
+			if (slot.hasItem()) {
+				if (!ItemStack.isSameItemSameComponents(slot.getItem(), carried)) {
+					continue;
+				}
+				int currentCount = slot.getItem().getCount();
+				if (currentCount >= Math.min(slot.getMaxStackSize(), carried.getMaxStackSize())) {
+					continue;
+				}
+				if (bestMerge == null || currentCount > bestMergeCount) {
+					bestMerge = slot;
+					bestMergeCount = currentCount;
+				}
+			} else if (bestEmpty == null) {
+				bestEmpty = slot;
+			}
+		}
+
+		return bestMerge != null ? bestMerge : bestEmpty;
 	}
 
 	private static void fillSlotFromGrid(AbstractContainerMenu menu, MultiPlayerGameMode gameMode, int targetMenuIdx, int targetCount, String itemId, Set<Integer> excludedGridSlots) {

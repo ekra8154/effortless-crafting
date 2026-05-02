@@ -4,6 +4,7 @@ import java.util.LinkedHashMap;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.StringJoiner;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
@@ -90,5 +91,33 @@ public record AvailableItemSnapshot(
 			.sorted(Map.Entry.comparingByKey())
 			.forEach(entry -> joiner.add(entry.getValue() + "x " + entry.getKey()));
 		return joiner.toString();
+	}
+
+	public static String formatInventorySlots(LocalPlayer player) {
+		return formatInventorySlots(player, null);
+	}
+
+	public static String formatInventorySlots(LocalPlayer player, Set<String> itemFilter) {
+		if (player == null) {
+			return "<no-player>";
+		}
+
+		StringJoiner joiner = new StringJoiner(", ");
+		List<ItemStack> items = player.getInventory().getNonEquipmentItems();
+		for (int i = 0; i < items.size(); i++) {
+			ItemStack stack = items.get(i);
+			if (stack.isEmpty()) {
+				continue;
+			}
+
+			String itemId = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+			if (itemFilter != null && !itemFilter.isEmpty() && !itemFilter.contains(itemId)) {
+				continue;
+			}
+
+			joiner.add("inv" + i + "=" + stack.getCount() + "x " + itemId);
+		}
+		String formatted = joiner.toString();
+		return formatted.isEmpty() ? "<empty>" : formatted;
 	}
 }

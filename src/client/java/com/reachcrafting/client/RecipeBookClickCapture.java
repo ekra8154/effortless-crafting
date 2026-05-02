@@ -174,6 +174,15 @@ public final class RecipeBookClickCapture {
 		int requestedClicks
 	) {
 		AvailableItemSnapshot availableItems = AvailableItemSnapshot.capture(player, screen);
+		ReachCraftingMod.LOGGER.info(
+			"[recipe_capture] screen={} inventory={} grid={} slots={} pending={} replay={}",
+			screen.getClass().getSimpleName(),
+			availableItems.inventorySummary(),
+			availableItems.gridSummary(),
+			AvailableItemSnapshot.formatInventorySlots(player),
+			pendingHeldRecipe != null ? pendingHeldRecipe.action().recipeId().index() + "x" + pendingHeldRecipe.clickCount() : "<none>",
+			replayBatch != null ? replayBatch.action().recipeId().index() + "x" + replayBatch.remainingClicks() : "<none>"
+		);
 		boolean allowReservedGridVariantSwitch = false;
 		int desiredVariantCopies = availableItems.hasReservedGrid() && !craftAll
 			? ContainerUtils.currentReservedCraftCopies(availableItems.gridStacks()) + requestedClicks
@@ -411,6 +420,17 @@ public final class RecipeBookClickCapture {
 			replayBatch = null;
 			return;
 		}
+
+		NearbyContainerDryRun.runPendingPostReturnCompaction(minecraft);
+
+		ReachCraftingMod.LOGGER.info(
+			"[recipe_replay] screen={} recipe_idx={} remaining_clicks={} allow_nearby={} craft_all={}",
+			screen.getClass().getSimpleName(),
+			replayBatch.action().recipeId().index(),
+			replayBatch.remainingClicks(),
+			replayBatch.allowNearby(),
+			replayBatch.craftAll()
+		);
 
 		executeRecipeButtonClick(
 			minecraft,
