@@ -15,6 +15,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.core.registries.BuiltInRegistries;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Set;
 
 public final class InventoryGridRestoreTracker {
@@ -111,53 +112,261 @@ public final class InventoryGridRestoreTracker {
 				Minecraft client = Minecraft.getInstance();
 				if (client.player == null) return;
 
-				// PASS 1: Direct Mapping Restoration
-				// Use explicit mappings from GRID_TO_ORIGINAL_SLOT (for items the mod moved or the user clicked)
 				Set<Integer> processedGridSlots = new HashSet<>();
+
+				List<Map.Entry<Integer, ItemStack>> orderedSnapshots = snapshots.entrySet().stream()
+					.sorted(Map.Entry.comparingByKey())
+					.toList();
+				logSmartRestoreState("pre", menu, client.player, orderedSnapshots);
+
+				// PASS 1: Restore the original snapshot baseline exactly.
+				for (Map.Entry<Integer, ItemStack> entry : orderedSnapshots) {
+					int invIdx = entry.getKey();
+					ItemStack snapshot = entry.getValue();
+					int targetMenuIdx = inventoryIndexToMenuIndex(menu, invIdx);
+					if (targetMenuIdx != -1) {
+						restoreSnapshotBaseline(menu, gameMode, targetMenuIdx, snapshot, processedGridSlots);
+					}
+				}
+				logSmartRestoreState("post_baseline", menu, client.player, orderedSnapshots);
+
+				// PASS 2: Use same-item overflow to top off the restored snapshot slots one at a time.
+				for (Map.Entry<Integer, ItemStack> entry : orderedSnapshots) {
+					int invIdx = entry.getKey();
+					ItemStack snapshot = entry.getValue();
+					int targetMenuIdx = inventoryIndexToMenuIndex(menu, invIdx);
+					if (targetMenuIdx != -1) {
+						topOffSnapshotSlot(menu, gameMode, targetMenuIdx, snapshot, processedGridSlots);
+					}
+				}
+				logSmartRestoreState("post_topoff", menu, client.player, orderedSnapshots);
+
+				// PASS 3: Return remaining grid items to their mapped inventory slots where possible.
 				for (int gridIdx = 0; gridIdx < menu.slots.size(); gridIdx++) {
-					if (isGridSlot(menu, gridIdx)) {
-						Slot gridSlot = menu.getSlot(gridIdx);
-						if (gridSlot.hasItem()) {
-							int targetMenuIdx = GRID_TO_ORIGINAL_SLOT.getOrDefault(gridIdx, -1);
-							if (targetMenuIdx != -1) {
-								moveItems(menu, gameMode, gridIdx, targetMenuIdx);
-								if (!gridSlot.hasItem()) {
-									processedGridSlots.add(gridIdx);
-								}
-							}
+					if (!isGridSlot(menu, gridIdx) || processedGridSlots.contains(gridIdx)) {
+						continue;
+					}
+					Slot gridSlot = menu.getSlot(gridIdx);
+					if (!gridSlot.hasItem()) {
+						continue;
+					}
+					int targetMenuIdx = GRID_TO_ORIGINAL_SLOT.getOrDefault(gridIdx, -1);
+					if (targetMenuIdx != -1) {
+						moveItems(menu, gameMode, gridIdx, targetMenuIdx);
+						if (!gridSlot.hasItem()) {
+							processedGridSlots.add(gridIdx);
 						}
 					}
 				}
-
-				// PASS 2: Snapshot-Based Distributed Restoration
-				// For each slot that had an item in the snapshot, try to fill it back to its original count
-				for (Map.Entry<Integer, ItemStack> entry : snapshots.entrySet()) {
-					int invIdx = entry.getKey();
-					ItemStack snapshot = entry.getValue();
-					String itemId = BuiltInRegistries.ITEM.getKey(snapshot.getItem()).toString();
-					int targetMenuIdx = inventoryIndexToMenuIndex(menu, invIdx);
-					
-					if (targetMenuIdx != -1) {
-						fillSlotFromGrid(menu, gameMode, targetMenuIdx, snapshot.getCount(), itemId, processedGridSlots);
-					}
-				}
+				logSmartRestoreState("post_mapped", menu, client.player, orderedSnapshots);
 			}
 
-			// PASS 3: Leftover Consolidation
-			// Anything still in the grid (e.g. newly crafted items or extras) gets Shift-Clicked
+			// PASS 4: Leftover Consolidation
+			// Compact any remaining grid stacks into inventory so overflow keeps filling restored slots before spilling elsewhere.
+			compactGridIntoInventory(menu, gameMode);
 			Minecraft client = Minecraft.getInstance();
-			for (int gridIdx = 0; gridIdx < menu.slots.size(); gridIdx++) {
-				if (isGridSlot(menu, gridIdx)) {
-					Slot s = menu.getSlot(gridIdx);
-					if (s.hasItem()) {
-						gameMode.handleInventoryMouseClick(menu.containerId, gridIdx, 0, ClickType.QUICK_MOVE, client.player);
-					}
-				}
+			if (client.player != null) {
+				List<Map.Entry<Integer, ItemStack>> orderedSnapshots = PulledResourcesTracker.getInitialSlotSnapshots().entrySet().stream()
+					.sorted(Map.Entry.comparingByKey())
+					.toList();
+				logSmartRestoreState("post_compact", menu, client.player, orderedSnapshots);
 			}
 		} catch (Exception e) {
 			com.reachcrafting.ReachCraftingMod.LOGGER.error("[grid_restore] Error during restore: ", e);
 		}
 		clear();
+	}
+
+	private static void logSmartRestoreState(String phase, AbstractContainerMenu menu, net.minecraft.client.player.LocalPlayer player, List<Map.Entry<Integer, ItemStack>> orderedSnapshots) {
+		if (orderedSnapshots.isEmpty()) {
+			return;
+		}
+		Set<String> trackedItemIds = new LinkedHashSet<>();
+		StringBuilder targets = new StringBuilder();
+		boolean first = true;
+		for (Map.Entry<Integer, ItemStack> entry : orderedSnapshots) {
+			ItemStack snapshot = entry.getValue();
+			if (snapshot.isEmpty()) {
+				continue;
+			}
+			String itemId = BuiltInRegistries.ITEM.getKey(snapshot.getItem()).toString();
+			trackedItemIds.add(itemId);
+			int targetMenuIdx = inventoryIndexToMenuIndex(menu, entry.getKey());
+			Slot target = targetMenuIdx >= 0 ? menu.getSlot(targetMenuIdx) : null;
+			int currentCount = target != null && target.hasItem() && ItemStack.isSameItemSameComponents(target.getItem(), snapshot) ? target.getItem().getCount() : 0;
+			if (!first) {
+				targets.append(", ");
+			}
+			first = false;
+			targets.append("inv").append(entry.getKey()).append("=").append(currentCount).append("/").append(snapshot.getCount());
+		}
+		ReachCraftingMod.LOGGER.info(
+			"[grid_restore] phase={} targets={} inventory_slots={} grid={}",
+			phase,
+			targets,
+			AvailableItemSnapshot.formatInventorySlots(player, trackedItemIds),
+			summarizeGrid(menu)
+		);
+	}
+
+	private static String summarizeGrid(AbstractContainerMenu menu) {
+		Map<String, Integer> gridCounts = new HashMap<>();
+		for (int gridIdx = 0; gridIdx < menu.slots.size(); gridIdx++) {
+			if (!isGridSlot(menu, gridIdx)) {
+				continue;
+			}
+			ItemStack stack = menu.getSlot(gridIdx).getItem();
+			if (stack.isEmpty()) {
+				continue;
+			}
+			String itemId = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+			gridCounts.merge(itemId, stack.getCount(), Integer::sum);
+		}
+		return AvailableItemSnapshot.formatCounts(gridCounts);
+	}
+
+	private static void restoreSnapshotBaseline(AbstractContainerMenu menu, MultiPlayerGameMode gameMode, int targetMenuIdx, ItemStack snapshot, Set<Integer> processedGridSlots) {
+		Slot target = menu.getSlot(targetMenuIdx);
+		if (target.hasItem() && !ItemStack.isSameItemSameComponents(target.getItem(), snapshot)) {
+			return;
+		}
+
+		int currentCount = target.hasItem() ? target.getItem().getCount() : 0;
+		int missing = snapshot.getCount() - currentCount;
+		if (missing <= 0) {
+			return;
+		}
+
+		moveMatchingGridItemsToTargetPrecisely(menu, gameMode, targetMenuIdx, snapshot, missing, processedGridSlots);
+	}
+
+	private static void topOffSnapshotSlot(AbstractContainerMenu menu, MultiPlayerGameMode gameMode, int targetMenuIdx, ItemStack snapshot, Set<Integer> processedGridSlots) {
+		Slot target = menu.getSlot(targetMenuIdx);
+		if (!target.hasItem() || !ItemStack.isSameItemSameComponents(target.getItem(), snapshot)) {
+			return;
+		}
+
+		int maxTargetCount = Math.min(target.getMaxStackSize(), snapshot.getMaxStackSize());
+		int missing = maxTargetCount - target.getItem().getCount();
+		if (missing <= 0) {
+			return;
+		}
+
+		moveMatchingGridItemsToTarget(menu, gameMode, targetMenuIdx, snapshot, missing, processedGridSlots);
+	}
+
+	private static void moveMatchingGridItemsToTarget(AbstractContainerMenu menu, MultiPlayerGameMode gameMode, int targetMenuIdx, ItemStack desiredStack, int requestedCount, Set<Integer> processedGridSlots) {
+		if (requestedCount <= 0) {
+			return;
+		}
+
+		int remaining = requestedCount;
+		for (int gridIdx = 0; gridIdx < menu.slots.size() && remaining > 0; gridIdx++) {
+			if (!isGridSlot(menu, gridIdx) || processedGridSlots.contains(gridIdx)) {
+				continue;
+			}
+
+			Slot gridSlot = menu.getSlot(gridIdx);
+			if (!gridSlot.hasItem() || !ItemStack.isSameItemSameComponents(gridSlot.getItem(), desiredStack)) {
+				continue;
+			}
+
+			int moved = moveExactCountFromGrid(menu, gameMode, gridIdx, targetMenuIdx, remaining);
+			if (moved > 0) {
+				remaining -= moved;
+				if (!gridSlot.hasItem()) {
+					processedGridSlots.add(gridIdx);
+				}
+			}
+		}
+	}
+
+	private static void moveMatchingGridItemsToTargetPrecisely(AbstractContainerMenu menu, MultiPlayerGameMode gameMode, int targetMenuIdx, ItemStack desiredStack, int requestedCount, Set<Integer> processedGridSlots) {
+		if (requestedCount <= 0) {
+			return;
+		}
+
+		int remaining = requestedCount;
+		for (int gridIdx = 0; gridIdx < menu.slots.size() && remaining > 0; gridIdx++) {
+			if (!isGridSlot(menu, gridIdx) || processedGridSlots.contains(gridIdx)) {
+				continue;
+			}
+
+			Slot gridSlot = menu.getSlot(gridIdx);
+			if (!gridSlot.hasItem() || !ItemStack.isSameItemSameComponents(gridSlot.getItem(), desiredStack)) {
+				continue;
+			}
+
+			int moved = moveExactCountFromGridPrecisely(menu, gameMode, gridIdx, targetMenuIdx, remaining);
+			if (moved > 0) {
+				remaining -= moved;
+				if (!gridSlot.hasItem()) {
+					processedGridSlots.add(gridIdx);
+				}
+			}
+		}
+	}
+
+	private static int moveExactCountFromGrid(AbstractContainerMenu menu, MultiPlayerGameMode gameMode, int sourceIdx, int targetIdx, int requestedCount) {
+		Minecraft client = Minecraft.getInstance();
+		if (client.player == null || requestedCount <= 0) {
+			return 0;
+		}
+
+		Slot source = menu.getSlot(sourceIdx);
+		Slot target = menu.getSlot(targetIdx);
+		if (!source.hasItem()) {
+			return 0;
+		}
+
+		ItemStack sourceStack = source.getItem();
+		int maxTargetCount = Math.min(target.getMaxStackSize(), sourceStack.getMaxStackSize());
+		int currentTargetCount = target.hasItem() ? target.getItem().getCount() : 0;
+		int moveCount = Math.min(requestedCount, Math.min(sourceStack.getCount(), maxTargetCount - currentTargetCount));
+		if (moveCount <= 0) {
+			return 0;
+		}
+
+		gameMode.handleInventoryMouseClick(menu.containerId, sourceIdx, 0, ClickType.PICKUP, client.player);
+		int remainder = sourceStack.getCount() - moveCount;
+		for (int i = 0; i < remainder; i++) {
+			gameMode.handleInventoryMouseClick(menu.containerId, sourceIdx, 1, ClickType.PICKUP, client.player);
+		}
+		gameMode.handleInventoryMouseClick(menu.containerId, targetIdx, 0, ClickType.PICKUP, client.player);
+		if (!client.player.containerMenu.getCarried().isEmpty()) {
+			gameMode.handleInventoryMouseClick(menu.containerId, sourceIdx, 0, ClickType.PICKUP, client.player);
+		}
+		return moveCount;
+	}
+
+	private static int moveExactCountFromGridPrecisely(AbstractContainerMenu menu, MultiPlayerGameMode gameMode, int sourceIdx, int targetIdx, int requestedCount) {
+		Minecraft client = Minecraft.getInstance();
+		if (client.player == null || requestedCount <= 0) {
+			return 0;
+		}
+
+		Slot source = menu.getSlot(sourceIdx);
+		Slot target = menu.getSlot(targetIdx);
+		if (!source.hasItem()) {
+			return 0;
+		}
+
+		ItemStack sourceStack = source.getItem();
+		int maxTargetCount = Math.min(target.getMaxStackSize(), sourceStack.getMaxStackSize());
+		int currentTargetCount = target.hasItem() ? target.getItem().getCount() : 0;
+		int moveCount = Math.min(requestedCount, Math.min(sourceStack.getCount(), maxTargetCount - currentTargetCount));
+		if (moveCount <= 0) {
+			return 0;
+		}
+
+		gameMode.handleInventoryMouseClick(menu.containerId, sourceIdx, 0, ClickType.PICKUP, client.player);
+		for (int i = 0; i < moveCount; i++) {
+			gameMode.handleInventoryMouseClick(menu.containerId, targetIdx, 1, ClickType.PICKUP, client.player);
+		}
+		if (!client.player.containerMenu.getCarried().isEmpty()) {
+			gameMode.handleInventoryMouseClick(menu.containerId, sourceIdx, 0, ClickType.PICKUP, client.player);
+		}
+		return moveCount;
 	}
 
 	public static void compactTrackedInventoryStacks(AbstractContainerMenu menu, MultiPlayerGameMode gameMode, Set<String> trackedItemIds) {
@@ -293,46 +502,6 @@ public final class InventoryGridRestoreTracker {
 		}
 
 		return bestMerge != null ? bestMerge : bestEmpty;
-	}
-
-	private static void fillSlotFromGrid(AbstractContainerMenu menu, MultiPlayerGameMode gameMode, int targetMenuIdx, int targetCount, String itemId, Set<Integer> excludedGridSlots) {
-		Minecraft client = Minecraft.getInstance();
-		Slot target = menu.getSlot(targetMenuIdx);
-		
-		// Only fill if it's the right item type or empty
-		if (target.hasItem()) {
-			String currentId = BuiltInRegistries.ITEM.getKey(target.getItem().getItem()).toString();
-			if (!currentId.equals(itemId)) return;
-		}
-
-		for (int gridIdx = 0; gridIdx < menu.slots.size(); gridIdx++) {
-			if (isGridSlot(menu, gridIdx) && !excludedGridSlots.contains(gridIdx)) {
-				Slot gridSlot = menu.getSlot(gridIdx);
-				if (gridSlot.hasItem()) {
-					String gridItemId = BuiltInRegistries.ITEM.getKey(gridSlot.getItem().getItem()).toString();
-					if (gridItemId.equals(itemId)) {
-						int currentCount = target.hasItem() ? target.getItem().getCount() : 0;
-						if (currentCount >= targetCount) return;
-
-						// Pick up from grid
-						gameMode.handleInventoryMouseClick(menu.containerId, gridIdx, 0, ClickType.PICKUP, client.player);
-						
-						// Try to place into target
-						// Note: Minecraft will only place as many as fit/needed for a stack merge
-						gameMode.handleInventoryMouseClick(menu.containerId, targetMenuIdx, 0, ClickType.PICKUP, client.player);
-						
-						// If still carrying (target was full or perfect), put back in grid
-						if (!client.player.containerMenu.getCarried().isEmpty()) {
-							gameMode.handleInventoryMouseClick(menu.containerId, gridIdx, 0, ClickType.PICKUP, client.player);
-						}
-						
-						if (!gridSlot.hasItem()) {
-							excludedGridSlots.add(gridIdx);
-						}
-					}
-				}
-			}
-		}
 	}
 
 	private static int inventoryIndexToMenuIndex(AbstractContainerMenu menu, int invIdx) {

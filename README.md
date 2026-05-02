@@ -103,6 +103,8 @@ remove option to turn off hold and release style - its just better
 
 on release, input number count should stay there, and allow the user to decrease or increase it as needed (or change it to a different recipe)
 
+if ctrl or shift is released but spacebar is still held the searchbox doesn't refocus until spacebar is released? on the temporary defocus thing
+
 KNOWN BUGS:
 - queuing a new item when one is in the grid ejects the first and pulls the second but both end up in the inventory instead of the second being in the grid
 
