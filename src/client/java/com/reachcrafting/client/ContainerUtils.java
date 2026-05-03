@@ -12,6 +12,7 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.InventoryMenu;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
@@ -288,6 +289,10 @@ public final class ContainerUtils {
 						autoMoveSnapshotCounts.put(i, s.getItem().getCount());
 					}
 				}
+				Slot offhandSlot = findVisibleOffhandSlot(menu);
+				if (offhandSlot != null && offhandSlot.hasItem()) {
+					autoMoveSnapshotCounts.put(offhandSlot.index, offhandSlot.getItem().getCount());
+				}
 				
 				// Perform the initial Shift-click (synchronous client-side update)
 				client.gameMode.handleInventoryMouseClick(menu.containerId, resultSlot.index, 0, net.minecraft.world.inventory.ClickType.QUICK_MOVE, client.player);
@@ -313,6 +318,24 @@ public final class ContainerUtils {
 				
 				if (currentCount > oldCount) {
 					// Found newly landed items. Try to consolidate them leftward into the hotbar.
+					Slot offhandSlot = findVisibleOffhandSlot(menu);
+					if (offhandSlot != null
+						&& offhandSlot.hasItem()
+						&& ItemStack.isSameItemSameComponents(offhandSlot.getItem(), autoMoveTargetStack)
+						&& offhandSlot.getItem().getCount() < offhandSlot.getItem().getMaxStackSize()) {
+						client.gameMode.handleInventoryMouseClick(menu.containerId, sourceSlot.index, 0, net.minecraft.world.inventory.ClickType.PICKUP, client.player);
+						client.gameMode.handleInventoryMouseClick(menu.containerId, offhandSlot.index, 0, net.minecraft.world.inventory.ClickType.PICKUP, client.player);
+						
+						if (!client.player.containerMenu.getCarried().isEmpty()) {
+							client.gameMode.handleInventoryMouseClick(menu.containerId, sourceSlot.index, 0, net.minecraft.world.inventory.ClickType.PICKUP, client.player);
+						}
+						
+						movesThisTick++;
+						autoMoveSnapshotCounts.put(i, 0);
+						autoMoveSnapshotCounts.put(offhandSlot.index, offhandSlot.getItem().getCount() + currentCount);
+						continue;
+					}
+
 					for (int h = 0; h < i && h < 9; h++) {
 						Slot targetSlot = findInventorySlot(menu, h);
 						if (targetSlot == null) continue;
@@ -413,5 +436,14 @@ public final class ContainerUtils {
 			}
 		}
 		return null;
+	}
+
+	private static Slot findVisibleOffhandSlot(AbstractContainerMenu menu) {
+		if (!ReachCraftingConfig.get().inventory2x2OffhandConsolidation()
+			|| !(menu instanceof InventoryMenu)
+			|| menu.slots.size() <= InventoryMenu.SHIELD_SLOT) {
+			return null;
+		}
+		return menu.getSlot(InventoryMenu.SHIELD_SLOT);
 	}
 }

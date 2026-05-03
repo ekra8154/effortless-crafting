@@ -135,6 +135,16 @@ public final class ReachCraftingConfigScreen {
 			.setSaveConsumer(config::setRedistributeToCraftWhenNeeded)
 			.build());
 
+		logicGroup.add(entries.startBooleanToggle(
+				Component.translatable("option.reachcrafting.inventory_2x2_offhand_consolidation"),
+				config.inventory2x2OffhandConsolidation()
+			)
+			.setDefaultValue(true)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.inventory_2x2_offhand_consolidation"))
+			.setSaveConsumer(config::setInventory2x2OffhandConsolidation)
+			.build());
+
+
 		craftingUi.addEntry(logicGroup.build());
 
 
@@ -185,6 +195,7 @@ public final class ReachCraftingConfigScreen {
 			.setTooltip(Component.translatable("tooltip.reachcrafting.put_pulled_resources_back"))
 			.setSaveConsumer(config::setPutPulledResourcesBack)
 			.build());
+
 
 		// Sub-Category: Filtering & Highlighting
 		var filterGroup = entries.startSubCategory(Component.translatable("category.reachcrafting.filtering_highlighting"));

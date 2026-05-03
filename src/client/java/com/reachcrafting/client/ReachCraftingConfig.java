@@ -7,6 +7,7 @@ import java.io.Reader;
 import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -29,6 +30,7 @@ public final class ReachCraftingConfig {
 		"minecraft:waxed_oxidized_copper_chest"
 	);
 	private static ReachCraftingConfig instance = defaults();
+	private static final int MAX_SEARCH_HISTORY = 20;
 
 	private boolean enabled;
 	private boolean enableNearbyContainerUsage;
@@ -48,11 +50,13 @@ public final class ReachCraftingConfig {
 	private boolean autoCraftMode;
 	private boolean showTotalOutputCounts;
 	private InputCounterVisibility inputCounterVisibility;
+	private boolean inventory2x2OffhandConsolidation;
 	private boolean scrollToPull;
 	private boolean typeToFocusSearch;
 	private Set<String> blacklistedContainerIds;
 
 	private static String lastSearchText = "";
+	private static final List<String> searchHistory = new ArrayList<>();
 
 	private ReachCraftingConfig() {
 	}
@@ -93,6 +97,7 @@ public final class ReachCraftingConfig {
 			instance.showFilterOutlines = stored.showFilterOutlines != null ? stored.showFilterOutlines : OutlineDisplayMode.OFF;
 			instance.showTotalOutputCounts = stored.showTotalOutputCounts != null ? stored.showTotalOutputCounts : true;
 			instance.inputCounterVisibility = stored.inputCounterVisibility != null ? stored.inputCounterVisibility : InputCounterVisibility.SHOW_WHILE_QUEUEING;
+			instance.inventory2x2OffhandConsolidation = stored.inventory2x2OffhandConsolidation == null ? true : stored.inventory2x2OffhandConsolidation;
 			instance.scrollToPull = stored.scrollToPull != null ? stored.scrollToPull : true;
 			instance.typeToFocusSearch = stored.typeToFocusSearch != null ? stored.typeToFocusSearch : true;
 			instance.autoCraftMode = stored.autoCraftMode != null ? stored.autoCraftMode : false;
@@ -275,6 +280,14 @@ public final class ReachCraftingConfig {
 		this.inputCounterVisibility = inputCounterVisibility;
 	}
 
+	public boolean inventory2x2OffhandConsolidation() {
+		return inventory2x2OffhandConsolidation;
+	}
+
+	public void setInventory2x2OffhandConsolidation(boolean inventory2x2OffhandConsolidation) {
+		this.inventory2x2OffhandConsolidation = inventory2x2OffhandConsolidation;
+	}
+
 	public boolean scrollToPull() {
 		return scrollToPull;
 	}
@@ -297,6 +310,29 @@ public final class ReachCraftingConfig {
 
 	public static void setLastSearchText(String text) {
 		lastSearchText = text != null ? text : "";
+	}
+
+	public static void pushSearchHistory(String text) {
+		String normalized = text != null ? text.trim() : "";
+		if (normalized.isEmpty()) {
+			return;
+		}
+		searchHistory.remove(normalized);
+		searchHistory.add(0, normalized);
+		while (searchHistory.size() > MAX_SEARCH_HISTORY) {
+			searchHistory.remove(searchHistory.size() - 1);
+		}
+	}
+
+	public static int getSearchHistorySize() {
+		return searchHistory.size();
+	}
+
+	public static String getSearchHistoryEntry(int index) {
+		if (index < 0 || index >= searchHistory.size()) {
+			return "";
+		}
+		return searchHistory.get(index);
 	}
 	
 	public Set<String> blacklistedContainerIds() {
@@ -328,6 +364,7 @@ public final class ReachCraftingConfig {
 		defaults.autoCraftMode = false;
 		defaults.showTotalOutputCounts = true;
 		defaults.inputCounterVisibility = InputCounterVisibility.SHOW_WHILE_QUEUEING;
+		defaults.inventory2x2OffhandConsolidation = true;
 		defaults.scrollToPull = true;
 		defaults.typeToFocusSearch = true;
 		defaults.blacklistedContainerIds = new LinkedHashSet<>(DEFAULT_BLACKLIST);
@@ -370,6 +407,7 @@ public final class ReachCraftingConfig {
 		private OutlineDisplayMode showFilterOutlines;
 		private Boolean showTotalOutputCounts;
 		private InputCounterVisibility inputCounterVisibility;
+		private Boolean inventory2x2OffhandConsolidation;
 		private Boolean scrollToPull;
 		private Boolean typeToFocusSearch;
 		private Boolean autoCraftMode;
@@ -393,6 +431,7 @@ public final class ReachCraftingConfig {
 			this.showFilterOutlines = config.showFilterOutlines;
 			this.showTotalOutputCounts = config.showTotalOutputCounts;
 			this.inputCounterVisibility = config.inputCounterVisibility;
+			this.inventory2x2OffhandConsolidation = config.inventory2x2OffhandConsolidation;
 			this.scrollToPull = config.scrollToPull;
 			this.typeToFocusSearch = config.typeToFocusSearch;
 			this.autoCraftMode = config.autoCraftMode;

@@ -8,6 +8,7 @@ import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ClickType;
+import net.minecraft.world.inventory.InventoryMenu;
 import net.minecraft.world.inventory.ResultSlot;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
@@ -142,6 +143,16 @@ public final class ScrollToPullHandler {
             }
         }
 
+        // Priority 3.5: Refill matching offhand stack, but never use an empty offhand slot
+        Slot offhandSlot = findVisibleOffhandSlot(menu);
+        if (offhandSlot != null
+            && offhandSlot.hasItem()
+            && !virtualSlotCounts.containsKey(offhandSlot.index)
+            && ItemStack.isSameItemSameComponents(offhandSlot.getItem(), result)
+            && offhandSlot.getItem().getCount() + craftCount <= maxStack) {
+            return offhandSlot.index;
+        }
+
         // Priority 4: Empty Hotbar
         for (int i = 0; i < 9; i++) {
             Slot s = findInventorySlot(menu, i);
@@ -168,6 +179,15 @@ public final class ScrollToPullHandler {
             }
         }
         return null;
+    }
+
+    private static Slot findVisibleOffhandSlot(AbstractContainerMenu menu) {
+        if (!ReachCraftingConfig.get().inventory2x2OffhandConsolidation()
+            || !(menu instanceof InventoryMenu)
+            || menu.slots.size() <= InventoryMenu.SHIELD_SLOT) {
+            return null;
+        }
+        return menu.getSlot(InventoryMenu.SHIELD_SLOT);
     }
 
     public static boolean isHoveringOutput(Minecraft minecraft) {

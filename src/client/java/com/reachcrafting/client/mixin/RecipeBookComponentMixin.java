@@ -25,6 +25,8 @@ public abstract class RecipeBookComponentMixin {
 	protected EditBox searchBox;
 
 	private long lastScreenOpenTime = 0;
+	private int reachcrafting$searchHistoryIndex = -1;
+	private String reachcrafting$searchHistoryDraft = "";
 
 	@Shadow
 	private String lastSearch;
@@ -57,7 +59,11 @@ public abstract class RecipeBookComponentMixin {
 		if (!ReachCraftingConfig.get().enabled()) return;
 		if (visible) {
 			lastScreenOpenTime = System.currentTimeMillis();
+			reachcrafting$resetSearchHistoryNavigation();
 			reachcrafting$applyAutoFocus();
+		} else {
+			reachcrafting$commitCurrentSearchToHistory();
+			reachcrafting$resetSearchHistoryNavigation();
 		}
 	}
 
@@ -65,6 +71,7 @@ public abstract class RecipeBookComponentMixin {
 	private void reachcrafting$onMouseClicked(MouseButtonEvent click, boolean filtering, CallbackInfoReturnable<Boolean> cir) {
 		if (!ReachCraftingConfig.get().enabled()) return;
 		if (this.searchBox != null && this.isVisible() && reachcrafting$isSupportedScreen()) {
+			reachcrafting$commitCurrentSearchToHistory();
 			ReachCraftingConfig.setLastSearchText(this.searchBox.getValue());
 		}
 	}
@@ -72,9 +79,16 @@ public abstract class RecipeBookComponentMixin {
 	@Inject(method = "keyPressed", at = @At("HEAD"), cancellable = true)
 	private void reachcrafting$onKeyPressedHead(KeyEvent event, CallbackInfoReturnable<Boolean> cir) {
 		if (!ReachCraftingConfig.get().enabled()) return;
-		// If focused, let number keys through to the screen for hotbar switching
 		if (this.searchBox != null && this.searchBox.isFocused()) {
 			int key = event.key();
+			if (key == GLFW.GLFW_KEY_UP || key == GLFW.GLFW_KEY_DOWN) {
+				if (reachcrafting$navigateSearchHistory(key == GLFW.GLFW_KEY_UP)) {
+					cir.setReturnValue(true);
+					return;
+				}
+			}
+
+			// If focused, let number keys through to the screen for hotbar switching
 			if ((key >= GLFW.GLFW_KEY_0 && key <= GLFW.GLFW_KEY_9) ||
 				(key >= GLFW.GLFW_KEY_KP_0 && key <= GLFW.GLFW_KEY_KP_9)) {
 				cir.setReturnValue(false);
@@ -111,6 +125,12 @@ public abstract class RecipeBookComponentMixin {
 	private void reachcrafting$onKeyPressed(KeyEvent event, CallbackInfoReturnable<Boolean> cir) {
 		if (!ReachCraftingConfig.get().enabled()) return;
 		if (this.searchBox != null && this.isVisible() && reachcrafting$isSupportedScreen()) {
+			if (this.searchBox.isFocused()) {
+				int key = event.key();
+				if (key != GLFW.GLFW_KEY_UP && key != GLFW.GLFW_KEY_DOWN) {
+					reachcrafting$resetSearchHistoryNavigation();
+				}
+			}
 			ReachCraftingConfig.setLastSearchText(this.searchBox.getValue());
 			this.checkSearchStringUpdate();
 		}
@@ -130,6 +150,9 @@ public abstract class RecipeBookComponentMixin {
 	private void reachcrafting$onCharTyped(CharacterEvent event, CallbackInfoReturnable<Boolean> cir) {
 		if (!ReachCraftingConfig.get().enabled()) return;
 		if (this.searchBox != null && this.isVisible() && reachcrafting$isSupportedScreen()) {
+			if (this.searchBox.isFocused()) {
+				reachcrafting$resetSearchHistoryNavigation();
+			}
 			ReachCraftingConfig.setLastSearchText(this.searchBox.getValue());
 			this.checkSearchStringUpdate();
 		}
@@ -147,6 +170,7 @@ public abstract class RecipeBookComponentMixin {
 		if (ReachCraftingConfig.get().rememberPreviousSearch() && reachcrafting$isSupportedScreen()) {
 			String lastSearch = ReachCraftingConfig.getLastSearchText();
 			if (!lastSearch.isEmpty()) {
+				ReachCraftingConfig.pushSearchHistory(lastSearch);
 				this.searchBox.setValue(lastSearch);
 				this.lastSearch = lastSearch;
 				boolean isFiltering = this.minecraft.player != null && this.minecraft.player.getRecipeBook().isFiltering(this.menu.getRecipeBookType());
@@ -221,5 +245,64 @@ public abstract class RecipeBookComponentMixin {
 		}
 
 		return true;
+	}
+
+	private boolean reachcrafting$navigateSearchHistory(boolean moveUp) {
+		int historySize = ReachCraftingConfig.getSearchHistorySize();
+		if (moveUp) {
+			if (historySize <= 0) {
+				return false;
+			}
+			if (reachcrafting$searchHistoryIndex < 0) {
+				reachcrafting$searchHistoryDraft = this.searchBox.getValue();
+				reachcrafting$searchHistoryIndex = 0;
+			} else if (reachcrafting$searchHistoryIndex < historySize - 1) {
+				reachcrafting$searchHistoryIndex++;
+			}
+			reachcrafting$applySearchText(ReachCraftingConfig.getSearchHistoryEntry(reachcrafting$searchHistoryIndex));
+			return true;
+		}
+
+		if (reachcrafting$searchHistoryIndex < 0) {
+			reachcrafting$applySearchText("");
+			return true;
+		}
+		reachcrafting$searchHistoryIndex--;
+		if (reachcrafting$searchHistoryIndex < 0) {
+			reachcrafting$applySearchText(reachcrafting$searchHistoryDraft);
+			reachcrafting$searchHistoryDraft = "";
+			return true;
+		}
+		reachcrafting$applySearchText(ReachCraftingConfig.getSearchHistoryEntry(reachcrafting$searchHistoryIndex));
+		return true;
+	}
+
+	private void reachcrafting$applySearchText(String text) {
+		if (this.searchBox == null) {
+			return;
+		}
+		String updated = text != null ? text : "";
+		this.searchBox.setValue(updated);
+		this.lastSearch = updated;
+		ReachCraftingConfig.setLastSearchText(updated);
+		boolean isFiltering = this.minecraft != null
+			&& this.minecraft.player != null
+			&& this.menu != null
+			&& this.minecraft.player.getRecipeBook().isFiltering(this.menu.getRecipeBookType());
+		this.updateCollections(true, isFiltering);
+		this.searchBox.setCursorPosition(updated.length());
+		this.searchBox.setHighlightPos(0);
+	}
+
+	private void reachcrafting$commitCurrentSearchToHistory() {
+		if (this.searchBox == null) {
+			return;
+		}
+		ReachCraftingConfig.pushSearchHistory(this.searchBox.getValue());
+	}
+
+	private void reachcrafting$resetSearchHistoryNavigation() {
+		reachcrafting$searchHistoryIndex = -1;
+		reachcrafting$searchHistoryDraft = "";
 	}
 }
