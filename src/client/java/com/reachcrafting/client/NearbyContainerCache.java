@@ -294,9 +294,6 @@ public final class NearbyContainerCache {
 	}
 
 	public static void onContainerScreenRemoved(AbstractContainerMenu menu) {
-		if (NearbyContainerDryRun.isActiveSessionRunning()) {
-			return;
-		}
 		if (openObservedPos == null || menu == null || menu.containerId != openObservedContainerId) {
 			return;
 		}
@@ -397,6 +394,16 @@ public final class NearbyContainerCache {
 				relevant += snapshot.itemCounts().getOrDefault(itemId, 0);
 			}
 			return relevant;
+		}
+
+		public Map<String, Integer> itemCountsAt(BlockPos pos) {
+			ContainerKey key = accessKeyByPos.get(pos);
+			if (key == null) {
+				return Map.of();
+			}
+
+			ContainerSnapshot snapshot = snapshotsByKey.get(key);
+			return snapshot != null ? snapshot.itemCounts() : Map.of();
 		}
 	}
 

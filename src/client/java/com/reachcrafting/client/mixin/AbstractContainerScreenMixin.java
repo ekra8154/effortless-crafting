@@ -79,6 +79,7 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 	@Inject(method = "removed", at = @At("HEAD"))
 	private void reachcrafting$cacheContainerOnClose(CallbackInfo ci) {
 		if (!ReachCraftingConfig.get().enabled()) return;
+		// Final menu contents are authoritative for cache refresh, including automated open/close flows.
 		NearbyContainerCache.onContainerScreenRemoved(this.menu);
 		
 		if (!com.reachcrafting.client.NearbyContainerDryRun.isActiveSessionRunning()) {

@@ -106,9 +106,11 @@ public final class RecipeVariantResolver {
 				desiredCopiesPerSlot
 			))
 			.toList();
+		int requestedCopies = Math.max(desiredCopiesPerSlot, 1);
 
 		if (handling == ReachCraftingConfig.RevolvingCraftHandling.PREFER_CLICKED_TYPE_WITH_COUNT_FALLBACK
-			&& exactSelection.copiesAvailable() > 0) {
+			&& exactSelection.copiesAvailable() > 0
+			&& (craftAll || exactSelection.copiesAvailable() >= requestedCopies)) {
 			return exactSelection;
 		}
 
@@ -123,8 +125,25 @@ public final class RecipeVariantResolver {
 			}
 		}
 
-		return candidates.stream()
+		List<Selection> viableCandidates = candidates.stream()
 			.filter(candidate -> candidate.copiesAvailable() > 0)
+			.toList();
+		if (viableCandidates.isEmpty()) {
+			return exactSelection;
+		}
+
+		if (!craftAll) {
+			List<Selection> fullRequestCandidates = viableCandidates.stream()
+				.filter(candidate -> candidate.copiesAvailable() >= requestedCopies)
+				.toList();
+			if (!fullRequestCandidates.isEmpty()) {
+				return fullRequestCandidates.stream()
+					.max(compareSelections(ReachCraftingConfig.get().countPreference(), false))
+					.orElse(exactSelection);
+			}
+		}
+
+		return viableCandidates.stream()
 			.max(compareSelections(ReachCraftingConfig.get().countPreference(), craftAll))
 			.orElse(exactSelection);
 	}

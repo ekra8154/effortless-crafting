@@ -394,12 +394,14 @@ public final class NearbyContainerDryRun {
 		private final List<String> remainingItemIds;
 		private final ScreenContext originalContext;
 		private final Set<String> scanAcceptedItemIds;
-		private final NearbyContainerCache.ReachableView cachedReachableView;
+		private NearbyContainerCache.ReachableView reachableView;
 		private final List<BlockPos> candidates;
+		private List<BlockPos> activeCandidates = List.of();
 		private final Set<BlockPos> visited = new HashSet<>();
 		private final Map<String, Integer> discoveredNearby = new LinkedHashMap<>();
 		private final Map<String, Integer> withdrawnItems = new LinkedHashMap<>();
 		private final boolean allowNearby;
+		private final boolean useCachedSearch;
 		private List<IngredientPlanning.SlotTarget> plannedTargets = List.of();
 
 		private int nextCandidateIndex;
@@ -413,6 +415,7 @@ public final class NearbyContainerDryRun {
 		private BlockPos pendingContainerPos;
 		private boolean inventorySpaceBlocked;
 		private boolean redistributeThisRun;
+		private boolean discoveryFallbackStarted;
 		private String blockedCommittedLayoutMissingSummary;
 		private SearchPhase phase;
 		private SearchState state = SearchState.OPEN_NEXT;
@@ -462,12 +465,11 @@ public final class NearbyContainerDryRun {
 				craftAll
 			);
 			this.remainingItemIds = new ArrayList<>(initialDeficit.missingItemIds());
-			this.cachedReachableView = NearbyContainerCache.getReachableView(level, cameraEntity, player.blockInteractionRange());
-			this.candidates = allowNearby ? NearbyContainerCache.prioritizeCandidates(
-				findCandidates(level, cameraEntity, player.blockInteractionRange()),
-				cachedReachableView,
-				scanAcceptedItemIds
-			) : List.of();
+			this.reachableView = NearbyContainerCache.getReachableView(level, cameraEntity, player.blockInteractionRange());
+			this.candidates = allowNearby ? findCandidates(level, cameraEntity, player.blockInteractionRange()) : List.of();
+			this.useCachedSearch = allowNearby
+				&& ReachCraftingConfig.get().cacheContainersForFasterSearch()
+				&& !this.reachableView.isEmpty();
 			this.targetCopiesPerSlot = craftAll ? 0 : this.requestedSingleClicks;
 			this.reopenAttemptsRemaining = 3;
 			this.restoreTicksRemaining = 10;
@@ -494,6 +496,19 @@ public final class NearbyContainerDryRun {
 			);
 
 			PulledResourcesTracker.clearWithdrawals(); // Safety: clear stale withdrawals, but keep the baseline inventory snapshot for return planning
+
+			if (useCachedSearch) {
+				refreshReachableView();
+				discoveredNearby.clear();
+				discoveredNearby.putAll(reachableView.countsFor(scanAcceptedItemIds));
+				ReachCraftingMod.LOGGER.info(
+					"[nearby_cache] idx={} seeded_from_cache={}",
+					recipeIndex,
+					AvailableItemSnapshot.formatCounts(discoveredNearby)
+				);
+				beginWithdrawPhaseOrResume();
+				return;
+			}
 
 			if (allowNearby) {
 				sendChat("Scanning nearby containers...");
@@ -580,6 +595,8 @@ public final class NearbyContainerDryRun {
 				if (!openNextContainer()) {
 					if (phase == SearchPhase.DISCOVERY) {
 						beginWithdrawPhaseOrResume();
+					} else if (shouldStartFallbackDiscovery()) {
+						beginFallbackDiscovery();
 					} else {
 						beginResume();
 					}
@@ -654,8 +671,11 @@ public final class NearbyContainerDryRun {
 			Map<String, Integer> allItems = ContainerUtils.collectAllItems(menu);
 			NearbyContainerCache.recordObservedContents(level, pendingContainerPos, allItems);
 			Map<String, Integer> usefulItems = collectUsefulItems(menu, scanAcceptedItemIds);
-			if (!usefulItems.isEmpty()) {
+			boolean shouldMergeDiscovery = phase == SearchPhase.DISCOVERY || !useCachedSearch;
+			if (!usefulItems.isEmpty() && shouldMergeDiscovery) {
 				usefulItems.forEach((itemId, count) -> discoveredNearby.merge(itemId, count, Integer::sum));
+			}
+			if (!usefulItems.isEmpty()) {
 				ReachCraftingMod.LOGGER.info(
 					"[nearby_container] idx={} pos={} found={}",
 					recipeIndex,
@@ -688,9 +708,13 @@ public final class NearbyContainerDryRun {
 		}
 
 		private boolean openNextContainer() {
+			if (activeCandidates.isEmpty()) {
+				activeCandidates = phase == SearchPhase.DISCOVERY ? candidates : buildWithdrawCandidates();
+			}
+
 			Vec3 eyePos = cameraEntity.getEyePosition(0);
-			while (nextCandidateIndex < candidates.size()) {
-				BlockPos pos = candidates.get(nextCandidateIndex++);
+			while (nextCandidateIndex < activeCandidates.size()) {
+				BlockPos pos = activeCandidates.get(nextCandidateIndex++);
 				if (visited.contains(pos)) {
 					continue;
 				}
@@ -790,7 +814,6 @@ public final class NearbyContainerDryRun {
 		private boolean withdrawOneItem(AbstractContainerMenu menu, Slot sourceSlot, Slot targetSlot) {
 			ItemStack withdrawnStack = sourceSlot.getItem().copy();
 			withdrawnStack.setCount(1);
-			com.reachcrafting.client.PulledResourcesTracker.recordWithdrawal(pendingContainerPos, sourceSlot.getContainerSlot(), withdrawnStack);
 			
 			pickup(menu, sourceSlot, GLFW.GLFW_MOUSE_BUTTON_LEFT);
 			if (player.containerMenu.getCarried().isEmpty()) {
@@ -802,6 +825,7 @@ public final class NearbyContainerDryRun {
 			
 			boolean success = player.containerMenu.getCarried().isEmpty();
 			if (success) {
+				// Store the menu slot index that actually supplied the item so return targeting stays stable.
 				PulledResourcesTracker.recordWithdrawal(pendingContainerPos, sourceSlot.index, withdrawnStack);
 			}
 			return success;
@@ -821,6 +845,7 @@ public final class NearbyContainerDryRun {
 		}
 
 		private void beginWithdrawPhaseOrResume() {
+			refreshReachableView();
 			Map<String, Integer> inventoryCounts = currentInventoryCounts();
 			Map<String, Integer> inventoryAndNearby = AvailableItemSnapshot.mergeCounts(inventoryCounts, discoveredNearby);
 			boolean reservedGridMatchesCollection = originalContext.hasReservedGrid() && originalContext.reservedGridMatchesCollection(client.level, recipeCollection);
@@ -970,8 +995,26 @@ public final class NearbyContainerDryRun {
 				summarizeRemainingItems(remainingItemIds)
 			);
 
-			if (targetCopiesPerSlot <= 0 || plannedResult.hasMissingIngredients() || remainingItemIds.isEmpty()) {
+			if (remainingItemIds.isEmpty()) {
 				beginResume();
+				return;
+			}
+			if ((targetCopiesPerSlot <= 0 || plannedResult.hasMissingIngredients()) && useCachedSearch && !discoveryFallbackStarted) {
+				beginFallbackDiscovery();
+				return;
+			}
+			if (targetCopiesPerSlot <= 0 || plannedResult.hasMissingIngredients()) {
+				beginResume();
+				return;
+			}
+
+			List<BlockPos> withdrawCandidates = buildWithdrawCandidates();
+			if (allowNearby && ReachCraftingConfig.get().cacheContainersForFasterSearch() && withdrawCandidates.isEmpty()) {
+				if (shouldStartFallbackDiscovery()) {
+					beginFallbackDiscovery();
+				} else {
+					beginResume();
+				}
 				return;
 			}
 
@@ -979,6 +1022,7 @@ public final class NearbyContainerDryRun {
 			nextCandidateIndex = 0;
 			pendingContainerPos = null;
 			phase = SearchPhase.WITHDRAW;
+			activeCandidates = withdrawCandidates;
 			state = SearchState.OPEN_NEXT;
 			sendChat("Fetching: " + summarizeRemainingItems(remainingItemIds));
 		}
@@ -1104,6 +1148,120 @@ public final class NearbyContainerDryRun {
 
 		private Map<String, Integer> currentInventoryCounts() {
 			return AvailableItemSnapshot.mergeCounts(localItems.inventoryCounts(), withdrawnItems);
+		}
+
+		private void refreshReachableView() {
+			reachableView = NearbyContainerCache.getReachableView(level, cameraEntity, player.blockInteractionRange());
+		}
+
+		private boolean shouldStartFallbackDiscovery() {
+			return useCachedSearch
+				&& allowNearby
+				&& phase == SearchPhase.WITHDRAW
+				&& !remainingItemIds.isEmpty()
+				&& !discoveryFallbackStarted;
+		}
+
+		private void beginFallbackDiscovery() {
+			discoveryFallbackStarted = true;
+			refreshReachableView();
+			phase = SearchPhase.DISCOVERY;
+			activeCandidates = remainingUnvisitedCandidates(candidates);
+			nextCandidateIndex = 0;
+			pendingContainerPos = null;
+			state = SearchState.OPEN_NEXT;
+			ReachCraftingMod.LOGGER.info(
+				"[nearby_cache] idx={} fallback_discovery remaining={}",
+				recipeIndex,
+				summarizeRemainingItems(remainingItemIds)
+			);
+			sendChat("Cache missed some items, scanning the rest...");
+		}
+
+		private List<BlockPos> buildWithdrawCandidates() {
+			if (!allowNearby) {
+				return List.of();
+			}
+			if (!ReachCraftingConfig.get().cacheContainersForFasterSearch()) {
+				return candidates;
+			}
+
+			refreshReachableView();
+			Map<String, Integer> neededCounts = countNeededItems(remainingItemIds);
+			if (neededCounts.isEmpty()) {
+				return List.of();
+			}
+
+			List<BlockPos> prioritized = new ArrayList<>();
+			for (BlockPos pos : candidates) {
+				if (cachedMatchUnitsAt(pos, neededCounts) > 0) {
+					prioritized.add(pos);
+				}
+			}
+
+			Map<BlockPos, Integer> originalOrder = new HashMap<>();
+			for (int i = 0; i < prioritized.size(); i++) {
+				originalOrder.put(prioritized.get(i), i);
+			}
+
+			Comparator<BlockPos> comparator = Comparator
+				.comparingInt((BlockPos pos) -> cachedDistinctMatchesAt(pos, neededCounts)).reversed()
+				.thenComparingInt((BlockPos pos) -> cachedMatchUnitsAt(pos, neededCounts)).reversed();
+			if (ReachCraftingConfig.get().countPreference() == IngredientPlanning.CountPreference.HIGHEST_TOTAL) {
+				comparator = comparator.thenComparing(Comparator.comparingInt((BlockPos pos) -> cachedPreferenceTotalAt(pos, neededCounts)).reversed());
+			} else {
+				comparator = comparator.thenComparingInt(pos -> cachedPreferenceTotalAt(pos, neededCounts));
+			}
+			comparator = comparator.thenComparingInt(pos -> originalOrder.getOrDefault(pos, Integer.MAX_VALUE));
+
+			prioritized.sort(comparator);
+			return List.copyOf(prioritized);
+		}
+
+		private List<BlockPos> remainingUnvisitedCandidates(List<BlockPos> source) {
+			List<BlockPos> remaining = new ArrayList<>();
+			for (BlockPos pos : source) {
+				if (!visited.contains(pos)) {
+					remaining.add(pos);
+				}
+			}
+			return List.copyOf(remaining);
+		}
+
+		private int cachedDistinctMatchesAt(BlockPos pos, Map<String, Integer> neededCounts) {
+			int matches = 0;
+			for (String itemId : neededCounts.keySet()) {
+				if (reachableView.itemCountsAt(pos).getOrDefault(itemId, 0) > 0) {
+					matches++;
+				}
+			}
+			return matches;
+		}
+
+		private int cachedMatchUnitsAt(BlockPos pos, Map<String, Integer> neededCounts) {
+			int matches = 0;
+			Map<String, Integer> itemCounts = reachableView.itemCountsAt(pos);
+			for (Map.Entry<String, Integer> entry : neededCounts.entrySet()) {
+				matches += Math.min(itemCounts.getOrDefault(entry.getKey(), 0), entry.getValue());
+			}
+			return matches;
+		}
+
+		private int cachedPreferenceTotalAt(BlockPos pos, Map<String, Integer> neededCounts) {
+			int total = 0;
+			Map<String, Integer> itemCounts = reachableView.itemCountsAt(pos);
+			for (String itemId : neededCounts.keySet()) {
+				total += itemCounts.getOrDefault(itemId, 0);
+			}
+			return total;
+		}
+
+		private static Map<String, Integer> countNeededItems(List<String> itemIds) {
+			Map<String, Integer> counts = new LinkedHashMap<>();
+			for (String itemId : itemIds) {
+				counts.merge(itemId, 1, Integer::sum);
+			}
+			return counts;
 		}
 
 		private static void subtractCounts(Map<String, Integer> counts, Map<String, Integer> subtract) {
@@ -1902,6 +2060,9 @@ public final class NearbyContainerDryRun {
 			RecipeBookPageAccessor pageAccessor = (RecipeBookPageAccessor) accessor.getRecipeBookPage();
 			OverlayRecipeComponent overlay = pageAccessor.getOverlay();
 			String text = searchBox != null ? searchBox.getValue() : "";
+			if (searchBox != null) {
+				ReachCraftingConfig.setLastSearchText(text);
+			}
 			ReachCraftingMod.LOGGER.info("[nearby_capture] Captured search text: '{}' (focused={})", text, searchBox != null && searchBox.isFocused());
 			return new RecipeBookState(
 				component.isVisible(),
@@ -1937,6 +2098,7 @@ public final class NearbyContainerDryRun {
 					ReachCraftingMod.LOGGER.info("[nearby_restore] Restoring search text: '{}' (was: '{}')", searchText, searchBox.getValue());
 					searchBox.setValue(searchText);
 				}
+				ReachCraftingConfig.setLastSearchText(searchBox.getValue());
 				if (focused) {
 					searchBox.setFocused(true);
 					searchBox.setCursorPosition(searchBox.getValue().length());
@@ -2252,6 +2414,7 @@ public final class NearbyContainerDryRun {
 			if (ReachCraftingConfig.get().restoreInventoryItemPositions()) {
 				restoreProtectedInventoryLayout(menu);
 			}
+			NearbyContainerCache.recordObservedContents(level, pendingContainerPos, ContainerUtils.collectAllItems(menu));
 
 			player.closeContainer();
 			pendingContainerPos = null;

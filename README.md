@@ -85,14 +85,11 @@ This project is licensed under **LGPL-3.0-or-later**. It draws inspiration and c
 
 TODO:
 
-settings / more to make caching actually faster
-
 normal clicking cycling items that should be craftable should craft them?
 
 up arrow to restore searches?
 
 on release, input number count should stay there?
 
-KNOWN BUGS:
 
-with auto craft on, request 5 compass. they get put at earliest hotbar slot. but then on esc, 1 teleports to slot 9.
+KNOWN BUGS:
