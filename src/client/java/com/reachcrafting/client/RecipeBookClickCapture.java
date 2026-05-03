@@ -379,7 +379,12 @@ public final class RecipeBookClickCapture {
 		);
 
 		if (pendingHeldRecipe == null) {
-			pendingHeldRecipe = new PendingHeldRecipe(action, 1, false, allowNearby, ctrlTriggered);
+			int initialCount = nextQueuedCountFromCurrentState(Minecraft.getInstance(), action, 1);
+			if (initialCount <= 0) {
+				pendingHeldRecipe = null;
+				return;
+			}
+			pendingHeldRecipe = new PendingHeldRecipe(action, initialCount, initialCount >= 2, allowNearby, ctrlTriggered);
 			return;
 		}
 
@@ -395,7 +400,12 @@ public final class RecipeBookClickCapture {
 		}
 
 		if (!pendingHeldRecipe.locked()) {
-			pendingHeldRecipe = new PendingHeldRecipe(action, 1, false, allowNearby, ctrlTriggered);
+			int initialCount = nextQueuedCountFromCurrentState(Minecraft.getInstance(), action, 1);
+			if (initialCount <= 0) {
+				pendingHeldRecipe = null;
+				return;
+			}
+			pendingHeldRecipe = new PendingHeldRecipe(action, initialCount, initialCount >= 2, allowNearby, ctrlTriggered);
 		}
 	}
 
@@ -408,7 +418,7 @@ public final class RecipeBookClickCapture {
 		if (!ReachCraftingConfig.get().enabled()) {
 			return false;
 		}
-		if (!canUseHeldQueueControls(Minecraft.getInstance()) || recipeId == null || collection == null) {
+		if (recipeId == null || collection == null) {
 			return false;
 		}
 		return clearHeldRecipe(new HeldRecipeAction(
@@ -560,8 +570,8 @@ public final class RecipeBookClickCapture {
 		int effectiveDelta = delta * multiplier;
 
 		if (pendingHeldRecipe == null) {
-			int updatedCount = Math.floorMod(effectiveDelta, 65);
-			if (updatedCount == 0) {
+			int updatedCount = nextQueuedCountFromCurrentState(minecraft, action, effectiveDelta);
+			if (updatedCount <= 0) {
 				pendingHeldRecipe = null;
 				return true;
 			}
@@ -581,8 +591,8 @@ public final class RecipeBookClickCapture {
 		}
 
 		if (delta > 0) {
-			int updatedCount = Math.floorMod(effectiveDelta, 65);
-			if (updatedCount == 0) {
+			int updatedCount = nextQueuedCountFromCurrentState(minecraft, action, effectiveDelta);
+			if (updatedCount <= 0) {
 				pendingHeldRecipe = null;
 				return true;
 			}
@@ -594,11 +604,111 @@ public final class RecipeBookClickCapture {
 	}
 
 	private static boolean clearHeldRecipe(HeldRecipeAction action) {
-		if (pendingHeldRecipe == null || !pendingHeldRecipe.action().sameRecipe(action)) {
+		Minecraft minecraft = Minecraft.getInstance();
+		boolean hasDisplayedCount = getHeldQueuedCount(action.recipeId(), action.collection(), action.explicitVariantSelection()) > 0;
+		if (!hasDisplayedCount) {
 			return false;
 		}
+
+		boolean samePendingRecipe = pendingHeldRecipe != null && pendingHeldRecipe.action().sameRecipe(action);
 		pendingHeldRecipe = null;
-		return true;
+		replayBatch = null;
+		wasModifierReleasedWhileSpaceHeld = false;
+		if (ReachCraftingConfig.get().inputCounterVisibility() == ReachCraftingConfig.InputCounterVisibility.ALWAYS_SHOW
+			&& minecraft.player != null
+			&& !ContainerUtils.isGridEmpty(minecraft.player.containerMenu)) {
+			ContainerUtils.flushCraftingGrid(minecraft, true, true);
+		}
+		return samePendingRecipe || hasDisplayedCount;
+	}
+
+	private static int nextQueuedCountFromCurrentState(Minecraft minecraft, HeldRecipeAction action, int delta) {
+		int baseCount = resolveGridMatchedCount(minecraft, action.recipeId(), action.collection(), action.explicitVariantSelection());
+		int updatedCount = baseCount + delta;
+		if (updatedCount <= 0) {
+			return 0;
+		}
+		return Math.min(updatedCount, 64);
+	}
+
+	private static int resolveGridMatchedCount(
+		Minecraft minecraft,
+		RecipeDisplayId recipeId,
+		RecipeCollection collection,
+		boolean explicitVariantSelection
+	) {
+		if (minecraft == null
+			|| minecraft.player == null
+			|| minecraft.level == null
+			|| recipeId == null
+			|| collection == null) {
+			return 0;
+		}
+		Screen screen = minecraft.screen;
+		if (!(screen instanceof InventoryScreen) && !(screen instanceof CraftingScreen)) {
+			return 0;
+		}
+
+		AvailableItemSnapshot availableItems = AvailableItemSnapshot.capture(minecraft.player, screen);
+		if (!availableItems.hasReservedGrid()) {
+			return 0;
+		}
+
+		int gridCount = ContainerUtils.currentReservedCraftCopies(availableItems.gridStacks());
+		if (gridCount <= 0) {
+			return 0;
+		}
+
+		RecipeVariantResolver.Selection gridSelection = RecipeVariantResolver.resolveMatchForGrid(
+			minecraft,
+			minecraft.player,
+			collection,
+			availableItems.gridStacks(),
+			availableItems,
+			availableItems.inventoryCounts(),
+			availableItems.inventoryCounts(),
+			false,
+			gridCount
+		);
+		if (gridSelection == null) {
+			return 0;
+		}
+
+		if (explicitVariantSelection) {
+			return gridSelection.recipeId().equals(recipeId) ? gridCount : 0;
+		}
+		return gridCount;
+	}
+
+	public static int getHeldQueuedCount(
+		RecipeDisplayId recipeId,
+		RecipeCollection collection,
+		boolean explicitVariantSelection
+	) {
+		if (!ReachCraftingConfig.get().reachCraftHoldAndRelease()
+			|| recipeId == null
+			|| collection == null) {
+			return 0;
+		}
+
+		if (pendingHeldRecipe != null) {
+			HeldRecipeAction action = pendingHeldRecipe.action();
+			if (action.explicitVariantSelection() == explicitVariantSelection) {
+				if (explicitVariantSelection) {
+					if (action.recipeId().equals(recipeId)) {
+						return pendingHeldRecipe.clickCount();
+					}
+				} else if ((action.collection() != null && action.collection() == collection) || action.recipeId().equals(recipeId)) {
+					return pendingHeldRecipe.clickCount();
+				}
+			}
+		}
+
+		if (ReachCraftingConfig.get().inputCounterVisibility() != ReachCraftingConfig.InputCounterVisibility.ALWAYS_SHOW) {
+			return 0;
+		}
+
+		return resolveGridMatchedCount(Minecraft.getInstance(), recipeId, collection, explicitVariantSelection);
 	}
 
 	public static void tryCloseOverlayAfterRelease() {
@@ -625,31 +735,6 @@ public final class RecipeBookClickCapture {
 			return 0;
 		}
 		return getHeldQueuedCount(button.getCurrentRecipe(), button.getCollection(), false);
-	}
-
-	public static int getHeldQueuedCount(
-		RecipeDisplayId recipeId,
-		RecipeCollection collection,
-		boolean explicitVariantSelection
-	) {
-		if (!ReachCraftingConfig.get().reachCraftHoldAndRelease()
-			|| pendingHeldRecipe == null
-			|| recipeId == null
-			|| collection == null) {
-			return 0;
-		}
-
-		HeldRecipeAction action = pendingHeldRecipe.action();
-		if (action.explicitVariantSelection() != explicitVariantSelection) {
-			return 0;
-		}
-		if (explicitVariantSelection) {
-			return action.recipeId().equals(recipeId) ? pendingHeldRecipe.clickCount() : 0;
-		}
-		if (action.collection() != null && action.collection() == collection) {
-			return pendingHeldRecipe.clickCount();
-		}
-		return action.recipeId().equals(recipeId) ? pendingHeldRecipe.clickCount() : 0;
 	}
 
 	private static boolean isShiftKeyDown(Minecraft minecraft) {

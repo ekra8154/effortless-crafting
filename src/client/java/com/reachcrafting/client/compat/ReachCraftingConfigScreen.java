@@ -115,6 +115,17 @@ public final class ReachCraftingConfigScreen {
 			.setEnumNameProvider(value -> Component.translatable("enum.reachcrafting.revolving_craft_handling." + value.name().toLowerCase()))
 			.build());
 
+		logicGroup.add(entries.startEnumSelector(
+				Component.translatable("option.reachcrafting.input_counter_visibility"),
+				ReachCraftingConfig.InputCounterVisibility.class,
+				config.inputCounterVisibility()
+			)
+			.setDefaultValue(ReachCraftingConfig.InputCounterVisibility.ALWAYS_SHOW)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.input_counter_visibility"))
+			.setSaveConsumer(config::setInputCounterVisibility)
+			.setEnumNameProvider(value -> Component.translatable("enum.reachcrafting.input_counter_visibility." + value.name().toLowerCase()))
+			.build());
+
 		logicGroup.add(entries.startBooleanToggle(
 				Component.translatable("option.reachcrafting.redistribute_to_craft_when_needed"),
 				config.redistributeToCraftWhenNeeded()

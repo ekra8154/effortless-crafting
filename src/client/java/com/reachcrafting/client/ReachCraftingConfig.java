@@ -46,6 +46,7 @@ public final class ReachCraftingConfig {
 	private OutlineDisplayMode showFilterOutlines;
 	private boolean autoCraftMode;
 	private boolean showTotalOutputCounts;
+	private InputCounterVisibility inputCounterVisibility;
 	private boolean scrollToPull;
 	private boolean typeToFocusSearch;
 	private Set<String> blacklistedContainerIds;
@@ -90,6 +91,7 @@ public final class ReachCraftingConfig {
 			instance.rememberPreviousSearch = stored.rememberPreviousSearch == null ? true : stored.rememberPreviousSearch;
 			instance.showFilterOutlines = stored.showFilterOutlines != null ? stored.showFilterOutlines : OutlineDisplayMode.OFF;
 			instance.showTotalOutputCounts = stored.showTotalOutputCounts != null ? stored.showTotalOutputCounts : true;
+			instance.inputCounterVisibility = stored.inputCounterVisibility != null ? stored.inputCounterVisibility : InputCounterVisibility.ALWAYS_SHOW;
 			instance.scrollToPull = stored.scrollToPull != null ? stored.scrollToPull : true;
 			instance.typeToFocusSearch = stored.typeToFocusSearch != null ? stored.typeToFocusSearch : true;
 			instance.autoCraftMode = stored.autoCraftMode != null ? stored.autoCraftMode : false;
@@ -262,6 +264,14 @@ public final class ReachCraftingConfig {
 		this.showTotalOutputCounts = showTotalOutputCounts;
 	}
 
+	public InputCounterVisibility inputCounterVisibility() {
+		return inputCounterVisibility;
+	}
+
+	public void setInputCounterVisibility(InputCounterVisibility inputCounterVisibility) {
+		this.inputCounterVisibility = inputCounterVisibility;
+	}
+
 	public boolean scrollToPull() {
 		return scrollToPull;
 	}
@@ -314,6 +324,7 @@ public final class ReachCraftingConfig {
 		defaults.showFilterOutlines = OutlineDisplayMode.OFF;
 		defaults.autoCraftMode = false;
 		defaults.showTotalOutputCounts = true;
+		defaults.inputCounterVisibility = InputCounterVisibility.ALWAYS_SHOW;
 		defaults.scrollToPull = true;
 		defaults.typeToFocusSearch = true;
 		defaults.blacklistedContainerIds = new HashSet<>(DEFAULT_BLACKLIST);
@@ -333,6 +344,11 @@ public final class ReachCraftingConfig {
 		SPECIFIC_VARIANT_ONLY
 	}
 
+	public enum InputCounterVisibility {
+		ALWAYS_SHOW,
+		SHOW_WHILE_QUEUEING
+	}
+
 	private static final class StoredConfig {
 		private Boolean enabled;
 		private Boolean enableNearbyContainerUsage;
@@ -350,6 +366,7 @@ public final class ReachCraftingConfig {
 		private Boolean rememberPreviousSearch;
 		private OutlineDisplayMode showFilterOutlines;
 		private Boolean showTotalOutputCounts;
+		private InputCounterVisibility inputCounterVisibility;
 		private Boolean scrollToPull;
 		private Boolean typeToFocusSearch;
 		private Boolean autoCraftMode;
@@ -372,6 +389,7 @@ public final class ReachCraftingConfig {
 			this.rememberPreviousSearch = config.rememberPreviousSearch;
 			this.showFilterOutlines = config.showFilterOutlines;
 			this.showTotalOutputCounts = config.showTotalOutputCounts;
+			this.inputCounterVisibility = config.inputCounterVisibility;
 			this.scrollToPull = config.scrollToPull;
 			this.typeToFocusSearch = config.typeToFocusSearch;
 			this.autoCraftMode = config.autoCraftMode;

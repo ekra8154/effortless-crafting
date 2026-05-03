@@ -93,3 +93,5 @@ on release, input number count should stay there?
 
 
 KNOWN BUGS:
+
+idk if this is a bug, but sometimes when i rejoin the world items are on the ground instead of in inventory (or the chests they came from). perhaps inventory restore isn't working properly if i leave the game.

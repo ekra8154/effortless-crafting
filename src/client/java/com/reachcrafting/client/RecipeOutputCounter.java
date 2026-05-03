@@ -52,8 +52,15 @@ public final class RecipeOutputCounter {
 			if (queuedClicks > 0) {
 				ItemStack queuedResultStack = resolveQueuedOutputStack(minecraft, pending);
 				if (!queuedResultStack.isEmpty()) {
-					queuedOutputCount = queuedClicks * queuedResultStack.getCount();
 					queuedItemId = BuiltInRegistries.ITEM.getKey(queuedResultStack.getItem()).toString();
+					int effectiveQueuedClicks = queuedClicks;
+					if (!gridResultStack.isEmpty()) {
+						String gridItemId = BuiltInRegistries.ITEM.getKey(gridResultStack.getItem()).toString();
+						if (gridItemId.equals(queuedItemId)) {
+							effectiveQueuedClicks = Math.max(0, queuedClicks - gridCrafts);
+						}
+					}
+					queuedOutputCount = effectiveQueuedClicks * queuedResultStack.getCount();
 				}
 			}
 		}
