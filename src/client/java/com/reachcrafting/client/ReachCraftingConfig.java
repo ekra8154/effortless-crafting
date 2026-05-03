@@ -30,6 +30,7 @@ public final class ReachCraftingConfig {
 	private static ReachCraftingConfig instance = defaults();
 
 	private boolean enabled;
+	private boolean enableNearbyContainerUsage;
 	private boolean redistributeToCraftWhenNeeded;
 	private InWorldFilterMode inWorldFilterMode;
 	private RevolvingCraftHandling revolvingCraftHandling;
@@ -68,6 +69,7 @@ public final class ReachCraftingConfig {
 				return;
 			}
 			instance.enabled = stored.enabled == null ? true : stored.enabled;
+			instance.enableNearbyContainerUsage = stored.enableNearbyContainerUsage == null ? true : stored.enableNearbyContainerUsage;
 			instance.redistributeToCraftWhenNeeded = stored.redistributeToCraftWhenNeeded;
 			instance.inWorldFilterMode = stored.inWorldFilterMode != null ? stored.inWorldFilterMode : InWorldFilterMode.NONE;
 			instance.revolvingCraftHandling = stored.revolvingCraftHandling != null
@@ -120,6 +122,17 @@ public final class ReachCraftingConfig {
 
 	public void setEnabled(boolean enabled) {
 		this.enabled = enabled;
+	}
+
+	public boolean enableNearbyContainerUsage() {
+		return enableNearbyContainerUsage;
+	}
+
+	public void setEnableNearbyContainerUsage(boolean enableNearbyContainerUsage) {
+		this.enableNearbyContainerUsage = enableNearbyContainerUsage;
+		if (!enableNearbyContainerUsage) {
+			NearbyContainerCache.clear();
+		}
 	}
 
 	public IngredientPlanning.Policy toPlanningPolicy() {
@@ -285,6 +298,7 @@ public final class ReachCraftingConfig {
 	private static ReachCraftingConfig defaults() {
 		ReachCraftingConfig defaults = new ReachCraftingConfig();
 		defaults.enabled = true;
+		defaults.enableNearbyContainerUsage = true;
 		defaults.redistributeToCraftWhenNeeded = true;
 		defaults.inWorldFilterMode = InWorldFilterMode.NONE;
 		defaults.revolvingCraftHandling = RevolvingCraftHandling.PREFER_CLICKED_TYPE_WITH_COUNT_FALLBACK;
@@ -321,6 +335,7 @@ public final class ReachCraftingConfig {
 
 	private static final class StoredConfig {
 		private Boolean enabled;
+		private Boolean enableNearbyContainerUsage;
 		private boolean redistributeToCraftWhenNeeded;
 		private InWorldFilterMode inWorldFilterMode;
 		private RevolvingCraftHandling revolvingCraftHandling;
@@ -342,6 +357,7 @@ public final class ReachCraftingConfig {
 
 		private StoredConfig(ReachCraftingConfig config) {
 			this.enabled = config.enabled;
+			this.enableNearbyContainerUsage = config.enableNearbyContainerUsage;
 			this.redistributeToCraftWhenNeeded = config.redistributeToCraftWhenNeeded;
 			this.inWorldFilterMode = config.inWorldFilterMode;
 			this.revolvingCraftHandling = config.revolvingCraftHandling;

@@ -131,6 +131,15 @@ public final class ReachCraftingConfigScreen {
 		ConfigCategory containers = builder.getOrCreateCategory(Component.translatable("category.reachcrafting.nearby_containers"));
 
 		containers.addEntry(entries.startBooleanToggle(
+				Component.translatable("option.reachcrafting.enable_nearby_container_usage"),
+				config.enableNearbyContainerUsage()
+			)
+			.setDefaultValue(true)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.enable_nearby_container_usage"))
+			.setSaveConsumer(config::setEnableNearbyContainerUsage)
+			.build());
+
+		containers.addEntry(entries.startBooleanToggle(
 				Component.translatable("option.reachcrafting.reach_craft_prefer_inventory"),
 				config.reachCraftPreferInventory()
 			)

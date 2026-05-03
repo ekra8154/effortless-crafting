@@ -7,6 +7,8 @@
 	"tooltip.reachcrafting.enabled": "Whether any of the mod's features are enabled.",
 	"category.reachcrafting.logic_planning": "Logic & Planning",
 	"category.reachcrafting.nearby_containers": "Nearby Containers",
+	"option.reachcrafting.enable_nearby_container_usage": "Enable Nearby Container Usage",
+	"tooltip.reachcrafting.enable_nearby_container_usage": "Controls all ability to pull from and put back items to nearby containers. If disabled, the mod will only use items from your player inventory during crafting.",
 	"category.reachcrafting.filtering_highlighting": "Filtering & Highlighting",
 	"option.reachcrafting.count_preference": "Count Preference",
 	"tooltip.reachcrafting.count_preference": "Controls whether nearby crafting prefers higher-count or lower-count variants when multiple valid choices exist.",

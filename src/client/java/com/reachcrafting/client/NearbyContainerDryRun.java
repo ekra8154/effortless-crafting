@@ -444,7 +444,7 @@ public final class NearbyContainerDryRun {
 			this.localItems = localItems;
 			this.craftAll = craftAll;
 			this.requestedSingleClicks = Math.max(requestedSingleClicks, 1);
-			this.allowNearby = allowNearby;
+			this.allowNearby = allowNearby && ReachCraftingConfig.get().enableNearbyContainerUsage();
 			this.originalContext = ScreenContext.capture(client, cameraEntity, player.blockInteractionRange(), localItems);
 			this.planningPolicy = ReachCraftingConfig.get().toPlanningPolicy();
 			Set<String> accepted = new HashSet<>(ingredientSummary.acceptedItemIds());

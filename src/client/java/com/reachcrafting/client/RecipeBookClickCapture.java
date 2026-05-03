@@ -67,8 +67,8 @@ public final class RecipeBookClickCapture {
 			}
 
 			if (pendingHeldRecipe != null) {
-				boolean modifierDown = pendingHeldRecipe.allowNearby() ? controlDown : shiftDown;
-				boolean modifierJustReleased = pendingHeldRecipe.allowNearby() ? (wasControlDown && !controlDown) : (wasShiftDown && !shiftDown);
+				boolean modifierDown = pendingHeldRecipe.ctrlTriggered() ? controlDown : shiftDown;
+				boolean modifierJustReleased = pendingHeldRecipe.ctrlTriggered() ? (wasControlDown && !controlDown) : (wasShiftDown && !shiftDown);
 
 				if (modifierJustReleased) {
 					wasModifierReleasedWhileSpaceHeld = true;
@@ -154,10 +154,11 @@ public final class RecipeBookClickCapture {
 		}
 
 		boolean craftAll = shiftModifierDown || isShiftKeyDown(minecraft);
-		boolean allowNearbyChests = ctrlModifierDown || isControlKeyDown(minecraft);
+		boolean allowNearbyChests = (ctrlModifierDown || isControlKeyDown(minecraft)) && ReachCraftingConfig.get().enableNearbyContainerUsage();
 
 		if (shouldQueueHeldRecipe(minecraft, allowNearbyChests, craftAll) && replayBatch == null) {
-			queueHeldRecipe(recipeId, collection, displayStack, mouseButton, explicitVariantSelection, allowNearbyChests);
+			boolean ctrlTriggered = ctrlModifierDown || isControlKeyDown(minecraft);
+			queueHeldRecipe(recipeId, collection, displayStack, mouseButton, explicitVariantSelection, allowNearbyChests, ctrlTriggered);
 			return;
 		}
 
@@ -366,7 +367,8 @@ public final class RecipeBookClickCapture {
 		ItemStack displayStack,
 		int mouseButton,
 		boolean explicitVariantSelection,
-		boolean allowNearby
+		boolean allowNearby,
+		boolean ctrlTriggered
 	) {
 		HeldRecipeAction action = new HeldRecipeAction(
 			recipeId,
@@ -375,24 +377,25 @@ public final class RecipeBookClickCapture {
 			mouseButton,
 			explicitVariantSelection
 		);
+
 		if (pendingHeldRecipe == null) {
-			pendingHeldRecipe = new PendingHeldRecipe(action, 1, false, allowNearby);
+			pendingHeldRecipe = new PendingHeldRecipe(action, 1, false, allowNearby, ctrlTriggered);
 			return;
 		}
 
 		if (pendingHeldRecipe.action().sameRecipe(action)) {
 			int delta = isSpaceKeyDown(Minecraft.getInstance()) ? 16 : 1;
 			int updatedCount = Math.floorMod(pendingHeldRecipe.clickCount() + delta, 65);
-			if (updatedCount <= 0) {
+			if (updatedCount == 0) {
 				pendingHeldRecipe = null;
 				return;
 			}
-			pendingHeldRecipe = new PendingHeldRecipe(action, updatedCount, updatedCount >= 2, allowNearby);
+			pendingHeldRecipe = new PendingHeldRecipe(action, updatedCount, updatedCount >= 2, allowNearby, ctrlTriggered);
 			return;
 		}
 
 		if (!pendingHeldRecipe.locked()) {
-			pendingHeldRecipe = new PendingHeldRecipe(action, 1, false, allowNearby);
+			pendingHeldRecipe = new PendingHeldRecipe(action, 1, false, allowNearby, ctrlTriggered);
 		}
 	}
 
@@ -562,7 +565,7 @@ public final class RecipeBookClickCapture {
 				pendingHeldRecipe = null;
 				return true;
 			}
-			pendingHeldRecipe = new PendingHeldRecipe(action, updatedCount, updatedCount >= 2, isControlKeyDown(minecraft));
+			pendingHeldRecipe = new PendingHeldRecipe(action, updatedCount, updatedCount >= 2, isControlKeyDown(minecraft) && ReachCraftingConfig.get().enableNearbyContainerUsage(), isControlKeyDown(minecraft));
 			return true;
 		}
 
@@ -573,7 +576,7 @@ public final class RecipeBookClickCapture {
 				pendingHeldRecipe = null;
 				return true;
 			}
-			pendingHeldRecipe = new PendingHeldRecipe(action, updatedCount, updatedCount >= 2, pendingHeldRecipe.allowNearby());
+			pendingHeldRecipe = new PendingHeldRecipe(action, updatedCount, updatedCount >= 2, pendingHeldRecipe.allowNearby(), pendingHeldRecipe.ctrlTriggered());
 			return true;
 		}
 
@@ -583,7 +586,7 @@ public final class RecipeBookClickCapture {
 				pendingHeldRecipe = null;
 				return true;
 			}
-			pendingHeldRecipe = new PendingHeldRecipe(action, updatedCount, updatedCount >= 2, isControlKeyDown(minecraft));
+			pendingHeldRecipe = new PendingHeldRecipe(action, updatedCount, updatedCount >= 2, isControlKeyDown(minecraft) && ReachCraftingConfig.get().enableNearbyContainerUsage(), isControlKeyDown(minecraft));
 			return true;
 		}
 
@@ -735,7 +738,7 @@ public final class RecipeBookClickCapture {
 		}
 	}
 
-	public record PendingHeldRecipe(HeldRecipeAction action, int clickCount, boolean locked, boolean allowNearby) {
+	public record PendingHeldRecipe(HeldRecipeAction action, int clickCount, boolean locked, boolean allowNearby, boolean ctrlTriggered) {
 	}
 
 	public record ReplayBatch(HeldRecipeAction action, int remainingClicks, boolean allowNearby, boolean craftAll) {

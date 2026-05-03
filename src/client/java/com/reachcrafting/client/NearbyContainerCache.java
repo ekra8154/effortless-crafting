@@ -70,7 +70,7 @@ public final class NearbyContainerCache {
 	}
 
 	public static boolean isCurrentContainerActive() {
-		if (openObservedPos == null) return false;
+		if (openObservedPos == null || !ReachCraftingConfig.get().enableNearbyContainerUsage()) return false;
 		Minecraft client = Minecraft.getInstance();
 		if (client.level == null) return false;
 		BlockState state = client.level.getBlockState(openObservedPos);
@@ -86,7 +86,7 @@ public final class NearbyContainerCache {
 	}
 
 	public static ReachableView getReachableView(Level level, Entity cameraEntity, double reachDistance) {
-		if (!ReachCraftingConfig.get().cacheContainersForFasterSearch()) {
+		if (!ReachCraftingConfig.get().cacheContainersForFasterSearch() || !ReachCraftingConfig.get().enableNearbyContainerUsage()) {
 			return ReachableView.empty(revision);
 		}
 		if (level == null || cameraEntity == null) {
@@ -183,7 +183,7 @@ public final class NearbyContainerCache {
 	}
 
 	public static void recordObservedContents(Level level, BlockPos observedPos, Map<String, Integer> itemCounts) {
-		if (!ReachCraftingConfig.get().cacheContainersForFasterSearch()) {
+		if (!ReachCraftingConfig.get().cacheContainersForFasterSearch() || !ReachCraftingConfig.get().enableNearbyContainerUsage()) {
 			return;
 		}
 		ContainerKey key = resolveContainerKey(level, observedPos);
