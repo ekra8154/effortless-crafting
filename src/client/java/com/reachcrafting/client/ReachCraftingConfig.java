@@ -8,14 +8,15 @@ import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collections;
-import java.util.HashSet;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Set;
 import net.fabricmc.loader.api.FabricLoader;
 
 public final class ReachCraftingConfig {
 	private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 	private static final Path CONFIG_PATH = FabricLoader.getInstance().getConfigDir().resolve("reachcrafting.json");
-	private static final Set<String> DEFAULT_BLACKLIST = Set.of(
+	public static final List<String> DEFAULT_BLACKLIST = List.of(
 		"minecraft:ender_chest",
 		"minecraft:hopper",
 		"minecraft:copper_chest",
@@ -91,11 +92,13 @@ public final class ReachCraftingConfig {
 			instance.rememberPreviousSearch = stored.rememberPreviousSearch == null ? true : stored.rememberPreviousSearch;
 			instance.showFilterOutlines = stored.showFilterOutlines != null ? stored.showFilterOutlines : OutlineDisplayMode.OFF;
 			instance.showTotalOutputCounts = stored.showTotalOutputCounts != null ? stored.showTotalOutputCounts : true;
-			instance.inputCounterVisibility = stored.inputCounterVisibility != null ? stored.inputCounterVisibility : InputCounterVisibility.ALWAYS_SHOW;
+			instance.inputCounterVisibility = stored.inputCounterVisibility != null ? stored.inputCounterVisibility : InputCounterVisibility.SHOW_WHILE_QUEUEING;
 			instance.scrollToPull = stored.scrollToPull != null ? stored.scrollToPull : true;
 			instance.typeToFocusSearch = stored.typeToFocusSearch != null ? stored.typeToFocusSearch : true;
 			instance.autoCraftMode = stored.autoCraftMode != null ? stored.autoCraftMode : false;
-			instance.blacklistedContainerIds = stored.blacklistedContainerIds != null ? new HashSet<>(stored.blacklistedContainerIds) : new HashSet<>(DEFAULT_BLACKLIST);
+			instance.blacklistedContainerIds = stored.blacklistedContainerIds != null 
+				? new LinkedHashSet<>(stored.blacklistedContainerIds) 
+				: new LinkedHashSet<>(DEFAULT_BLACKLIST);
 		} catch (Exception exception) {
 			ReachCraftingMod.LOGGER.warn("Failed to load reachcrafting config from {}", CONFIG_PATH, exception);
 			instance = defaults();
@@ -301,7 +304,7 @@ public final class ReachCraftingConfig {
 	}
 
 	public void setBlacklistedContainerIds(Set<String> blacklistedContainerIds) {
-		this.blacklistedContainerIds = new HashSet<>(blacklistedContainerIds);
+		this.blacklistedContainerIds = new LinkedHashSet<>(blacklistedContainerIds);
 		NearbyContainerCache.clear();
 	}
 
@@ -324,10 +327,10 @@ public final class ReachCraftingConfig {
 		defaults.showFilterOutlines = OutlineDisplayMode.OFF;
 		defaults.autoCraftMode = false;
 		defaults.showTotalOutputCounts = true;
-		defaults.inputCounterVisibility = InputCounterVisibility.ALWAYS_SHOW;
+		defaults.inputCounterVisibility = InputCounterVisibility.SHOW_WHILE_QUEUEING;
 		defaults.scrollToPull = true;
 		defaults.typeToFocusSearch = true;
-		defaults.blacklistedContainerIds = new HashSet<>(DEFAULT_BLACKLIST);
+		defaults.blacklistedContainerIds = new LinkedHashSet<>(DEFAULT_BLACKLIST);
 		return defaults;
 	}
 

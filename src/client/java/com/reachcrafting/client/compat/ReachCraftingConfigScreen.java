@@ -7,7 +7,7 @@ import me.shedaniel.clothconfig2.api.ConfigCategory;
 import me.shedaniel.clothconfig2.api.ConfigEntryBuilder;
 import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.List;
+// import java.util.List;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
@@ -120,7 +120,7 @@ public final class ReachCraftingConfigScreen {
 				ReachCraftingConfig.InputCounterVisibility.class,
 				config.inputCounterVisibility()
 			)
-			.setDefaultValue(ReachCraftingConfig.InputCounterVisibility.ALWAYS_SHOW)
+			.setDefaultValue(ReachCraftingConfig.InputCounterVisibility.SHOW_WHILE_QUEUEING)
 			.setTooltip(Component.translatable("tooltip.reachcrafting.input_counter_visibility"))
 			.setSaveConsumer(config::setInputCounterVisibility)
 			.setEnumNameProvider(value -> Component.translatable("enum.reachcrafting.input_counter_visibility." + value.name().toLowerCase()))
@@ -215,7 +215,8 @@ public final class ReachCraftingConfigScreen {
 				Component.translatable("option.reachcrafting.blacklisted_container_ids"),
 				new ArrayList<>(config.blacklistedContainerIds())
 			)
-			.setDefaultValue(List.of())
+			.setExpanded(true)
+			.setDefaultValue(new ArrayList<>(ReachCraftingConfig.DEFAULT_BLACKLIST))
 			.setTooltip(Component.translatable("tooltip.reachcrafting.blacklisted_container_ids"))
 			.setSaveConsumer(list -> config.setBlacklistedContainerIds(new HashSet<>(list)))
 			.build());

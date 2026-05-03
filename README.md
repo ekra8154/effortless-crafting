@@ -89,7 +89,7 @@ normal clicking cycling items that should be craftable should craft them?
 
 up arrow to restore searches?
 
-on release, input number count should stay there?
+offhand append?
 
 
 KNOWN BUGS:

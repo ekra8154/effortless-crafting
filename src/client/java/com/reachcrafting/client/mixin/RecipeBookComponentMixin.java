@@ -72,6 +72,16 @@ public abstract class RecipeBookComponentMixin {
 	@Inject(method = "keyPressed", at = @At("HEAD"), cancellable = true)
 	private void reachcrafting$onKeyPressedHead(KeyEvent event, CallbackInfoReturnable<Boolean> cir) {
 		if (!ReachCraftingConfig.get().enabled()) return;
+		// If focused, let number keys through to the screen for hotbar switching
+		if (this.searchBox != null && this.searchBox.isFocused()) {
+			int key = event.key();
+			if ((key >= GLFW.GLFW_KEY_0 && key <= GLFW.GLFW_KEY_9) ||
+				(key >= GLFW.GLFW_KEY_KP_0 && key <= GLFW.GLFW_KEY_KP_9)) {
+				cir.setReturnValue(false);
+				return;
+			}
+		}
+
 		if (event.key() == GLFW.GLFW_KEY_LEFT_ALT || event.key() == GLFW.GLFW_KEY_RIGHT_ALT) {
 			ContainerUtils.handleAutoCraftKeyPress();
 			cir.setReturnValue(true);
@@ -103,6 +113,16 @@ public abstract class RecipeBookComponentMixin {
 		if (this.searchBox != null && this.isVisible() && reachcrafting$isSupportedScreen()) {
 			ReachCraftingConfig.setLastSearchText(this.searchBox.getValue());
 			this.checkSearchStringUpdate();
+		}
+	}
+
+	@Inject(method = "charTyped", at = @At("HEAD"), cancellable = true)
+	private void reachcrafting$onCharTypedHead(CharacterEvent event, CallbackInfoReturnable<Boolean> cir) {
+		if (!ReachCraftingConfig.get().enabled()) return;
+		if (this.searchBox != null && this.searchBox.isFocused()) {
+			if (Character.isDigit(event.codepoint())) {
+				cir.setReturnValue(false);
+			}
 		}
 	}
 
@@ -185,14 +205,14 @@ public abstract class RecipeBookComponentMixin {
 			return false;
 		}
 
-		// Exclude drop key
-		if (this.minecraft.options.keyDrop.matches(event)) {
+		// Exclude drop and swap offhand keys
+		if (this.minecraft.options.keyDrop.matches(event) || this.minecraft.options.keySwapOffhand.matches(event)) {
 			return false;
 		}
 
 		// Exclude system keys that don't produce characters
 		if (key == GLFW.GLFW_KEY_ESCAPE || key == GLFW.GLFW_KEY_TAB || 
-			key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_BACKSPACE || 
+			key == GLFW.GLFW_KEY_ENTER || 
 			key == GLFW.GLFW_KEY_DELETE || key == GLFW.GLFW_KEY_INSERT ||
 			key == GLFW.GLFW_KEY_PAGE_UP || key == GLFW.GLFW_KEY_PAGE_DOWN ||
 			key == GLFW.GLFW_KEY_HOME || key == GLFW.GLFW_KEY_END ||
