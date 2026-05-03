@@ -92,6 +92,10 @@ public final class ContainerUtils {
 		return pendingAutoMove;
 	}
 
+	public static boolean isAutomatedInteractionRunning() {
+		return pendingAutoMove || autoMoveOrganizing || NearbyContainerDryRun.isActiveSessionRunning() || InventoryGridRestoreTracker.isRestoring();
+	}
+
 	public static boolean isSupportedContainer(BlockState state) {
 		String blockId = BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
 		if (ReachCraftingConfig.get().blacklistedContainerIds().contains(blockId)) {

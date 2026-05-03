@@ -46,18 +46,18 @@ public abstract class MultiPlayerGameModeMixin {
 		
 		// Update the inventory snapshot high-water mark after every click to capture movements
 		// BUT only if we aren't in an automated session, otherwise we'll "capture" the withdrawn items as initial state!
-		if (!com.reachcrafting.client.NearbyContainerDryRun.isActiveSessionRunning()) {
+		if (!com.reachcrafting.client.ContainerUtils.isAutomatedInteractionRunning()) {
 			com.reachcrafting.client.PulledResourcesTracker.updateSnapshot(client.player);
-		}
 
-		if (clickType == ClickType.PICKUP) {
-			if (menu.getCarried().isEmpty()) {
-				InventoryGridRestoreTracker.recordPotentialSource(slotId, clickType, menu);
-			} else {
+			if (clickType == ClickType.PICKUP) {
+				if (menu.getCarried().isEmpty()) {
+					InventoryGridRestoreTracker.recordPotentialSource(slotId, clickType, menu);
+				} else {
+					InventoryGridRestoreTracker.recordPotentialDestination(slotId, button, clickType, menu);
+				}
+			} else if (clickType == ClickType.QUICK_CRAFT) {
 				InventoryGridRestoreTracker.recordPotentialDestination(slotId, button, clickType, menu);
 			}
-		} else if (clickType == ClickType.QUICK_CRAFT) {
-			InventoryGridRestoreTracker.recordPotentialDestination(slotId, button, clickType, menu);
 		}
 	}
 }

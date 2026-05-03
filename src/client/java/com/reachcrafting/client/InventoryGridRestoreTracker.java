@@ -25,6 +25,7 @@ public final class InventoryGridRestoreTracker {
 	
 	// Tracks the "last picked up" slot to link it to a destination.
 	private static int lastInventorySlotClicked = -1;
+	private static boolean restoring = false;
 
 	private InventoryGridRestoreTracker() {
 	}
@@ -94,6 +95,7 @@ public final class InventoryGridRestoreTracker {
 
 	public static void restore(AbstractContainerMenu menu, MultiPlayerGameMode gameMode) {
 		com.reachcrafting.ReachCraftingMod.LOGGER.info("[grid_restore] Starting restoration sequence for menu {}", menu.getClass().getSimpleName());
+		restoring = true;
 		try {
 			if (menu == null || gameMode == null) {
 				clear();
@@ -173,8 +175,14 @@ public final class InventoryGridRestoreTracker {
 			}
 		} catch (Exception e) {
 			com.reachcrafting.ReachCraftingMod.LOGGER.error("[grid_restore] Error during restore: ", e);
+		} finally {
+			restoring = false;
 		}
 		clear();
+	}
+
+	public static boolean isRestoring() {
+		return restoring;
 	}
 
 	private static void logSmartRestoreState(String phase, AbstractContainerMenu menu, net.minecraft.client.player.LocalPlayer player, List<Map.Entry<Integer, ItemStack>> orderedSnapshots) {
