@@ -80,13 +80,15 @@ public final class ReachCraftingConfigScreen {
 			.setSaveConsumer(config::setReachCraftCloseOverlayAfterRelease)
 			.build());
 
-		craftingUi.addEntry(entries.startBooleanToggle(
+		craftingUi.addEntry(entries.startEnumSelector(
 				Component.translatable("option.reachcrafting.scroll_to_pull"),
-				config.scrollToPull()
+				ReachCraftingConfig.ScrollToPullMode.class,
+				config.scrollToPullMode()
 			)
-			.setDefaultValue(true)
+			.setDefaultValue(ReachCraftingConfig.ScrollToPullMode.WHILE_RESULT_OR_INVENTORY_SLOT_HOVERED)
 			.setTooltip(Component.translatable("tooltip.reachcrafting.scroll_to_pull"))
-			.setSaveConsumer(config::setScrollToPull)
+			.setSaveConsumer(config::setScrollToPullMode)
+			.setEnumNameProvider(value -> Component.translatable("enum.reachcrafting.scroll_to_pull." + value.name().toLowerCase()))
 			.build());
 
 		// Sub-Category: Planning & Logic

@@ -2,6 +2,8 @@ package com.reachcrafting.client;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonPrimitive;
 import com.reachcrafting.ReachCraftingMod;
 import java.io.Reader;
 import java.io.Writer;
@@ -51,7 +53,7 @@ public final class ReachCraftingConfig {
 	private boolean showTotalOutputCounts;
 	private InputCounterVisibility inputCounterVisibility;
 	private boolean inventory2x2OffhandConsolidation;
-	private boolean scrollToPull;
+	private ScrollToPullMode scrollToPullMode;
 	private boolean typeToFocusSearch;
 	private Set<String> blacklistedContainerIds;
 
@@ -98,7 +100,7 @@ public final class ReachCraftingConfig {
 			instance.showTotalOutputCounts = stored.showTotalOutputCounts != null ? stored.showTotalOutputCounts : true;
 			instance.inputCounterVisibility = stored.inputCounterVisibility != null ? stored.inputCounterVisibility : InputCounterVisibility.SHOW_WHILE_QUEUEING;
 			instance.inventory2x2OffhandConsolidation = stored.inventory2x2OffhandConsolidation == null ? true : stored.inventory2x2OffhandConsolidation;
-			instance.scrollToPull = stored.scrollToPull != null ? stored.scrollToPull : true;
+			instance.scrollToPullMode = parseScrollToPullMode(stored.scrollToPullMode);
 			instance.typeToFocusSearch = stored.typeToFocusSearch != null ? stored.typeToFocusSearch : true;
 			instance.autoCraftMode = stored.autoCraftMode != null ? stored.autoCraftMode : false;
 			instance.blacklistedContainerIds = stored.blacklistedContainerIds != null 
@@ -288,12 +290,12 @@ public final class ReachCraftingConfig {
 		this.inventory2x2OffhandConsolidation = inventory2x2OffhandConsolidation;
 	}
 
-	public boolean scrollToPull() {
-		return scrollToPull;
+	public ScrollToPullMode scrollToPullMode() {
+		return scrollToPullMode;
 	}
 
-	public void setScrollToPull(boolean scrollToPull) {
-		this.scrollToPull = scrollToPull;
+	public void setScrollToPullMode(ScrollToPullMode scrollToPullMode) {
+		this.scrollToPullMode = scrollToPullMode;
 	}
 
 	public boolean typeToFocusSearch() {
@@ -365,10 +367,32 @@ public final class ReachCraftingConfig {
 		defaults.showTotalOutputCounts = true;
 		defaults.inputCounterVisibility = InputCounterVisibility.SHOW_WHILE_QUEUEING;
 		defaults.inventory2x2OffhandConsolidation = true;
-		defaults.scrollToPull = true;
+		defaults.scrollToPullMode = ScrollToPullMode.WHILE_RESULT_OR_INVENTORY_SLOT_HOVERED;
 		defaults.typeToFocusSearch = true;
 		defaults.blacklistedContainerIds = new LinkedHashSet<>(DEFAULT_BLACKLIST);
 		return defaults;
+	}
+
+	private static ScrollToPullMode parseScrollToPullMode(JsonElement rawValue) {
+		if (rawValue == null || rawValue.isJsonNull()) {
+			return ScrollToPullMode.WHILE_RESULT_OR_INVENTORY_SLOT_HOVERED;
+		}
+		if (rawValue.isJsonPrimitive()) {
+			JsonPrimitive primitive = rawValue.getAsJsonPrimitive();
+			if (primitive.isBoolean()) {
+				return primitive.getAsBoolean()
+					? ScrollToPullMode.WHILE_RESULT_SLOT_HOVERED
+					: ScrollToPullMode.NONE;
+			}
+			if (primitive.isString()) {
+				try {
+					return ScrollToPullMode.valueOf(primitive.getAsString());
+				} catch (IllegalArgumentException exception) {
+					ReachCraftingMod.LOGGER.warn("Unknown scrollToPullMode value in config: {}", primitive.getAsString());
+				}
+			}
+		}
+		return ScrollToPullMode.WHILE_RESULT_OR_INVENTORY_SLOT_HOVERED;
 	}
 
 
@@ -387,6 +411,12 @@ public final class ReachCraftingConfig {
 	public enum InputCounterVisibility {
 		ALWAYS_SHOW,
 		SHOW_WHILE_QUEUEING
+	}
+
+	public enum ScrollToPullMode {
+		NONE,
+		WHILE_RESULT_SLOT_HOVERED,
+		WHILE_RESULT_OR_INVENTORY_SLOT_HOVERED
 	}
 
 	private static final class StoredConfig {
@@ -408,7 +438,7 @@ public final class ReachCraftingConfig {
 		private Boolean showTotalOutputCounts;
 		private InputCounterVisibility inputCounterVisibility;
 		private Boolean inventory2x2OffhandConsolidation;
-		private Boolean scrollToPull;
+		private JsonElement scrollToPullMode;
 		private Boolean typeToFocusSearch;
 		private Boolean autoCraftMode;
 		private Set<String> blacklistedContainerIds;
@@ -432,7 +462,7 @@ public final class ReachCraftingConfig {
 			this.showTotalOutputCounts = config.showTotalOutputCounts;
 			this.inputCounterVisibility = config.inputCounterVisibility;
 			this.inventory2x2OffhandConsolidation = config.inventory2x2OffhandConsolidation;
-			this.scrollToPull = config.scrollToPull;
+			this.scrollToPullMode = new JsonPrimitive(config.scrollToPullMode.name());
 			this.typeToFocusSearch = config.typeToFocusSearch;
 			this.autoCraftMode = config.autoCraftMode;
 			this.blacklistedContainerIds = config.blacklistedContainerIds;
