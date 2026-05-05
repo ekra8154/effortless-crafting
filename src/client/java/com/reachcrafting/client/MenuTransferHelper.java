@@ -11,6 +11,20 @@ import net.minecraft.world.item.ItemStack;
 import org.lwjgl.glfw.GLFW;
 
 final class MenuTransferHelper {
+	enum WithdrawalExecutionMode {
+		FULL_STACK,
+		SPLIT_PICKUP,
+		REMAINDER_BACK_TO_SOURCE,
+		REPEATED_TARGET_PLACEMENT,
+		FAILED
+	}
+
+	record WithdrawalMoveResult(int moved, WithdrawalExecutionMode mode) {
+		static WithdrawalMoveResult failed() {
+			return new WithdrawalMoveResult(0, WithdrawalExecutionMode.FAILED);
+		}
+	}
+
 	private MenuTransferHelper() {
 	}
 
@@ -102,6 +116,152 @@ final class MenuTransferHelper {
 			}
 		}
 		return placed;
+	}
+
+	static WithdrawalMoveResult moveExactCountFromContainerToInventory(
+		AbstractContainerMenu menu,
+		Slot sourceSlot,
+		Slot targetSlot,
+		int remaining,
+		LocalPlayer player,
+		MultiPlayerGameMode gameMode
+	) {
+		ItemStack sourceStack = sourceSlot.getItem();
+		ItemStack targetStack = targetSlot.getItem();
+		if (sourceStack.isEmpty() || remaining <= 0) {
+			return WithdrawalMoveResult.failed();
+		}
+
+		int maxTargetCount = Math.min(targetSlot.getMaxStackSize(), sourceStack.getMaxStackSize());
+		int currentTargetCount = targetStack.isEmpty() ? 0 : targetStack.getCount();
+		boolean compatibleTarget = targetStack.isEmpty() || ItemStack.isSameItemSameComponents(sourceStack, targetStack);
+		if (!compatibleTarget) {
+			return WithdrawalMoveResult.failed();
+		}
+
+		int roomInTarget = maxTargetCount - currentTargetCount;
+		int moveCount = Math.min(remaining, Math.min(sourceStack.getCount(), roomInTarget));
+		if (moveCount <= 0) {
+			return WithdrawalMoveResult.failed();
+		}
+
+		int sourceCount = sourceStack.getCount();
+		int splitCarryCount = (sourceCount + 1) / 2;
+		int splitRemainderClicks = Math.max(0, splitCarryCount - moveCount);
+		int sourceRemainderAfterFullPickup = sourceCount - moveCount;
+
+		if (moveCount == sourceCount) {
+			pickup(gameMode, player, menu, sourceSlot, GLFW.GLFW_MOUSE_BUTTON_LEFT);
+			pickup(gameMode, player, menu, targetSlot, GLFW.GLFW_MOUSE_BUTTON_LEFT);
+			if (!player.containerMenu.getCarried().isEmpty()) {
+				pickup(gameMode, player, menu, sourceSlot, GLFW.GLFW_MOUSE_BUTTON_LEFT);
+				return WithdrawalMoveResult.failed();
+			}
+			return new WithdrawalMoveResult(moveCount, WithdrawalExecutionMode.FULL_STACK);
+		}
+
+		boolean canUseSplitPickup = moveCount <= splitCarryCount;
+		int splitClickCost = canUseSplitPickup ? 2 + splitRemainderClicks : Integer.MAX_VALUE;
+		int remainderBackCost = 2 + sourceRemainderAfterFullPickup;
+		int repeatedTargetCost = 1 + moveCount + (sourceRemainderAfterFullPickup > 0 ? 1 : 0);
+
+		WithdrawalExecutionMode mode = selectWithdrawalExecutionMode(splitClickCost, remainderBackCost, repeatedTargetCost);
+		return switch (mode) {
+			case SPLIT_PICKUP -> executeSplitPickup(menu, sourceSlot, targetSlot, moveCount, splitCarryCount, player, gameMode);
+			case REMAINDER_BACK_TO_SOURCE -> executeRemainderBack(menu, sourceSlot, targetSlot, moveCount, sourceRemainderAfterFullPickup, player, gameMode);
+			case REPEATED_TARGET_PLACEMENT -> executeRepeatedTargetPlacement(menu, sourceSlot, targetSlot, moveCount, player, gameMode);
+			case FULL_STACK, FAILED -> WithdrawalMoveResult.failed();
+		};
+	}
+
+	private static WithdrawalExecutionMode selectWithdrawalExecutionMode(int splitClickCost, int remainderBackCost, int repeatedTargetCost) {
+		int best = Math.min(splitClickCost, Math.min(remainderBackCost, repeatedTargetCost));
+		if (best == splitClickCost) {
+			return WithdrawalExecutionMode.SPLIT_PICKUP;
+		}
+		if (best == remainderBackCost) {
+			return WithdrawalExecutionMode.REMAINDER_BACK_TO_SOURCE;
+		}
+		return WithdrawalExecutionMode.REPEATED_TARGET_PLACEMENT;
+	}
+
+	private static WithdrawalMoveResult executeSplitPickup(
+		AbstractContainerMenu menu,
+		Slot sourceSlot,
+		Slot targetSlot,
+		int moveCount,
+		int splitCarryCount,
+		LocalPlayer player,
+		MultiPlayerGameMode gameMode
+	) {
+		pickup(gameMode, player, menu, sourceSlot, GLFW.GLFW_MOUSE_BUTTON_RIGHT);
+		if (player.containerMenu.getCarried().isEmpty()) {
+			return WithdrawalMoveResult.failed();
+		}
+
+		for (int i = 0; i < splitCarryCount - moveCount; i++) {
+			pickup(gameMode, player, menu, sourceSlot, GLFW.GLFW_MOUSE_BUTTON_RIGHT);
+		}
+		pickup(gameMode, player, menu, targetSlot, GLFW.GLFW_MOUSE_BUTTON_LEFT);
+		if (!player.containerMenu.getCarried().isEmpty()) {
+			pickup(gameMode, player, menu, sourceSlot, GLFW.GLFW_MOUSE_BUTTON_LEFT);
+			return WithdrawalMoveResult.failed();
+		}
+		return new WithdrawalMoveResult(moveCount, WithdrawalExecutionMode.SPLIT_PICKUP);
+	}
+
+	private static WithdrawalMoveResult executeRemainderBack(
+		AbstractContainerMenu menu,
+		Slot sourceSlot,
+		Slot targetSlot,
+		int moveCount,
+		int sourceRemainderAfterFullPickup,
+		LocalPlayer player,
+		MultiPlayerGameMode gameMode
+	) {
+		pickup(gameMode, player, menu, sourceSlot, GLFW.GLFW_MOUSE_BUTTON_LEFT);
+		if (player.containerMenu.getCarried().isEmpty()) {
+			return WithdrawalMoveResult.failed();
+		}
+
+		for (int i = 0; i < sourceRemainderAfterFullPickup; i++) {
+			pickup(gameMode, player, menu, sourceSlot, GLFW.GLFW_MOUSE_BUTTON_RIGHT);
+		}
+		pickup(gameMode, player, menu, targetSlot, GLFW.GLFW_MOUSE_BUTTON_LEFT);
+
+		if (!player.containerMenu.getCarried().isEmpty()) {
+			pickup(gameMode, player, menu, sourceSlot, GLFW.GLFW_MOUSE_BUTTON_LEFT);
+			return WithdrawalMoveResult.failed();
+		}
+		return new WithdrawalMoveResult(moveCount, WithdrawalExecutionMode.REMAINDER_BACK_TO_SOURCE);
+	}
+
+	private static WithdrawalMoveResult executeRepeatedTargetPlacement(
+		AbstractContainerMenu menu,
+		Slot sourceSlot,
+		Slot targetSlot,
+		int moveCount,
+		LocalPlayer player,
+		MultiPlayerGameMode gameMode
+	) {
+		pickup(gameMode, player, menu, sourceSlot, GLFW.GLFW_MOUSE_BUTTON_LEFT);
+		if (player.containerMenu.getCarried().isEmpty()) {
+			return WithdrawalMoveResult.failed();
+		}
+
+		int placed = 0;
+		while (placed < moveCount && !player.containerMenu.getCarried().isEmpty()) {
+			pickup(gameMode, player, menu, targetSlot, GLFW.GLFW_MOUSE_BUTTON_RIGHT);
+			placed++;
+		}
+
+		if (!player.containerMenu.getCarried().isEmpty()) {
+			pickup(gameMode, player, menu, sourceSlot, GLFW.GLFW_MOUSE_BUTTON_LEFT);
+		}
+		if (!player.containerMenu.getCarried().isEmpty()) {
+			return WithdrawalMoveResult.failed();
+		}
+		return new WithdrawalMoveResult(placed, WithdrawalExecutionMode.REPEATED_TARGET_PLACEMENT);
 	}
 
 	static boolean moveGridSlotBackToInventory(AbstractContainerMenu menu, Slot sourceGridSlot, LocalPlayer player, MultiPlayerGameMode gameMode) {

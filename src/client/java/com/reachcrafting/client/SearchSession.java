@@ -420,75 +420,14 @@ final class SearchSession extends BaseCraftSession {
 			return;
 		}
 
-		Map<String, Integer> containerWithdrawnItems = new LinkedHashMap<>();
-		for (Slot slot : menu.slots) {
-			if (slot.container instanceof Inventory || !slot.hasItem()) {
-				continue;
-			}
-
-			String itemId = BuiltInRegistries.ITEM.getKey(slot.getItem().getItem()).toString();
-			if (findMatchingRemainingItemIndex(itemId) < 0 || !slot.mayPickup(player)) {
-				continue;
-			}
-
-			while (slot.hasItem()) {
-				int remainingItemIndex = findMatchingRemainingItemIndex(itemId);
-				if (remainingItemIndex < 0) {
-					break;
-				}
-
-				Slot targetSlot = MenuTransferHelper.findPlayerDestinationSlot(player, menu, itemId);
-				if (targetSlot == null) {
-					inventorySpaceBlocked = true;
-					sendChat("No inventory space for " + itemId);
-					return;
-				}
-				if (!withdrawOneItem(menu, slot, targetSlot)) {
-					return;
-				}
-
-				remainingItemIds.remove(remainingItemIndex);
-				withdrawnItems.merge(itemId, 1, Integer::sum);
-				containerWithdrawnItems.merge(itemId, 1, Integer::sum);
-			}
-		}
-
-		subtractCounts(discoveredNearby, containerWithdrawnItems);
-		NearbyContainerCache.applyWithdrawals(level, pendingContainerPos, containerWithdrawnItems);
-		if (!withdrawnItems.isEmpty()) {
-			ReachCraftingMod.LOGGER.info(
-				"[nearby_withdraw] idx={} pos={} total_withdrawn={} remaining={}",
-				recipeIndex,
-				ContainerUtils.formatPos(pendingContainerPos),
-				AvailableItemSnapshot.formatCounts(withdrawnItems),
-				summarizeRemainingItems(remainingItemIds)
-			);
-		}
+		WithdrawalPlan plan = buildWithdrawalPlan(menu);
+		Map<String, Integer> executedWithdrawals = executeWithdrawalPlan(menu, plan);
+		applyWithdrawalResults(executedWithdrawals, plan.inventorySpaceBlocked());
 	}
 
 	private void markVisited(BlockPos pos) {
 		visited.add(pos);
 		ContainerUtils.getOtherHalfOfLargeChest(level, pos).ifPresent(visited::add);
-	}
-
-	private boolean withdrawOneItem(AbstractContainerMenu menu, Slot sourceSlot, Slot targetSlot) {
-		ItemStack withdrawnStack = sourceSlot.getItem().copy();
-		withdrawnStack.setCount(1);
-		
-		pickup(menu, sourceSlot, GLFW.GLFW_MOUSE_BUTTON_LEFT);
-		if (player.containerMenu.getCarried().isEmpty()) {
-			return false;
-		}
-
-		pickup(menu, targetSlot, GLFW.GLFW_MOUSE_BUTTON_RIGHT);
-		pickup(menu, sourceSlot, GLFW.GLFW_MOUSE_BUTTON_LEFT);
-		
-		boolean success = player.containerMenu.getCarried().isEmpty();
-		if (success) {
-			// Store the menu slot index that actually supplied the item so return targeting stays stable.
-			PulledResourcesTracker.recordWithdrawal(pendingContainerPos, sourceSlot.index, withdrawnStack);
-		}
-		return success;
 	}
 
 	private void beginResume() {
@@ -1488,15 +1427,6 @@ final class SearchSession extends BaseCraftSession {
 		return MenuTransferHelper.moveExactCount(menu, sourceSlot, targetSlot, remaining, player, gameMode);
 	}
 
-	private int findMatchingRemainingItemIndex(String itemId) {
-		for (int i = 0; i < remainingItemIds.size(); i++) {
-			if (itemId.equals(remainingItemIds.get(i))) {
-				return i;
-			}
-		}
-		return -1;
-	}
-
 	private static List<BlockPos> findCandidates(Level level, Entity cameraEntity, double reachDistance) {
 		Vec3 eyePos = cameraEntity.getEyePosition(0);
 		int radius = Mth.ceil(reachDistance);
@@ -1542,6 +1472,236 @@ final class SearchSession extends BaseCraftSession {
 			aggregate.merge(itemId, 1, Integer::sum);
 		}
 		return AvailableItemSnapshot.formatCounts(aggregate);
+	}
+
+	private WithdrawalPlan buildWithdrawalPlan(AbstractContainerMenu menu) {
+		Map<String, Integer> remainingNeeds = countNeededItems(remainingItemIds);
+		Map<String, Integer> plannedWithdrawals = new LinkedHashMap<>();
+		List<WithdrawalPlan.PlannedMove> moves = new ArrayList<>();
+		Map<Integer, Integer> virtualPlayerCounts = capturePlayerOccupancy(menu);
+		boolean blockedByInventory = false;
+
+		for (Map.Entry<String, Integer> needEntry : remainingNeeds.entrySet()) {
+			String itemId = needEntry.getKey();
+			int stillNeeded = needEntry.getValue();
+			List<Slot> matchingSources = sortedMatchingContainerSources(menu, itemId);
+			if (matchingSources.isEmpty()) {
+				continue;
+			}
+
+			for (Slot sourceSlot : matchingSources) {
+				if (stillNeeded <= 0) {
+					break;
+				}
+
+				int sourceRemaining = sourceSlot.getItem().getCount();
+				while (sourceRemaining > 0 && stillNeeded > 0) {
+					Slot targetSlot = findPlannedDestinationSlot(menu, itemId, virtualPlayerCounts);
+					if (targetSlot == null) {
+						blockedByInventory = true;
+						break;
+					}
+
+					int currentTargetCount = virtualPlayerCounts.getOrDefault(targetSlot.index, targetSlot.hasItem() ? targetSlot.getItem().getCount() : 0);
+					int maxTargetCount = targetSlot.hasItem()
+						? Math.min(targetSlot.getMaxStackSize(), targetSlot.getItem().getMaxStackSize())
+						: Math.min(targetSlot.getMaxStackSize(), sourceSlot.getItem().getMaxStackSize());
+					int roomInTarget = maxTargetCount - currentTargetCount;
+					int moveCount = Math.min(stillNeeded, Math.min(sourceRemaining, roomInTarget));
+					if (moveCount <= 0) {
+						break;
+					}
+
+					moves.add(new WithdrawalPlan.PlannedMove(sourceSlot, targetSlot, itemId, moveCount));
+					virtualPlayerCounts.put(targetSlot.index, currentTargetCount + moveCount);
+					plannedWithdrawals.merge(itemId, moveCount, Integer::sum);
+					sourceRemaining -= moveCount;
+					stillNeeded -= moveCount;
+				}
+
+				if (blockedByInventory) {
+					break;
+				}
+			}
+
+			remainingNeeds.put(itemId, stillNeeded);
+			if (blockedByInventory) {
+				break;
+			}
+		}
+
+		Map<String, Integer> unresolvedNeeds = new LinkedHashMap<>();
+		for (Map.Entry<String, Integer> entry : remainingNeeds.entrySet()) {
+			if (entry.getValue() > 0) {
+				unresolvedNeeds.put(entry.getKey(), entry.getValue());
+			}
+		}
+
+		if (!moves.isEmpty()) {
+			ReachCraftingMod.LOGGER.info(
+				"[nearby_withdraw_plan] idx={} pos={} moves={} planned={} unresolved={}",
+				recipeIndex,
+				ContainerUtils.formatPos(pendingContainerPos),
+				moves.size(),
+				AvailableItemSnapshot.formatCounts(plannedWithdrawals),
+				AvailableItemSnapshot.formatCounts(unresolvedNeeds)
+			);
+		}
+
+		return new WithdrawalPlan(moves, plannedWithdrawals, unresolvedNeeds, blockedByInventory);
+	}
+
+	private Map<String, Integer> executeWithdrawalPlan(AbstractContainerMenu menu, WithdrawalPlan plan) {
+		Map<String, Integer> executedWithdrawals = new LinkedHashMap<>();
+		for (WithdrawalPlan.PlannedMove move : plan.moves()) {
+			if (!move.source().hasItem() || !move.source().mayPickup(player)) {
+				ReachCraftingMod.LOGGER.warn(
+					"[nearby_withdraw_plan] idx={} source_unavailable slot={} item={}",
+					recipeIndex,
+					move.source().index,
+					move.itemId()
+				);
+				break;
+			}
+
+			ItemStack withdrawnStack = move.source().getItem().copy();
+			withdrawnStack.setCount(Math.min(move.count(), withdrawnStack.getCount()));
+			MenuTransferHelper.WithdrawalMoveResult result = MenuTransferHelper.moveExactCountFromContainerToInventory(
+				menu,
+				move.source(),
+				move.target(),
+				move.count(),
+				player,
+				gameMode
+			);
+			if (result.moved() <= 0) {
+				ReachCraftingMod.LOGGER.warn(
+					"[nearby_withdraw_plan] idx={} move_failed source={} target={} item={} requested={}",
+					recipeIndex,
+					move.source().index,
+					move.target().index,
+					move.itemId(),
+					move.count()
+				);
+				break;
+			}
+
+			ReachCraftingMod.LOGGER.info(
+				"[nearby_withdraw_move] idx={} source={} target={} item={} count={} mode={}",
+				recipeIndex,
+				move.source().index,
+				move.target().index,
+				move.itemId(),
+				result.moved(),
+				result.mode().name().toLowerCase()
+			);
+
+			withdrawnStack.setCount(result.moved());
+			PulledResourcesTracker.recordWithdrawal(pendingContainerPos, move.source().index, withdrawnStack);
+			executedWithdrawals.merge(move.itemId(), result.moved(), Integer::sum);
+		}
+		return executedWithdrawals;
+	}
+
+	private void applyWithdrawalResults(Map<String, Integer> executedWithdrawals, boolean blockedByInventory) {
+		if (blockedByInventory) {
+			inventorySpaceBlocked = true;
+		}
+		if (executedWithdrawals.isEmpty()) {
+			if (inventorySpaceBlocked) {
+				sendChat("No inventory space for fetched items");
+			}
+			return;
+		}
+
+		for (Map.Entry<String, Integer> entry : executedWithdrawals.entrySet()) {
+			removeRemainingItems(entry.getKey(), entry.getValue());
+			withdrawnItems.merge(entry.getKey(), entry.getValue(), Integer::sum);
+		}
+
+		subtractCounts(discoveredNearby, executedWithdrawals);
+		NearbyContainerCache.applyWithdrawals(level, pendingContainerPos, executedWithdrawals);
+		ReachCraftingMod.LOGGER.info(
+			"[nearby_withdraw] idx={} pos={} total_withdrawn={} remaining={}",
+			recipeIndex,
+			ContainerUtils.formatPos(pendingContainerPos),
+			AvailableItemSnapshot.formatCounts(withdrawnItems),
+			summarizeRemainingItems(remainingItemIds)
+		);
+	}
+
+	private static Map<Integer, Integer> capturePlayerOccupancy(AbstractContainerMenu menu) {
+		Map<Integer, Integer> occupancy = new HashMap<>();
+		for (Slot slot : menu.slots) {
+			if (slot.container instanceof Inventory) {
+				occupancy.put(slot.index, slot.hasItem() ? slot.getItem().getCount() : 0);
+			}
+		}
+		return occupancy;
+	}
+
+	private List<Slot> sortedMatchingContainerSources(AbstractContainerMenu menu, String itemId) {
+		List<Slot> matchingSources = new ArrayList<>();
+		for (Slot slot : menu.slots) {
+			if (slot.container instanceof Inventory || !slot.hasItem() || !slot.mayPickup(player)) {
+				continue;
+			}
+			String slotItemId = BuiltInRegistries.ITEM.getKey(slot.getItem().getItem()).toString();
+			if (itemId.equals(slotItemId)) {
+				matchingSources.add(slot);
+			}
+		}
+
+		matchingSources.sort(
+			Comparator.comparingInt((Slot slot) -> slot.getItem().getCount())
+				.thenComparingInt(slot -> slot.index)
+		);
+		return matchingSources;
+	}
+
+	private Slot findPlannedDestinationSlot(AbstractContainerMenu menu, String itemId, Map<Integer, Integer> virtualPlayerCounts) {
+		Slot bestPartial = null;
+		int bestPartialCount = -1;
+		Slot bestEmpty = null;
+
+		for (Slot slot : menu.slots) {
+			if (!(slot.container instanceof Inventory)) {
+				continue;
+			}
+
+			int virtualCount = virtualPlayerCounts.getOrDefault(slot.index, slot.hasItem() ? slot.getItem().getCount() : 0);
+			if (slot.hasItem()) {
+				String slotItemId = BuiltInRegistries.ITEM.getKey(slot.getItem().getItem()).toString();
+				if (!itemId.equals(slotItemId)) {
+					continue;
+				}
+
+				int max = Math.min(slot.getMaxStackSize(), slot.getItem().getMaxStackSize());
+				if (virtualCount >= max) {
+					continue;
+				}
+				if (bestPartial == null || virtualCount > bestPartialCount || (virtualCount == bestPartialCount && slot.index < bestPartial.index)) {
+					bestPartial = slot;
+					bestPartialCount = virtualCount;
+				}
+			} else if (virtualCount == 0 && bestEmpty == null) {
+				bestEmpty = slot;
+			}
+		}
+
+		return bestPartial != null ? bestPartial : bestEmpty;
+	}
+
+	private void removeRemainingItems(String itemId, int count) {
+		int toRemove = count;
+		for (int i = 0; i < remainingItemIds.size() && toRemove > 0; ) {
+			if (itemId.equals(remainingItemIds.get(i))) {
+				remainingItemIds.remove(i);
+				toRemove--;
+				continue;
+			}
+			i++;
+		}
 	}
 
 
