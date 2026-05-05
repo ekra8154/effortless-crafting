@@ -1,35 +1,35 @@
 # Reach Crafting
 
-**Reach Crafting** is a high-performance, client-side Fabric mod for Minecraft 1.21.11 that eliminates the friction of survival crafting. It treats nearby storage as a seamless extension of your own inventory, allowing you to craft complex, high-volume recipes directly from your chests without the "inventory shuffle."
+**Reach Crafting** is a client-side Fabric mod for Minecraft 1.21.11 that lets you craft from your inventory and nearby containers without constant inventory shuffling.
 
-Designed for vanilla-compatible servers, Reach Crafting performs only actions that a standard client could—just much faster and with perfect mathematical precision.
+It is designed for vanilla-compatible play: the mod only uses normal container interactions and recipe placement that a standard client can already perform.
 
 ---
 
 ## Key Features
 
 ### Nearby Container Integration
-Stop running back and forth to your chests. Reach Crafting automatically scans nearby containers (Chests, Barrels, Shulker Boxes, Ender Chests) and pulls exactly what you need to complete your craft.
+Stop running back and forth to your chests. Reach Crafting scans nearby containers such as chests, barrels, shulker boxes, ender chests, and other supported storage blocks to help complete the current craft.
 * **Smart Discovery**: Scans within your block interaction range.
-* **Automatic Withdrawal**: Fetches ingredients in a single, fluid motion.
-* **Lag Resistant**: Built with a robust state machine to handle server latency and container synchronization.
+* **Automatic Withdrawal**: Pulls only the ingredients needed for the current craft.
+* **Latency Aware**: Uses a session-based workflow that accounts for container opens, restores, and resuming the original crafting screen.
 
-### Smart Redistribution Engine
-The heart of the mod is an atomic planning engine that re-balances your crafting grid on the fly.
-* **Multi-Material Support**: Crafting a recipe with mixed ingredients (like different types of wood for chests)? The mod intelligently partitions your available materials into the grid.
-* **Batch Expansion**: Already have 20 items on the table but need 64? The mod calculates the "top-up" requirements and fills the grid to your target count.
-* **Material Prioritization**: Choose whether to use your inventory first or pull from nearby containers to keep your pockets clean.
+### Smart Craft Expansion
+Reach Crafting can treat the crafting grid as a working plan instead of a one-click action.
+* **Batch Expansion**: Grow an existing craft toward the next stack or requested count.
+* **Variant Awareness**: Understands recipe families such as wood, wool, glass, and concrete variants.
+* **Inventory Preference**: Can prioritize materials already in your inventory before pulling from nearby storage.
 
-### Intelligent Family Logic
-Reach Crafting understands "Recipe Families" (Concrete, Wool, Glass, Wood, etc.).
-* **Family-Aware Indicators**: The recipe book shows a "Nearby Craftable" dot if *any* variant of a family is available.
-* **Variant Menu Integration**: Long-click a recipe to see specific craftability indicators for every color and variant.
-* **Locked Expansions**: If you have a specific variant on the table (e.g., Yellow Concrete), expanding the craft via the generic recipe button will automatically lock to your current color.
+### Recipe Book Feedback
+The recipe book can surface more than vanilla craftability.
+* **Nearby Craftable Indicators**: Shows when cached nearby storage appears to satisfy missing ingredients.
+* **Queued Count Indicators**: Displays queued recipe counts while modifier-based crafting is active.
+* **Variant Overlay Support**: Works with recipe families and per-variant selection.
 
-### Vanilla Compatible & Safe
+### Vanilla-Friendly Operation
 * **Client-Side Only**: No server-side mod required.
-* **Legal Movements**: Only performs standard slot clicks and container interactions.
-* **Anti-Desync**: Aggressive cursor sanitation and grid clearing ensure you never get items "stuck" to your mouse.
+* **Vanilla UI Driven**: Uses standard slot clicks, recipe placement, and container interactions.
+* **Configurable Workflow**: Includes options for inventory preference, search behavior, nearby-container usage, filtering, and output handling.
 
 ---
 
@@ -39,33 +39,30 @@ Reach Crafting understands "Recipe Families" (Concrete, Wool, Glass, Wood, etc.)
 | :--- | :--- |
 | **Left Click** | Craft a single item using inventory and nearby materials. |
 | **Shift + Click** | Craft as much as possible and move the results to your inventory. |
-| **Ctrl + Click** | **Smart Batch**: Fills the crafting grid to the next stack or requested count, redistributing existing materials for maximum efficiency. |
-| **Ctrl + Scroll** | **Adjust Count**: Rapidly increase or decrease the target count for batch crafting directly from the recipe book. |
-| **Right Click** | Opens the Variant Menu with per-variant craftability indicators. |
+| **Ctrl + Click** | **Smart Batch**: fills the crafting grid toward the next stack or requested count, redistributing materials when needed. |
+| **Shift + Scroll** | **Scroll to Pull**: pulls crafted output to the cursor or directly into a hovered inventory slot, depending on your setting. |
+| **Right Click** | Opens the variant menu with per-variant craftability indicators. |
 
 ---
 
-## Configuration & Policy Logic
+## Configuration
 
-Reach Crafting is highly customizable, and its planning engine intelligently combines your settings to match your workflow:
+Reach Crafting includes options for:
+* preferring inventory over nearby containers
+* choosing high-count vs low-count variant usage
+* caching nearby container contents for faster recipe checks
+* remembering recipe-book search behavior
+* restoring inventory layout after crafting
+* in-world container filtering and optional wireframe outlines
 
-### Setting Interactions
-* **Prefer Inventory + Count Preference**: 
-    * The mod first identifies all usable items in your player inventory. 
-    * It applies your `Count Preference` (Lowest/Highest Total) **within** those inventory items first. 
-    * If more materials are needed, it then pulls from nearby containers, again applying your `Count Preference` to the discovered chest contents.
-    * *Example*: With `Low Counts` enabled, the mod will use your scarcest inventory wood before touching your large stockpiles in nearby chests.
-* **Redistribute on Expansion**: 
-    * When enabled, the mod treats batch expansions as atomic operations, clearing and re-balancing the grid to ensure the fastest possible craft.
-    * When disabled, the mod performs a "Top-Up," preserving your existing grid layout and variant perfectly while only adding what is missing.
-* **Family-Aware Discovery**: 
-    * When scanning nearby chests, the mod automatically includes materials for all variants in a family (e.g., discovering all dyes when clicking any concrete color). This ensures that "Locked Expansions" always have the data they need to proceed.
+If Mod Menu and Cloth Config are installed, the mod exposes an in-game config screen.
 
 ---
 
 ## Development
 
 Building the project locally:
+
 ```powershell
 # Run the client
 .\gradlew.bat runClient
@@ -78,13 +75,5 @@ Building the project locally:
 
 ## Credits & License
 
-This project is licensed under **LGPL-3.0-or-later**. It draws inspiration and certain implementation patterns from the following excellent project:
+This project is licensed under **LGPL-3.0-or-later**. It draws inspiration and certain implementation patterns from:
 * [stack-to-nearby-chests](https://github.com/xiaocihua/stack-to-nearby-chests) by xiaocihua (LGPL-3.0)
-
-
-
-TODO:
-
-KNOWN BUGS:
-
-idk if this is a bug, but sometimes when i rejoin the world items are on the ground instead of in inventory (or the chests they came from). perhaps inventory restore isn't working properly if i leave the game.

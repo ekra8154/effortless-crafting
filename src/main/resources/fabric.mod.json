@@ -3,17 +3,10 @@
 	"id": "reachcrafting",
 	"version": "${version}",
 	"name": "Reach Crafting",
-	"description": "A Fabric mod scaffold for reach-crafting on Minecraft 1.21.11.",
-	"authors": [
-		"Me!"
-	],
-	"contact": {
-		"homepage": "",
-		"sources": ""
-	},
+	"description": "A client-side Fabric mod for Minecraft 1.21.11 that crafts from your inventory and nearby containers through vanilla interactions.",
 	"license": "LGPL-3.0-or-later",
 	"icon": "assets/reachcrafting/icon.png",
-	"environment": "*",
+	"environment": "client",
 	"entrypoints": {
 		"main": [
 			"com.reachcrafting.ReachCraftingMod"

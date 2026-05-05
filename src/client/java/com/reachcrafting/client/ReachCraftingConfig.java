@@ -19,6 +19,27 @@ import net.fabricmc.loader.api.FabricLoader;
 public final class ReachCraftingConfig {
 	private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 	private static final Path CONFIG_PATH = FabricLoader.getInstance().getConfigDir().resolve("reachcrafting.json");
+	private static final boolean DEFAULT_ENABLED = true;
+	private static final boolean DEFAULT_ENABLE_NEARBY_CONTAINER_USAGE = true;
+	private static final boolean DEFAULT_REDISTRIBUTE_TO_CRAFT_WHEN_NEEDED = true;
+	private static final InWorldFilterMode DEFAULT_IN_WORLD_FILTER_MODE = InWorldFilterMode.NONE;
+	private static final RevolvingCraftHandling DEFAULT_REVOLVING_CRAFT_HANDLING = RevolvingCraftHandling.PREFER_CLICKED_TYPE_WITH_COUNT_FALLBACK;
+	private static final IngredientPlanning.CountPreference DEFAULT_COUNT_PREFERENCE = IngredientPlanning.CountPreference.HIGHEST_TOTAL;
+	private static final boolean DEFAULT_SHOW_NEARBY_CRAFTABLE_INDICATOR = true;
+	private static final boolean DEFAULT_CACHE_CONTAINERS_FOR_FASTER_SEARCH = true;
+	private static final boolean DEFAULT_REACH_CRAFT_HOLD_AND_RELEASE = true;
+	private static final boolean DEFAULT_REACH_CRAFT_CLOSE_OVERLAY_AFTER_RELEASE = true;
+	private static final boolean DEFAULT_REACH_CRAFT_PREFER_INVENTORY = true;
+	private static final boolean DEFAULT_PUT_PULLED_RESOURCES_BACK = true;
+	private static final boolean DEFAULT_RESTORE_INVENTORY_ITEM_POSITIONS = true;
+	private static final boolean DEFAULT_REMEMBER_PREVIOUS_SEARCH = true;
+	private static final OutlineDisplayMode DEFAULT_SHOW_FILTER_OUTLINES = OutlineDisplayMode.KEYBIND;
+	private static final boolean DEFAULT_AUTO_CRAFT_MODE = false;
+	private static final boolean DEFAULT_SHOW_TOTAL_OUTPUT_COUNTS = true;
+	private static final InputCounterVisibility DEFAULT_INPUT_COUNTER_VISIBILITY = InputCounterVisibility.SHOW_WHILE_QUEUEING;
+	private static final boolean DEFAULT_INVENTORY_2X2_OFFHAND_CONSOLIDATION = true;
+	private static final ScrollToPullMode DEFAULT_SCROLL_TO_PULL_MODE = ScrollToPullMode.WHILE_RESULT_OR_INVENTORY_SLOT_HOVERED;
+	private static final boolean DEFAULT_TYPE_TO_FOCUS_SEARCH = true;
 	public static final List<String> DEFAULT_BLACKLIST = List.of(
 		"minecraft:ender_chest",
 		"minecraft:hopper",
@@ -76,33 +97,33 @@ public final class ReachCraftingConfig {
 				save();
 				return;
 			}
-			instance.enabled = stored.enabled == null ? true : stored.enabled;
-			instance.enableNearbyContainerUsage = stored.enableNearbyContainerUsage == null ? true : stored.enableNearbyContainerUsage;
-			instance.redistributeToCraftWhenNeeded = stored.redistributeToCraftWhenNeeded;
-			instance.inWorldFilterMode = stored.inWorldFilterMode != null ? stored.inWorldFilterMode : InWorldFilterMode.NONE;
+			instance.enabled = stored.enabled != null ? stored.enabled : DEFAULT_ENABLED;
+			instance.enableNearbyContainerUsage = stored.enableNearbyContainerUsage != null ? stored.enableNearbyContainerUsage : DEFAULT_ENABLE_NEARBY_CONTAINER_USAGE;
+			instance.redistributeToCraftWhenNeeded = stored.redistributeToCraftWhenNeeded != null ? stored.redistributeToCraftWhenNeeded : DEFAULT_REDISTRIBUTE_TO_CRAFT_WHEN_NEEDED;
+			instance.inWorldFilterMode = stored.inWorldFilterMode != null ? stored.inWorldFilterMode : DEFAULT_IN_WORLD_FILTER_MODE;
 			instance.revolvingCraftHandling = stored.revolvingCraftHandling != null
 				? stored.revolvingCraftHandling
-				: RevolvingCraftHandling.PREFER_CLICKED_TYPE_WITH_COUNT_FALLBACK;
+				: DEFAULT_REVOLVING_CRAFT_HANDLING;
 			instance.countPreference = stored.countPreference != null
 				? stored.countPreference
-				: IngredientPlanning.CountPreference.HIGHEST_TOTAL;
-			instance.showNearbyCraftableIndicator = stored.showNearbyCraftableIndicator;
-			instance.cacheContainersForFasterSearch = stored.cacheContainersForFasterSearch == null
-				? true
-				: stored.cacheContainersForFasterSearch;
-			instance.reachCraftHoldAndRelease = stored.reachCraftHoldAndRelease;
-			instance.reachCraftCloseOverlayAfterRelease = stored.reachCraftCloseOverlayAfterRelease == null ? true : stored.reachCraftCloseOverlayAfterRelease;
-			instance.reachCraftPreferInventory = stored.reachCraftPreferInventory == null ? true : stored.reachCraftPreferInventory;
-			instance.putPulledResourcesBack = stored.putPulledResourcesBack;
-			instance.restoreInventoryItemPositions = stored.restoreInventoryItemPositions == null ? true : stored.restoreInventoryItemPositions;
-			instance.rememberPreviousSearch = stored.rememberPreviousSearch == null ? true : stored.rememberPreviousSearch;
-			instance.showFilterOutlines = stored.showFilterOutlines != null ? stored.showFilterOutlines : OutlineDisplayMode.OFF;
-			instance.showTotalOutputCounts = stored.showTotalOutputCounts != null ? stored.showTotalOutputCounts : true;
-			instance.inputCounterVisibility = stored.inputCounterVisibility != null ? stored.inputCounterVisibility : InputCounterVisibility.SHOW_WHILE_QUEUEING;
-			instance.inventory2x2OffhandConsolidation = stored.inventory2x2OffhandConsolidation == null ? true : stored.inventory2x2OffhandConsolidation;
+				: DEFAULT_COUNT_PREFERENCE;
+			instance.showNearbyCraftableIndicator = stored.showNearbyCraftableIndicator != null ? stored.showNearbyCraftableIndicator : DEFAULT_SHOW_NEARBY_CRAFTABLE_INDICATOR;
+			instance.cacheContainersForFasterSearch = stored.cacheContainersForFasterSearch != null
+				? stored.cacheContainersForFasterSearch
+				: DEFAULT_CACHE_CONTAINERS_FOR_FASTER_SEARCH;
+			instance.reachCraftHoldAndRelease = stored.reachCraftHoldAndRelease != null ? stored.reachCraftHoldAndRelease : DEFAULT_REACH_CRAFT_HOLD_AND_RELEASE;
+			instance.reachCraftCloseOverlayAfterRelease = stored.reachCraftCloseOverlayAfterRelease != null ? stored.reachCraftCloseOverlayAfterRelease : DEFAULT_REACH_CRAFT_CLOSE_OVERLAY_AFTER_RELEASE;
+			instance.reachCraftPreferInventory = stored.reachCraftPreferInventory != null ? stored.reachCraftPreferInventory : DEFAULT_REACH_CRAFT_PREFER_INVENTORY;
+			instance.putPulledResourcesBack = stored.putPulledResourcesBack != null ? stored.putPulledResourcesBack : DEFAULT_PUT_PULLED_RESOURCES_BACK;
+			instance.restoreInventoryItemPositions = stored.restoreInventoryItemPositions != null ? stored.restoreInventoryItemPositions : DEFAULT_RESTORE_INVENTORY_ITEM_POSITIONS;
+			instance.rememberPreviousSearch = stored.rememberPreviousSearch != null ? stored.rememberPreviousSearch : DEFAULT_REMEMBER_PREVIOUS_SEARCH;
+			instance.showFilterOutlines = stored.showFilterOutlines != null ? stored.showFilterOutlines : DEFAULT_SHOW_FILTER_OUTLINES;
+			instance.showTotalOutputCounts = stored.showTotalOutputCounts != null ? stored.showTotalOutputCounts : DEFAULT_SHOW_TOTAL_OUTPUT_COUNTS;
+			instance.inputCounterVisibility = stored.inputCounterVisibility != null ? stored.inputCounterVisibility : DEFAULT_INPUT_COUNTER_VISIBILITY;
+			instance.inventory2x2OffhandConsolidation = stored.inventory2x2OffhandConsolidation != null ? stored.inventory2x2OffhandConsolidation : DEFAULT_INVENTORY_2X2_OFFHAND_CONSOLIDATION;
 			instance.scrollToPullMode = parseScrollToPullMode(stored.scrollToPullMode);
-			instance.typeToFocusSearch = stored.typeToFocusSearch != null ? stored.typeToFocusSearch : true;
-			instance.autoCraftMode = stored.autoCraftMode != null ? stored.autoCraftMode : false;
+			instance.typeToFocusSearch = stored.typeToFocusSearch != null ? stored.typeToFocusSearch : DEFAULT_TYPE_TO_FOCUS_SEARCH;
+			instance.autoCraftMode = stored.autoCraftMode != null ? stored.autoCraftMode : DEFAULT_AUTO_CRAFT_MODE;
 			instance.blacklistedContainerIds = stored.blacklistedContainerIds != null 
 				? new LinkedHashSet<>(stored.blacklistedContainerIds) 
 				: new LinkedHashSet<>(DEFAULT_BLACKLIST);
@@ -348,34 +369,34 @@ public final class ReachCraftingConfig {
 
 	private static ReachCraftingConfig defaults() {
 		ReachCraftingConfig defaults = new ReachCraftingConfig();
-		defaults.enabled = true;
-		defaults.enableNearbyContainerUsage = true;
-		defaults.redistributeToCraftWhenNeeded = true;
-		defaults.inWorldFilterMode = InWorldFilterMode.NONE;
-		defaults.revolvingCraftHandling = RevolvingCraftHandling.PREFER_CLICKED_TYPE_WITH_COUNT_FALLBACK;
-		defaults.countPreference = IngredientPlanning.CountPreference.HIGHEST_TOTAL;
-		defaults.showNearbyCraftableIndicator = true;
-		defaults.cacheContainersForFasterSearch = true;
-		defaults.reachCraftHoldAndRelease = true;
-		defaults.reachCraftCloseOverlayAfterRelease = true;
-		defaults.reachCraftPreferInventory = true;
-		defaults.putPulledResourcesBack = true;
-		defaults.restoreInventoryItemPositions = true;
-		defaults.rememberPreviousSearch = true;
-		defaults.showFilterOutlines = OutlineDisplayMode.OFF;
-		defaults.autoCraftMode = false;
-		defaults.showTotalOutputCounts = true;
-		defaults.inputCounterVisibility = InputCounterVisibility.SHOW_WHILE_QUEUEING;
-		defaults.inventory2x2OffhandConsolidation = true;
-		defaults.scrollToPullMode = ScrollToPullMode.WHILE_RESULT_OR_INVENTORY_SLOT_HOVERED;
-		defaults.typeToFocusSearch = true;
+		defaults.enabled = DEFAULT_ENABLED;
+		defaults.enableNearbyContainerUsage = DEFAULT_ENABLE_NEARBY_CONTAINER_USAGE;
+		defaults.redistributeToCraftWhenNeeded = DEFAULT_REDISTRIBUTE_TO_CRAFT_WHEN_NEEDED;
+		defaults.inWorldFilterMode = DEFAULT_IN_WORLD_FILTER_MODE;
+		defaults.revolvingCraftHandling = DEFAULT_REVOLVING_CRAFT_HANDLING;
+		defaults.countPreference = DEFAULT_COUNT_PREFERENCE;
+		defaults.showNearbyCraftableIndicator = DEFAULT_SHOW_NEARBY_CRAFTABLE_INDICATOR;
+		defaults.cacheContainersForFasterSearch = DEFAULT_CACHE_CONTAINERS_FOR_FASTER_SEARCH;
+		defaults.reachCraftHoldAndRelease = DEFAULT_REACH_CRAFT_HOLD_AND_RELEASE;
+		defaults.reachCraftCloseOverlayAfterRelease = DEFAULT_REACH_CRAFT_CLOSE_OVERLAY_AFTER_RELEASE;
+		defaults.reachCraftPreferInventory = DEFAULT_REACH_CRAFT_PREFER_INVENTORY;
+		defaults.putPulledResourcesBack = DEFAULT_PUT_PULLED_RESOURCES_BACK;
+		defaults.restoreInventoryItemPositions = DEFAULT_RESTORE_INVENTORY_ITEM_POSITIONS;
+		defaults.rememberPreviousSearch = DEFAULT_REMEMBER_PREVIOUS_SEARCH;
+		defaults.showFilterOutlines = DEFAULT_SHOW_FILTER_OUTLINES;
+		defaults.autoCraftMode = DEFAULT_AUTO_CRAFT_MODE;
+		defaults.showTotalOutputCounts = DEFAULT_SHOW_TOTAL_OUTPUT_COUNTS;
+		defaults.inputCounterVisibility = DEFAULT_INPUT_COUNTER_VISIBILITY;
+		defaults.inventory2x2OffhandConsolidation = DEFAULT_INVENTORY_2X2_OFFHAND_CONSOLIDATION;
+		defaults.scrollToPullMode = DEFAULT_SCROLL_TO_PULL_MODE;
+		defaults.typeToFocusSearch = DEFAULT_TYPE_TO_FOCUS_SEARCH;
 		defaults.blacklistedContainerIds = new LinkedHashSet<>(DEFAULT_BLACKLIST);
 		return defaults;
 	}
 
 	private static ScrollToPullMode parseScrollToPullMode(JsonElement rawValue) {
 		if (rawValue == null || rawValue.isJsonNull()) {
-			return ScrollToPullMode.WHILE_RESULT_OR_INVENTORY_SLOT_HOVERED;
+			return DEFAULT_SCROLL_TO_PULL_MODE;
 		}
 		if (rawValue.isJsonPrimitive()) {
 			JsonPrimitive primitive = rawValue.getAsJsonPrimitive();
@@ -392,7 +413,7 @@ public final class ReachCraftingConfig {
 				}
 			}
 		}
-		return ScrollToPullMode.WHILE_RESULT_OR_INVENTORY_SLOT_HOVERED;
+		return DEFAULT_SCROLL_TO_PULL_MODE;
 	}
 
 
@@ -422,16 +443,16 @@ public final class ReachCraftingConfig {
 	private static final class StoredConfig {
 		private Boolean enabled;
 		private Boolean enableNearbyContainerUsage;
-		private boolean redistributeToCraftWhenNeeded;
+		private Boolean redistributeToCraftWhenNeeded;
 		private InWorldFilterMode inWorldFilterMode;
 		private RevolvingCraftHandling revolvingCraftHandling;
 		private IngredientPlanning.CountPreference countPreference;
-		private boolean showNearbyCraftableIndicator;
+		private Boolean showNearbyCraftableIndicator;
 		private Boolean cacheContainersForFasterSearch;
-		private boolean reachCraftHoldAndRelease;
+		private Boolean reachCraftHoldAndRelease;
 		private Boolean reachCraftCloseOverlayAfterRelease;
 		private Boolean reachCraftPreferInventory;
-		private boolean putPulledResourcesBack;
+		private Boolean putPulledResourcesBack;
 		private Boolean restoreInventoryItemPositions;
 		private Boolean rememberPreviousSearch;
 		private OutlineDisplayMode showFilterOutlines;

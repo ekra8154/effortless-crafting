@@ -218,7 +218,7 @@ public final class ReachCraftingConfigScreen {
 				ReachCraftingConfig.OutlineDisplayMode.class,
 				config.showFilterOutlines()
 			)
-			.setDefaultValue(ReachCraftingConfig.OutlineDisplayMode.OFF)
+			.setDefaultValue(ReachCraftingConfig.OutlineDisplayMode.KEYBIND)
 			.setTooltip(Component.translatable("tooltip.reachcrafting.show_filter_outlines"))
 			.setEnumNameProvider(value -> Component.translatable("enum.reachcrafting.outline_display_mode." + value.name().toLowerCase()))
 			.setSaveConsumer(config::setShowFilterOutlines)
