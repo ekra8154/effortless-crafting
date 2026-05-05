@@ -160,10 +160,10 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 		if (!ReachCraftingConfig.get().enabled()) return;
 		if (com.reachcrafting.client.ContainerUtils.isAutoCraftEnabled() && slot instanceof ResultSlot) {
 			if ((Object) this instanceof CraftingScreen || (Object) this instanceof InventoryScreen) {
-				RecipeButtonNearbyIndicator.renderGrayArrow(guiGraphics, slot.x + 6, slot.y + 6);
 				if (com.reachcrafting.client.ContainerUtils.isBulkAutoCraftModeEnabled()) {
 					RecipeButtonNearbyIndicator.renderOrangeArrowOutline(guiGraphics, slot.x + 6, slot.y + 6);
 				}
+				RecipeButtonNearbyIndicator.renderGrayArrow(guiGraphics, slot.x + 6, slot.y + 6);
 			}
 		}
 	}
@@ -214,10 +214,10 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 	}
 
 	private boolean reachcrafting$isArrowClickTarget(Slot slot, double mouseX, double mouseY) {
-		double arrowStartX = this.leftPos + slot.x + 5;
-		double arrowEndX = this.leftPos + slot.x + 10;
-		double arrowStartY = this.topPos + slot.y + 6;
-		double arrowEndY = this.topPos + slot.y + 12;
-		return mouseX >= arrowStartX && mouseX <= arrowEndX && mouseY >= arrowStartY && mouseY <= arrowEndY;
+		double startX = this.leftPos + slot.x;
+		double endX = startX + 16;
+		double startY = this.topPos + slot.y;
+		double endY = startY + 16;
+		return mouseX >= startX && mouseX <= endX && mouseY >= startY && mouseY <= endY;
 	}
 }
