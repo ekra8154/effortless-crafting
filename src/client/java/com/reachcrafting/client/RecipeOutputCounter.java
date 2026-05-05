@@ -43,19 +43,13 @@ public final class RecipeOutputCounter {
 		}
 
 		// 2. Calculate Queued Output
+		QueuedRecipeCountState countState = resolveQueuedCountState(minecraft);
 		int queuedOutputCount = 0;
 		String queuedItemId = null;
-		boolean hasQueuedState = false;
-		
-		var pending = RecipeBookClickCapture.getPendingHeldRecipe();
-		if (pending != null) {
-			hasQueuedState = true;
-			int queuedClicks = pending.clickCount();
-			ItemStack queuedResultStack = resolveQueuedOutputStack(minecraft, pending);
-			if (!queuedResultStack.isEmpty()) {
-				queuedItemId = BuiltInRegistries.ITEM.getKey(queuedResultStack.getItem()).toString();
-				queuedOutputCount = queuedClicks * queuedResultStack.getCount();
-			}
+		boolean hasQueuedState = countState.queuedState();
+		if (hasQueuedState && !countState.queuedOutputStack().isEmpty()) {
+			queuedItemId = BuiltInRegistries.ITEM.getKey(countState.queuedOutputStack().getItem()).toString();
+			queuedOutputCount = countState.displayedCount() * countState.queuedOutputStack().getCount();
 		}
 
 		// 3. Resolve Total Count and Logic
@@ -123,7 +117,15 @@ public final class RecipeOutputCounter {
 		return stacks;
 	}
 
-	private static ItemStack resolveQueuedOutputStack(Minecraft minecraft, RecipeBookClickCapture.PendingHeldRecipe pending) {
-		return RecipeBookClickCapture.resolvePendingOutputStack(minecraft);
+	private static QueuedRecipeCountState resolveQueuedCountState(Minecraft minecraft) {
+		var pending = RecipeBookClickCapture.getPendingHeldRecipe();
+		if (pending == null) {
+			return QueuedRecipeCountState.hidden();
+		}
+		return QueuedRecipeCountState.visible(
+			pending.clickCount(),
+			true,
+			RecipeBookClickCapture.resolvePendingOutputStack(minecraft)
+		);
 	}
 }

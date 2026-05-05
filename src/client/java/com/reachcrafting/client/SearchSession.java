@@ -37,6 +37,11 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 import org.lwjgl.glfw.GLFW;
 
+/**
+ * SearchSession owns nearby-container craft discovery and withdrawal for one recipe action.
+ * Invariants: tick only advances through explicit SearchState transitions; planning is computed once
+ * per withdraw pass and applied through helper transitions rather than ad hoc field mutation.
+ */
 final class SearchSession extends BaseCraftSession {
 	private static final int OPEN_TIMEOUT_TICKS = 40;
 	private static final int RESUME_DELAY_TICKS = 10; // Increased from 2 to 10 to prevent race conditions
@@ -238,8 +243,7 @@ final class SearchSession extends BaseCraftSession {
 	@Override
 	public void tick() {
 		if (client.player != player || client.level != level) {
-			stop(false);
-			coordinator.clearActiveSession(this);
+			finishSession(false);
 			return;
 		}
 
@@ -502,6 +506,10 @@ final class SearchSession extends BaseCraftSession {
 
 	private void beginWithdrawPhaseOrResume() {
 		refreshReachableView();
+		applySearchPlanDecision(buildSearchPlanDecision());
+	}
+
+	private SearchPlanDecision buildSearchPlanDecision() {
 		Map<String, Integer> inventoryCounts = currentInventoryCounts();
 		Map<String, Integer> inventoryAndNearby = AvailableItemSnapshot.mergeCounts(inventoryCounts, discoveredNearby);
 		boolean reservedGridMatchesCollection = originalContext.hasReservedGrid() && originalContext.reservedGridMatchesCollection(client.level, recipeCollection);
@@ -519,7 +527,6 @@ final class SearchSession extends BaseCraftSession {
 				&& reservedGridMatchesCollection
 				&& (craftAll || !committedLayoutCanContinue));
 		boolean redistributeReservedGrid = planningPolicy.redistributeToCraftWhenNeeded() && (craftAll || requestedSingleClicks > 1 || rotatingFamilyRedistribute);
-		this.redistributeThisRun = redistributeReservedGrid;
 		Map<String, Integer> gridCounts = countStacks(originalContext.gridStacks());
 		Map<String, Integer> totalAvailable = redistributeReservedGrid
 			? AvailableItemSnapshot.mergeCounts(inventoryAndNearby, gridCounts)
@@ -633,15 +640,27 @@ final class SearchSession extends BaseCraftSession {
 		if (!planningPolicy.redistributeToCraftWhenNeeded() && committedReservedGrid) {
 			Map<String, Integer> finalMissing = subtractAvailableCounts(computeReservedGridNeededCounts(), inventoryAndNearby);
 			if (!finalMissing.isEmpty()) {
-				blockedCommittedLayoutMissingSummary = AvailableItemSnapshot.formatCounts(finalMissing);
-				remainingItemIds.clear();
+				String blockedSummary = AvailableItemSnapshot.formatCounts(finalMissing);
 				ReachCraftingMod.LOGGER.info(
 					"[nearby_plan] idx={} committed_layout_blocked missing={}",
 					recipeIndex,
-					blockedCommittedLayoutMissingSummary
+					blockedSummary
 				);
-				beginResume();
-				return;
+				return new SearchPlanDecision(
+					recipeId,
+					outputLabel,
+					ingredientSummary,
+					redistributeReservedGrid,
+					targetCopiesPerSlot,
+					plannedTargets,
+					List.of(),
+					List.of(),
+					plannedResult.hasMissingIngredients(),
+					true,
+					false,
+					blockedSummary,
+					AvailableItemSnapshot.formatCounts(totalAvailable)
+				);
 			}
 		}
 
@@ -653,26 +672,56 @@ final class SearchSession extends BaseCraftSession {
 			summarizeRemainingItems(remainingItemIds)
 		);
 
-		if (remainingItemIds.isEmpty()) {
-			beginResume();
-			return;
-		}
-		if ((targetCopiesPerSlot <= 0 || plannedResult.hasMissingIngredients()) && useCachedSearch && !discoveryFallbackStarted) {
-			beginFallbackDiscovery();
-			return;
-		}
-		if (targetCopiesPerSlot <= 0 || plannedResult.hasMissingIngredients()) {
-			beginResume();
-			return;
+		boolean resumeOriginalContext = remainingItemIds.isEmpty()
+			|| ((targetCopiesPerSlot <= 0 || plannedResult.hasMissingIngredients()) && !(useCachedSearch && !discoveryFallbackStarted));
+		boolean startFallbackDiscovery = !resumeOriginalContext
+			&& (targetCopiesPerSlot <= 0 || plannedResult.hasMissingIngredients())
+			&& useCachedSearch
+			&& !discoveryFallbackStarted;
+		List<BlockPos> withdrawCandidates = resumeOriginalContext || startFallbackDiscovery ? List.of() : buildWithdrawCandidates();
+		if (!resumeOriginalContext
+			&& !startFallbackDiscovery
+			&& allowNearby
+			&& ReachCraftingConfig.get().cacheContainersForFasterSearch()
+			&& withdrawCandidates.isEmpty()) {
+			startFallbackDiscovery = shouldStartFallbackDiscovery();
+			resumeOriginalContext = !startFallbackDiscovery;
 		}
 
-		List<BlockPos> withdrawCandidates = buildWithdrawCandidates();
-		if (allowNearby && ReachCraftingConfig.get().cacheContainersForFasterSearch() && withdrawCandidates.isEmpty()) {
-			if (shouldStartFallbackDiscovery()) {
-				beginFallbackDiscovery();
-			} else {
-				beginResume();
-			}
+		return new SearchPlanDecision(
+			recipeId,
+			outputLabel,
+			ingredientSummary,
+			redistributeReservedGrid,
+			targetCopiesPerSlot,
+			plannedTargets,
+			List.copyOf(remainingItemIds),
+			withdrawCandidates,
+			plannedResult.hasMissingIngredients(),
+			resumeOriginalContext,
+			startFallbackDiscovery,
+			null,
+			AvailableItemSnapshot.formatCounts(totalAvailable)
+		);
+	}
+
+	private void applySearchPlanDecision(SearchPlanDecision decision) {
+		recipeId = decision.resolvedRecipeId();
+		outputLabel = decision.resolvedOutputLabel();
+		ingredientSummary = decision.resolvedIngredientSummary();
+		redistributeThisRun = decision.redistributeReservedGrid();
+		targetCopiesPerSlot = decision.targetCopiesPerSlot();
+		plannedTargets = decision.plannedTargets();
+		remainingItemIds.clear();
+		remainingItemIds.addAll(decision.fetchItemIds());
+		blockedCommittedLayoutMissingSummary = decision.blockedCommittedLayoutMissingSummary();
+
+		if (decision.resumeOriginalContext()) {
+			beginResume();
+			return;
+		}
+		if (decision.startFallbackDiscovery()) {
+			beginFallbackDiscovery();
 			return;
 		}
 
@@ -680,7 +729,7 @@ final class SearchSession extends BaseCraftSession {
 		nextCandidateIndex = 0;
 		pendingContainerPos = null;
 		phase = SearchPhase.WITHDRAW;
-		activeCandidates = withdrawCandidates;
+		activeCandidates = decision.withdrawCandidates();
 		state = SearchState.OPEN_NEXT;
 		sendChat("Fetching: " + summarizeRemainingItems(remainingItemIds));
 	}
@@ -1171,9 +1220,7 @@ final class SearchSession extends BaseCraftSession {
 			}
 			ContainerUtils.scheduleAutoMove(expectedStack);
 		}
-		stop(false);
-		coordinator.clearActiveSession(this);
-		RecipeBookClickCapture.refocusRecipeBookSearch(client);
+		finishSession(false);
 		return true;
 	}
 

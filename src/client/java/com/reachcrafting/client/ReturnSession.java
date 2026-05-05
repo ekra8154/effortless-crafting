@@ -26,6 +26,10 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 
+/**
+ * ReturnSession owns post-craft container returns for one closing screen.
+ * Invariants: excess is computed once at start; each opened container gets a plan before any moves execute.
+ */
 final class ReturnSession extends BaseCraftSession {
 	private final List<PulledResourcesTracker.WithdrawnItem> itemsToReturn;
 	private final List<BlockPos> uniquePositions;
@@ -96,8 +100,7 @@ final class ReturnSession extends BaseCraftSession {
 	@Override
 	public void tick() {
 		if (client.player != player || client.level != level) {
-			stop(false);
-			coordinator.clearActiveSession(this);
+			finishSession(false);
 			return;
 		}
 
@@ -107,8 +110,7 @@ final class ReturnSession extends BaseCraftSession {
 					state = SearchState.RESUME_CONTEXT;
 					timeoutTicks = 2; // Short delay before re-opening
 				} else {
-					stop(false);
-					coordinator.clearActiveSession(this);
+					finishSession(false);
 				}
 			}
 			return;
@@ -118,8 +120,7 @@ final class ReturnSession extends BaseCraftSession {
 			timeoutTicks--;
 			if (timeoutTicks <= 0) {
 				resumeOriginalContext();
-				stop(false);
-				coordinator.clearActiveSession(this);
+				finishSession(false);
 			}
 			return;
 		}
@@ -154,8 +155,17 @@ final class ReturnSession extends BaseCraftSession {
 			Direction face = Direction.getApproximateNearest(hitPos.subtract(eyePos)).getOpposite();
 			BlockHitResult hitResult = new BlockHitResult(hitPos, face, pos, false);
 			
+			boolean wasSneaking = player.isShiftKeyDown() || (player.input != null && player.input.keyPresses != null && player.input.keyPresses.shift());
 			withSuppressedSecondaryUse(() -> {
+				if (wasSneaking) {
+					sendShiftOverride(client, player, false);
+					player.setShiftKeyDown(false);
+				}
 				gameMode.useItemOn(player, InteractionHand.MAIN_HAND, hitResult);
+				if (wasSneaking) {
+					player.setShiftKeyDown(true);
+					sendShiftOverride(client, player, true);
+				}
 			});
 			
 			pendingContainerPos = pos;
@@ -180,77 +190,8 @@ final class ReturnSession extends BaseCraftSession {
 
 		ReachCraftingMod.LOGGER.info("[nearby_return] Container opened at {}. Preparing return plan...", ContainerUtils.formatPos(pendingContainerPos));
 
-		// 1. Consolidate what this specific container originally provided
-		Map<String, Integer> providedByThisChest = new LinkedHashMap<>();
-		for (PulledResourcesTracker.WithdrawnItem item : itemsToReturn) {
-			if (item.containerPos().equals(pendingContainerPos)) {
-				String itemId = BuiltInRegistries.ITEM.getKey(item.stack().getItem()).toString();
-				providedByThisChest.merge(itemId, item.stack().getCount(), Integer::sum);
-			}
-		}
-
-		// 2. Map out the current occupancy of ALL slots in the container by index
-		Map<Integer, Integer> simulatedOccupancy = new HashMap<>();
-		for (Slot slot : menu.slots) {
-			if (!(slot.container instanceof net.minecraft.world.entity.player.Inventory)) {
-				simulatedOccupancy.put(slot.index, slot.hasItem() ? slot.getItem().getCount() : 0);
-			}
-		}
-
-		// 3. Build the movement plan
-		List<PlannedMove> plan = new ArrayList<>();
-		for (Map.Entry<String, Integer> entry : providedByThisChest.entrySet()) {
-			String itemId = entry.getKey();
-			int amountToReturnToThisChest = Math.min(entry.getValue(), currentExcess.getOrDefault(itemId, 0));
-			
-			if (amountToReturnToThisChest <= 0) {
-				ReachCraftingMod.LOGGER.info("[nearby_return]   Skipping {}: no excess available to return", itemId);
-				continue;
-			}
-
-			int remaining = amountToReturnToThisChest;
-			ReachCraftingMod.LOGGER.info("[nearby_return]   Planning {}x {} for this container...", remaining, itemId);
-			
-			while (remaining > 0) {
-				Slot inventorySlot = findAvailableInventorySlot(menu, itemId, plan);
-				if (inventorySlot == null) {
-					ReachCraftingMod.LOGGER.warn("[nearby_return]   Plan break: no more {} in inventory", itemId);
-					break;
-				}
-
-				int availableInInvSlot = getAvailableCountInSlot(inventorySlot, plan);
-				Slot targetSlot = findBestTargetSlot(menu, itemId, inventorySlot.getItem(), simulatedOccupancy);
-				
-				if (targetSlot == null) {
-					ReachCraftingMod.LOGGER.warn("[nearby_return]   Plan break: no more space for {} in container", itemId);
-					break;
-				}
-
-				int currentInChest = simulatedOccupancy.get(targetSlot.index);
-				int max = Math.min(targetSlot.getMaxStackSize(), inventorySlot.getItem().getMaxStackSize());
-				int canAccept = max - currentInChest;
-				
-				int amountToMove = Math.min(Math.min(availableInInvSlot, remaining), canAccept);
-				if (amountToMove <= 0) {
-					ReachCraftingMod.LOGGER.warn("[nearby_return]   Plan break: target slot {} cannot accept more ({} / {})", targetSlot.index, currentInChest, max);
-					break;
-				}
-
-				plan.add(new PlannedMove(inventorySlot, targetSlot, amountToMove));
-				simulatedOccupancy.put(targetSlot.index, currentInChest + amountToMove);
-				remaining -= amountToMove;
-				currentExcess.put(itemId, currentExcess.get(itemId) - amountToMove);
-				ReachCraftingMod.LOGGER.info("[nearby_return]   Added to plan: {}x from inv {} to chest {}", amountToMove, inventorySlot.index, targetSlot.index);
-			}
-		}
-
-		// 4. Execute the plan
-		ReachCraftingMod.LOGGER.info("[nearby_return] Plan complete. Executing {} moves.", plan.size());
-		for (PlannedMove move : plan) {
-			String itemId = BuiltInRegistries.ITEM.getKey(move.source.getItem().getItem()).toString();
-			ReachCraftingMod.LOGGER.info("[nearby_return]   Executing: {}x {} (slot {} -> {})", move.count, itemId, move.source.index, move.target.index);
-			moveItem(menu, move.source, move.target, move.count);
-		}
+		ReturnPlan plan = buildReturnPlan(menu);
+		executeReturnPlan(menu, plan);
 		if (ReachCraftingConfig.get().restoreInventoryItemPositions()) {
 			restoreProtectedInventoryLayout(menu);
 		}
@@ -262,15 +203,13 @@ final class ReturnSession extends BaseCraftSession {
 		state = SearchState.OPEN_NEXT;
 	}
 
-	private record PlannedMove(Slot source, Slot target, int count) {}
-
 	private void resumeOriginalContext() {
 		super.resumeOriginalContext(originalContext);
 	}
 
-	private int getAvailableCountInSlot(Slot slot, List<PlannedMove> plan) {
+	private int getAvailableCountInSlot(Slot slot, List<ReturnPlan.PlannedMove> plan) {
 		int planned = 0;
-		for (PlannedMove p : plan) if (p.source == slot) planned += p.count;
+		for (ReturnPlan.PlannedMove p : plan) if (p.source() == slot) planned += p.count();
 		if (!(slot.container instanceof Inventory) || !slot.hasItem()) {
 			return 0;
 		}
@@ -280,7 +219,7 @@ final class ReturnSession extends BaseCraftSession {
 		return Math.max(0, returnableCount - planned);
 	}
 
-	private Slot findAvailableInventorySlot(AbstractContainerMenu menu, String itemId, List<PlannedMove> plan) {
+	private Slot findAvailableInventorySlot(AbstractContainerMenu menu, String itemId, List<ReturnPlan.PlannedMove> plan) {
 		Slot bestSlot = null;
 		int bestAvailable = 0;
 		int bestProtectedCount = Integer.MAX_VALUE;
@@ -337,6 +276,88 @@ final class ReturnSession extends BaseCraftSession {
 		}
 		
 		return null;
+	}
+
+	private ReturnPlan buildReturnPlan(AbstractContainerMenu menu) {
+		Map<String, Integer> providedByThisChest = providedByCurrentContainer();
+		Map<Integer, Integer> simulatedOccupancy = captureContainerOccupancy(menu);
+		Map<String, Integer> plannedExcess = new HashMap<>(currentExcess);
+		List<ReturnPlan.PlannedMove> moves = new ArrayList<>();
+
+		for (Map.Entry<String, Integer> entry : providedByThisChest.entrySet()) {
+			String itemId = entry.getKey();
+			int amountToReturnToThisChest = Math.min(entry.getValue(), plannedExcess.getOrDefault(itemId, 0));
+			if (amountToReturnToThisChest <= 0) {
+				ReachCraftingMod.LOGGER.info("[nearby_return]   Skipping {}: no excess available to return", itemId);
+				continue;
+			}
+
+			int remaining = amountToReturnToThisChest;
+			ReachCraftingMod.LOGGER.info("[nearby_return]   Planning {}x {} for this container...", remaining, itemId);
+			while (remaining > 0) {
+				Slot inventorySlot = findAvailableInventorySlot(menu, itemId, moves);
+				if (inventorySlot == null) {
+					ReachCraftingMod.LOGGER.warn("[nearby_return]   Plan break: no more {} in inventory", itemId);
+					break;
+				}
+
+				int availableInInvSlot = getAvailableCountInSlot(inventorySlot, moves);
+				Slot targetSlot = findBestTargetSlot(menu, itemId, inventorySlot.getItem(), simulatedOccupancy);
+				if (targetSlot == null) {
+					ReachCraftingMod.LOGGER.warn("[nearby_return]   Plan break: no more space for {} in container", itemId);
+					break;
+				}
+
+				int currentInChest = simulatedOccupancy.get(targetSlot.index);
+				int max = Math.min(targetSlot.getMaxStackSize(), inventorySlot.getItem().getMaxStackSize());
+				int canAccept = max - currentInChest;
+				int amountToMove = Math.min(Math.min(availableInInvSlot, remaining), canAccept);
+				if (amountToMove <= 0) {
+					ReachCraftingMod.LOGGER.warn("[nearby_return]   Plan break: target slot {} cannot accept more ({} / {})", targetSlot.index, currentInChest, max);
+					break;
+				}
+
+				moves.add(new ReturnPlan.PlannedMove(inventorySlot, targetSlot, amountToMove));
+				simulatedOccupancy.put(targetSlot.index, currentInChest + amountToMove);
+				remaining -= amountToMove;
+				plannedExcess.put(itemId, plannedExcess.get(itemId) - amountToMove);
+				ReachCraftingMod.LOGGER.info("[nearby_return]   Added to plan: {}x from inv {} to chest {}", amountToMove, inventorySlot.index, targetSlot.index);
+			}
+		}
+
+		return new ReturnPlan(moves, plannedExcess);
+	}
+
+	private Map<String, Integer> providedByCurrentContainer() {
+		Map<String, Integer> providedByThisChest = new LinkedHashMap<>();
+		for (PulledResourcesTracker.WithdrawnItem item : itemsToReturn) {
+			if (item.containerPos().equals(pendingContainerPos)) {
+				String itemId = BuiltInRegistries.ITEM.getKey(item.stack().getItem()).toString();
+				providedByThisChest.merge(itemId, item.stack().getCount(), Integer::sum);
+			}
+		}
+		return providedByThisChest;
+	}
+
+	private Map<Integer, Integer> captureContainerOccupancy(AbstractContainerMenu menu) {
+		Map<Integer, Integer> simulatedOccupancy = new HashMap<>();
+		for (Slot slot : menu.slots) {
+			if (!(slot.container instanceof net.minecraft.world.entity.player.Inventory)) {
+				simulatedOccupancy.put(slot.index, slot.hasItem() ? slot.getItem().getCount() : 0);
+			}
+		}
+		return simulatedOccupancy;
+	}
+
+	private void executeReturnPlan(AbstractContainerMenu menu, ReturnPlan plan) {
+		ReachCraftingMod.LOGGER.info("[nearby_return] Plan complete. Executing {} moves.", plan.moves().size());
+		for (ReturnPlan.PlannedMove move : plan.moves()) {
+			String itemId = BuiltInRegistries.ITEM.getKey(move.source().getItem().getItem()).toString();
+			ReachCraftingMod.LOGGER.info("[nearby_return]   Executing: {}x {} (slot {} -> {})", move.count(), itemId, move.source().index, move.target().index);
+			moveItem(menu, move.source(), move.target(), move.count());
+		}
+		currentExcess.clear();
+		currentExcess.putAll(plan.updatedExcess());
 	}
 
 	private void restoreProtectedInventoryLayout(AbstractContainerMenu menu) {

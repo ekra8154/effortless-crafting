@@ -5,15 +5,12 @@ import com.reachcrafting.ReachCraftingMod;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
-import net.minecraft.ChatFormatting;
 import net.minecraft.client.KeyMapping;
-import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 // import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import org.lwjgl.glfw.GLFW;
 
 public class ReachCraftingModClient implements ClientModInitializer {
-	private static KeyMapping debugPingKey;
 	public static KeyMapping showFilterOutlinesKey;
 	public static KeyMapping quickCraftKey;
 	public static boolean forceNextInventorySearchFocus = false;
@@ -31,13 +28,6 @@ public class ReachCraftingModClient implements ClientModInitializer {
 		KeyMapping.Category reachCraftingCategory = KeyMapping.Category.register(
 			Identifier.fromNamespaceAndPath(ReachCraftingMod.MOD_ID, "debug")
 		);
-
-		debugPingKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
-			"key.reachcrafting.debug_ping",
-			InputConstants.Type.KEYSYM,
-			GLFW.GLFW_KEY_F8,
-			reachCraftingCategory
-		));
 
 		showFilterOutlinesKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
 			"key.reachcrafting.show_filter_outlines",
@@ -64,20 +54,8 @@ public class ReachCraftingModClient implements ClientModInitializer {
 
 			if (!ReachCraftingConfig.get().enabled()) {
 				// Flush any pending clicks/keys just in case
-				while (debugPingKey.consumeClick());
 				while (quickCraftKey.consumeClick());
 				return;
-			}
-
-			while (debugPingKey.consumeClick()) {
-				ReachCraftingMod.LOGGER.info("[debug_ping] manual debug ping triggered");
-				if (client.player != null) {
-					client.player.displayClientMessage(
-						Component.literal("Effortless Crafting debug ping logged.")
-							.withStyle(ChatFormatting.AQUA),
-						true
-					);
-				}
 			}
 
 			while (quickCraftKey.consumeClick()) {

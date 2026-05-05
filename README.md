@@ -82,9 +82,6 @@ This project is licensed under **LGPL-3.0-or-later**. It draws inspiration and c
 TODO: 
 mass dispenser craft
 
+prioritize almost empty slots: (take out the slot of 2 cobblestone before using the slot of 64)
 
-bugs:
-
-something is wrong. it can't "see" items until i have explicitly chosen its variant at least once, then it works fine from then on until relaunch. 
-
-can blacklist crafting tables, looms? should not apply to all uis, only types we support (even if globally blacklisted)
+nbt matching

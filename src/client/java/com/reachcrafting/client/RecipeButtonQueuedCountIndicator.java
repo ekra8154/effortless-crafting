@@ -22,18 +22,15 @@ public final class RecipeButtonQueuedCountIndicator {
 		if (!ReachCraftingConfig.get().enabled()) {
 			return;
 		}
-		int queuedCount = RecipeBookClickCapture.getHeldQueuedCount(button);
-		boolean hasPendingZero = button.getCollection() != null
-			&& button.getCurrentRecipe() != null
-			&& RecipeBookClickCapture.hasPendingHeldRecipe(button.getCurrentRecipe(), button.getCollection(), false);
-		if (queuedCount < 1 && !hasPendingZero) {
+		QueuedRecipeCountState countState = RecipeBookClickCapture.getQueuedCountState(button);
+		if (!countState.visible()) {
 			return;
 		}
 
 		AbstractWidget widget = (AbstractWidget) (Object) button;
 		Minecraft minecraft = Minecraft.getInstance();
 		Font font = minecraft.font;
-		String text = Integer.toString(Math.min(queuedCount, 64));
+		String text = Integer.toString(Math.max(countState.displayedCount(), 0));
 
 		int badgeX = widget.getX() + widget.getWidth() - BADGE_WIDTH - 2;
 		int badgeY = widget.getY() + 2;
@@ -59,15 +56,14 @@ public final class RecipeButtonQueuedCountIndicator {
 		if (!ReachCraftingConfig.get().enabled()) {
 			return;
 		}
-		int queuedCount = RecipeBookClickCapture.getHeldQueuedCount(recipeId, collection, true);
-		boolean hasPendingZero = RecipeBookClickCapture.hasPendingHeldRecipe(recipeId, collection, true);
-		if (queuedCount < 1 && !hasPendingZero) {
+		QueuedRecipeCountState countState = RecipeBookClickCapture.getQueuedCountState(recipeId, collection, true);
+		if (!countState.visible()) {
 			return;
 		}
 
 		Minecraft minecraft = Minecraft.getInstance();
 		Font font = minecraft.font;
-		String text = Integer.toString(Math.min(queuedCount, 64));
+		String text = Integer.toString(Math.max(countState.displayedCount(), 0));
 
 		int badgeX = x + width - BADGE_WIDTH - 2;
 		int badgeY = y + 2;

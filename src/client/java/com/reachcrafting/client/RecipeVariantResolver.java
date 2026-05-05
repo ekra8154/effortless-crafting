@@ -141,6 +141,10 @@ public final class RecipeVariantResolver {
 					.max(compareSelections(ReachCraftingConfig.get().countPreference(), false))
 					.orElse(exactSelection);
 			}
+
+			return viableCandidates.stream()
+				.max(comparePartialRequestSelections(ReachCraftingConfig.get().countPreference()))
+				.orElse(exactSelection);
 		}
 
 		return viableCandidates.stream()
@@ -257,6 +261,15 @@ public final class RecipeVariantResolver {
 		return craftAll
 			? byCopies.thenComparing(byPreferredCount).thenComparing(Selection::outputItemId)
 			: byPreferredCount.thenComparing(byCopies).thenComparing(Selection::outputItemId);
+	}
+
+	private static Comparator<Selection> comparePartialRequestSelections(IngredientPlanning.CountPreference countPreference) {
+		Comparator<Selection> byCopies = Comparator.comparingInt(Selection::copiesAvailable);
+		Comparator<Selection> byPreferredCount = Comparator.comparingInt(Selection::preferredTotalCount);
+		if (countPreference == IngredientPlanning.CountPreference.LOWEST_TOTAL) {
+			byPreferredCount = byPreferredCount.reversed();
+		}
+		return byCopies.thenComparing(byPreferredCount).thenComparing(Selection::outputItemId);
 	}
 
 	public static ItemStack resolveDisplayStack(RecipeDisplay display, ContextMap context) {

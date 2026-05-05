@@ -1,0 +1,31 @@
+package com.reachcrafting.client;
+
+import java.util.List;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.item.crafting.display.RecipeDisplayId;
+
+/**
+ * Immutable output of the search planning phase.
+ * SearchSession applies this decision, but does not re-derive planning branches afterwards.
+ */
+record SearchPlanDecision(
+	RecipeDisplayId resolvedRecipeId,
+	String resolvedOutputLabel,
+	RecipeIngredientSummary resolvedIngredientSummary,
+	boolean redistributeReservedGrid,
+	int targetCopiesPerSlot,
+	List<IngredientPlanning.SlotTarget> plannedTargets,
+	List<String> fetchItemIds,
+	List<BlockPos> withdrawCandidates,
+	boolean hasMissingIngredients,
+	boolean resumeOriginalContext,
+	boolean startFallbackDiscovery,
+	String blockedCommittedLayoutMissingSummary,
+	String totalAvailableSummary
+) {
+	SearchPlanDecision {
+		plannedTargets = List.copyOf(plannedTargets);
+		fetchItemIds = List.copyOf(fetchItemIds);
+		withdrawCandidates = List.copyOf(withdrawCandidates);
+	}
+}

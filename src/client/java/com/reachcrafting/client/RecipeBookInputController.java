@@ -21,6 +21,10 @@ import org.lwjgl.glfw.GLFW;
 final class RecipeBookInputController {
 	private static final RecipeBookInputController INSTANCE = new RecipeBookInputController();
 
+	/**
+	 * Owns all held-recipe queue semantics, including visible-count fallback,
+	 * queued zero state, release behavior, and per-recipe wrap limits.
+	 */
 	private final HeldRecipeQueueState state = new HeldRecipeQueueState();
 
 	private RecipeBookInputController() {
@@ -195,41 +199,53 @@ final class RecipeBookInputController {
 		));
 	}
 
-	int getHeldQueuedCount(
+	QueuedRecipeCountState getQueuedCountState(
 		RecipeDisplayId recipeId,
 		net.minecraft.client.gui.screens.recipebook.RecipeCollection collection,
 		boolean explicitVariantSelection
 	) {
 		if (!ReachCraftingConfig.get().reachCraftHoldAndRelease() || recipeId == null || collection == null) {
-			return 0;
+			return QueuedRecipeCountState.hidden();
 		}
 
-		if (state.pendingHeldRecipe() != null) {
-			RecipeBookClickCapture.HeldRecipeAction action = state.pendingHeldRecipe().action();
-			if (action.explicitVariantSelection() == explicitVariantSelection) {
-				if (explicitVariantSelection) {
-					if (action.recipeId().equals(recipeId)) {
-						return state.pendingHeldRecipe().clickCount();
-					}
-				} else if ((action.collection() != null && action.collection() == collection) || action.recipeId().equals(recipeId)) {
-					return state.pendingHeldRecipe().clickCount();
-				}
-			}
+		if (state.pendingHeldRecipe() != null && matchesAction(state.pendingHeldRecipe().action(), recipeId, collection, explicitVariantSelection)) {
+			return QueuedRecipeCountState.visible(
+				state.pendingHeldRecipe().clickCount(),
+				true,
+				resolvePendingOutputStack(Minecraft.getInstance())
+			);
 		}
 
 		Minecraft minecraft = Minecraft.getInstance();
 		if (!shouldShowCurrentRecipeCount(minecraft)) {
-			return 0;
+			return QueuedRecipeCountState.hidden();
 		}
 
-		return RecipeClickExecutor.resolveGridMatchedCount(minecraft, recipeId, collection, explicitVariantSelection);
+		int currentCount = RecipeClickExecutor.resolveGridMatchedCount(minecraft, recipeId, collection, explicitVariantSelection);
+		if (currentCount <= 0) {
+			return QueuedRecipeCountState.hidden();
+		}
+
+		return QueuedRecipeCountState.visible(currentCount, false, ItemStack.EMPTY);
+	}
+
+	QueuedRecipeCountState getQueuedCountState(RecipeButton button) {
+		if (button == null || button.getCollection() == null || button.getCurrentRecipe() == null) {
+			return QueuedRecipeCountState.hidden();
+		}
+		return getQueuedCountState(button.getCurrentRecipe(), button.getCollection(), false);
+	}
+
+	int getHeldQueuedCount(
+		RecipeDisplayId recipeId,
+		net.minecraft.client.gui.screens.recipebook.RecipeCollection collection,
+		boolean explicitVariantSelection
+	) {
+		return getQueuedCountState(recipeId, collection, explicitVariantSelection).displayedCount();
 	}
 
 	int getHeldQueuedCount(RecipeButton button) {
-		if (button == null || button.getCollection() == null || button.getCurrentRecipe() == null) {
-			return 0;
-		}
-		return getHeldQueuedCount(button.getCurrentRecipe(), button.getCollection(), false);
+		return getQueuedCountState(button).displayedCount();
 	}
 
 	void tryCloseOverlayAfterRelease() {

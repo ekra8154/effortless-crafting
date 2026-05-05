@@ -26,30 +26,23 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.util.Mth;
 
+/**
+ * NearbyContainerCache owns cached observed contents plus the currently tracked container UI context.
+ * Invariants: cache snapshots are independent of UI tracking; filter-dot eligibility is derived from tracked state.
+ */
 public final class NearbyContainerCache {
 	private static final Map<ContainerKey, ContainerSnapshot> SNAPSHOTS = new LinkedHashMap<>();
 	private static long revision;
 	private static ViewCacheKey lastViewKey;
 	private static ReachableView lastView;
-	private static BlockPos pendingObservedPos;
-	private static int pendingObservedTicks;
-	private static BlockPos openObservedPos;
-	private static int openObservedContainerId = -1;
+	private static final TrackedContainerContext TRACKED_CONTEXT = new TrackedContainerContext();
 
 	private NearbyContainerCache() {
 	}
 
 	public static void init() {
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
-			if (pendingObservedTicks > 0) {
-				pendingObservedTicks--;
-				if (pendingObservedTicks == 0) {
-					if (openObservedContainerId == -1) {
-						openObservedPos = null;
-					}
-					pendingObservedPos = null;
-				}
-			}
+			TRACKED_CONTEXT.tick();
 		});
 	}
 
@@ -58,14 +51,16 @@ public final class NearbyContainerCache {
 		revision++;
 		lastViewKey = null;
 		lastView = null;
-		pendingObservedPos = null;
-		pendingObservedTicks = 0;
-		openObservedPos = null;
-		openObservedContainerId = -1;
+		TRACKED_CONTEXT.clear();
 	}
 
-	public static boolean isCurrentContainerSupported() {
-		if (openObservedPos == null) {
+	public static boolean hasTrackedContainer() {
+		return TRACKED_CONTEXT.hasTrackedContainer();
+	}
+
+	public static boolean isTrackedContainerEligibleForFilterUi() {
+		BlockPos trackedPos = TRACKED_CONTEXT.trackedPos();
+		if (trackedPos == null) {
 			return false;
 		}
 
@@ -79,36 +74,46 @@ public final class NearbyContainerCache {
 			return false;
 		}
 
-		BlockState state = client.level.getBlockState(openObservedPos);
-		if (!ContainerUtils.isPotentiallySupportedContainer(state) || !ContainerUtils.canAttemptOpen(client.level, openObservedPos, state)) {
+		BlockState state = client.level.getBlockState(trackedPos);
+		if (!ContainerUtils.isPotentiallySupportedContainer(state) || !ContainerUtils.canAttemptOpen(client.level, trackedPos, state)) {
 			return false;
 		}
 
-		if (openObservedContainerId == -1) {
-			return pendingObservedPos != null && openObservedPos.equals(pendingObservedPos);
+		if (TRACKED_CONTEXT.confirmedContainerId() == -1) {
+			return TRACKED_CONTEXT.hasLiveCandidate();
 		}
 
-		return client.player.containerMenu != null && client.player.containerMenu.containerId == openObservedContainerId;
+		return client.player.containerMenu != null && TRACKED_CONTEXT.matchesConfirmedMenu(client.player.containerMenu.containerId);
+	}
+
+	public static boolean isCurrentContainerSupported() {
+		return isTrackedContainerEligibleForFilterUi();
 	}
 
 	public static BlockPos getCurrentContainerPos() {
-		return openObservedPos;
+		return TRACKED_CONTEXT.trackedPos();
 	}
 
 	public static boolean isCurrentContainerActive() {
-		if (openObservedPos == null || !ReachCraftingConfig.get().enableNearbyContainerUsage()) return false;
+		BlockPos trackedPos = TRACKED_CONTEXT.trackedPos();
+		if (trackedPos == null || !ReachCraftingConfig.get().enableNearbyContainerUsage()) return false;
 		Minecraft client = Minecraft.getInstance();
 		if (client.level == null) return false;
-		BlockState state = client.level.getBlockState(openObservedPos);
-		return InWorldFilterManager.isContainerActive(client.level, openObservedPos, state);
+		BlockState state = client.level.getBlockState(trackedPos);
+		return InWorldFilterManager.isContainerActive(client.level, trackedPos, state);
+	}
+
+	public static void toggleTrackedContainerInclusion() {
+		BlockPos trackedPos = TRACKED_CONTEXT.trackedPos();
+		if (trackedPos == null) return;
+		Minecraft client = Minecraft.getInstance();
+		if (client.level == null) return;
+		BlockState state = client.level.getBlockState(trackedPos);
+		InWorldFilterManager.toggleInclusion(client.level, trackedPos, state);
 	}
 
 	public static void toggleCurrentContainerInclusion() {
-		if (openObservedPos == null) return;
-		Minecraft client = Minecraft.getInstance();
-		if (client.level == null) return;
-		BlockState state = client.level.getBlockState(openObservedPos);
-		InWorldFilterManager.toggleInclusion(client.level, openObservedPos, state);
+		toggleTrackedContainerInclusion();
 	}
 
 	public static ReachableView getReachableView(Level level, Entity cameraEntity, double reachDistance) {
@@ -278,11 +283,7 @@ public final class NearbyContainerCache {
 			return;
 		}
 
-		BlockPos canonicalPos = ContainerUtils.canonicalizeContainerPos(level, pos, state);
-		openObservedPos = canonicalPos;
-		openObservedContainerId = -1;
-		pendingObservedPos = canonicalPos;
-		pendingObservedTicks = 10;
+		TRACKED_CONTEXT.noteCandidate(level, pos, state);
 	}
 
 	public static void onContainerContentsInitialized(AbstractContainerMenu menu) {
@@ -295,44 +296,38 @@ public final class NearbyContainerCache {
 		if (player == null || client.level == null) {
 			return;
 		}
-		if (pendingObservedPos == null || pendingObservedTicks <= 0) {
+		if (!TRACKED_CONTEXT.hasLiveCandidate()) {
 			return;
 		}
 		
-		BlockState state = client.level.getBlockState(pendingObservedPos);
+		BlockState state = client.level.getBlockState(TRACKED_CONTEXT.candidatePos());
 		if (!ContainerUtils.isPotentiallySupportedContainer(state)) {
-			pendingObservedPos = null;
-			pendingObservedTicks = 0;
+			TRACKED_CONTEXT.clearCandidate();
 			return;
 		}
 
 		if (menu instanceof InventoryMenu || client.screen instanceof InventoryScreen || client.screen instanceof CraftingScreen) {
-			pendingObservedPos = null;
-			pendingObservedTicks = 0;
+			TRACKED_CONTEXT.clearCandidate();
 			return;
 		}
 		if (!(client.screen instanceof AbstractContainerScreen<?>)) {
 			return;
 		}
 
-		recordObservedContents(client.level, pendingObservedPos, ContainerUtils.collectAllItems(menu));
-		openObservedPos = pendingObservedPos;
-		openObservedContainerId = menu.containerId;
-		pendingObservedPos = null;
-		pendingObservedTicks = 0;
+		recordObservedContents(client.level, TRACKED_CONTEXT.candidatePos(), ContainerUtils.collectAllItems(menu));
+		TRACKED_CONTEXT.confirmOpen(menu.containerId);
 	}
 
 	public static void onContainerScreenRemoved(AbstractContainerMenu menu) {
-		if (openObservedPos == null || menu == null || menu.containerId != openObservedContainerId) {
+		if (menu == null || !TRACKED_CONTEXT.matchesConfirmedMenu(menu.containerId)) {
 			return;
 		}
 
 		Minecraft client = Minecraft.getInstance();
 		if (client.level != null) {
-			recordObservedContents(client.level, openObservedPos, ContainerUtils.collectAllItems(menu));
+			recordObservedContents(client.level, TRACKED_CONTEXT.confirmedPos(), ContainerUtils.collectAllItems(menu));
 		}
-		openObservedPos = null;
-		openObservedContainerId = -1;
+		TRACKED_CONTEXT.clearConfirmed();
 	}
 
 	private static Map<String, Integer> normalizeCounts(Map<String, Integer> itemCounts) {

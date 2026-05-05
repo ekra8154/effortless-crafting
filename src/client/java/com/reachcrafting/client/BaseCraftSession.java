@@ -67,4 +67,9 @@ abstract class BaseCraftSession implements CraftSession {
 		}
 		return ContainerUtils.findNearestCraftingTable(level, cameraEntity.getEyePosition(0), reachDistance);
 	}
+
+	protected final void finishSession(boolean closeContainer) {
+		stop(closeContainer);
+		coordinator.onSessionFinished(this);
+	}
 }

@@ -69,6 +69,18 @@ public final class RecipeBookClickCapture {
 		return CONTROLLER.getPendingHeldRecipe();
 	}
 
+	public static QueuedRecipeCountState getQueuedCountState(
+		RecipeDisplayId recipeId,
+		RecipeCollection collection,
+		boolean explicitVariantSelection
+	) {
+		return CONTROLLER.getQueuedCountState(recipeId, collection, explicitVariantSelection);
+	}
+
+	public static QueuedRecipeCountState getQueuedCountState(RecipeButton button) {
+		return CONTROLLER.getQueuedCountState(button);
+	}
+
 	public static boolean hasPendingHeldRecipe(
 		RecipeDisplayId recipeId,
 		RecipeCollection collection,

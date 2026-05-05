@@ -197,6 +197,11 @@ final class NearbyCraftCoordinator {
 		}
 	}
 
+	void onSessionFinished(CraftSession session) {
+		clearActiveSession(session);
+		RecipeBookClickCapture.refocusRecipeBookSearch(Minecraft.getInstance());
+	}
+
 	void queuePostReturnCompaction(Set<String> itemIds) {
 		pendingPostReturnCompactionItemIds = Set.copyOf(itemIds);
 	}

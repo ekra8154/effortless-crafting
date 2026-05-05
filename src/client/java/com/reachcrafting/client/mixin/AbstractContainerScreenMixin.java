@@ -96,7 +96,7 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 		Minecraft client = Minecraft.getInstance();
 		if ((InputConstants.isKeyDown(client.getWindow(), GLFW.GLFW_KEY_LEFT_CONTROL)
 			|| InputConstants.isKeyDown(client.getWindow(), GLFW.GLFW_KEY_RIGHT_CONTROL))
-			&& NearbyContainerCache.isCurrentContainerSupported()) {
+			&& NearbyContainerCache.isTrackedContainerEligibleForFilterUi()) {
 			
 			Component titleComponent = ((Screen) (Object) this).getTitle();
 			int titleWidth = client.font.width(titleComponent);
@@ -122,7 +122,7 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 		if (click.button() != 0) return; // Only left click
 		
 		Minecraft client = Minecraft.getInstance();
-		if (!NearbyContainerCache.isCurrentContainerSupported()) return;
+		if (!NearbyContainerCache.isTrackedContainerEligibleForFilterUi()) return;
 		
 		boolean ctrlDown = (click.modifiers() & GLFW.GLFW_MOD_CONTROL) != 0;
 		if (!ctrlDown) return;
@@ -138,7 +138,7 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 		double dotEndY = dotStartY + 5;
 
 		if (click.x() >= dotStartX && click.x() <= dotEndX && click.y() >= dotStartY && click.y() <= dotEndY) {
-			NearbyContainerCache.toggleCurrentContainerInclusion();
+			NearbyContainerCache.toggleTrackedContainerInclusion();
 			cir.setReturnValue(true);
 		}
 	}

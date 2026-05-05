@@ -54,14 +54,19 @@ public final class InWorldFilterManager {
 
 	public static boolean isContainerActive(Level level, BlockPos pos, BlockState state) {
 		if (!ReachCraftingConfig.get().enabled() || !ReachCraftingConfig.get().enableNearbyContainerUsage()) return false;
+		ReachCraftingConfig.InWorldFilterMode mode = ReachCraftingConfig.get().inWorldFilterMode();
+		if (mode == ReachCraftingConfig.InWorldFilterMode.NONE) {
+			return ContainerUtils.isSupportedContainer(state);
+		}
+
 		InclusionState manual = getManualState(level, pos);
 		if (manual == InclusionState.MANUAL_WHITELIST) return true;
 		if (manual == InclusionState.MANUAL_BLACKLIST) return false;
 		
 		// Unset, use auto logic
-		if (!ContainerUtils.isSupportedContainer(state)) return false;
-		
-		ReachCraftingConfig.InWorldFilterMode mode = ReachCraftingConfig.get().inWorldFilterMode();
+		if (!ContainerUtils.isSupportedContainer(state)) {
+			return false;
+		}
 		return mode != ReachCraftingConfig.InWorldFilterMode.WHITELIST;
 	}
 
