@@ -49,6 +49,22 @@ public final class ContainerUtils {
 		return AutoCraftController.isTogglePending();
 	}
 
+	public static boolean isAutoCraftEnabled() {
+		return AutoCraftController.isEnabled();
+	}
+
+	public static boolean isBulkAutoCraftModeEnabled() {
+		return AutoCraftController.isBulkModeEnabled();
+	}
+
+	public static void toggleAutoCraftEnabledModeViaArrow() {
+		AutoCraftController.toggleEnabledModeViaArrow();
+	}
+
+	public static void clearBulkAutoCraft() {
+		BulkAutoCraftController.clear();
+	}
+
 	public static void scheduleAutoMove(ItemStack expectedStack) {
 		AutoMoveController.scheduleAutoMove(expectedStack);
 	}

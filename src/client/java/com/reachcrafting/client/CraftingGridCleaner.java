@@ -19,7 +19,14 @@ final class CraftingGridCleaner {
 
 		AbstractContainerMenu menu = client.player.containerMenu;
 
-		if (allowScreenChange && ReachCraftingConfig.get().putPulledResourcesBack() && !PulledResourcesTracker.isEmpty()) {
+		boolean retainBulkResources = isStartingNewCraft && BulkAutoCraftController.shouldRetainPulledResourcesForNextBulkCraft();
+		if (allowScreenChange && retainBulkResources) {
+			com.reachcrafting.ReachCraftingMod.LOGGER.info(
+				"[grid_flush] Retaining staged nearby resources for next bulk craft (items={}, screen={})",
+				PulledResourcesTracker.getWithdrawnItems().size(),
+				client.screen != null ? client.screen.getClass().getSimpleName() : "<none>"
+			);
+		} else if (allowScreenChange && ReachCraftingConfig.get().putPulledResourcesBack() && !PulledResourcesTracker.isEmpty()) {
 			com.reachcrafting.ReachCraftingMod.LOGGER.info(
 				"[grid_flush] Initiating return to chests (items={}, starting_new_craft={}, screen={})",
 				PulledResourcesTracker.getWithdrawnItems().size(),

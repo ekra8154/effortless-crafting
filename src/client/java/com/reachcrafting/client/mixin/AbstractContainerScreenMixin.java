@@ -65,6 +65,7 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 	private void reachcrafting$onClose(CallbackInfo ci) {
 		if (!ReachCraftingConfig.get().enabled()) return;
 		com.reachcrafting.ReachCraftingMod.LOGGER.info("[grid_restore] Screen onClose triggered for {}", this.getClass().getName());
+		com.reachcrafting.client.ContainerUtils.clearBulkAutoCraft();
 
 		if (com.reachcrafting.client.NearbyContainerDryRun.isActiveSessionRunning()) {
 			com.reachcrafting.ReachCraftingMod.LOGGER.info("[grid_restore] Aborting active session.");
@@ -118,6 +119,17 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 	@Inject(method = "mouseClicked", at = @At("HEAD"), cancellable = true)
 	private void reachcrafting$onMouseClicked(MouseButtonEvent click, boolean filtering, CallbackInfoReturnable<Boolean> cir) {
 		if (!ReachCraftingConfig.get().enabled()) return;
+		if (click.button() == 0
+			&& (click.modifiers() & GLFW.GLFW_MOD_ALT) != 0
+			&& ((Object) this instanceof CraftingScreen || (Object) this instanceof InventoryScreen)) {
+			Slot hoveredSlot = ((AbstractContainerScreenAccessor) this).getHoveredSlot();
+			if (hoveredSlot instanceof ResultSlot && reachcrafting$isArrowClickTarget(hoveredSlot, click.x(), click.y())) {
+				com.reachcrafting.client.ContainerUtils.cancelAutoCraftToggle();
+				com.reachcrafting.client.ContainerUtils.toggleAutoCraftEnabledModeViaArrow();
+				cir.setReturnValue(true);
+				return;
+			}
+		}
 		if (ReachCraftingConfig.get().inWorldFilterMode() == ReachCraftingConfig.InWorldFilterMode.NONE) return;
 		if (click.button() != 0) return; // Only left click
 		
@@ -146,9 +158,12 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 	@Inject(method = "renderSlot", at = @At("HEAD"))
 	private void reachcrafting$renderResultArrow(GuiGraphics guiGraphics, Slot slot, int i, int j, CallbackInfo ci) {
 		if (!ReachCraftingConfig.get().enabled()) return;
-		if (ReachCraftingConfig.get().autoCraftMode() && slot instanceof ResultSlot) {
+		if (com.reachcrafting.client.ContainerUtils.isAutoCraftEnabled() && slot instanceof ResultSlot) {
 			if ((Object) this instanceof CraftingScreen || (Object) this instanceof InventoryScreen) {
 				RecipeButtonNearbyIndicator.renderGrayArrow(guiGraphics, slot.x + 6, slot.y + 6);
+				if (com.reachcrafting.client.ContainerUtils.isBulkAutoCraftModeEnabled()) {
+					RecipeButtonNearbyIndicator.renderOrangeArrowOutline(guiGraphics, slot.x + 6, slot.y + 6);
+				}
 			}
 		}
 	}
@@ -189,5 +204,13 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 	private void reachcrafting$renderOutputCounter(GuiGraphics guiGraphics, Slot slot, int i, int j, CallbackInfo ci) {
 		if (!ReachCraftingConfig.get().enabled()) return;
 		com.reachcrafting.client.RecipeOutputCounter.render(guiGraphics, (AbstractContainerScreen<?>) (Object) this, slot);
+	}
+
+	private boolean reachcrafting$isArrowClickTarget(Slot slot, double mouseX, double mouseY) {
+		double arrowStartX = this.leftPos + slot.x + 5;
+		double arrowEndX = this.leftPos + slot.x + 10;
+		double arrowStartY = this.topPos + slot.y + 6;
+		double arrowEndY = this.topPos + slot.y + 12;
+		return mouseX >= arrowStartX && mouseX <= arrowEndX && mouseY >= arrowStartY && mouseY <= arrowEndY;
 	}
 }

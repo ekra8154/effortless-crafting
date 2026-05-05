@@ -64,6 +64,9 @@ final class AutoMoveController {
 						ContainerUtils.formatStack(currentResult)
 					);
 					pendingAutoMove = false;
+					autoMoveOrganizing = false;
+					autoMoveTargetStack = ItemStack.EMPTY;
+					BulkAutoCraftController.onAutoMoveFinished(client, false);
 					return;
 				}
 
@@ -88,6 +91,9 @@ final class AutoMoveController {
 				autoMoveWaitingTicks++;
 				if (autoMoveWaitingTicks > 10) {
 					pendingAutoMove = false;
+					autoMoveOrganizing = false;
+					autoMoveTargetStack = ItemStack.EMPTY;
+					BulkAutoCraftController.onAutoMoveFinished(client, false);
 				}
 				return;
 			}
@@ -168,6 +174,7 @@ final class AutoMoveController {
 			pendingAutoMove = false;
 			autoMoveOrganizing = false;
 			autoMoveTargetStack = ItemStack.EMPTY;
+			BulkAutoCraftController.onAutoMoveFinished(client, true);
 		}
 	}
 

@@ -34,7 +34,8 @@ public final class ReachCraftingConfig {
 	private static final boolean DEFAULT_RESTORE_INVENTORY_ITEM_POSITIONS = true;
 	private static final boolean DEFAULT_REMEMBER_PREVIOUS_SEARCH = true;
 	private static final OutlineDisplayMode DEFAULT_SHOW_FILTER_OUTLINES = OutlineDisplayMode.KEYBIND;
-	private static final boolean DEFAULT_AUTO_CRAFT_MODE = false;
+	private static final boolean DEFAULT_AUTO_CRAFT_ENABLED = false;
+	private static final AutoCraftMode DEFAULT_AUTO_CRAFT_ENABLED_MODE = AutoCraftMode.NORMAL;
 	private static final boolean DEFAULT_SHOW_TOTAL_OUTPUT_COUNTS = true;
 	private static final InputCounterVisibility DEFAULT_INPUT_COUNTER_VISIBILITY = InputCounterVisibility.SHOW_WHILE_QUEUEING;
 	private static final boolean DEFAULT_INVENTORY_2X2_OFFHAND_CONSOLIDATION = true;
@@ -70,7 +71,8 @@ public final class ReachCraftingConfig {
 	private boolean restoreInventoryItemPositions;
 	private boolean rememberPreviousSearch;
 	private OutlineDisplayMode showFilterOutlines;
-	private boolean autoCraftMode;
+	private boolean autoCraftEnabled;
+	private AutoCraftMode autoCraftEnabledMode;
 	private boolean showTotalOutputCounts;
 	private InputCounterVisibility inputCounterVisibility;
 	private boolean inventory2x2OffhandConsolidation;
@@ -123,7 +125,8 @@ public final class ReachCraftingConfig {
 			instance.inventory2x2OffhandConsolidation = stored.inventory2x2OffhandConsolidation != null ? stored.inventory2x2OffhandConsolidation : DEFAULT_INVENTORY_2X2_OFFHAND_CONSOLIDATION;
 			instance.scrollToPullMode = parseScrollToPullMode(stored.scrollToPullMode);
 			instance.typeToFocusSearch = stored.typeToFocusSearch != null ? stored.typeToFocusSearch : DEFAULT_TYPE_TO_FOCUS_SEARCH;
-			instance.autoCraftMode = stored.autoCraftMode != null ? stored.autoCraftMode : DEFAULT_AUTO_CRAFT_MODE;
+			instance.autoCraftEnabled = stored.autoCraftEnabled != null ? stored.autoCraftEnabled : (stored.autoCraftMode != null ? stored.autoCraftMode : DEFAULT_AUTO_CRAFT_ENABLED);
+			instance.autoCraftEnabledMode = stored.autoCraftEnabledMode != null ? stored.autoCraftEnabledMode : DEFAULT_AUTO_CRAFT_ENABLED_MODE;
 			instance.blacklistedContainerIds = stored.blacklistedContainerIds != null 
 				? new LinkedHashSet<>(stored.blacklistedContainerIds) 
 				: new LinkedHashSet<>(DEFAULT_BLACKLIST);
@@ -279,12 +282,24 @@ public final class ReachCraftingConfig {
 		this.showFilterOutlines = showFilterOutlines;
 	}
 
-	public boolean autoCraftMode() {
-		return autoCraftMode;
+	public boolean autoCraftEnabled() {
+		return autoCraftEnabled;
 	}
 
-	public void setAutoCraftMode(boolean autoCraftMode) {
-		this.autoCraftMode = autoCraftMode;
+	public void setAutoCraftEnabled(boolean autoCraftEnabled) {
+		this.autoCraftEnabled = autoCraftEnabled;
+	}
+
+	public AutoCraftMode autoCraftEnabledMode() {
+		return autoCraftEnabledMode;
+	}
+
+	public void setAutoCraftEnabledMode(AutoCraftMode autoCraftEnabledMode) {
+		this.autoCraftEnabledMode = autoCraftEnabledMode != null ? autoCraftEnabledMode : DEFAULT_AUTO_CRAFT_ENABLED_MODE;
+	}
+
+	public boolean isBulkAutoCraftMode() {
+		return autoCraftEnabled && autoCraftEnabledMode == AutoCraftMode.BULK;
 	}
 
 	public boolean showTotalOutputCounts() {
@@ -384,7 +399,8 @@ public final class ReachCraftingConfig {
 		defaults.restoreInventoryItemPositions = DEFAULT_RESTORE_INVENTORY_ITEM_POSITIONS;
 		defaults.rememberPreviousSearch = DEFAULT_REMEMBER_PREVIOUS_SEARCH;
 		defaults.showFilterOutlines = DEFAULT_SHOW_FILTER_OUTLINES;
-		defaults.autoCraftMode = DEFAULT_AUTO_CRAFT_MODE;
+		defaults.autoCraftEnabled = DEFAULT_AUTO_CRAFT_ENABLED;
+		defaults.autoCraftEnabledMode = DEFAULT_AUTO_CRAFT_ENABLED_MODE;
 		defaults.showTotalOutputCounts = DEFAULT_SHOW_TOTAL_OUTPUT_COUNTS;
 		defaults.inputCounterVisibility = DEFAULT_INPUT_COUNTER_VISIBILITY;
 		defaults.inventory2x2OffhandConsolidation = DEFAULT_INVENTORY_2X2_OFFHAND_CONSOLIDATION;
@@ -440,6 +456,11 @@ public final class ReachCraftingConfig {
 		WHILE_RESULT_OR_INVENTORY_SLOT_HOVERED
 	}
 
+	public enum AutoCraftMode {
+		NORMAL,
+		BULK
+	}
+
 	private static final class StoredConfig {
 		private Boolean enabled;
 		private Boolean enableNearbyContainerUsage;
@@ -462,6 +483,8 @@ public final class ReachCraftingConfig {
 		private JsonElement scrollToPullMode;
 		private Boolean typeToFocusSearch;
 		private Boolean autoCraftMode;
+		private Boolean autoCraftEnabled;
+		private AutoCraftMode autoCraftEnabledMode;
 		private Set<String> blacklistedContainerIds;
 
 		private StoredConfig(ReachCraftingConfig config) {
@@ -485,7 +508,8 @@ public final class ReachCraftingConfig {
 			this.inventory2x2OffhandConsolidation = config.inventory2x2OffhandConsolidation;
 			this.scrollToPullMode = new JsonPrimitive(config.scrollToPullMode.name());
 			this.typeToFocusSearch = config.typeToFocusSearch;
-			this.autoCraftMode = config.autoCraftMode;
+			this.autoCraftEnabled = config.autoCraftEnabled;
+			this.autoCraftEnabledMode = config.autoCraftEnabledMode;
 			this.blacklistedContainerIds = config.blacklistedContainerIds;
 		}
 	}

@@ -80,8 +80,5 @@ This project is licensed under **LGPL-3.0-or-later**. It draws inspiration and c
 
 
 TODO: 
-mass dispenser craft
 
-prioritize almost empty slots: (take out the slot of 2 cobblestone before using the slot of 64)
-
-nbt matching
+focus lost while queuing should cancel. same with esc

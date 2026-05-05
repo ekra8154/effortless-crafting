@@ -69,6 +69,10 @@ public final class RecipeBookClickCapture {
 		return CONTROLLER.getPendingHeldRecipe();
 	}
 
+	public static void scheduleReplay(HeldRecipeAction action, int remainingClicks, boolean allowNearby, boolean craftAll) {
+		CONTROLLER.scheduleReplay(action, remainingClicks, allowNearby, craftAll);
+	}
+
 	public static QueuedRecipeCountState getQueuedCountState(
 		RecipeDisplayId recipeId,
 		RecipeCollection collection,

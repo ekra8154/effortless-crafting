@@ -183,4 +183,9 @@ public final class RecipeButtonNearbyIndicator {
 		guiGraphics.fill(x + 0, y + 4, x + 3, y + 5, color); // Point mid (3x1)
 		guiGraphics.fill(x + 1, y + 5, x + 2, y + 6, color); // Point tip (1x1)
 	}
+
+	public static void renderOrangeArrowOutline(net.minecraft.client.gui.GuiGraphics guiGraphics, int x, int y) {
+		int color = 0xFFFF9A1F;
+		guiGraphics.renderOutline(x - 3, y - 2, 9, 10, color);
+	}
 }

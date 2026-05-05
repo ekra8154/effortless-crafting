@@ -24,6 +24,8 @@ import net.minecraft.world.item.crafting.display.RecipeDisplayId;
 import net.minecraft.world.item.crafting.display.SlotDisplayContext;
 
 final class RecipeClickExecutor {
+	private static final int BULK_QUEUE_LIMIT = 1_000_000;
+
 	private RecipeClickExecutor() {
 	}
 
@@ -95,6 +97,12 @@ final class RecipeClickExecutor {
 		RecipeDeficitReport deficitReport = craftAll
 			? RecipeDeficitReport.from(ingredientSummary, availableItems.inventoryCounts(), availableItems.gridStacks(), true)
 			: RecipeDeficitReport.from(ingredientSummary, availableItems.inventoryCounts(), availableItems.gridStacks(), desiredVariantCopies);
+		RecipeDeficitReport immediateCraftDeficit = RecipeDeficitReport.from(
+			ingredientSummary,
+			availableItems.inventoryCounts(),
+			availableItems.gridStacks(),
+			1
+		);
 		String resolvedItemId = BuiltInRegistries.ITEM.getKey(resolvedDisplayStack.getItem()).toString();
 		String outputLabel = resolvedItemId + " x" + resolvedDisplayStack.getCount();
 		String chatMessage = deficitReport.hasMissingIngredients()
@@ -129,6 +137,34 @@ final class RecipeClickExecutor {
 
 		boolean useDryRun = forceDryRun || allowNearbyChests || craftAll;
 		if (useDryRun) {
+			if (allowNearbyChests
+				&& AutoCraftController.isBulkModeEnabled()
+				&& !craftAll
+				&& !immediateCraftDeficit.hasMissingIngredients()
+				&& minecraft.gameMode != null) {
+				minecraft.gameMode.handlePlaceRecipe(player.containerMenu.containerId, selectedRecipe.recipeId(), false);
+				armBulkAutoCraft(
+					selectedRecipe.recipeId(),
+					collection,
+					displayStack,
+					mouseButton,
+					explicitVariantSelection,
+					true,
+					false,
+					requestedClicks,
+					selectedRecipe.displayStack()
+				);
+				ContainerUtils.scheduleAutoMove(selectedRecipe.displayStack());
+				player.displayClientMessage(
+					Component.literal("[Effortless Crafting] Placed recipe: " + outputLabel).withStyle(ChatFormatting.YELLOW),
+					false
+				);
+				if (explicitVariantSelection) {
+					tryCloseOverlayAfterRelease();
+				}
+				return;
+			}
+
 			if (!deficitReport.hasMissingIngredients() && availableItems.hasReservedGrid()) {
 				if (NearbyContainerDryRun.tryExpandReservedGrid(
 					selectedRecipe.recipeId(),
@@ -142,7 +178,18 @@ final class RecipeClickExecutor {
 					requestedClicks,
 					allowNearbyChests
 				)) {
-					if (ReachCraftingConfig.get().autoCraftMode()) {
+					if (AutoCraftController.isEnabled()) {
+						armBulkAutoCraft(
+							selectedRecipe.recipeId(),
+							collection,
+							displayStack,
+							mouseButton,
+							explicitVariantSelection,
+							allowNearbyChests,
+							craftAll,
+							requestedClicks,
+							selectedRecipe.displayStack()
+						);
 						ContainerUtils.scheduleAutoMove(selectedRecipe.displayStack());
 					}
 					return;
@@ -166,7 +213,18 @@ final class RecipeClickExecutor {
 		MultiPlayerGameMode gameMode = minecraft.gameMode;
 		if (gameMode != null) {
 			gameMode.handlePlaceRecipe(player.containerMenu.containerId, selectedRecipe.recipeId(), craftAll);
-			if (ReachCraftingConfig.get().autoCraftMode()) {
+			if (AutoCraftController.isEnabled()) {
+				armBulkAutoCraft(
+					selectedRecipe.recipeId(),
+					collection,
+					displayStack,
+					mouseButton,
+					explicitVariantSelection,
+					allowNearbyChests,
+					craftAll,
+					requestedClicks,
+					selectedRecipe.displayStack()
+				);
 				ContainerUtils.scheduleAutoMove(selectedRecipe.displayStack());
 			}
 			player.displayClientMessage(
@@ -246,6 +304,40 @@ final class RecipeClickExecutor {
 			.mapToInt(RecipeIngredientSummary.IngredientSlot::maxStackSize)
 			.min()
 			.orElse(64);
+	}
+
+	static int bulkRecipeQueueLimit() {
+		return BULK_QUEUE_LIMIT;
+	}
+
+	private static void armBulkAutoCraft(
+		RecipeDisplayId recipeId,
+		net.minecraft.client.gui.screens.recipebook.RecipeCollection collection,
+		ItemStack displayStack,
+		int mouseButton,
+		boolean explicitVariantSelection,
+		boolean allowNearbyChests,
+		boolean craftAll,
+		int requestedClicks,
+		ItemStack expectedOutput
+	) {
+		if (!AutoCraftController.isBulkModeEnabled() || craftAll || requestedClicks <= 1) {
+			BulkAutoCraftController.clear();
+			return;
+		}
+
+		BulkAutoCraftController.startOrUpdate(
+			new RecipeBookClickCapture.HeldRecipeAction(
+				recipeId,
+				collection,
+				displayStack != null ? displayStack.copy() : ItemStack.EMPTY,
+				mouseButton,
+				explicitVariantSelection
+			),
+			requestedClicks,
+			allowNearbyChests,
+			expectedOutput
+		);
 	}
 
 	private static RecipeDisplayEntry findRecipeEntry(

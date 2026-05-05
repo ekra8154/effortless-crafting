@@ -21,6 +21,7 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
 import net.minecraft.util.Mth;
 import net.minecraft.util.context.ContextMap;
 import net.minecraft.world.InteractionHand;
@@ -704,15 +705,8 @@ final class SearchSession extends BaseCraftSession {
 			}
 		}
 
-		List<String> fetchItems = new ArrayList<>();
-		for (Map.Entry<String, Integer> entry : desiredCounts.entrySet()) {
-			String itemId = entry.getKey();
-			int missing = entry.getValue() - alreadyCovered.getOrDefault(itemId, 0);
-			for (int i = 0; i < Math.max(missing, 0); i++) {
-				fetchItems.add(itemId);
-			}
-		}
-		return fetchItems;
+		appendBulkFutureStagingCounts(slotTargets, desiredCounts, alreadyCovered);
+		return buildMissingFetchItems(desiredCounts, alreadyCovered);
 	}
 
 
@@ -720,26 +714,8 @@ final class SearchSession extends BaseCraftSession {
 		Map<String, Integer> neededCounts = computeReservedGridNeededCounts();
 
 		Map<String, Integer> availableInventory = new LinkedHashMap<>(currentInventoryCounts());
-		List<String> fetchItems = new ArrayList<>();
-		for (Map.Entry<String, Integer> entry : neededCounts.entrySet()) {
-			String itemId = entry.getKey();
-			int stillNeeded = entry.getValue();
-			int inventoryCount = availableInventory.getOrDefault(itemId, 0);
-			int coveredByInventory = Math.min(inventoryCount, stillNeeded);
-			stillNeeded -= coveredByInventory;
-			if (coveredByInventory > 0) {
-				if (inventoryCount == coveredByInventory) {
-					availableInventory.remove(itemId);
-				} else {
-					availableInventory.put(itemId, inventoryCount - coveredByInventory);
-				}
-			}
-
-			for (int i = 0; i < stillNeeded; i++) {
-				fetchItems.add(itemId);
-			}
-		}
-		return fetchItems;
+		appendBulkFutureStagingCounts(plannedTargets, neededCounts, availableInventory);
+		return buildMissingFetchItems(neededCounts, availableInventory);
 	}
 
 	private List<String> computeRedistributedFetchItemIds(List<IngredientPlanning.SlotTarget> slotTargets) {
@@ -752,11 +728,251 @@ final class SearchSession extends BaseCraftSession {
 		}
 
 		Map<String, Integer> movableCounts = AvailableItemSnapshot.mergeCounts(currentInventoryCounts(), countStacks(originalContext.gridStacks()));
+		appendBulkFutureStagingCounts(slotTargets, desiredCounts, movableCounts);
+		return buildMissingFetchItems(desiredCounts, movableCounts);
+	}
+
+	private void appendBulkFutureStagingCounts(
+		List<IngredientPlanning.SlotTarget> slotTargets,
+		Map<String, Integer> desiredCounts,
+		Map<String, Integer> alreadyCovered
+	) {
+		if (!AutoCraftController.isBulkModeEnabled() || !allowNearby || craftAll) {
+			return;
+		}
+
+		int remainingCopies = BulkAutoCraftController.remainingRequestedRecipeCopies();
+		if (remainingCopies <= 0) {
+			return;
+		}
+
+		int extraFutureCopies = Math.max(0, remainingCopies - Math.max(targetCopiesPerSlot, 1));
+		if (extraFutureCopies <= 0) {
+			return;
+		}
+
+		Map<String, Integer> perCraftCounts = perCraftIngredientCounts(slotTargets);
+		if (perCraftCounts.isEmpty()) {
+			return;
+		}
+
+		int reachableFutureCopies = computeReachableFutureCopies(desiredCounts, perCraftCounts);
+		if (reachableFutureCopies <= 0) {
+			return;
+		}
+
+		int stageableFutureCopies = computeStageableFutureCopies(
+			desiredCounts,
+			alreadyCovered,
+			perCraftCounts,
+			Math.min(extraFutureCopies, reachableFutureCopies)
+		);
+		if (stageableFutureCopies <= 0) {
+			return;
+		}
+
+		for (Map.Entry<String, Integer> entry : perCraftCounts.entrySet()) {
+			desiredCounts.merge(entry.getKey(), entry.getValue() * stageableFutureCopies, Integer::sum);
+		}
+	}
+
+	private Map<String, Integer> perCraftIngredientCounts(List<IngredientPlanning.SlotTarget> slotTargets) {
+		Map<String, Integer> perCraftCounts = new LinkedHashMap<>();
+		for (IngredientPlanning.SlotTarget slotTarget : slotTargets) {
+			if (slotTarget.itemId() == null || slotTarget.targetCount() <= 0) {
+				continue;
+			}
+			perCraftCounts.merge(slotTarget.itemId(), 1, Integer::sum);
+		}
+		return perCraftCounts;
+	}
+
+	private int computeStageableFutureCopies(
+		Map<String, Integer> currentDesiredCounts,
+		Map<String, Integer> alreadyCovered,
+		Map<String, Integer> perCraftCounts,
+		int maxExtraFutureCopies
+	) {
+		List<ItemStack> currentPlanInventory = snapshotPlayerInventorySlots();
+		Map<String, ItemStack> prototypes = buildItemPrototypes(currentDesiredCounts, perCraftCounts);
+		for (Map.Entry<String, Integer> entry : currentDesiredCounts.entrySet()) {
+			int toStageNow = Math.max(0, entry.getValue() - alreadyCovered.getOrDefault(entry.getKey(), 0));
+			if (toStageNow <= 0) {
+				continue;
+			}
+			if (!placeIntoVirtualInventory(currentPlanInventory, prototypeForItem(entry.getKey(), prototypes), toStageNow)) {
+				return 0;
+			}
+		}
+
+		Map<String, Integer> futureLocalReserve = new LinkedHashMap<>();
+		for (Map.Entry<String, Integer> entry : alreadyCovered.entrySet()) {
+			int remaining = entry.getValue() - currentDesiredCounts.getOrDefault(entry.getKey(), 0);
+			if (remaining > 0) {
+				futureLocalReserve.put(entry.getKey(), remaining);
+			}
+		}
+
+		int stageableCopies = 0;
+		List<ItemStack> simulatedInventory = copyStacks(currentPlanInventory);
+		Map<String, Integer> simulatedReserve = new LinkedHashMap<>(futureLocalReserve);
+		for (int copyIndex = 0; copyIndex < maxExtraFutureCopies; copyIndex++) {
+			List<ItemStack> nextInventory = copyStacks(simulatedInventory);
+			Map<String, Integer> nextReserve = new LinkedHashMap<>(simulatedReserve);
+			boolean fits = true;
+			for (Map.Entry<String, Integer> entry : perCraftCounts.entrySet()) {
+				String itemId = entry.getKey();
+				int needed = entry.getValue();
+				int reserved = nextReserve.getOrDefault(itemId, 0);
+				int consumedFromReserve = Math.min(reserved, needed);
+				if (consumedFromReserve > 0) {
+					int remainingReserve = reserved - consumedFromReserve;
+					if (remainingReserve > 0) {
+						nextReserve.put(itemId, remainingReserve);
+					} else {
+						nextReserve.remove(itemId);
+					}
+				}
+
+				int toStage = needed - consumedFromReserve;
+				if (toStage > 0 && !placeIntoVirtualInventory(nextInventory, prototypeForItem(itemId, prototypes), toStage)) {
+					fits = false;
+					break;
+				}
+			}
+
+			if (!fits) {
+				break;
+			}
+
+			simulatedInventory = nextInventory;
+			simulatedReserve = nextReserve;
+			stageableCopies++;
+		}
+
+		return stageableCopies;
+	}
+
+	private int computeReachableFutureCopies(Map<String, Integer> currentDesiredCounts, Map<String, Integer> perCraftCounts) {
+		Map<String, Integer> totalAvailable = AvailableItemSnapshot.mergeCounts(currentInventoryCounts(), discoveredNearby);
+		int maxFutureCopies = Integer.MAX_VALUE;
+		for (Map.Entry<String, Integer> entry : perCraftCounts.entrySet()) {
+			int perCraft = entry.getValue();
+			if (perCraft <= 0) {
+				continue;
+			}
+
+			int available = totalAvailable.getOrDefault(entry.getKey(), 0) - currentDesiredCounts.getOrDefault(entry.getKey(), 0);
+			int reachableCopies = Math.max(0, available / perCraft);
+			maxFutureCopies = Math.min(maxFutureCopies, reachableCopies);
+		}
+		return maxFutureCopies == Integer.MAX_VALUE ? 0 : maxFutureCopies;
+	}
+
+	private List<ItemStack> snapshotPlayerInventorySlots() {
+		List<ItemStack> slots = new ArrayList<>();
+		for (ItemStack stack : player.getInventory().getNonEquipmentItems()) {
+			slots.add(stack.copy());
+		}
+		return slots;
+	}
+
+	private Map<String, ItemStack> buildItemPrototypes(Map<String, Integer> desiredCounts, Map<String, Integer> perCraftCounts) {
+		Map<String, ItemStack> prototypes = new LinkedHashMap<>();
+		for (String itemId : desiredCounts.keySet()) {
+			prototypes.put(itemId, itemPrototype(itemId));
+		}
+		for (String itemId : perCraftCounts.keySet()) {
+			prototypes.putIfAbsent(itemId, itemPrototype(itemId));
+		}
+		return prototypes;
+	}
+
+	private ItemStack prototypeForItem(String itemId, Map<String, ItemStack> prototypes) {
+		return prototypes.getOrDefault(itemId, itemPrototype(itemId));
+	}
+
+	private ItemStack itemPrototype(String itemId) {
+		if (itemId == null || itemId.isEmpty()) {
+			return ItemStack.EMPTY;
+		}
+
+		try {
+			var item = BuiltInRegistries.ITEM.getValue(Identifier.parse(itemId));
+			return item == null ? ItemStack.EMPTY : item.getDefaultInstance();
+		} catch (Exception ignored) {
+			return ItemStack.EMPTY;
+		}
+	}
+
+	private List<ItemStack> copyStacks(List<ItemStack> stacks) {
+		List<ItemStack> copies = new ArrayList<>(stacks.size());
+		for (ItemStack stack : stacks) {
+			copies.add(stack.copy());
+		}
+		return copies;
+	}
+
+	private boolean placeIntoVirtualInventory(List<ItemStack> inventorySlots, ItemStack prototype, int count) {
+		if (count <= 0) {
+			return true;
+		}
+		if (prototype == null || prototype.isEmpty()) {
+			return false;
+		}
+
+		int remaining = count;
+		int maxStackSize = Math.max(prototype.getMaxStackSize(), 1);
+		for (ItemStack slot : inventorySlots) {
+			if (remaining <= 0) {
+				break;
+			}
+			if (slot.isEmpty() || !ItemStack.isSameItemSameComponents(slot, prototype)) {
+				continue;
+			}
+
+			int room = maxStackSize - slot.getCount();
+			if (room <= 0) {
+				continue;
+			}
+			int placed = Math.min(room, remaining);
+			slot.grow(placed);
+			remaining -= placed;
+		}
+
+		for (int i = 0; i < inventorySlots.size() && remaining > 0; i++) {
+			if (!inventorySlots.get(i).isEmpty()) {
+				continue;
+			}
+
+			int placed = Math.min(maxStackSize, remaining);
+			ItemStack newStack = prototype.copy();
+			newStack.setCount(placed);
+			inventorySlots.set(i, newStack);
+			remaining -= placed;
+		}
+
+		return remaining <= 0;
+	}
+
+	private List<String> buildMissingFetchItems(Map<String, Integer> desiredCounts, Map<String, Integer> availableCounts) {
 		List<String> fetchItems = new ArrayList<>();
+		Map<String, Integer> mutableAvailable = new LinkedHashMap<>(availableCounts);
 		for (Map.Entry<String, Integer> entry : desiredCounts.entrySet()) {
 			String itemId = entry.getKey();
-			int missing = entry.getValue() - movableCounts.getOrDefault(itemId, 0);
-			for (int i = 0; i < Math.max(missing, 0); i++) {
+			int stillNeeded = entry.getValue();
+			int available = mutableAvailable.getOrDefault(itemId, 0);
+			int covered = Math.min(available, stillNeeded);
+			stillNeeded -= covered;
+			if (covered > 0) {
+				if (available == covered) {
+					mutableAvailable.remove(itemId);
+				} else {
+					mutableAvailable.put(itemId, available - covered);
+				}
+			}
+
+			for (int i = 0; i < stillNeeded; i++) {
 				fetchItems.add(itemId);
 			}
 		}
@@ -1150,12 +1366,26 @@ final class SearchSession extends BaseCraftSession {
 		if (explicitVariantSelection) {
 			RecipeBookClickCapture.tryCloseOverlayAfterRelease();
 		}
-		if (ReachCraftingConfig.get().autoCraftMode()) {
+		if (AutoCraftController.isEnabled()) {
 			ItemStack expectedStack = ItemStack.EMPTY;
 			var knownRecipes = ((com.reachcrafting.client.mixin.ClientRecipeBookAccessor) player.getRecipeBook()).getKnown();
 			var entry = knownRecipes.get(recipeId);
 			if (entry != null) {
 				expectedStack = RecipeVariantResolver.resolveDisplayStack(entry.display(), net.minecraft.world.item.crafting.display.SlotDisplayContext.fromLevel(level));
+			}
+			if (AutoCraftController.isBulkModeEnabled() && !craftAll && requestedSingleClicks > 1) {
+				BulkAutoCraftController.startOrUpdate(
+					new RecipeBookClickCapture.HeldRecipeAction(
+						recipeId,
+						recipeCollection,
+						ItemStack.EMPTY,
+						org.lwjgl.glfw.GLFW.GLFW_MOUSE_BUTTON_LEFT,
+						explicitVariantSelection
+					),
+					requestedSingleClicks,
+					allowNearby,
+					expectedStack
+				);
 			}
 			ContainerUtils.scheduleAutoMove(expectedStack);
 		}
@@ -1479,6 +1709,7 @@ final class SearchSession extends BaseCraftSession {
 		Map<String, Integer> plannedWithdrawals = new LinkedHashMap<>();
 		List<WithdrawalPlan.PlannedMove> moves = new ArrayList<>();
 		Map<Integer, Integer> virtualPlayerCounts = capturePlayerOccupancy(menu);
+		Map<Integer, String> virtualPlayerItemIds = capturePlayerItemIds(menu);
 		boolean blockedByInventory = false;
 
 		for (Map.Entry<String, Integer> needEntry : remainingNeeds.entrySet()) {
@@ -1496,7 +1727,7 @@ final class SearchSession extends BaseCraftSession {
 
 				int sourceRemaining = sourceSlot.getItem().getCount();
 				while (sourceRemaining > 0 && stillNeeded > 0) {
-					Slot targetSlot = findPlannedDestinationSlot(menu, itemId, virtualPlayerCounts);
+					Slot targetSlot = findPlannedDestinationSlot(menu, itemId, virtualPlayerCounts, virtualPlayerItemIds);
 					if (targetSlot == null) {
 						blockedByInventory = true;
 						break;
@@ -1514,6 +1745,7 @@ final class SearchSession extends BaseCraftSession {
 
 					moves.add(new WithdrawalPlan.PlannedMove(sourceSlot, targetSlot, itemId, moveCount));
 					virtualPlayerCounts.put(targetSlot.index, currentTargetCount + moveCount);
+					virtualPlayerItemIds.put(targetSlot.index, itemId);
 					plannedWithdrawals.merge(itemId, moveCount, Integer::sum);
 					sourceRemaining -= moveCount;
 					stillNeeded -= moveCount;
@@ -1640,6 +1872,17 @@ final class SearchSession extends BaseCraftSession {
 		return occupancy;
 	}
 
+	private static Map<Integer, String> capturePlayerItemIds(AbstractContainerMenu menu) {
+		Map<Integer, String> itemIds = new HashMap<>();
+		for (Slot slot : menu.slots) {
+			if (!(slot.container instanceof Inventory) || !slot.hasItem()) {
+				continue;
+			}
+			itemIds.put(slot.index, BuiltInRegistries.ITEM.getKey(slot.getItem().getItem()).toString());
+		}
+		return itemIds;
+	}
+
 	private List<Slot> sortedMatchingContainerSources(AbstractContainerMenu menu, String itemId) {
 		List<Slot> matchingSources = new ArrayList<>();
 		for (Slot slot : menu.slots) {
@@ -1659,7 +1902,12 @@ final class SearchSession extends BaseCraftSession {
 		return matchingSources;
 	}
 
-	private Slot findPlannedDestinationSlot(AbstractContainerMenu menu, String itemId, Map<Integer, Integer> virtualPlayerCounts) {
+	private Slot findPlannedDestinationSlot(
+		AbstractContainerMenu menu,
+		String itemId,
+		Map<Integer, Integer> virtualPlayerCounts,
+		Map<Integer, String> virtualPlayerItemIds
+	) {
 		Slot bestPartial = null;
 		int bestPartialCount = -1;
 		Slot bestEmpty = null;
@@ -1684,8 +1932,24 @@ final class SearchSession extends BaseCraftSession {
 					bestPartial = slot;
 					bestPartialCount = virtualCount;
 				}
-			} else if (virtualCount == 0 && bestEmpty == null) {
-				bestEmpty = slot;
+			} else {
+				String virtualItemId = virtualPlayerItemIds.get(slot.index);
+				if (virtualCount > 0) {
+					if (!itemId.equals(virtualItemId)) {
+						continue;
+					}
+					ItemStack prototype = itemPrototype(itemId);
+					int max = prototype.isEmpty() ? slot.getMaxStackSize() : Math.min(slot.getMaxStackSize(), prototype.getMaxStackSize());
+					if (virtualCount >= max) {
+						continue;
+					}
+					if (bestPartial == null || virtualCount > bestPartialCount || (virtualCount == bestPartialCount && slot.index < bestPartial.index)) {
+						bestPartial = slot;
+						bestPartialCount = virtualCount;
+					}
+				} else if (bestEmpty == null) {
+					bestEmpty = slot;
+				}
 			}
 		}
 

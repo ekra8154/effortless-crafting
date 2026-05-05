@@ -260,6 +260,24 @@ final class RecipeBookInputController {
 		return state.pendingHeldRecipe();
 	}
 
+	void scheduleReplay(RecipeBookClickCapture.HeldRecipeAction action, int remainingClicks, boolean allowNearby, boolean craftAll) {
+		if (!ReachCraftingConfig.get().enabled() || action == null || remainingClicks <= 0) {
+			return;
+		}
+
+		Minecraft minecraft = Minecraft.getInstance();
+		if (minecraft.player == null) {
+			return;
+		}
+
+		if (!ContainerUtils.isGridEmpty(minecraft.player.containerMenu)) {
+			ContainerUtils.flushCraftingGrid(minecraft, allowNearby, true);
+			state.setReplayDelayTicks(1);
+		}
+
+		state.setReplayBatch(new RecipeBookClickCapture.ReplayBatch(action, remainingClicks, allowNearby, craftAll));
+	}
+
 	boolean hasPendingHeldRecipe(
 		RecipeDisplayId recipeId,
 		net.minecraft.client.gui.screens.recipebook.RecipeCollection collection,
@@ -501,6 +519,9 @@ final class RecipeBookInputController {
 			RecipeClickExecutor.resolveGridMatchedCount(minecraft, action.recipeId(), action.collection(), action.explicitVariantSelection()),
 			queueLimit
 		);
+		if (AutoCraftController.isBulkModeEnabled()) {
+			return clampQueuedCount(baseCount, delta, queueLimit);
+		}
 		int updatedCount = baseCount + delta;
 		if (updatedCount < 0) {
 			return queueLimit;
@@ -521,11 +542,26 @@ final class RecipeBookInputController {
 
 	private int wrapQueuedCount(Minecraft minecraft, RecipeBookClickCapture.HeldRecipeAction action, int currentCount, int delta) {
 		int queueLimit = resolveQueueLimit(minecraft, action);
+		if (AutoCraftController.isBulkModeEnabled()) {
+			return clampQueuedCount(currentCount, delta, queueLimit);
+		}
 		return Math.floorMod(currentCount + delta, queueLimit + 1);
 	}
 
 	private int resolveQueueLimit(Minecraft minecraft, RecipeBookClickCapture.HeldRecipeAction action) {
-		return Math.max(RecipeClickExecutor.resolveRecipeQueueLimit(minecraft, action.recipeId(), action.collection()), 1);
+		int queueLimit = Math.max(RecipeClickExecutor.resolveRecipeQueueLimit(minecraft, action.recipeId(), action.collection()), 1);
+		if (AutoCraftController.isBulkModeEnabled()) {
+			return Math.max(queueLimit, RecipeClickExecutor.bulkRecipeQueueLimit());
+		}
+		return queueLimit;
+	}
+
+	private int clampQueuedCount(int currentCount, int delta, int queueLimit) {
+		long updatedCount = (long) currentCount + delta;
+		if (updatedCount <= 0L) {
+			return 0;
+		}
+		return (int) Math.min(updatedCount, queueLimit);
 	}
 
 	private boolean matchesAction(
