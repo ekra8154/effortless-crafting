@@ -147,7 +147,7 @@ final class SearchSession extends BaseCraftSession {
 
 	@Override
 	public void start() {
-		ReachCraftingMod.LOGGER.info(
+		ReachCraftingMod.LOGGER.debug(
 			"[nearby_scan] idx={} start missing={} candidates={} craft_all={} phase={} planned={}",
 			recipeIndex,
 			initialDeficit.compactMissingSummary(),
@@ -163,7 +163,7 @@ final class SearchSession extends BaseCraftSession {
 			refreshReachableView();
 			discoveredNearby.clear();
 			discoveredNearby.putAll(reachableView.countsFor(scanAcceptedItemIds));
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.LOGGER.debug(
 				"[nearby_cache] idx={} seeded_from_cache={}",
 				recipeIndex,
 				AvailableItemSnapshot.formatCounts(discoveredNearby)
@@ -295,7 +295,7 @@ final class SearchSession extends BaseCraftSession {
 			if (timeoutTicks <= 0) {
 				if (originalContext.kind() != ScreenKind.NONE && reopenAttemptsRemaining > 0) {
 					reopenAttemptsRemaining--;
-					ReachCraftingMod.LOGGER.info(
+					ReachCraftingMod.LOGGER.debug(
 						"[nearby_restore] idx={} reopen_retry kind={} attempts_left={}",
 						recipeIndex,
 						originalContext.kind().name().toLowerCase(),
@@ -337,7 +337,7 @@ final class SearchSession extends BaseCraftSession {
 			usefulItems.forEach((itemId, count) -> discoveredNearby.merge(itemId, count, Integer::sum));
 		}
 		if (!usefulItems.isEmpty()) {
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.LOGGER.debug(
 				"[nearby_container] idx={} pos={} found={}",
 				recipeIndex,
 				ContainerUtils.formatPos(pendingContainerPos),
@@ -357,7 +357,7 @@ final class SearchSession extends BaseCraftSession {
 
 	@Override
 	public void onOpenFailed(String reason) {
-		ReachCraftingMod.LOGGER.info(
+		ReachCraftingMod.LOGGER.debug(
 			"[nearby_container] idx={} pos={} skipped={}",
 			recipeIndex,
 			ContainerUtils.formatPos(pendingContainerPos),
@@ -502,7 +502,7 @@ final class SearchSession extends BaseCraftSession {
 				craftAll,
 				desiredVariantCopies
 			);
-			ReachCraftingMod.LOGGER.info("[recipe_variant] locked_to_grid_variant idx={} mode=locked_expansion match={}", recipeIndex, resolvedSelection != null);
+			ReachCraftingMod.LOGGER.debug("[recipe_variant] locked_to_grid_variant idx={} mode=locked_expansion match={}", recipeIndex, resolvedSelection != null);
 		} else {
 			resolvedSelection = RecipeVariantResolver.resolve(
 				client,
@@ -524,7 +524,7 @@ final class SearchSession extends BaseCraftSession {
 		if (resolvedSelection != null) {
 			boolean variantChanged = !resolvedSelection.recipeId().equals(recipeId);
 			if (variantChanged || (!redistributeReservedGrid && committedReservedGrid)) {
-				ReachCraftingMod.LOGGER.info(
+				ReachCraftingMod.LOGGER.debug(
 					"[recipe_variant] clicked_idx={} selected_idx={} mode={} output={}",
 					recipeIndex,
 					resolvedSelection.recipeId().index(),
@@ -581,7 +581,7 @@ final class SearchSession extends BaseCraftSession {
 			Map<String, Integer> finalMissing = subtractAvailableCounts(computeReservedGridNeededCounts(), inventoryAndNearby);
 			if (!finalMissing.isEmpty()) {
 				String blockedSummary = AvailableItemSnapshot.formatCounts(finalMissing);
-				ReachCraftingMod.LOGGER.info(
+				ReachCraftingMod.LOGGER.debug(
 					"[nearby_plan] idx={} committed_layout_blocked missing={}",
 					recipeIndex,
 					blockedSummary
@@ -604,7 +604,7 @@ final class SearchSession extends BaseCraftSession {
 			}
 		}
 
-		ReachCraftingMod.LOGGER.info(
+		ReachCraftingMod.LOGGER.debug(
 			"[nearby_plan] idx={} total_available={} target_copies={} planned={}",
 			recipeIndex,
 			AvailableItemSnapshot.formatCounts(totalAvailable),
@@ -1032,7 +1032,7 @@ final class SearchSession extends BaseCraftSession {
 		nextCandidateIndex = 0;
 		pendingContainerPos = null;
 		state = SearchState.OPEN_NEXT;
-		ReachCraftingMod.LOGGER.info(
+		ReachCraftingMod.LOGGER.debug(
 			"[nearby_cache] idx={} fallback_discovery remaining={}",
 			recipeIndex,
 			summarizeRemainingItems(remainingItemIds)
@@ -1246,7 +1246,7 @@ final class SearchSession extends BaseCraftSession {
 		
 		if (!gridRestored && originalContext.hasReservedGrid() && restoreTicksRemaining > 0) {
 			restoreTicksRemaining--;
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.LOGGER.debug(
 				"[nearby_restore] idx={} waiting_for_grid_restore remaining_ticks={}",
 				recipeIndex,
 				restoreTicksRemaining
@@ -1275,7 +1275,7 @@ final class SearchSession extends BaseCraftSession {
 			if (seededPlacement == PlacementAttempt.WAITING_FOR_SEED) {
 				if (seedWaitTicksRemaining > 0) {
 					seedWaitTicksRemaining--;
-					ReachCraftingMod.LOGGER.info(
+					ReachCraftingMod.LOGGER.debug(
 						"[nearby_restore] idx={} waiting_for_seeded_shape remaining_ticks={}",
 						recipeIndex,
 						seedWaitTicksRemaining
@@ -1322,7 +1322,7 @@ final class SearchSession extends BaseCraftSession {
 				false
 			);
 		}
-		ReachCraftingMod.LOGGER.info(
+		ReachCraftingMod.LOGGER.debug(
 			"[nearby_scan] idx={} scanned={} discovered={} withdrawn={} remaining={}",
 			recipeIndex,
 			scannedContainers,
@@ -1441,7 +1441,7 @@ final class SearchSession extends BaseCraftSession {
 			}
 		}
 
-		ReachCraftingMod.LOGGER.info("[nearby_restore] idx={} restored_grid={}", recipeIndex, originalContext.gridSummary());
+		ReachCraftingMod.LOGGER.debug("[nearby_restore] idx={} restored_grid={}", recipeIndex, originalContext.gridSummary());
 		return true;
 	}
 
@@ -1485,7 +1485,7 @@ final class SearchSession extends BaseCraftSession {
 			}
 		}
 
-		ReachCraftingMod.LOGGER.info("[nearby_restore] idx={} expanded_grid={}", recipeIndex, summarizeGrid(menu, originalGridStacks.size()));
+		ReachCraftingMod.LOGGER.debug("[nearby_restore] idx={} expanded_grid={}", recipeIndex, summarizeGrid(menu, originalGridStacks.size()));
 		return true;
 	}
 
@@ -1500,7 +1500,7 @@ final class SearchSession extends BaseCraftSession {
 			totalFound++;
 		}
 
-		ReachCraftingMod.LOGGER.info("[nearby_restore] idx={} placed_via_vanilla_calls count={} target={}", recipeIndex, totalFound, targetCopiesPerSlot);
+		ReachCraftingMod.LOGGER.debug("[nearby_restore] idx={} placed_via_vanilla_calls count={} target={}", recipeIndex, totalFound, targetCopiesPerSlot);
 		return PlacementAttempt.SUCCESS;
 	}
 
@@ -1770,7 +1770,7 @@ final class SearchSession extends BaseCraftSession {
 		}
 
 		if (!moves.isEmpty()) {
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.LOGGER.debug(
 				"[nearby_withdraw_plan] idx={} pos={} moves={} planned={} unresolved={}",
 				recipeIndex,
 				ContainerUtils.formatPos(pendingContainerPos),
@@ -1818,7 +1818,7 @@ final class SearchSession extends BaseCraftSession {
 				break;
 			}
 
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.LOGGER.debug(
 				"[nearby_withdraw_move] idx={} source={} target={} item={} count={} mode={}",
 				recipeIndex,
 				move.source().index,
@@ -1853,7 +1853,7 @@ final class SearchSession extends BaseCraftSession {
 
 		subtractCounts(discoveredNearby, executedWithdrawals);
 		NearbyContainerCache.applyWithdrawals(level, pendingContainerPos, executedWithdrawals);
-		ReachCraftingMod.LOGGER.info(
+		ReachCraftingMod.LOGGER.debug(
 			"[nearby_withdraw] idx={} pos={} total_withdrawn={} remaining={}",
 			recipeIndex,
 			ContainerUtils.formatPos(pendingContainerPos),

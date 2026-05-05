@@ -58,7 +58,7 @@ final class AutoMoveController {
 				ItemStack currentResult = resultSlot.getItem();
 
 				if (!autoMoveExpectedStack.isEmpty() && !ItemStack.isSameItemSameComponents(currentResult, autoMoveExpectedStack)) {
-					com.reachcrafting.ReachCraftingMod.LOGGER.info(
+					com.reachcrafting.ReachCraftingMod.LOGGER.debug(
 						"[auto_move] Recipe changed! Expected: {}, Found: {}. Stopping.",
 						ContainerUtils.formatStack(autoMoveExpectedStack),
 						ContainerUtils.formatStack(currentResult)

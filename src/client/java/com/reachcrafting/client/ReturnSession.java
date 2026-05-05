@@ -65,7 +65,7 @@ final class ReturnSession extends BaseCraftSession {
 
 	@Override
 	public void start() {
-		com.reachcrafting.ReachCraftingMod.LOGGER.info("[nearby_return] starting return session with menu {} ({} slots)", closingMenu.getClass().getSimpleName(), closingMenu.slots.size());
+		com.reachcrafting.ReachCraftingMod.LOGGER.debug("[nearby_return] starting return session with menu {} ({} slots)", closingMenu.getClass().getSimpleName(), closingMenu.slots.size());
 		sendChat("Returning items to containers...");
 		
 		Map<String, Integer> currentCounts = new HashMap<>();
@@ -89,7 +89,7 @@ final class ReturnSession extends BaseCraftSession {
 			int current = currentCounts.getOrDefault(itemId, 0);
 			int excess = PulledResourcesTracker.getExcessCount(itemId, current);
 			
-			com.reachcrafting.ReachCraftingMod.LOGGER.info("[nearby_return] item={} current={} excess={}", itemId, current, excess);
+			com.reachcrafting.ReachCraftingMod.LOGGER.debug("[nearby_return] item={} current={} excess={}", itemId, current, excess);
 			
 			if (excess > 0) {
 				currentExcess.put(itemId, excess);
@@ -136,7 +136,7 @@ final class ReturnSession extends BaseCraftSession {
 
 	@Override
 	public void onOpenFailed(String reason) {
-		ReachCraftingMod.LOGGER.info("[nearby_return] pos={} skipped={}", ContainerUtils.formatPos(pendingContainerPos), reason);
+		ReachCraftingMod.LOGGER.debug("[nearby_return] pos={} skipped={}", ContainerUtils.formatPos(pendingContainerPos), reason);
 		pendingContainerPos = null;
 		timeoutTicks = 0;
 		state = SearchState.OPEN_NEXT;
@@ -188,7 +188,7 @@ final class ReturnSession extends BaseCraftSession {
 		}
 
 
-		ReachCraftingMod.LOGGER.info("[nearby_return] Container opened at {}. Preparing return plan...", ContainerUtils.formatPos(pendingContainerPos));
+		ReachCraftingMod.LOGGER.debug("[nearby_return] Container opened at {}. Preparing return plan...", ContainerUtils.formatPos(pendingContainerPos));
 
 		ReturnPlan plan = buildReturnPlan(menu);
 		executeReturnPlan(menu, plan);
@@ -288,12 +288,12 @@ final class ReturnSession extends BaseCraftSession {
 			String itemId = entry.getKey();
 			int amountToReturnToThisChest = Math.min(entry.getValue(), plannedExcess.getOrDefault(itemId, 0));
 			if (amountToReturnToThisChest <= 0) {
-				ReachCraftingMod.LOGGER.info("[nearby_return]   Skipping {}: no excess available to return", itemId);
+				ReachCraftingMod.LOGGER.debug("[nearby_return]   Skipping {}: no excess available to return", itemId);
 				continue;
 			}
 
 			int remaining = amountToReturnToThisChest;
-			ReachCraftingMod.LOGGER.info("[nearby_return]   Planning {}x {} for this container...", remaining, itemId);
+			ReachCraftingMod.LOGGER.debug("[nearby_return]   Planning {}x {} for this container...", remaining, itemId);
 			while (remaining > 0) {
 				Slot inventorySlot = findAvailableInventorySlot(menu, itemId, moves);
 				if (inventorySlot == null) {
@@ -321,7 +321,7 @@ final class ReturnSession extends BaseCraftSession {
 				simulatedOccupancy.put(targetSlot.index, currentInChest + amountToMove);
 				remaining -= amountToMove;
 				plannedExcess.put(itemId, plannedExcess.get(itemId) - amountToMove);
-				ReachCraftingMod.LOGGER.info("[nearby_return]   Added to plan: {}x from inv {} to chest {}", amountToMove, inventorySlot.index, targetSlot.index);
+				ReachCraftingMod.LOGGER.debug("[nearby_return]   Added to plan: {}x from inv {} to chest {}", amountToMove, inventorySlot.index, targetSlot.index);
 			}
 		}
 
@@ -350,10 +350,10 @@ final class ReturnSession extends BaseCraftSession {
 	}
 
 	private void executeReturnPlan(AbstractContainerMenu menu, ReturnPlan plan) {
-		ReachCraftingMod.LOGGER.info("[nearby_return] Plan complete. Executing {} moves.", plan.moves().size());
+		ReachCraftingMod.LOGGER.debug("[nearby_return] Plan complete. Executing {} moves.", plan.moves().size());
 		for (ReturnPlan.PlannedMove move : plan.moves()) {
 			String itemId = BuiltInRegistries.ITEM.getKey(move.source().getItem().getItem()).toString();
-			ReachCraftingMod.LOGGER.info("[nearby_return]   Executing: {}x {} (slot {} -> {})", move.count(), itemId, move.source().index, move.target().index);
+			ReachCraftingMod.LOGGER.debug("[nearby_return]   Executing: {}x {} (slot {} -> {})", move.count(), itemId, move.source().index, move.target().index);
 			moveItem(menu, move.source(), move.target(), move.count());
 		}
 		currentExcess.clear();
@@ -392,7 +392,7 @@ final class ReturnSession extends BaseCraftSession {
 			while (missing > 0) {
 				Slot donor = findProtectedLayoutDonor(menu, inventorySlot, snapshot, missing);
 				if (donor == null) {
-					ReachCraftingMod.LOGGER.info(
+					ReachCraftingMod.LOGGER.debug(
 						"[nearby_return]   Layout restore stalled for invSlot {}: missing {}x {}",
 						inventorySlot,
 						missing,
@@ -408,7 +408,7 @@ final class ReturnSession extends BaseCraftSession {
 					break;
 				}
 
-				ReachCraftingMod.LOGGER.info(
+				ReachCraftingMod.LOGGER.debug(
 					"[nearby_return]   Restoring layout: {}x {} from inv {} to inv {}",
 					toMove,
 					BuiltInRegistries.ITEM.getKey(snapshot.getItem()),
@@ -484,10 +484,10 @@ final class ReturnSession extends BaseCraftSession {
 			}
 			if (reopenScreen) {
 				coordinator.queuePostReturnCompaction(trackedItemIds);
-				ReachCraftingMod.LOGGER.info("[nearby_return] Deferred compaction queued for {}", trackedItemIds);
+				ReachCraftingMod.LOGGER.debug("[nearby_return] Deferred compaction queued for {}", trackedItemIds);
 			} else {
 				InventoryGridRestoreTracker.compactTrackedInventoryStacks(player.containerMenu, gameMode, trackedItemIds);
-				ReachCraftingMod.LOGGER.info(
+				ReachCraftingMod.LOGGER.debug(
 					"[nearby_return] Post-stop tracked slots={}",
 					AvailableItemSnapshot.formatInventorySlots(player, trackedItemIds)
 				);
@@ -501,17 +501,17 @@ final class ReturnSession extends BaseCraftSession {
 				inventoryCounts.merge(itemId, slot.getItem().getCount(), Integer::sum);
 			}
 		}
-		ReachCraftingMod.LOGGER.info(
+		ReachCraftingMod.LOGGER.debug(
 			"[nearby_return] Post-stop inventory summary={} reopen_screen={}",
 			AvailableItemSnapshot.formatCounts(inventoryCounts),
 			reopenScreen
 		);
 		
 		// Log final inventory state for debugging
-		ReachCraftingMod.LOGGER.info("[nearby_return] Session stopped. Final inventory state:");
+		ReachCraftingMod.LOGGER.debug("[nearby_return] Session stopped. Final inventory state:");
 		for (Slot slot : player.inventoryMenu.slots) {
 			if (slot.hasItem()) {
-				ReachCraftingMod.LOGGER.info("  slot {}: {}x {}", slot.index, slot.getItem().getCount(), BuiltInRegistries.ITEM.getKey(slot.getItem().getItem()));
+				ReachCraftingMod.LOGGER.debug("  slot {}: {}x {}", slot.index, slot.getItem().getCount(), BuiltInRegistries.ITEM.getKey(slot.getItem().getItem()));
 			}
 		}
 		

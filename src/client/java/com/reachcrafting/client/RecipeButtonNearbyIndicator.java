@@ -178,14 +178,27 @@ public final class RecipeButtonNearbyIndicator {
 		//  #####
 		//   ###
 		//    #
-		guiGraphics.fill(x + 0, y,     x + 3, y + 3, color);     // Tail (3x3)
-		guiGraphics.fill(x - 1, y + 3, x + 4, y + 4, color); // Cross (5x1)
-		guiGraphics.fill(x + 0, y + 4, x + 3, y + 5, color); // Point mid (3x1)
-		guiGraphics.fill(x + 1, y + 5, x + 2, y + 6, color); // Point tip (1x1)
+		guiGraphics.fill(x + 0, y,     x + 3, y + 3, color); // Tail (3x3)
+		guiGraphics.fill(x - 1, y + 3, x + 4, y + 4, color); // (5x1)
+		guiGraphics.fill(x + 0, y + 4, x + 3, y + 5, color); // (3x1)
+		guiGraphics.fill(x + 1, y + 5, x + 2, y + 6, color); // (1x1)
 	}
 
+	// Stylized arrow with tail:
+	//   #####
+	//   #####
+	//   #####
+	//   #####
+	//  #######
+	//   #####
+	//    ###
+	//     #
 	public static void renderOrangeArrowOutline(net.minecraft.client.gui.GuiGraphics guiGraphics, int x, int y) {
 		int color = 0xFFFF9A1F;
-		guiGraphics.renderOutline(x - 3, y - 2, 9, 10, color);
+		guiGraphics.fill(x - 1, y - 1, x + 4, y + 4, color); // (5x4)
+		guiGraphics.fill(x - 2, y + 4, x + 5, y + 5, color); // (7x1)
+		guiGraphics.fill(x - 1, y + 5, x + 4, y + 6, color); // (5x1)
+		guiGraphics.fill(x + 0, y + 6, x + 3, y + 7, color); // (3x1)
+		guiGraphics.fill(x + 1, y + 7, x + 2, y + 8, color); // (1x1)
 	}
 }

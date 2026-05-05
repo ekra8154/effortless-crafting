@@ -45,7 +45,7 @@ final class RecipeClickExecutor {
 		HeldRecipeQueueState state
 	) {
 		AvailableItemSnapshot availableItems = AvailableItemSnapshot.capture(player, screen);
-		ReachCraftingMod.LOGGER.info(
+		ReachCraftingMod.LOGGER.debug(
 			"[recipe_capture] screen={} inventory={} grid={} slots={} pending={} replay={}",
 			screen.getClass().getSimpleName(),
 			availableItems.inventorySummary(),
@@ -83,7 +83,7 @@ final class RecipeClickExecutor {
 		boolean craftable = collection.isCraftable(recipeId);
 		int recipeIndex = selectedRecipe.recipeId().index();
 		if (!selectedRecipe.recipeId().equals(recipeId)) {
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.LOGGER.debug(
 				"[recipe_variant] clicked_idx={} selected_idx={} mode={} output={}",
 				recipeId.index(),
 				selectedRecipe.recipeId().index(),
@@ -109,7 +109,7 @@ final class RecipeClickExecutor {
 			? "Missing: " + deficitReport.compactMissingSummary()
 			: "Ready: " + outputLabel;
 
-		ReachCraftingMod.LOGGER.info(
+		ReachCraftingMod.LOGGER.debug(
 			"[recipe_click] screen={} button={} idx={} craftable={} shift={} ctrl={} output={}",
 			screenKind,
 			mouseButton,
@@ -119,13 +119,13 @@ final class RecipeClickExecutor {
 			allowNearbyChests,
 			outputLabel
 		);
-		ReachCraftingMod.LOGGER.info(
+		ReachCraftingMod.LOGGER.debug(
 			"[recipe_needs] idx={} summary={} slots={}",
 			recipeIndex,
 			ingredientSummary.compactSummary(),
 			ingredientSummary.rawSlots()
 		);
-		ReachCraftingMod.LOGGER.info(
+		ReachCraftingMod.LOGGER.debug(
 			"[recipe_missing] idx={} inventory={} grid={} missing={}",
 			recipeIndex,
 			availableItems.inventorySummary(),

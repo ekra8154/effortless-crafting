@@ -421,7 +421,7 @@ final class RecipeBookInputController {
 
 		NearbyContainerDryRun.runPendingPostReturnCompaction(minecraft);
 
-		com.reachcrafting.ReachCraftingMod.LOGGER.info(
+		com.reachcrafting.ReachCraftingMod.LOGGER.debug(
 			"[recipe_replay] screen={} recipe_idx={} remaining_clicks={} allow_nearby={} craft_all={}",
 			screen.getClass().getSimpleName(),
 			state.replayBatch().action().recipeId().index(),

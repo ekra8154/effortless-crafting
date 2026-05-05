@@ -40,7 +40,7 @@ final class ScreenContextRestorer {
 			String itemId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
 			reservedGridCounts.merge(itemId, stack.getCount(), Integer::sum);
 		}
-		ReachCraftingMod.LOGGER.info(
+		ReachCraftingMod.LOGGER.debug(
 			"[nearby_resume] kind={} grid={} mouse=({}, {})",
 			context.kind(),
 			AvailableItemSnapshot.formatCounts(reservedGridCounts),

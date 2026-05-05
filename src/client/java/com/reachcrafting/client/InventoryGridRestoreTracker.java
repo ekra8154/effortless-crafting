@@ -37,7 +37,7 @@ public final class InventoryGridRestoreTracker {
 		if (slot.container instanceof Inventory) {
 			if (clickType == ClickType.PICKUP) {
 				lastInventorySlotClicked = slotId;
-				ReachCraftingMod.LOGGER.info("[grid_restore] Recorded potential source slot: {}", slotId);
+				ReachCraftingMod.LOGGER.debug("[grid_restore] Recorded potential source slot: {}", slotId);
 			}
 		}
 	}
@@ -52,13 +52,13 @@ public final class InventoryGridRestoreTracker {
 		if (isGrid) {
 			if (clickType == ClickType.PICKUP && lastInventorySlotClicked != -1) {
 				GRID_TO_ORIGINAL_SLOT.put(slotId, lastInventorySlotClicked);
-				ReachCraftingMod.LOGGER.info("[grid_restore] Linked grid slot {} to original inventory slot {}", slotId, lastInventorySlotClicked);
+				ReachCraftingMod.LOGGER.debug("[grid_restore] Linked grid slot {} to original inventory slot {}", slotId, lastInventorySlotClicked);
 			} else if (clickType == ClickType.QUICK_CRAFT && lastInventorySlotClicked != -1) {
 				// Dragging phase (button & 3): 1 = add slot, 2 = end drag
 				int phase = button & 3;
 				if (phase == 1 || phase == 2) {
 					GRID_TO_ORIGINAL_SLOT.put(slotId, lastInventorySlotClicked);
-					ReachCraftingMod.LOGGER.info("[grid_restore] Linked grid slot {} to original inventory slot {} (via drag)", slotId, lastInventorySlotClicked);
+					ReachCraftingMod.LOGGER.debug("[grid_restore] Linked grid slot {} to original inventory slot {} (via drag)", slotId, lastInventorySlotClicked);
 				}
 			}
 		} else if (isInventory) {
@@ -94,7 +94,7 @@ public final class InventoryGridRestoreTracker {
 	}
 
 	public static void restore(AbstractContainerMenu menu, MultiPlayerGameMode gameMode) {
-		com.reachcrafting.ReachCraftingMod.LOGGER.info("[grid_restore] Starting restoration sequence for menu {}", menu.getClass().getSimpleName());
+		com.reachcrafting.ReachCraftingMod.LOGGER.debug("[grid_restore] Starting restoration sequence for menu {}", menu.getClass().getSimpleName());
 		restoring = true;
 		try {
 			if (menu == null || gameMode == null) {
@@ -208,7 +208,7 @@ public final class InventoryGridRestoreTracker {
 			first = false;
 			targets.append("inv").append(entry.getKey()).append("=").append(currentCount).append("/").append(snapshot.getCount());
 		}
-		ReachCraftingMod.LOGGER.info(
+		ReachCraftingMod.LOGGER.debug(
 			"[grid_restore] phase={} targets={} inventory_slots={} grid={}",
 			phase,
 			targets,

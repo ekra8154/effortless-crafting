@@ -145,7 +145,7 @@ final class NearbyCraftCoordinator {
 			return;
 		}
 		InventoryGridRestoreTracker.compactTrackedInventoryStacks(client.player.containerMenu, client.gameMode, pendingPostReturnCompactionItemIds);
-		ReachCraftingMod.LOGGER.info(
+		ReachCraftingMod.LOGGER.debug(
 			"[nearby_return] Deferred compaction applied: {}",
 			AvailableItemSnapshot.formatInventorySlots(client.player, pendingPostReturnCompactionItemIds)
 		);

@@ -40,7 +40,7 @@ record RecipeBookSnapshot(
 		if (searchBox != null) {
 			ReachCraftingConfig.setLastSearchText(text);
 		}
-		ReachCraftingMod.LOGGER.info("[nearby_capture] Captured search text: '{}' (focused={})", text, searchBox != null && searchBox.isFocused());
+		ReachCraftingMod.LOGGER.debug("[nearby_capture] Captured search text: '{}' (focused={})", text, searchBox != null && searchBox.isFocused());
 		return new RecipeBookSnapshot(
 			component.isVisible(),
 			filterButton != null && Boolean.TRUE.equals(filterButton.getValue()),
@@ -72,7 +72,7 @@ record RecipeBookSnapshot(
 		EditBox searchBox = accessor.getSearchBox();
 		if (searchBox != null) {
 			if (!searchText.equals(searchBox.getValue())) {
-				ReachCraftingMod.LOGGER.info("[nearby_restore] Restoring search text: '{}' (was: '{}')", searchText, searchBox.getValue());
+				ReachCraftingMod.LOGGER.debug("[nearby_restore] Restoring search text: '{}' (was: '{}')", searchText, searchBox.getValue());
 				searchBox.setValue(searchText);
 			}
 			ReachCraftingConfig.setLastSearchText(searchBox.getValue());

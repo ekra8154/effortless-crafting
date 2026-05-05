@@ -49,13 +49,13 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 	private void reachcrafting$captureInventoryOnOpen(CallbackInfo ci) {
 		if (!ReachCraftingConfig.get().enabled()) return;
 		// ONLY clear and snapshot if we aren't in the middle of an automated session!
-		if (!com.reachcrafting.client.NearbyContainerDryRun.isActiveSessionRunning()) {
+		if (!com.reachcrafting.client.ContainerUtils.isAutomatedInteractionRunning()) {
 			com.reachcrafting.client.InventoryGridRestoreTracker.clear();
 			com.reachcrafting.client.PulledResourcesTracker.clear();
 
 			if ((ReachCraftingConfig.get().putPulledResourcesBack() || ReachCraftingConfig.get().restoreInventoryItemPositions())
 				&& ((Object) this instanceof net.minecraft.client.gui.screens.inventory.CraftingScreen || (Object) this instanceof net.minecraft.client.gui.screens.inventory.InventoryScreen)) {
-				com.reachcrafting.ReachCraftingMod.LOGGER.info("[grid_restore] Capturing fresh inventory snapshot...");
+				com.reachcrafting.ReachCraftingMod.LOGGER.debug("[grid_restore] Capturing fresh inventory snapshot...");
 				com.reachcrafting.client.PulledResourcesTracker.captureInventorySnapshot(net.minecraft.client.Minecraft.getInstance().player);
 			}
 		}
@@ -64,11 +64,11 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 	@Inject(method = "onClose", at = @At("HEAD"))
 	private void reachcrafting$onClose(CallbackInfo ci) {
 		if (!ReachCraftingConfig.get().enabled()) return;
-		com.reachcrafting.ReachCraftingMod.LOGGER.info("[grid_restore] Screen onClose triggered for {}", this.getClass().getName());
+		com.reachcrafting.ReachCraftingMod.LOGGER.debug("[grid_restore] Screen onClose triggered for {}", this.getClass().getName());
 		com.reachcrafting.client.ContainerUtils.clearBulkAutoCraft();
 
-		if (com.reachcrafting.client.NearbyContainerDryRun.isActiveSessionRunning()) {
-			com.reachcrafting.ReachCraftingMod.LOGGER.info("[grid_restore] Aborting active session.");
+		if (com.reachcrafting.client.ContainerUtils.isAutomatedInteractionRunning()) {
+			com.reachcrafting.ReachCraftingMod.LOGGER.debug("[grid_restore] Aborting active session.");
 			com.reachcrafting.client.NearbyContainerDryRun.abortActiveSession();
 		}
 
@@ -83,7 +83,7 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 		// Final menu contents are authoritative for cache refresh, including automated open/close flows.
 		NearbyContainerCache.onContainerScreenRemoved(this.menu);
 		
-		if (!com.reachcrafting.client.NearbyContainerDryRun.isActiveSessionRunning()) {
+		if (!com.reachcrafting.client.ContainerUtils.isAutomatedInteractionRunning()) {
 			com.reachcrafting.client.PulledResourcesTracker.clear();
 			com.reachcrafting.client.InventoryGridRestoreTracker.clear();
 		}

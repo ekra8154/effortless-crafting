@@ -12,6 +12,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class MinecraftInteractionBlockMixin {
 	@Inject(method = "startUseItem", at = @At("HEAD"), cancellable = true)
 	private void reachcrafting$blockWorldUse(CallbackInfo ci) {
+		if (!com.reachcrafting.client.ReachCraftingConfig.get().enabled()) return;
 		if (NearbyContainerDryRun.shouldBlockWorldInteraction()) {
 			ci.cancel();
 		}
@@ -19,6 +20,7 @@ public abstract class MinecraftInteractionBlockMixin {
 
 	@Inject(method = "startAttack", at = @At("HEAD"), cancellable = true)
 	private void reachcrafting$blockWorldAttack(CallbackInfoReturnable<Boolean> cir) {
+		if (!com.reachcrafting.client.ReachCraftingConfig.get().enabled()) return;
 		if (NearbyContainerDryRun.shouldBlockWorldInteraction()) {
 			cir.setReturnValue(false);
 		}
@@ -26,6 +28,7 @@ public abstract class MinecraftInteractionBlockMixin {
 
 	@Inject(method = "continueAttack", at = @At("HEAD"), cancellable = true)
 	private void reachcrafting$blockHeldAttack(boolean interacting, CallbackInfo ci) {
+		if (!com.reachcrafting.client.ReachCraftingConfig.get().enabled()) return;
 		if (NearbyContainerDryRun.shouldBlockWorldInteraction()) {
 			ci.cancel();
 		}

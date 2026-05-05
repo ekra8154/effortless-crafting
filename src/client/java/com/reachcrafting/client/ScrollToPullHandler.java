@@ -86,7 +86,7 @@ public final class ScrollToPullHandler {
                 
                 if (targetSlotIndex != -1) {
                     int virtualCountAfter = virtualSlotCounts.getOrDefault(targetSlotIndex, (menu.getSlot(targetSlotIndex).hasItem() ? menu.getSlot(targetSlotIndex).getItem().getCount() : 0)) + countToMove;
-                    ReachCraftingMod.LOGGER.info("ScrollToPull: Granular craft {}/{} -> Slot {}, New Virtual Count: {}", i + 1, multiplier, targetSlotIndex, virtualCountAfter);
+                    ReachCraftingMod.LOGGER.debug("ScrollToPull: Granular craft {}/{} -> Slot {}, New Virtual Count: {}", i + 1, multiplier, targetSlotIndex, virtualCountAfter);
 
                     // 2. Click Output
                     minecraft.gameMode.handleInventoryMouseClick(menu.containerId, resultSlot.index, 0, ClickType.PICKUP, minecraft.player);

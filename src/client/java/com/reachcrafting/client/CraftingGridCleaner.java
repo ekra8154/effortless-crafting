@@ -21,13 +21,13 @@ final class CraftingGridCleaner {
 
 		boolean retainBulkResources = isStartingNewCraft && BulkAutoCraftController.shouldRetainPulledResourcesForNextBulkCraft();
 		if (allowScreenChange && retainBulkResources) {
-			com.reachcrafting.ReachCraftingMod.LOGGER.info(
+			com.reachcrafting.ReachCraftingMod.LOGGER.debug(
 				"[grid_flush] Retaining staged nearby resources for next bulk craft (items={}, screen={})",
 				PulledResourcesTracker.getWithdrawnItems().size(),
 				client.screen != null ? client.screen.getClass().getSimpleName() : "<none>"
 			);
 		} else if (allowScreenChange && ReachCraftingConfig.get().putPulledResourcesBack() && !PulledResourcesTracker.isEmpty()) {
-			com.reachcrafting.ReachCraftingMod.LOGGER.info(
+			com.reachcrafting.ReachCraftingMod.LOGGER.debug(
 				"[grid_flush] Initiating return to chests (items={}, starting_new_craft={}, screen={})",
 				PulledResourcesTracker.getWithdrawnItems().size(),
 				isStartingNewCraft,
@@ -38,7 +38,7 @@ final class CraftingGridCleaner {
 				return;
 			}
 		} else if (allowScreenChange && ReachCraftingConfig.get().putPulledResourcesBack()) {
-			com.reachcrafting.ReachCraftingMod.LOGGER.info("[grid_flush] Skipping return to chests: PulledResourcesTracker is empty");
+			com.reachcrafting.ReachCraftingMod.LOGGER.debug("[grid_flush] Skipping return to chests: PulledResourcesTracker is empty");
 		}
 
 		InventoryGridRestoreTracker.restore(menu, client.gameMode);
