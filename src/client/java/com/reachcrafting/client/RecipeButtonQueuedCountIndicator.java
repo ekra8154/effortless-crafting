@@ -23,7 +23,10 @@ public final class RecipeButtonQueuedCountIndicator {
 			return;
 		}
 		int queuedCount = RecipeBookClickCapture.getHeldQueuedCount(button);
-		if (queuedCount < 1) {
+		boolean hasPendingZero = button.getCollection() != null
+			&& button.getCurrentRecipe() != null
+			&& RecipeBookClickCapture.hasPendingHeldRecipe(button.getCurrentRecipe(), button.getCollection(), false);
+		if (queuedCount < 1 && !hasPendingZero) {
 			return;
 		}
 
@@ -57,7 +60,8 @@ public final class RecipeButtonQueuedCountIndicator {
 			return;
 		}
 		int queuedCount = RecipeBookClickCapture.getHeldQueuedCount(recipeId, collection, true);
-		if (queuedCount < 1) {
+		boolean hasPendingZero = RecipeBookClickCapture.hasPendingHeldRecipe(recipeId, collection, true);
+		if (queuedCount < 1 && !hasPendingZero) {
 			return;
 		}
 

@@ -73,7 +73,7 @@ public class ReachCraftingModClient implements ClientModInitializer {
 				ReachCraftingMod.LOGGER.info("[debug_ping] manual debug ping triggered");
 				if (client.player != null) {
 					client.player.displayClientMessage(
-						Component.literal("Reach Crafting debug ping logged.")
+						Component.literal("Effortless Crafting debug ping logged.")
 							.withStyle(ChatFormatting.AQUA),
 						true
 					);

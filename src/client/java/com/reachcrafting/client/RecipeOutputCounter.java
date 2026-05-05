@@ -45,23 +45,16 @@ public final class RecipeOutputCounter {
 		// 2. Calculate Queued Output
 		int queuedOutputCount = 0;
 		String queuedItemId = null;
+		boolean hasQueuedState = false;
 		
 		var pending = RecipeBookClickCapture.getPendingHeldRecipe();
 		if (pending != null) {
+			hasQueuedState = true;
 			int queuedClicks = pending.clickCount();
-			if (queuedClicks > 0) {
-				ItemStack queuedResultStack = resolveQueuedOutputStack(minecraft, pending);
-				if (!queuedResultStack.isEmpty()) {
-					queuedItemId = BuiltInRegistries.ITEM.getKey(queuedResultStack.getItem()).toString();
-					int effectiveQueuedClicks = queuedClicks;
-					if (!gridResultStack.isEmpty()) {
-						String gridItemId = BuiltInRegistries.ITEM.getKey(gridResultStack.getItem()).toString();
-						if (gridItemId.equals(queuedItemId)) {
-							effectiveQueuedClicks = Math.max(0, queuedClicks - gridCrafts);
-						}
-					}
-					queuedOutputCount = effectiveQueuedClicks * queuedResultStack.getCount();
-				}
+			ItemStack queuedResultStack = resolveQueuedOutputStack(minecraft, pending);
+			if (!queuedResultStack.isEmpty()) {
+				queuedItemId = BuiltInRegistries.ITEM.getKey(queuedResultStack.getItem()).toString();
+				queuedOutputCount = queuedClicks * queuedResultStack.getCount();
 			}
 		}
 
@@ -71,26 +64,26 @@ public final class RecipeOutputCounter {
 		if (!gridResultStack.isEmpty()) {
 			displayCount = gridOutputCount;
 			
-			// If queued item is the same, add it
+			// If queued item is the same, the queued amount is the intended total.
 			if (queuedItemId != null) {
 				String gridItemId = BuiltInRegistries.ITEM.getKey(gridResultStack.getItem()).toString();
 				if (gridItemId.equals(queuedItemId)) {
-					displayCount += queuedOutputCount;
+					displayCount = queuedOutputCount;
 					includesQueued = true;
 				}
 			}
-		} else if (queuedOutputCount > 0) {
+		} else if (hasQueuedState && queuedOutputCount >= 0) {
 			// Grid is empty, show queued output
 			displayCount = queuedOutputCount;
 			includesQueued = true;
 		}
 
-		if (displayCount <= 0 || (displayCount == 1 && gridOutputCount == 1 && !includesQueued)) {
+		if ((!includesQueued && displayCount <= 0) || (displayCount == 1 && gridOutputCount == 1 && !includesQueued)) {
 			// Don't show "1" if it's just the normal result stack count and no queuing
 			if (displayCount == 1 && !gridResultStack.isEmpty() && gridResultStack.getCount() == 1 && !includesQueued) {
 				return;
 			}
-			if (displayCount <= 0) return;
+			if (!includesQueued && displayCount <= 0) return;
 		}
 
 		// 4. Render

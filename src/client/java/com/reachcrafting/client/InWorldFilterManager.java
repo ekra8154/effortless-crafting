@@ -151,12 +151,7 @@ public final class InWorldFilterManager {
 		InclusionState current = getManualState(level, pos);
 		
 		if (current == InclusionState.UNSET) {
-			// Cycle to the opposite of what it currently is automatically
-			if (isContainerActive(level, pos, state)) {
-				INSTANCE_BLACKLIST.add(key);
-			} else {
-				INSTANCE_WHITELIST.add(key);
-			}
+			INSTANCE_BLACKLIST.add(key);
 		} else if (current == InclusionState.MANUAL_BLACKLIST) {
 			// Black -> White
 			INSTANCE_BLACKLIST.remove(key);

@@ -1,6 +1,6 @@
-# Reach Crafting
+# Effortless Crafting
 
-**Reach Crafting** is a client-side Fabric mod for Minecraft 1.21.11 that lets you craft from your inventory and nearby containers without constant inventory shuffling.
+**Effortless Crafting** is a client-side Fabric mod for Minecraft 1.21.11 that lets you craft from your inventory and nearby containers without constant inventory shuffling.
 
 It is designed for vanilla-compatible play: the mod only uses normal container interactions and recipe placement that a standard client can already perform.
 
@@ -9,13 +9,13 @@ It is designed for vanilla-compatible play: the mod only uses normal container i
 ## Key Features
 
 ### Nearby Container Integration
-Stop running back and forth to your chests. Reach Crafting scans nearby containers such as chests, barrels, shulker boxes, ender chests, and other supported storage blocks to help complete the current craft.
+Stop running back and forth to your chests. Effortless Crafting scans nearby containers such as chests, barrels, shulker boxes, ender chests, and other supported storage blocks to help complete the current craft.
 * **Smart Discovery**: Scans within your block interaction range.
 * **Automatic Withdrawal**: Pulls only the ingredients needed for the current craft.
 * **Latency Aware**: Uses a session-based workflow that accounts for container opens, restores, and resuming the original crafting screen.
 
 ### Smart Craft Expansion
-Reach Crafting can treat the crafting grid as a working plan instead of a one-click action.
+Effortless Crafting can treat the crafting grid as a working plan instead of a one-click action.
 * **Batch Expansion**: Grow an existing craft toward the next stack or requested count.
 * **Variant Awareness**: Understands recipe families such as wood, wool, glass, and concrete variants.
 * **Inventory Preference**: Can prioritize materials already in your inventory before pulling from nearby storage.
@@ -47,7 +47,7 @@ The recipe book can surface more than vanilla craftability.
 
 ## Configuration
 
-Reach Crafting includes options for:
+Effortless Crafting includes options for:
 * preferring inventory over nearby containers
 * choosing high-count vs low-count variant usage
 * caching nearby container contents for faster recipe checks
@@ -77,3 +77,14 @@ Building the project locally:
 
 This project is licensed under **LGPL-3.0-or-later**. It draws inspiration and certain implementation patterns from:
 * [stack-to-nearby-chests](https://github.com/xiaocihua/stack-to-nearby-chests) by xiaocihua (LGPL-3.0)
+
+
+TODO: 
+mass dispenser craft
+
+
+bugs:
+
+something is wrong. it can't "see" items until i have explicitly chosen its variant at least once, then it works fine from then on until relaunch. 
+
+can blacklist crafting tables, looms? should not apply to all uis, only types we support (even if globally blacklisted)

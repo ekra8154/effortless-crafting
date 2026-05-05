@@ -44,6 +44,9 @@ public final class NearbyContainerCache {
 			if (pendingObservedTicks > 0) {
 				pendingObservedTicks--;
 				if (pendingObservedTicks == 0) {
+					if (openObservedContainerId == -1) {
+						openObservedPos = null;
+					}
 					pendingObservedPos = null;
 				}
 			}
@@ -62,7 +65,30 @@ public final class NearbyContainerCache {
 	}
 
 	public static boolean isCurrentContainerSupported() {
-		return openObservedPos != null;
+		if (openObservedPos == null) {
+			return false;
+		}
+
+		Minecraft client = Minecraft.getInstance();
+		if (client.level == null || client.player == null) {
+			return false;
+		}
+		if (!(client.screen instanceof AbstractContainerScreen<?>)
+			|| client.screen instanceof InventoryScreen
+			|| client.screen instanceof CraftingScreen) {
+			return false;
+		}
+
+		BlockState state = client.level.getBlockState(openObservedPos);
+		if (!ContainerUtils.isPotentiallySupportedContainer(state) || !ContainerUtils.canAttemptOpen(client.level, openObservedPos, state)) {
+			return false;
+		}
+
+		if (openObservedContainerId == -1) {
+			return pendingObservedPos != null && openObservedPos.equals(pendingObservedPos);
+		}
+
+		return client.player.containerMenu != null && client.player.containerMenu.containerId == openObservedContainerId;
 	}
 
 	public static BlockPos getCurrentContainerPos() {
@@ -252,7 +278,10 @@ public final class NearbyContainerCache {
 			return;
 		}
 
-		pendingObservedPos = pos.immutable();
+		BlockPos canonicalPos = ContainerUtils.canonicalizeContainerPos(level, pos, state);
+		openObservedPos = canonicalPos;
+		openObservedContainerId = -1;
+		pendingObservedPos = canonicalPos;
 		pendingObservedTicks = 10;
 	}
 

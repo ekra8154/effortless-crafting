@@ -1,8 +1,5 @@
 package com.reachcrafting.client;
 
-// import com.reachcrafting.ReachCraftingMod;
-
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -12,7 +9,6 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.AbstractContainerMenu;
-import net.minecraft.world.inventory.InventoryMenu;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
@@ -37,64 +33,32 @@ public final class ContainerUtils {
 	private ContainerUtils() {
 	}
 
-	private static int autoMoveWaitingTicks = 0;
-	private static boolean pendingAutoMove = false;
-	private static ItemStack autoMoveTargetStack = ItemStack.EMPTY;
-	private static ItemStack autoMoveExpectedStack = ItemStack.EMPTY;
-	private static Map<Integer, Integer> autoMoveSnapshotCounts = new HashMap<>();
-	private static boolean autoMoveOrganizing = false;
-	private static boolean autoCraftKeyHeld = false;
-	private static long lastAutoCraftToggleTime = 0;
-
 	public static void handleAutoCraftKeyPress() {
-		autoCraftKeyHeld = true;
+		AutoCraftController.handleKeyPress();
 	}
 
 	public static void handleAutoCraftKeyReleased() {
-		if (autoCraftKeyHeld) {
-			autoCraftKeyHeld = false;
-			toggleAutoCraftMode();
-		}
+		AutoCraftController.handleKeyReleased();
 	}
 
 	public static void cancelAutoCraftToggle() {
-		autoCraftKeyHeld = false;
+		AutoCraftController.cancelToggle();
 	}
 
 	public static boolean isAutoCraftTogglePending() {
-		return autoCraftKeyHeld;
+		return AutoCraftController.isTogglePending();
 	}
-
-	private static void toggleAutoCraftMode() {
-		long now = System.currentTimeMillis();
-		if (now - lastAutoCraftToggleTime < 50) {
-			return;
-		}
-		lastAutoCraftToggleTime = now;
-		
-		boolean current = ReachCraftingConfig.get().autoCraftMode();
-		boolean next = !current;
-		ReachCraftingConfig.get().setAutoCraftMode(next);
-		if (next) {
-			scheduleAutoMove(ItemStack.EMPTY);
-		}
-		ReachCraftingConfig.save();
-	}
-
-
 
 	public static void scheduleAutoMove(ItemStack expectedStack) {
-		pendingAutoMove = true;
-		autoMoveWaitingTicks = 0;
-		autoMoveExpectedStack = expectedStack != null ? expectedStack.copy() : ItemStack.EMPTY;
+		AutoMoveController.scheduleAutoMove(expectedStack);
 	}
 
 	public static boolean isAutoMovePending() {
-		return pendingAutoMove;
+		return AutoMoveController.isAutoMovePending();
 	}
 
 	public static boolean isAutomatedInteractionRunning() {
-		return pendingAutoMove || autoMoveOrganizing || NearbyContainerDryRun.isActiveSessionRunning() || InventoryGridRestoreTracker.isRestoring();
+		return AutoMoveController.isAutomatedInteractionRunning();
 	}
 
 	public static boolean isSupportedContainer(BlockState state) {
@@ -248,145 +212,7 @@ public final class ContainerUtils {
 	}
 
 	public static void autoMoveResult(net.minecraft.client.Minecraft client) {
-		if (client.player == null || client.player.containerMenu == null || client.screen == null) {
-			return;
-		}
-		
-		// Only auto-move in Crafting or Inventory screens where slot 0 is the result
-		if (!(client.screen instanceof net.minecraft.client.gui.screens.inventory.CraftingScreen) 
-			&& !(client.screen instanceof net.minecraft.client.gui.screens.inventory.InventoryScreen)) {
-			return;
-		}
-		
-		AbstractContainerMenu menu = client.player.containerMenu;
-		if (menu.slots.isEmpty()) {
-			return;
-		}
-		
-		Slot resultSlot = menu.getSlot(0);
-		
-		// Phase 1: Initiation
-		if (!autoMoveOrganizing) {
-			if (resultSlot.hasItem() && resultSlot.mayPickup(client.player)) {
-				ItemStack currentResult = resultSlot.getItem();
-				
-				// If we have an expected stack, verify it matches
-				if (!autoMoveExpectedStack.isEmpty() && !ItemStack.isSameItemSameComponents(currentResult, autoMoveExpectedStack)) {
-					com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] Recipe changed! Expected: {}, Found: {}. Stopping.", formatStack(autoMoveExpectedStack), formatStack(currentResult));
-					pendingAutoMove = false;
-					return;
-				}
-
-				autoMoveTargetStack = currentResult.copy();
-				autoMoveWaitingTicks = 0;
-				autoMoveOrganizing = true;
-				
-				// Take snapshot of current counts
-				autoMoveSnapshotCounts.clear();
-				for (int i = 0; i < 36; i++) {
-					Slot s = findInventorySlot(menu, i);
-					if (s != null && s.hasItem()) {
-						autoMoveSnapshotCounts.put(i, s.getItem().getCount());
-					}
-				}
-				Slot offhandSlot = findVisibleOffhandSlot(menu);
-				if (offhandSlot != null && offhandSlot.hasItem()) {
-					autoMoveSnapshotCounts.put(offhandSlot.index, offhandSlot.getItem().getCount());
-				}
-				
-				// Perform the initial Shift-click (synchronous client-side update)
-				client.gameMode.handleInventoryMouseClick(menu.containerId, resultSlot.index, 0, net.minecraft.world.inventory.ClickType.QUICK_MOVE, client.player);
-			} else {
-				autoMoveWaitingTicks++;
-				if (autoMoveWaitingTicks > 10) pendingAutoMove = false;
-				return;
-			}
-		}
-		
-		// Phase 2: Single-Pass Reorganize
-		autoMoveWaitingTicks++;
-		int movesThisTick = 0;
-		int maxMovesPerTick = 20;
-		
-		// We only scan if we have reason to believe items have landed 
-		// (Either because we just clicked, or enough time has passed)
-		for (int i = 0; i < 36 && movesThisTick < maxMovesPerTick; i++) {
-			Slot sourceSlot = findInventorySlot(menu, i);
-			if (sourceSlot != null && sourceSlot.hasItem() && ItemStack.isSameItemSameComponents(sourceSlot.getItem(), autoMoveTargetStack)) {
-				int currentCount = sourceSlot.getItem().getCount();
-				int oldCount = autoMoveSnapshotCounts.getOrDefault(i, 0);
-				
-				if (currentCount > oldCount) {
-					// Found newly landed items. Try to consolidate them leftward into the hotbar.
-					Slot offhandSlot = findVisibleOffhandSlot(menu);
-					if (offhandSlot != null
-						&& offhandSlot.hasItem()
-						&& ItemStack.isSameItemSameComponents(offhandSlot.getItem(), autoMoveTargetStack)
-						&& offhandSlot.getItem().getCount() < offhandSlot.getItem().getMaxStackSize()) {
-						client.gameMode.handleInventoryMouseClick(menu.containerId, sourceSlot.index, 0, net.minecraft.world.inventory.ClickType.PICKUP, client.player);
-						client.gameMode.handleInventoryMouseClick(menu.containerId, offhandSlot.index, 0, net.minecraft.world.inventory.ClickType.PICKUP, client.player);
-						
-						if (!client.player.containerMenu.getCarried().isEmpty()) {
-							client.gameMode.handleInventoryMouseClick(menu.containerId, sourceSlot.index, 0, net.minecraft.world.inventory.ClickType.PICKUP, client.player);
-						}
-						
-						movesThisTick++;
-						autoMoveSnapshotCounts.put(i, 0);
-						autoMoveSnapshotCounts.put(offhandSlot.index, offhandSlot.getItem().getCount() + currentCount);
-						continue;
-					}
-
-					for (int h = 0; h < i && h < 9; h++) {
-						Slot targetSlot = findInventorySlot(menu, h);
-						if (targetSlot == null) continue;
-						
-						boolean canMove = false;
-						if (!targetSlot.hasItem()) {
-							canMove = true;
-						} else if (ItemStack.isSameItemSameComponents(targetSlot.getItem(), autoMoveTargetStack)) {
-							if (targetSlot.getItem().getCount() < targetSlot.getItem().getMaxStackSize()) {
-								canMove = true;
-							}
-						}
-						
-						if (canMove) {
-							client.gameMode.handleInventoryMouseClick(menu.containerId, sourceSlot.index, 0, net.minecraft.world.inventory.ClickType.PICKUP, client.player);
-							client.gameMode.handleInventoryMouseClick(menu.containerId, targetSlot.index, 0, net.minecraft.world.inventory.ClickType.PICKUP, client.player);
-							
-							if (!client.player.containerMenu.getCarried().isEmpty()) {
-								client.gameMode.handleInventoryMouseClick(menu.containerId, sourceSlot.index, 0, net.minecraft.world.inventory.ClickType.PICKUP, client.player);
-							}
-							
-							movesThisTick++;
-							
-							// CRITICAL: Update snapshot for BOTH slots to prevent collisions
-							autoMoveSnapshotCounts.put(i, 0); // Source is now empty (or reduced)
-							autoMoveSnapshotCounts.put(h, targetSlot.getItem().getCount() + currentCount); // Target is now fuller
-							break;
-						}
-					}
-				}
-			}
-		}
-		
-		// Cleanup: Stop if we've moved everything or timed out
-		if (movesThisTick == 0) {
-			if (autoMoveWaitingTicks > 1) {
-				// FINAL SAFETY: If anything is still on the cursor, put it away
-				if (!client.player.containerMenu.getCarried().isEmpty()) {
-					for (int i = 0; i < 36; i++) {
-						Slot s = findInventorySlot(menu, i);
-						if (s != null && !s.hasItem()) {
-							client.gameMode.handleInventoryMouseClick(menu.containerId, s.index, 0, net.minecraft.world.inventory.ClickType.PICKUP, client.player);
-							break;
-						}
-					}
-				}
-				pendingAutoMove = false;
-				autoMoveOrganizing = false;
-				autoMoveTargetStack = ItemStack.EMPTY;
-			}
-		}
+		AutoMoveController.autoMoveResult(client);
 	}
 
 	public static boolean isGridEmpty(AbstractContainerMenu menu) {
@@ -401,49 +227,6 @@ public final class ContainerUtils {
 	}
 
 	public static void flushCraftingGrid(net.minecraft.client.Minecraft client, boolean allowScreenChange, boolean isStartingNewCraft) {
-		if (client.player == null || client.player.containerMenu == null) return;
-		if (!(client.screen instanceof net.minecraft.client.gui.screens.inventory.CraftingScreen) 
-			&& !(client.screen instanceof net.minecraft.client.gui.screens.inventory.InventoryScreen)) {
-			return;
-		}
-		
-		AbstractContainerMenu menu = client.player.containerMenu;
-
-		if (allowScreenChange && ReachCraftingConfig.get().putPulledResourcesBack() && !PulledResourcesTracker.isEmpty()) {
-			com.reachcrafting.ReachCraftingMod.LOGGER.info(
-				"[grid_flush] Initiating return to chests (items={}, starting_new_craft={}, screen={})",
-				PulledResourcesTracker.getWithdrawnItems().size(),
-				isStartingNewCraft,
-				client.screen != null ? client.screen.getClass().getSimpleName() : "<none>"
-			);
-			NearbyContainerDryRun.startReturn(menu, PulledResourcesTracker.getWithdrawnItems(), isStartingNewCraft);
-			if (NearbyContainerDryRun.isActiveSessionRunning()) {
-				return;
-			}
-		} else if (allowScreenChange && ReachCraftingConfig.get().putPulledResourcesBack()) {
-			com.reachcrafting.ReachCraftingMod.LOGGER.info("[grid_flush] Skipping return to chests: PulledResourcesTracker is empty");
-		}
-
-		// 2. Return Grid Items to Inventory (Smart or Shift-Click)
-		// This will handle restoreInventoryItemPositions internally because we updated it.
-		InventoryGridRestoreTracker.restore(menu, client.gameMode);
-	}
-
-	private static Slot findInventorySlot(AbstractContainerMenu menu, int inventoryIndex) {
-		for (Slot slot : menu.slots) {
-			if (slot.container instanceof net.minecraft.world.entity.player.Inventory && slot.getContainerSlot() == inventoryIndex) {
-				return slot;
-			}
-		}
-		return null;
-	}
-
-	private static Slot findVisibleOffhandSlot(AbstractContainerMenu menu) {
-		if (!ReachCraftingConfig.get().inventory2x2OffhandConsolidation()
-			|| !(menu instanceof InventoryMenu)
-			|| menu.slots.size() <= InventoryMenu.SHIELD_SLOT) {
-			return null;
-		}
-		return menu.getSlot(InventoryMenu.SHIELD_SLOT);
+		CraftingGridCleaner.flushCraftingGrid(client, allowScreenChange, isStartingNewCraft);
 	}
 }

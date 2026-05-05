@@ -134,9 +134,16 @@ public final class IngredientPlanning {
 
 		List<SlotState> unassigned = new ArrayList<>(emptySlots);
 
-		// Pass 1: Try to satisfy slots using ONLY what we have in inventory (if preferInventory is on)
+		boolean hasPreferredVariants = groupSlots.getFirst().ingredientSlot().itemIds().stream()
+			.anyMatch(policy.preferredVariants()::contains);
+
+		// Pass 1: Try to satisfy slots using ONLY what we have in inventory (if preferInventory is on).
+		// If a selected recipe variant provided preferred ingredients, only inventory-match those exact variants here.
 		if (policy.preferInventory()) {
-			for (String variant : orderedVariants) {
+			List<String> inventoryFirstVariants = hasPreferredVariants
+				? orderedVariants.stream().filter(policy.preferredVariants()::contains).toList()
+				: orderedVariants;
+			for (String variant : inventoryFirstVariants) {
 				int invCount = inventoryCounts.getOrDefault(variant, 0);
 				int capacity = invCount / copiesPerSlot;
 				while (capacity > 0 && !unassigned.isEmpty()) {
@@ -250,6 +257,10 @@ public final class IngredientPlanning {
 	private static Comparator<String> compareByPreference(Map<String, Integer> preferenceTotals, Map<String, Integer> inventoryCounts, Policy policy) {
 		Comparator<String> comp = Comparator.comparingInt(itemId -> 0);
 
+		if (!policy.preferredVariants().isEmpty()) {
+			comp = comp.thenComparing(itemId -> policy.preferredVariants().contains(itemId) ? 0 : 1);
+		}
+
 		if (policy.preferInventory()) {
 			// Prioritize items already in inventory
 			comp = comp.thenComparing(itemId -> inventoryCounts.getOrDefault(itemId, 0) > 0 ? 0 : 1);
@@ -332,9 +343,14 @@ public final class IngredientPlanning {
 		return joiner.length() == 0 ? "<none>" : joiner.toString();
 	}
 
-	public record Policy(CountPreference countPreference, boolean redistributeToCraftWhenNeeded, boolean preferInventory) {
+	public record Policy(CountPreference countPreference, boolean redistributeToCraftWhenNeeded, boolean preferInventory, java.util.Set<String> preferredVariants) {
 		public Policy {
 			Objects.requireNonNull(countPreference, "countPreference");
+			preferredVariants = java.util.Set.copyOf(preferredVariants);
+		}
+
+		public Policy(CountPreference countPreference, boolean redistributeToCraftWhenNeeded, boolean preferInventory) {
+			this(countPreference, redistributeToCraftWhenNeeded, preferInventory, java.util.Set.of());
 		}
 	}
 
