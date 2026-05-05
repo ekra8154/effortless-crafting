@@ -45,6 +45,8 @@
 	"tooltip.reachcrafting.put_pulled_resources_back": "When you close the crafting grid, automatically return any items pulled from nearby containers back to where they came from.",
 	"option.reachcrafting.inventory_2x2_offhand_consolidation": "2x2 Offhand Consolidation",
 	"tooltip.reachcrafting.inventory_2x2_offhand_consolidation": "If auto craft or scroll-to-pull crafts items that are actively in the offhand, it will attempt to append them there first.",
+	"option.reachcrafting.eject_items_when_full": "Eject new items when inventory full",
+	"tooltip.reachcrafting.eject_items_when_full": "When auto-craft is on or scroll to pull is true, they will keep crafting when the inventory is full and instead throw them on the ground.",
 	"option.reachcrafting.restore_inventory_item_positions": "Restore Inventory Item Positions",
 	"tooltip.reachcrafting.restore_inventory_item_positions": "If you exit the crafting grid while items are still in it, attempt to return them to their original slots in your inventory.",
 	"option.reachcrafting.in_world_filter_mode": "In-world Black/Whitelist",

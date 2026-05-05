@@ -41,6 +41,7 @@ public final class ReachCraftingConfig {
 	private static final boolean DEFAULT_INVENTORY_2X2_OFFHAND_CONSOLIDATION = true;
 	private static final ScrollToPullMode DEFAULT_SCROLL_TO_PULL_MODE = ScrollToPullMode.WHILE_RESULT_OR_INVENTORY_SLOT_HOVERED;
 	private static final boolean DEFAULT_TYPE_TO_FOCUS_SEARCH = true;
+	private static final boolean DEFAULT_EJECT_ITEMS_WHEN_FULL = false;
 	public static final List<String> DEFAULT_BLACKLIST = List.of(
 		"minecraft:ender_chest",
 		"minecraft:hopper",
@@ -78,6 +79,7 @@ public final class ReachCraftingConfig {
 	private boolean inventory2x2OffhandConsolidation;
 	private ScrollToPullMode scrollToPullMode;
 	private boolean typeToFocusSearch;
+	private boolean ejectItemsWhenFull;
 	private Set<String> blacklistedContainerIds;
 
 	private static String lastSearchText = "";
@@ -125,6 +127,7 @@ public final class ReachCraftingConfig {
 			instance.inventory2x2OffhandConsolidation = stored.inventory2x2OffhandConsolidation != null ? stored.inventory2x2OffhandConsolidation : DEFAULT_INVENTORY_2X2_OFFHAND_CONSOLIDATION;
 			instance.scrollToPullMode = parseScrollToPullMode(stored.scrollToPullMode);
 			instance.typeToFocusSearch = stored.typeToFocusSearch != null ? stored.typeToFocusSearch : DEFAULT_TYPE_TO_FOCUS_SEARCH;
+			instance.ejectItemsWhenFull = stored.ejectItemsWhenFull != null ? stored.ejectItemsWhenFull : DEFAULT_EJECT_ITEMS_WHEN_FULL;
 			instance.autoCraftEnabled = stored.autoCraftEnabled != null ? stored.autoCraftEnabled : (stored.autoCraftMode != null ? stored.autoCraftMode : DEFAULT_AUTO_CRAFT_ENABLED);
 			instance.autoCraftEnabledMode = stored.autoCraftEnabledMode != null ? stored.autoCraftEnabledMode : DEFAULT_AUTO_CRAFT_ENABLED_MODE;
 			instance.blacklistedContainerIds = stored.blacklistedContainerIds != null 
@@ -342,6 +345,14 @@ public final class ReachCraftingConfig {
 		this.typeToFocusSearch = typeToFocusSearch;
 	}
 
+	public boolean ejectItemsWhenFull() {
+		return ejectItemsWhenFull;
+	}
+
+	public void setEjectItemsWhenFull(boolean ejectItemsWhenFull) {
+		this.ejectItemsWhenFull = ejectItemsWhenFull;
+	}
+
 	public static String getLastSearchText() {
 		return lastSearchText;
 	}
@@ -406,6 +417,7 @@ public final class ReachCraftingConfig {
 		defaults.inventory2x2OffhandConsolidation = DEFAULT_INVENTORY_2X2_OFFHAND_CONSOLIDATION;
 		defaults.scrollToPullMode = DEFAULT_SCROLL_TO_PULL_MODE;
 		defaults.typeToFocusSearch = DEFAULT_TYPE_TO_FOCUS_SEARCH;
+		defaults.ejectItemsWhenFull = DEFAULT_EJECT_ITEMS_WHEN_FULL;
 		defaults.blacklistedContainerIds = new LinkedHashSet<>(DEFAULT_BLACKLIST);
 		return defaults;
 	}
@@ -482,6 +494,7 @@ public final class ReachCraftingConfig {
 		private Boolean inventory2x2OffhandConsolidation;
 		private JsonElement scrollToPullMode;
 		private Boolean typeToFocusSearch;
+		private Boolean ejectItemsWhenFull;
 		private Boolean autoCraftMode;
 		private Boolean autoCraftEnabled;
 		private AutoCraftMode autoCraftEnabledMode;
@@ -508,6 +521,7 @@ public final class ReachCraftingConfig {
 			this.inventory2x2OffhandConsolidation = config.inventory2x2OffhandConsolidation;
 			this.scrollToPullMode = new JsonPrimitive(config.scrollToPullMode.name());
 			this.typeToFocusSearch = config.typeToFocusSearch;
+			this.ejectItemsWhenFull = config.ejectItemsWhenFull;
 			this.autoCraftEnabled = config.autoCraftEnabled;
 			this.autoCraftEnabledMode = config.autoCraftEnabledMode;
 			this.blacklistedContainerIds = config.blacklistedContainerIds;

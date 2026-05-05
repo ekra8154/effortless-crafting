@@ -18,7 +18,8 @@ final class BulkAutoCraftController {
 		RecipeBookClickCapture.HeldRecipeAction action,
 		int requestedRecipeCopies,
 		boolean allowNearby,
-		ItemStack expectedOutput
+		ItemStack expectedOutput,
+		RecipeIngredientSummary ingredientSummary
 	) {
 		if (!AutoCraftController.isBulkModeEnabled() || action == null || requestedRecipeCopies <= 1 || expectedOutput == null || expectedOutput.isEmpty()) {
 			return;
@@ -36,9 +37,11 @@ final class BulkAutoCraftController {
 				action,
 				requestedRecipeCopies,
 				0,
-				expectedCopy,
+				expectedOutput.copy(),
 				allowNearby,
-				baselineOutputCount
+				baselineOutputCount,
+				0,
+				ingredientSummary
 			);
 			return;
 		}
@@ -53,6 +56,32 @@ final class BulkAutoCraftController {
 
 	static void clear() {
 		activeSession = null;
+	}
+
+	static boolean isActive() {
+		return activeSession != null;
+	}
+
+	static java.util.Set<String> getAcceptedItemIds() {
+		if (activeSession != null && activeSession.ingredientSummary() != null) {
+			return activeSession.ingredientSummary().acceptedItemIds();
+		}
+		return null;
+	}
+
+	static int estimatedRequiredSlotsForNextBatch() {
+		if (activeSession == null || activeSession.ingredientSummary() == null) {
+			return 0;
+		}
+		int remaining = remainingRequestedRecipeCopies();
+		int batchTarget = Math.min(remaining, 3);
+		return activeSession.ingredientSummary().estimateRequiredInventorySlots(batchTarget);
+	}
+
+	static void addEjectedOutput(int count) {
+		if (activeSession != null) {
+			activeSession = activeSession.withEjected(activeSession.ejectedOutputCount() + count);
+		}
 	}
 
 	static int remainingRequestedRecipeCopies() {
@@ -77,7 +106,7 @@ final class BulkAutoCraftController {
 
 		int outputPerCraft = Math.max(activeSession.expectedOutput().getCount(), 1);
 		int currentOutputCount = countOutputInInventory(client, activeSession.expectedOutput());
-		int gainedOutputCount = currentOutputCount - activeSession.lastObservedOutputCount();
+		int gainedOutputCount = currentOutputCount - activeSession.lastObservedOutputCount() + activeSession.ejectedOutputCount();
 		int craftedCopies = gainedOutputCount / outputPerCraft;
 		if (craftedCopies <= 0) {
 			clear();
@@ -126,14 +155,20 @@ final class BulkAutoCraftController {
 		int completedRecipeCopies,
 		ItemStack expectedOutput,
 		boolean allowNearby,
-		int lastObservedOutputCount
+		int lastObservedOutputCount,
+		int ejectedOutputCount,
+		RecipeIngredientSummary ingredientSummary
 	) {
 		private BulkCraftSession withUpdatedCycle(boolean updatedAllowNearby, int requestedCopiesForCycle) {
-			return new BulkCraftSession(action, Math.max(requestedRecipeCopies, requestedCopiesForCycle), completedRecipeCopies, expectedOutput.copy(), updatedAllowNearby, lastObservedOutputCount);
+			return new BulkCraftSession(action, Math.max(requestedRecipeCopies, requestedCopiesForCycle), completedRecipeCopies, expectedOutput.copy(), updatedAllowNearby, lastObservedOutputCount, ejectedOutputCount, ingredientSummary);
 		}
 
 		private BulkCraftSession withProgress(int updatedCompletedRecipeCopies, int updatedLastObservedOutputCount) {
-			return new BulkCraftSession(action, requestedRecipeCopies, updatedCompletedRecipeCopies, expectedOutput.copy(), allowNearby, updatedLastObservedOutputCount);
+			return new BulkCraftSession(action, requestedRecipeCopies, updatedCompletedRecipeCopies, expectedOutput.copy(), allowNearby, updatedLastObservedOutputCount, 0, ingredientSummary);
+		}
+
+		private BulkCraftSession withEjected(int newEjectedCount) {
+			return new BulkCraftSession(action, requestedRecipeCopies, completedRecipeCopies, expectedOutput.copy(), allowNearby, lastObservedOutputCount, newEjectedCount, ingredientSummary);
 		}
 	}
 }

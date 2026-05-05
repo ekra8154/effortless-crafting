@@ -146,6 +146,15 @@ public final class ReachCraftingConfigScreen {
 			.setSaveConsumer(config::setInventory2x2OffhandConsolidation)
 			.build());
 
+		logicGroup.add(entries.startBooleanToggle(
+				Component.translatable("option.reachcrafting.eject_items_when_full"),
+				config.ejectItemsWhenFull()
+			)
+			.setDefaultValue(false)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.eject_items_when_full"))
+			.setSaveConsumer(config::setEjectItemsWhenFull)
+			.build());
+
 
 		craftingUi.addEntry(logicGroup.build());
 

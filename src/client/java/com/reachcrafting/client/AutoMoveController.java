@@ -70,6 +70,56 @@ final class AutoMoveController {
 					return;
 				}
 
+				boolean shouldEject = false;
+				if (ReachCraftingConfig.get().ejectItemsWhenFull()) {
+					if (AutoCraftController.isBulkModeEnabled() && BulkAutoCraftController.isActive()) {
+						int emptySlots = countEmptyInventorySlots(menu);
+						int requiredSlots = BulkAutoCraftController.estimatedRequiredSlotsForNextBatch();
+						if (emptySlots <= requiredSlots + 10) {
+							com.reachcrafting.ReachCraftingMod.LOGGER.debug("[auto_move] Ejecting early! emptySlots={} required={}", emptySlots, requiredSlots);
+							shouldEject = true;
+						} else if (!canFitInInventory(menu, currentResult)) {
+							com.reachcrafting.ReachCraftingMod.LOGGER.debug("[auto_move] Ejecting because inventory full (bulk)");
+							shouldEject = true;
+						}
+					} else {
+						if (!canFitInInventory(menu, currentResult)) {
+							com.reachcrafting.ReachCraftingMod.LOGGER.debug("[auto_move] Ejecting because inventory full (normal)");
+							shouldEject = true;
+						}
+					}
+				}
+
+				if (shouldEject) {
+					com.reachcrafting.ReachCraftingMod.LOGGER.debug("[auto_move] Performing THROW click on slot {} with button 1", resultSlot.index);
+					client.gameMode.handleInventoryMouseClick(menu.containerId, resultSlot.index, 1, ClickType.THROW, client.player);
+					if (AutoCraftController.isBulkModeEnabled()) {
+						BulkAutoCraftController.addEjectedOutput(currentResult.getCount());
+					}
+
+					// Eject any by-products left in the grid
+					if (AutoCraftController.isBulkModeEnabled()) {
+						java.util.Set<String> acceptedIds = BulkAutoCraftController.getAcceptedItemIds();
+						if (acceptedIds != null) {
+							int gridSlotCount = (menu instanceof net.minecraft.world.inventory.CraftingMenu) ? 9 : 4;
+							for (int i = 1; i <= gridSlotCount; i++) {
+								Slot gridSlot = menu.getSlot(i);
+								if (gridSlot.hasItem()) {
+									String itemId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(gridSlot.getItem().getItem()).toString();
+									if (!acceptedIds.contains(itemId)) {
+										com.reachcrafting.ReachCraftingMod.LOGGER.debug("[auto_move] Ejecting by-product {} from grid slot {}", itemId, i);
+										client.gameMode.handleInventoryMouseClick(menu.containerId, gridSlot.index, 1, ClickType.THROW, client.player);
+									}
+								}
+							}
+						}
+					}
+
+					pendingAutoMove = false;
+					BulkAutoCraftController.onAutoMoveFinished(client, true);
+					return;
+				}
+
 				autoMoveTargetStack = currentResult.copy();
 				autoMoveWaitingTicks = 0;
 				autoMoveOrganizing = true;
@@ -171,6 +221,36 @@ final class AutoMoveController {
 					}
 				}
 			}
+
+			if (ReachCraftingConfig.get().ejectItemsWhenFull() && AutoCraftController.isBulkModeEnabled()) {
+				java.util.Set<String> acceptedIds = BulkAutoCraftController.getAcceptedItemIds();
+				if (acceptedIds != null) {
+					int gridSlotCount = (menu instanceof net.minecraft.world.inventory.CraftingMenu) ? 9 : 4;
+					for (int i = 1; i <= gridSlotCount; i++) {
+						Slot gridSlot = menu.getSlot(i);
+						if (gridSlot.hasItem()) {
+							String itemId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(gridSlot.getItem().getItem()).toString();
+							if (!acceptedIds.contains(itemId)) {
+								com.reachcrafting.ReachCraftingMod.LOGGER.debug("[auto_move] Ejecting by-product {} from grid slot {}", itemId, i);
+								client.gameMode.handleInventoryMouseClick(menu.containerId, gridSlot.index, 1, ClickType.THROW, client.player);
+								movesThisTick++;
+							}
+						}
+					}
+					if (movesThisTick > 0) {
+						autoMoveWaitingTicks = 0;
+						return;
+					}
+				}
+			}
+
+			if (resultSlot.hasItem() && ItemStack.isSameItemSameComponents(resultSlot.getItem(), autoMoveTargetStack)) {
+				com.reachcrafting.ReachCraftingMod.LOGGER.debug("[auto_move] Result slot still has items after organizing. Restarting loop.");
+				autoMoveOrganizing = false;
+				autoMoveWaitingTicks = 0;
+				return;
+			}
+
 			pendingAutoMove = false;
 			autoMoveOrganizing = false;
 			autoMoveTargetStack = ItemStack.EMPTY;
@@ -185,6 +265,36 @@ final class AutoMoveController {
 			}
 		}
 		return null;
+	}
+
+	private static boolean canFitInInventory(AbstractContainerMenu menu, ItemStack stack) {
+		for (int i = 0; i < 36; i++) {
+			Slot slot = findInventorySlot(menu, i);
+			if (slot == null) continue;
+			if (!slot.hasItem()) return true;
+			if (ItemStack.isSameItemSameComponents(slot.getItem(), stack) && slot.getItem().getCount() + stack.getCount() <= stack.getMaxStackSize()) {
+				return true;
+			}
+		}
+		Slot offhandSlot = findVisibleOffhandSlot(menu);
+		if (offhandSlot != null) {
+			if (!offhandSlot.hasItem()) return true;
+			if (ItemStack.isSameItemSameComponents(offhandSlot.getItem(), stack) && offhandSlot.getItem().getCount() + stack.getCount() <= stack.getMaxStackSize()) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private static int countEmptyInventorySlots(AbstractContainerMenu menu) {
+		int empty = 0;
+		for (int i = 0; i < 36; i++) {
+			Slot slot = findInventorySlot(menu, i);
+			if (slot != null && !slot.hasItem()) {
+				empty++;
+			}
+		}
+		return empty;
 	}
 
 	private static Slot findVisibleOffhandSlot(AbstractContainerMenu menu) {

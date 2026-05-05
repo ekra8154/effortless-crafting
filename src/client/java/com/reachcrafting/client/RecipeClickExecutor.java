@@ -152,7 +152,8 @@ final class RecipeClickExecutor {
 					true,
 					false,
 					requestedClicks,
-					selectedRecipe.displayStack()
+					selectedRecipe.displayStack(),
+					ingredientSummary
 				);
 				ContainerUtils.scheduleAutoMove(selectedRecipe.displayStack());
 				player.displayClientMessage(
@@ -188,7 +189,8 @@ final class RecipeClickExecutor {
 							allowNearbyChests,
 							craftAll,
 							requestedClicks,
-							selectedRecipe.displayStack()
+							selectedRecipe.displayStack(),
+							ingredientSummary
 						);
 						ContainerUtils.scheduleAutoMove(selectedRecipe.displayStack());
 					}
@@ -223,7 +225,8 @@ final class RecipeClickExecutor {
 					allowNearbyChests,
 					craftAll,
 					requestedClicks,
-					selectedRecipe.displayStack()
+					selectedRecipe.displayStack(),
+					ingredientSummary
 				);
 				ContainerUtils.scheduleAutoMove(selectedRecipe.displayStack());
 			}
@@ -319,7 +322,8 @@ final class RecipeClickExecutor {
 		boolean allowNearbyChests,
 		boolean craftAll,
 		int requestedClicks,
-		ItemStack expectedOutput
+		ItemStack expectedOutput,
+		RecipeIngredientSummary ingredientSummary
 	) {
 		if (!AutoCraftController.isBulkModeEnabled() || craftAll || requestedClicks <= 1) {
 			BulkAutoCraftController.clear();
@@ -336,7 +340,8 @@ final class RecipeClickExecutor {
 			),
 			requestedClicks,
 			allowNearbyChests,
-			expectedOutput
+			expectedOutput,
+			ingredientSummary
 		);
 	}
 

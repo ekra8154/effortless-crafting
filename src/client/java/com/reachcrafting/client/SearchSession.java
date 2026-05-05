@@ -1384,7 +1384,8 @@ final class SearchSession extends BaseCraftSession {
 					),
 					requestedSingleClicks,
 					allowNearby,
-					expectedStack
+					expectedStack,
+					ingredientSummary
 				);
 			}
 			ContainerUtils.scheduleAutoMove(expectedStack);

@@ -97,6 +97,9 @@ public final class ScrollToPullHandler {
                     virtualSlotCounts.put(targetSlotIndex, virtualCountAfter);
                     
                     craftsAttempted++;
+                } else if (hoveredSlot == resultSlot && ReachCraftingConfig.get().ejectItemsWhenFull()) {
+                    minecraft.gameMode.handleInventoryMouseClick(menu.containerId, resultSlot.index, 0, ClickType.THROW, minecraft.player);
+                    craftsAttempted++;
                 } else {
                     break;
                 }

@@ -49,6 +49,25 @@ public record RecipeIngredientSummary(List<IngredientSlot> slots, List<String> r
 		return Set.copyOf(acceptedItemIds);
 	}
 
+	public int estimateRequiredInventorySlots(int craftCopies) {
+		Map<String, Integer> counts = new LinkedHashMap<>();
+		Map<String, Integer> stackLimits = new LinkedHashMap<>();
+		for (IngredientSlot slot : slots) {
+			if (slot.isEmpty()) continue;
+			counts.put(slot.display(), counts.getOrDefault(slot.display(), 0) + 1);
+			stackLimits.put(slot.display(), slot.maxStackSize());
+		}
+
+		int requiredSlots = 0;
+		for (Map.Entry<String, Integer> entry : counts.entrySet()) {
+			int countPerCraft = entry.getValue();
+			int maxStackSize = stackLimits.get(entry.getKey());
+			int totalItems = countPerCraft * craftCopies;
+			requiredSlots += (totalItems + maxStackSize - 1) / maxStackSize;
+		}
+		return requiredSlots;
+	}
+
 	private static List<SlotDisplay> extractIngredients(Object display) {
 		if (display instanceof ShapedCraftingRecipeDisplay shaped) {
 			return shaped.ingredients();
