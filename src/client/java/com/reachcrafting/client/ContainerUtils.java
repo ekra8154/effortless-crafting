@@ -245,4 +245,12 @@ public final class ContainerUtils {
 	public static void flushCraftingGrid(net.minecraft.client.Minecraft client, boolean allowScreenChange, boolean isStartingNewCraft) {
 		CraftingGridCleaner.flushCraftingGrid(client, allowScreenChange, isStartingNewCraft);
 	}
+
+	public static boolean isInputQueueActive() {
+		return RecipeBookInputController.getInstance().isInputQueueActive();
+	}
+
+	public static void clearInputQueue() {
+		RecipeBookInputController.getInstance().clearInputQueue();
+	}
 }

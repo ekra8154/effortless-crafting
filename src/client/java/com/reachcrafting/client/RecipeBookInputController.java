@@ -260,6 +260,23 @@ final class RecipeBookInputController {
 		return state.pendingHeldRecipe();
 	}
 
+	boolean isInputQueueActive() {
+		return state.pendingHeldRecipe() != null || state.replayBatch() != null;
+	}
+
+	void clearInputQueue() {
+		state.setPendingHeldRecipe(null);
+		state.setReplayBatch(null);
+		state.setWasModifierReleasedWhileSpaceHeld(false);
+		
+		Minecraft minecraft = Minecraft.getInstance();
+		if (ReachCraftingConfig.get().inputCounterVisibility() == ReachCraftingConfig.InputCounterVisibility.ALWAYS_SHOW
+			&& minecraft.player != null
+			&& !ContainerUtils.isGridEmpty(minecraft.player.containerMenu)) {
+			ContainerUtils.flushCraftingGrid(minecraft, true, true);
+		}
+	}
+
 	void scheduleReplay(RecipeBookClickCapture.HeldRecipeAction action, int remainingClicks, boolean allowNearby, boolean craftAll) {
 		if (!ReachCraftingConfig.get().enabled() || action == null || remainingClicks <= 0) {
 			return;

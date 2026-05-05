@@ -168,12 +168,14 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 		}
 	}
 
-
 	@Inject(method = "keyPressed", at = @At("HEAD"), cancellable = true)
 	private void reachcrafting$onKeyPressed(KeyEvent event, CallbackInfoReturnable<Boolean> cir) {
 		if (!ReachCraftingConfig.get().enabled()) return;
 		if (event.key() == GLFW.GLFW_KEY_LEFT_ALT || event.key() == GLFW.GLFW_KEY_RIGHT_ALT) {
 			com.reachcrafting.client.ContainerUtils.handleAutoCraftKeyPress();
+			cir.setReturnValue(true);
+		} else if (event.key() == GLFW.GLFW_KEY_ESCAPE && com.reachcrafting.client.ContainerUtils.isInputQueueActive()) {
+			com.reachcrafting.client.ContainerUtils.clearInputQueue();
 			cir.setReturnValue(true);
 		} else if (com.reachcrafting.client.ContainerUtils.isAutoCraftTogglePending()) {
 			com.reachcrafting.client.ContainerUtils.cancelAutoCraftToggle();
@@ -187,8 +189,13 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 		boolean altDown = InputConstants.isKeyDown(Minecraft.getInstance().getWindow(), GLFW.GLFW_KEY_LEFT_ALT) 
 					   || InputConstants.isKeyDown(Minecraft.getInstance().getWindow(), GLFW.GLFW_KEY_RIGHT_ALT);
 		
-		if (!Minecraft.getInstance().isWindowActive() && com.reachcrafting.client.ContainerUtils.isAutoCraftTogglePending()) {
-			com.reachcrafting.client.ContainerUtils.cancelAutoCraftToggle();
+		if (!Minecraft.getInstance().isWindowActive()) {
+			if (com.reachcrafting.client.ContainerUtils.isAutoCraftTogglePending()) {
+				com.reachcrafting.client.ContainerUtils.cancelAutoCraftToggle();
+			}
+			if (com.reachcrafting.client.ContainerUtils.isInputQueueActive()) {
+				com.reachcrafting.client.ContainerUtils.clearInputQueue();
+			}
 		}
 
 		if (!altDown && com.reachcrafting.client.ContainerUtils.isAutoCraftTogglePending()) {
