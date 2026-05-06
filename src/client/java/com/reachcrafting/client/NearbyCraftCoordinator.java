@@ -41,6 +41,9 @@ final class NearbyCraftCoordinator {
 			if (interactionBlockTicks > 0) {
 				interactionBlockTicks--;
 			}
+			if (client.screen instanceof net.minecraft.client.gui.screens.PauseScreen) {
+				ContainerUtils.abortAllSessions();
+			}
 			if (activeSession != null) {
 				activeSession.tick();
 			}

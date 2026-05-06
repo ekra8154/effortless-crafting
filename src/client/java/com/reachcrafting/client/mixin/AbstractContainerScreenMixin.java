@@ -65,12 +65,7 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 	private void reachcrafting$onClose(CallbackInfo ci) {
 		if (!ReachCraftingConfig.get().enabled()) return;
 		com.reachcrafting.ReachCraftingMod.LOGGER.debug("[grid_restore] Screen onClose triggered for {}", this.getClass().getName());
-		com.reachcrafting.client.ContainerUtils.clearBulkAutoCraft();
-
-		if (com.reachcrafting.client.ContainerUtils.isAutomatedInteractionRunning()) {
-			com.reachcrafting.ReachCraftingMod.LOGGER.debug("[grid_restore] Aborting active session.");
-			com.reachcrafting.client.NearbyContainerDryRun.abortActiveSession();
-		}
+		com.reachcrafting.client.ContainerUtils.abortAllSessions();
 
 		if ((Object) this instanceof net.minecraft.client.gui.screens.inventory.CraftingScreen || (Object) this instanceof net.minecraft.client.gui.screens.inventory.InventoryScreen) {
 			com.reachcrafting.client.ContainerUtils.flushCraftingGrid(net.minecraft.client.Minecraft.getInstance(), true, false);
@@ -174,9 +169,10 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 		if (event.key() == GLFW.GLFW_KEY_LEFT_ALT || event.key() == GLFW.GLFW_KEY_RIGHT_ALT) {
 			com.reachcrafting.client.ContainerUtils.handleAutoCraftKeyPress();
 			cir.setReturnValue(true);
-		} else if (event.key() == GLFW.GLFW_KEY_ESCAPE && com.reachcrafting.client.ContainerUtils.isInputQueueActive()) {
-			com.reachcrafting.client.ContainerUtils.clearInputQueue();
-			cir.setReturnValue(true);
+		} else if (event.key() == GLFW.GLFW_KEY_ESCAPE) {
+			if (com.reachcrafting.client.ContainerUtils.isInputQueueActive() || com.reachcrafting.client.ContainerUtils.isAutomatedInteractionRunning()) {
+				com.reachcrafting.client.ContainerUtils.abortAllSessions();
+			}
 		} else if (com.reachcrafting.client.ContainerUtils.isAutoCraftTogglePending()) {
 			com.reachcrafting.client.ContainerUtils.cancelAutoCraftToggle();
 		}

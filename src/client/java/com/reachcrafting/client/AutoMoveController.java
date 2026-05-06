@@ -34,7 +34,15 @@ final class AutoMoveController {
 	}
 
 	static boolean isAutomatedInteractionRunning() {
-		return pendingAutoMove || autoMoveOrganizing || NearbyContainerDryRun.isActiveSessionRunning() || InventoryGridRestoreTracker.isRestoring();
+		return pendingAutoMove || autoMoveOrganizing || NearbyContainerDryRun.isActiveSessionRunning() || InventoryGridRestoreTracker.isRestoring() || BulkAutoCraftController.isActive();
+	}
+
+	static void abort() {
+		pendingAutoMove = false;
+		autoMoveOrganizing = false;
+		autoMoveTargetStack = ItemStack.EMPTY;
+		autoMoveExpectedStack = ItemStack.EMPTY;
+		autoMoveSnapshotCounts.clear();
 	}
 
 	static void autoMoveResult(Minecraft client) {

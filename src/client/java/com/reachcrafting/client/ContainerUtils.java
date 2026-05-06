@@ -253,4 +253,12 @@ public final class ContainerUtils {
 	public static void clearInputQueue() {
 		RecipeBookInputController.getInstance().clearInputQueue();
 	}
+
+	public static void abortAllSessions() {
+		clearInputQueue();
+		AutoMoveController.abort();
+		BulkAutoCraftController.clear();
+		NearbyContainerDryRun.abortActiveSession();
+		InventoryGridRestoreTracker.clear();
+	}
 }
