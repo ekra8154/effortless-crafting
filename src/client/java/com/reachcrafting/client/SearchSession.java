@@ -1495,13 +1495,16 @@ final class SearchSession extends BaseCraftSession {
 			return PlacementAttempt.SUCCESS;
 		}
 
-		int totalFound = 0;
-		for (int i = 0; i < targetCopiesPerSlot; i++) {
-			gameMode.handlePlaceRecipe(player.containerMenu.containerId, recipeId, false);
-			totalFound++;
+		int queueLimit = RecipeClickExecutor.resolveRecipeQueueLimit(client, recipeId, recipeCollection);
+		if (targetCopiesPerSlot >= queueLimit) {
+			gameMode.handlePlaceRecipe(player.containerMenu.containerId, recipeId, true);
+		} else {
+			for (int i = 0; i < targetCopiesPerSlot; i++) {
+				gameMode.handlePlaceRecipe(player.containerMenu.containerId, recipeId, false);
+			}
 		}
 
-		ReachCraftingMod.LOGGER.debug("[nearby_restore] idx={} placed_via_vanilla_calls count={} target={}", recipeIndex, totalFound, targetCopiesPerSlot);
+		ReachCraftingMod.LOGGER.debug("[nearby_restore] idx={} placed_via_vanilla_calls target={}", recipeIndex, targetCopiesPerSlot);
 		return PlacementAttempt.SUCCESS;
 	}
 

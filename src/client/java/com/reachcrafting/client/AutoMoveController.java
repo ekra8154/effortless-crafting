@@ -52,6 +52,10 @@ final class AutoMoveController {
 		}
 
 		Slot resultSlot = menu.getSlot(0);
+		
+		if (AutoCraftController.isBulkModeEnabled() && BulkAutoCraftController.isActive()) {
+			sweepAndEjectByProducts(client, menu);
+		}
 
 		if (!autoMoveOrganizing) {
 			if (resultSlot.hasItem() && resultSlot.mayPickup(client.player)) {
@@ -255,6 +259,59 @@ final class AutoMoveController {
 			autoMoveOrganizing = false;
 			autoMoveTargetStack = ItemStack.EMPTY;
 			BulkAutoCraftController.onAutoMoveFinished(client, true);
+		}
+	}
+
+	private static void sweepAndEjectByProducts(Minecraft client, AbstractContainerMenu menu) {
+		if (!ReachCraftingConfig.get().ejectItemsWhenFull()) {
+			return;
+		}
+
+		java.util.Set<String> acceptedIds = BulkAutoCraftController.getAcceptedItemIds();
+		java.util.Map<String, Integer> initialCounts = BulkAutoCraftController.getInitialInventoryCounts();
+		ItemStack expectedOutput = BulkAutoCraftController.getExpectedOutput();
+		
+		if (acceptedIds == null || initialCounts == null || expectedOutput.isEmpty()) {
+			return;
+		}
+
+		String outputId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(expectedOutput.getItem()).toString();
+		
+		// Map current total counts to decide what is "extra"
+		java.util.Map<String, Integer> currentCounts = new java.util.HashMap<>();
+		for (Slot slot : menu.slots) {
+			if (slot.container instanceof Inventory && slot.hasItem()) {
+				String itemId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(slot.getItem().getItem()).toString();
+				currentCounts.merge(itemId, slot.getItem().getCount(), Integer::sum);
+			}
+		}
+
+		for (int i = 0; i < 36; i++) {
+			Slot slot = findInventorySlot(menu, i);
+			if (slot == null || !slot.hasItem()) continue;
+
+			ItemStack stack = slot.getItem();
+			String itemId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+
+			if (itemId.equals(outputId) || acceptedIds.contains(itemId)) {
+				continue;
+			}
+
+			int initialCount = initialCounts.getOrDefault(itemId, 0);
+			int currentTotal = currentCounts.getOrDefault(itemId, 0);
+
+			if (currentTotal > initialCount) {
+				// This item is a by-product (not output, not ingredient, and count increased)
+				// Only eject if the stack we are throwing doesn't take us below the initial count.
+				// This is a safety measure to avoid throwing away pre-existing items if they stacked.
+				if (currentTotal - stack.getCount() >= initialCount) {
+					com.reachcrafting.ReachCraftingMod.LOGGER.debug("[auto_move] Ejecting by-product {} from inventory slot {}", itemId, slot.index);
+					client.gameMode.handleInventoryMouseClick(menu.containerId, slot.index, 1, ClickType.THROW, client.player);
+					
+					// Update current counts so we don't over-eject if there are multiple slots of the same byproduct
+					currentCounts.put(itemId, currentTotal - stack.getCount());
+				}
+			}
 		}
 	}
 

@@ -41,7 +41,8 @@ final class BulkAutoCraftController {
 				allowNearby,
 				baselineOutputCount,
 				0,
-				ingredientSummary
+				ingredientSummary,
+				AvailableItemSnapshot.capture(client.player, client.screen).totalCounts()
 			);
 			return;
 		}
@@ -67,6 +68,20 @@ final class BulkAutoCraftController {
 			return activeSession.ingredientSummary().acceptedItemIds();
 		}
 		return null;
+	}
+
+	static java.util.Map<String, Integer> getInitialInventoryCounts() {
+		if (activeSession != null) {
+			return activeSession.initialInventoryCounts();
+		}
+		return null;
+	}
+
+	static ItemStack getExpectedOutput() {
+		if (activeSession != null) {
+			return activeSession.expectedOutput();
+		}
+		return ItemStack.EMPTY;
 	}
 
 	static int estimatedRequiredSlotsForNextBatch() {
@@ -157,18 +172,19 @@ final class BulkAutoCraftController {
 		boolean allowNearby,
 		int lastObservedOutputCount,
 		int ejectedOutputCount,
-		RecipeIngredientSummary ingredientSummary
+		RecipeIngredientSummary ingredientSummary,
+		java.util.Map<String, Integer> initialInventoryCounts
 	) {
 		private BulkCraftSession withUpdatedCycle(boolean updatedAllowNearby, int requestedCopiesForCycle) {
-			return new BulkCraftSession(action, Math.max(requestedRecipeCopies, requestedCopiesForCycle), completedRecipeCopies, expectedOutput.copy(), updatedAllowNearby, lastObservedOutputCount, ejectedOutputCount, ingredientSummary);
+			return new BulkCraftSession(action, Math.max(requestedRecipeCopies, requestedCopiesForCycle), completedRecipeCopies, expectedOutput.copy(), updatedAllowNearby, lastObservedOutputCount, ejectedOutputCount, ingredientSummary, initialInventoryCounts);
 		}
 
 		private BulkCraftSession withProgress(int updatedCompletedRecipeCopies, int updatedLastObservedOutputCount) {
-			return new BulkCraftSession(action, requestedRecipeCopies, updatedCompletedRecipeCopies, expectedOutput.copy(), allowNearby, updatedLastObservedOutputCount, 0, ingredientSummary);
+			return new BulkCraftSession(action, requestedRecipeCopies, updatedCompletedRecipeCopies, expectedOutput.copy(), allowNearby, updatedLastObservedOutputCount, 0, ingredientSummary, initialInventoryCounts);
 		}
 
 		private BulkCraftSession withEjected(int newEjectedCount) {
-			return new BulkCraftSession(action, requestedRecipeCopies, completedRecipeCopies, expectedOutput.copy(), allowNearby, lastObservedOutputCount, newEjectedCount, ingredientSummary);
+			return new BulkCraftSession(action, requestedRecipeCopies, completedRecipeCopies, expectedOutput.copy(), allowNearby, lastObservedOutputCount, newEjectedCount, ingredientSummary, initialInventoryCounts);
 		}
 	}
 }

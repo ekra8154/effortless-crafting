@@ -142,7 +142,14 @@ final class RecipeClickExecutor {
 				&& !craftAll
 				&& !immediateCraftDeficit.hasMissingIngredients()
 				&& minecraft.gameMode != null) {
-				minecraft.gameMode.handlePlaceRecipe(player.containerMenu.containerId, selectedRecipe.recipeId(), false);
+				int queueLimit = resolveRecipeQueueLimit(minecraft, selectedRecipe.recipeId(), collection);
+				if (requestedClicks >= queueLimit) {
+					minecraft.gameMode.handlePlaceRecipe(player.containerMenu.containerId, selectedRecipe.recipeId(), true);
+				} else {
+					for (int i = 0; i < Math.max(requestedClicks, 1); i++) {
+						minecraft.gameMode.handlePlaceRecipe(player.containerMenu.containerId, selectedRecipe.recipeId(), false);
+					}
+				}
 				armBulkAutoCraft(
 					selectedRecipe.recipeId(),
 					collection,
@@ -214,7 +221,18 @@ final class RecipeClickExecutor {
 
 		MultiPlayerGameMode gameMode = minecraft.gameMode;
 		if (gameMode != null) {
-			gameMode.handlePlaceRecipe(player.containerMenu.containerId, selectedRecipe.recipeId(), craftAll);
+			int queueLimit = resolveRecipeQueueLimit(minecraft, selectedRecipe.recipeId(), collection);
+			boolean useBulkPlace = craftAll || (AutoCraftController.isBulkModeEnabled() && requestedClicks >= queueLimit);
+
+			if (useBulkPlace) {
+				gameMode.handlePlaceRecipe(player.containerMenu.containerId, selectedRecipe.recipeId(), true);
+			} else {
+				int iterations = AutoCraftController.isBulkModeEnabled() ? Math.max(requestedClicks, 1) : 1;
+				for (int i = 0; i < iterations; i++) {
+					gameMode.handlePlaceRecipe(player.containerMenu.containerId, selectedRecipe.recipeId(), false);
+				}
+			}
+
 			if (AutoCraftController.isEnabled()) {
 				armBulkAutoCraft(
 					selectedRecipe.recipeId(),
