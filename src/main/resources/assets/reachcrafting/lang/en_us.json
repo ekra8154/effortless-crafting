@@ -77,5 +77,7 @@
 	"tooltip.reachcrafting.auto_craft_capability": "When enabled, press alt to toggle autocrafting (arrow in result slot). This affects items currently in the grid when first toggled on and other non-manual crafts. \nIf bulk is enabled, alt click the arrow to temporarily turn on bulk mode. This uncaps the item request limit and performs repeated autocrafts. Great for crafting dispensers, honey, etc.",
 	"enum.reachcrafting.auto_craft_capability.none": "Disabled",
 	"enum.reachcrafting.auto_craft_capability.normal": "Autocrafting",
-	"enum.reachcrafting.auto_craft_capability.bulk": "Autocrafting and Bulk Crafting"
+	"enum.reachcrafting.auto_craft_capability.bulk": "Autocrafting and Bulk Crafting",
+	"option.reachcrafting.auto_craft_off_after_bulk": "Toggle Autocraft Off After Bulk",
+	"tooltip.reachcrafting.auto_craft_off_after_bulk": "If enabled, auto-crafting is completely disabled once a bulk session finishes. If disabled, only bulk mode resets while standard auto-crafting stays on."
 }

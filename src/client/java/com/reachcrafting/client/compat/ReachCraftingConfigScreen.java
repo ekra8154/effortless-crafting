@@ -166,6 +166,15 @@ public final class ReachCraftingConfigScreen {
 			.setEnumNameProvider(value -> Component.translatable("enum.reachcrafting.auto_craft_capability." + value.name().toLowerCase()))
 			.build());
 
+		logicGroup.add(entries.startBooleanToggle(
+				Component.translatable("option.reachcrafting.auto_craft_off_after_bulk"),
+				config.autoCraftOffAfterBulk()
+			)
+			.setDefaultValue(true)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.auto_craft_off_after_bulk"))
+			.setSaveConsumer(config::setAutoCraftOffAfterBulk)
+			.build());
+
 
 		craftingUi.addEntry(logicGroup.build());
 

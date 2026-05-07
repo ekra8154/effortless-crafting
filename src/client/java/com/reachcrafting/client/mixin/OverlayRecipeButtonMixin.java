@@ -1,7 +1,6 @@
 package com.reachcrafting.client.mixin;
 
 import com.reachcrafting.client.ReachCraftingConfig;
-import com.reachcrafting.client.RecipeButtonQueuedCountIndicator;
 import com.reachcrafting.client.RecipeButtonNearbyIndicator;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
@@ -34,14 +33,6 @@ public abstract class OverlayRecipeButtonMixin {
 		}
 
 		AbstractWidget widget = (AbstractWidget) (Object) this;
-		RecipeButtonQueuedCountIndicator.renderOverlayButton(
-			guiGraphics,
-			widget.getX(),
-			widget.getY(),
-			widget.getWidth(),
-			recipe,
-			collection
-		);
 		RecipeButtonNearbyIndicator.renderOverlayButton(
 			guiGraphics,
 			widget.getX(),

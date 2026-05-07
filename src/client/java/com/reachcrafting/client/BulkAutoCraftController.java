@@ -11,6 +11,7 @@ import net.minecraft.world.item.ItemStack;
 public final class BulkAutoCraftController {
 	private static BulkCraftSession activeSession;
 	private static int tickCounter = 0;
+	private static boolean performedDiscoveryThisSession = false;
 
 	private BulkAutoCraftController() {
 	}
@@ -45,6 +46,7 @@ public final class BulkAutoCraftController {
 				ingredientSummary,
 				AvailableItemSnapshot.capture(client.player, client.screen).totalCounts()
 			);
+			performedDiscoveryThisSession = false;
 			return;
 		}
 
@@ -59,10 +61,19 @@ public final class BulkAutoCraftController {
 	static void clear() {
 		activeSession = null;
 		tickCounter = 0;
+		performedDiscoveryThisSession = false;
 	}
 
 	public static boolean isActive() {
 		return activeSession != null;
+	}
+
+	public static boolean hasPerformedDiscovery() {
+		return performedDiscoveryThisSession;
+	}
+
+	public static void noteDiscoveryPerformed() {
+		performedDiscoveryThisSession = true;
 	}
 
 	static java.util.Set<String> getAcceptedItemIds() {
@@ -132,8 +143,7 @@ public final class BulkAutoCraftController {
 			return;
 		}
 		if (!success || !AutoCraftController.isBulkModeEnabled() || !isSupportedScreen(client.screen) || client.player == null) {
-			AutoCraftController.setEnabledMode(ReachCraftingConfig.AutoCraftMode.NORMAL);
-			clear();
+			finishSession();
 			return;
 		}
 
@@ -142,15 +152,13 @@ public final class BulkAutoCraftController {
 		int gainedOutputCount = currentOutputCount - activeSession.lastObservedOutputCount() + activeSession.ejectedOutputCount();
 		int craftedCopies = gainedOutputCount / outputPerCraft;
 		if (craftedCopies <= 0) {
-			AutoCraftController.setEnabledMode(ReachCraftingConfig.AutoCraftMode.NORMAL);
-			clear();
+			finishSession();
 			return;
 		}
 
 		int completedRecipeCopies = activeSession.completedRecipeCopies() + craftedCopies;
 		if (completedRecipeCopies >= activeSession.requestedRecipeCopies()) {
-			AutoCraftController.setEnabledMode(ReachCraftingConfig.AutoCraftMode.NORMAL);
-			clear();
+			finishSession();
 			return;
 		}
 
@@ -160,6 +168,14 @@ public final class BulkAutoCraftController {
 		// The actual replay is now triggered in the tick() method after this delay expires.
 		postAutoMoveDelayTicks = 2;
 		com.reachcrafting.ReachCraftingMod.LOGGER.info("[bulk_craft] Craft finished. Delaying 1 tick before next batch to prevent fragmentation.");
+	}
+
+	private static void finishSession() {
+		AutoCraftController.setEnabledMode(ReachCraftingConfig.AutoCraftMode.NORMAL);
+		if (ReachCraftingConfig.get().autoCraftOffAfterBulk()) {
+			AutoCraftController.setEnabled(false);
+		}
+		clear();
 	}
 
 	private static java.util.Map<Integer, String> previousSnapshot = new java.util.LinkedHashMap<>();

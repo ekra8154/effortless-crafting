@@ -55,4 +55,31 @@ public abstract class OverlayRecipeComponentMixin {
 			true
 		);
 	}
+
+	@Inject(method = "render", at = @At("TAIL"))
+	private void reachcrafting$onRender(net.minecraft.client.gui.GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick, org.spongepowered.asm.mixin.injection.callback.CallbackInfo ci) {
+		if (!ReachCraftingConfig.get().enabled()) return;
+		OverlayRecipeComponent overlay = (OverlayRecipeComponent) (Object) this;
+		if (!overlay.isVisible()) return;
+
+		RecipeCollection collection = overlay.getRecipeCollection();
+		if (collection == null) return;
+
+		java.util.List<Object> buttons = ((OverlayRecipeComponentAccessor) overlay).getRecipeButtons();
+		for (Object buttonObj : buttons) {
+			if (buttonObj instanceof net.minecraft.client.gui.components.AbstractWidget widget) {
+				if (widget.visible) {
+					net.minecraft.world.item.crafting.display.RecipeDisplayId recipeId = ((OverlayRecipeButtonAccessor) widget).getRecipe();
+					com.reachcrafting.client.RecipeButtonQueuedCountIndicator.renderOverlayButton(
+						guiGraphics,
+						widget.getX(),
+						widget.getY(),
+						widget.getWidth(),
+						recipeId,
+						collection
+					);
+				}
+			}
+		}
+	}
 }

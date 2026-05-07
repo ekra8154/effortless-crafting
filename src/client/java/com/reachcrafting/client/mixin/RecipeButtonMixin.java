@@ -2,7 +2,6 @@ package com.reachcrafting.client.mixin;
 
 import com.reachcrafting.client.ReachCraftingConfig;
 import com.reachcrafting.client.RecipeButtonNearbyIndicator;
-import com.reachcrafting.client.RecipeButtonQueuedCountIndicator;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.screens.recipebook.RecipeButton;
@@ -22,6 +21,5 @@ public abstract class RecipeButtonMixin {
 			RecipeButtonNearbyIndicator.renderDot(guiGraphics, widget.getX() + 3, widget.getY() + 3);
 		}
 
-		RecipeButtonQueuedCountIndicator.render(guiGraphics, button);
 	}
 }

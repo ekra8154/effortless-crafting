@@ -158,6 +158,25 @@ public abstract class RecipeBookComponentMixin {
 		}
 	}
 
+	@Inject(method = "render", at = @At("TAIL"))
+	private void reachcrafting$onRender(net.minecraft.client.gui.GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick, CallbackInfo ci) {
+		if (!ReachCraftingConfig.get().enabled() || !this.isVisible()) {
+			return;
+		}
+
+		// Draw indicators for the buttons on the current page.
+		// Since we're at the TAIL of RecipeBookComponent.render, all buttons are already drawn.
+		net.minecraft.client.gui.screens.recipebook.RecipeBookPage page = ((RecipeBookComponentAccessor) this).getRecipeBookPage();
+		if (page != null) {
+			java.util.List<net.minecraft.client.gui.screens.recipebook.RecipeButton> buttons = ((RecipeBookPageAccessor) page).getButtons();
+			for (net.minecraft.client.gui.screens.recipebook.RecipeButton button : buttons) {
+				if (button.visible) {
+					com.reachcrafting.client.RecipeButtonQueuedCountIndicator.render(guiGraphics, button);
+				}
+			}
+		}
+	}
+
 	private void reachcrafting$applyAutoFocus() {
 		if (this.minecraft == null || this.minecraft.player == null) {
 			return;

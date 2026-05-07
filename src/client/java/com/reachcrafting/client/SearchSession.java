@@ -175,6 +175,15 @@ final class SearchSession extends BaseCraftSession {
 		if (allowNearby) {
 			sendChat("Scanning nearby containers...");
 		}
+
+		phase = SearchPhase.DISCOVERY;
+		if (BulkAutoCraftController.isActive()) {
+			BulkAutoCraftController.noteDiscoveryPerformed();
+		}
+		activeCandidates = candidates;
+		nextCandidateIndex = 0;
+		pendingContainerPos = null;
+		state = SearchState.OPEN_NEXT;
 	}
 
 	boolean expandReservedGridInPlace() {
@@ -612,12 +621,15 @@ final class SearchSession extends BaseCraftSession {
 			summarizeRemainingItems(remainingItemIds)
 		);
 
-		boolean resumeOriginalContext = remainingItemIds.isEmpty()
-			|| ((targetCopiesPerSlot <= 0 || plannedResult.hasMissingIngredients()) && !(useCachedSearch && !discoveryFallbackStarted));
-		boolean startFallbackDiscovery = !resumeOriginalContext
-			&& (targetCopiesPerSlot <= 0 || plannedResult.hasMissingIngredients())
-			&& useCachedSearch
-			&& !discoveryFallbackStarted;
+		boolean missingEssential = targetCopiesPerSlot <= 0 || plannedResult.hasMissingIngredients();
+		boolean underServed = !craftAll && targetCopiesPerSlot < desiredTargetCopies;
+		boolean hasUnscanned = reachableView.snapshotsByKey().size() < reachableView.nearestAccessByKey().size();
+		boolean alreadyScannedInBulk = BulkAutoCraftController.isActive() && BulkAutoCraftController.hasPerformedDiscovery();
+		boolean startFallbackDiscovery = (missingEssential || underServed || hasUnscanned) 
+			&& useCachedSearch 
+			&& !discoveryFallbackStarted
+			&& !alreadyScannedInBulk;
+		boolean resumeOriginalContext = !startFallbackDiscovery && (remainingItemIds.isEmpty() || missingEssential);
 		List<BlockPos> withdrawCandidates = resumeOriginalContext || startFallbackDiscovery ? List.of() : buildWithdrawCandidates();
 		if (!resumeOriginalContext
 			&& !startFallbackDiscovery
@@ -1017,15 +1029,26 @@ final class SearchSession extends BaseCraftSession {
 	}
 
 	private boolean shouldStartFallbackDiscovery() {
+		int desiredTargetCopies = originalContext.hasReservedGrid()
+			? currentReservedCraftCopies() + requestedSingleClicks
+			: requestedSingleClicks;
+		boolean underServed = !craftAll && targetCopiesPerSlot < desiredTargetCopies;
+		boolean hasUnscanned = reachableView.snapshotsByKey().size() < reachableView.nearestAccessByKey().size();
+		boolean alreadyScannedInBulk = BulkAutoCraftController.isActive() && BulkAutoCraftController.hasPerformedDiscovery();
+
 		return useCachedSearch
 			&& allowNearby
-			&& phase == SearchPhase.WITHDRAW
-			&& !remainingItemIds.isEmpty()
-			&& !discoveryFallbackStarted;
+			&& (phase == SearchPhase.WITHDRAW || phase == SearchPhase.DISCOVERY)
+			&& (!remainingItemIds.isEmpty() || targetCopiesPerSlot <= 0 || underServed || hasUnscanned)
+			&& !discoveryFallbackStarted
+			&& !alreadyScannedInBulk;
 	}
 
 	private void beginFallbackDiscovery() {
 		discoveryFallbackStarted = true;
+		if (BulkAutoCraftController.isActive()) {
+			BulkAutoCraftController.noteDiscoveryPerformed();
+		}
 		refreshReachableView();
 		phase = SearchPhase.DISCOVERY;
 		activeCandidates = remainingUnvisitedCandidates(candidates);

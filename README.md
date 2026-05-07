@@ -81,7 +81,11 @@ This project is licensed under **LGPL-3.0-or-later**. It draws inspiration and c
 
 TODO: 
 
-focus lost while queuing should cancel. same with esc
+setting: toggle autocraft off after bulk craft
 
 BUGS:
-caching problem - sometimes (only sometimes) when you first join in a world the first search will not pull resources from all chests even if it looked in them. future crafts work as intended. 
+fix first round of bulk craft doesn't seem to "count"
+
+input counter shows 2x64 thing
+
+fast scan does not use what it finds immediately, only the next time
