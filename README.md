@@ -82,3 +82,6 @@ This project is licensed under **LGPL-3.0-or-later**. It draws inspiration and c
 TODO: 
 
 focus lost while queuing should cancel. same with esc
+
+BUGS:
+caching problem - sometimes (only sometimes) when you first join in a world the first search will not pull resources from all chests even if it looked in them. future crafts work as intended. 

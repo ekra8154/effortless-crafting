@@ -41,7 +41,7 @@ public final class ReachCraftingConfig {
 	private static final boolean DEFAULT_INVENTORY_2X2_OFFHAND_CONSOLIDATION = true;
 	private static final ScrollToPullMode DEFAULT_SCROLL_TO_PULL_MODE = ScrollToPullMode.WHILE_RESULT_OR_INVENTORY_SLOT_HOVERED;
 	private static final boolean DEFAULT_TYPE_TO_FOCUS_SEARCH = true;
-	private static final boolean DEFAULT_EJECT_ITEMS_WHEN_FULL = false;
+	private static final boolean DEFAULT_EJECT_ITEMS_WHEN_FULL = true;
 	private static final AutoCraftCapability DEFAULT_AUTO_CRAFT_CAPABILITY = AutoCraftCapability.NONE;
 	public static final List<String> DEFAULT_BLACKLIST = List.of(
 		"minecraft:ender_chest",
@@ -306,6 +306,10 @@ public final class ReachCraftingConfig {
 			autoCraftEnabled = false;
 		}
 		this.autoCraftEnabled = autoCraftEnabled;
+		if (!autoCraftEnabled) {
+			this.autoCraftEnabledMode = AutoCraftMode.NORMAL;
+			BulkAutoCraftController.clear();
+		}
 	}
 
 	public AutoCraftMode autoCraftEnabledMode() {

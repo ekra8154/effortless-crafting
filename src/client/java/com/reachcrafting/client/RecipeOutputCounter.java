@@ -90,7 +90,7 @@ public final class RecipeOutputCounter {
 		float scale = 0.8f;
 		
 		// Position further up and to the right, mostly outside the 16x16 slot
-		float x = slotX + 14;
+		float x = slotX + 17;
 		float y = slotY - 4;
 
 		guiGraphics.pose().pushMatrix();
@@ -100,6 +100,38 @@ public final class RecipeOutputCounter {
 		// Draw at (0,0) relative to translated/scaled position
 		guiGraphics.drawString(font, text, 1, 1, SHADOW_COLOR, false);
 		guiGraphics.drawString(font, text, 0, 0, color, false);
+
+		if (count > 64) {
+			int textWidth = font.width(text);
+			renderBreakdown(guiGraphics, font, count, textWidth + 1, -1, color);
+		}
+		
+		guiGraphics.pose().popMatrix();
+	}
+
+	private static void renderBreakdown(GuiGraphics guiGraphics, Font font, int count, int x, int y, int color) {
+		int stacks = count / 64;
+		int remainder = count % 64;
+		String line1 = (stacks == 1 ? "64" : (stacks + "x64"));
+		
+		guiGraphics.pose().pushMatrix();
+		guiGraphics.pose().translate(x, y);
+		guiGraphics.pose().scale(0.75f, 0.75f);
+		
+		if (remainder > 0) {
+			String line1WithParen = "(" + line1;
+			String line2 = " +" + remainder + ")";
+			
+			guiGraphics.drawString(font, line1WithParen, 1, 1, SHADOW_COLOR, false);
+			guiGraphics.drawString(font, line1WithParen, 0, 0, color, false);
+			
+			guiGraphics.drawString(font, line2, 1, font.lineHeight + 1, SHADOW_COLOR, false);
+			guiGraphics.drawString(font, line2, 0, font.lineHeight, color, false);
+		} else {
+			String text = "(" + line1 + ")";
+			guiGraphics.drawString(font, text, 1, 1, SHADOW_COLOR, false);
+			guiGraphics.drawString(font, text, 0, 0, color, false);
+		}
 		
 		guiGraphics.pose().popMatrix();
 	}

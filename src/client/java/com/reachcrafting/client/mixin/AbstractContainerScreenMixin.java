@@ -116,6 +116,7 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 		if (!ReachCraftingConfig.get().enabled()) return;
 		if (click.button() == 0
 			&& (click.modifiers() & GLFW.GLFW_MOD_ALT) != 0
+			&& com.reachcrafting.client.ContainerUtils.isAutoCraftEnabled()
 			&& ((Object) this instanceof CraftingScreen || (Object) this instanceof InventoryScreen)) {
 			Slot hoveredSlot = ((AbstractContainerScreenAccessor) this).getHoveredSlot();
 			if (hoveredSlot instanceof ResultSlot && reachcrafting$isArrowClickTarget(hoveredSlot, click.x(), click.y())) {

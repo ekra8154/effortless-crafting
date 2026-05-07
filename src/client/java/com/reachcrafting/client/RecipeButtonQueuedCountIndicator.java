@@ -32,7 +32,7 @@ public final class RecipeButtonQueuedCountIndicator {
 		Font font = minecraft.font;
 		String text = Integer.toString(Math.max(countState.displayedCount(), 0));
 
-		int badgeX = widget.getX() + widget.getWidth() - BADGE_WIDTH - 2;
+		int badgeX = widget.getX() + widget.getWidth() - BADGE_WIDTH + 1;
 		int badgeY = widget.getY() + 2;
 		int textWidth = font.width(text);
 		int textX = badgeX + (BADGE_WIDTH - textWidth) / 2;
@@ -43,6 +43,10 @@ public final class RecipeButtonQueuedCountIndicator {
 
 		guiGraphics.drawString(font, text, textX + 1, textY + 1, SHADOW_COLOR, false);
 		guiGraphics.drawString(font, text, textX, textY, TEXT_COLOR, false);
+
+		if (countState.displayedCount() > 64) {
+			renderBreakdown(guiGraphics, font, countState.displayedCount(), textX + textWidth + 1, textY - 1, TEXT_COLOR);
+		}
 	}
 
 	public static void renderOverlayButton(
@@ -65,7 +69,7 @@ public final class RecipeButtonQueuedCountIndicator {
 		Font font = minecraft.font;
 		String text = Integer.toString(Math.max(countState.displayedCount(), 0));
 
-		int badgeX = x + width - BADGE_WIDTH - 2;
+		int badgeX = x + width - BADGE_WIDTH + 1;
 		int badgeY = y + 2;
 		int textWidth = font.width(text);
 		int textX = badgeX + (BADGE_WIDTH - textWidth) / 2;
@@ -74,5 +78,36 @@ public final class RecipeButtonQueuedCountIndicator {
 		guiGraphics.fill(badgeX, badgeY, badgeX + BADGE_WIDTH, badgeY + BADGE_HEIGHT, BACKGROUND_COLOR);
 		guiGraphics.drawString(font, text, textX + 1, textY + 1, SHADOW_COLOR, false);
 		guiGraphics.drawString(font, text, textX, textY, TEXT_COLOR, false);
+
+		if (countState.displayedCount() > 64) {
+			renderBreakdown(guiGraphics, font, countState.displayedCount(), textX + textWidth + 1, textY - 1, TEXT_COLOR);
+		}
+	}
+
+	private static void renderBreakdown(GuiGraphics guiGraphics, Font font, int count, int x, int y, int color) {
+		int stacks = count / 64;
+		int remainder = count % 64;
+		String line1 = (stacks == 1 ? "64" : (stacks + "x64"));
+		
+		guiGraphics.pose().pushMatrix();
+		guiGraphics.pose().translate(x, y);
+		guiGraphics.pose().scale(0.75f, 0.75f);
+		
+		if (remainder > 0) {
+			String line1WithParen = "(" + line1;
+			String line2 = " +" + remainder + ")";
+			
+			guiGraphics.drawString(font, line1WithParen, 1, 1, SHADOW_COLOR, false);
+			guiGraphics.drawString(font, line1WithParen, 0, 0, color, false);
+			
+			guiGraphics.drawString(font, line2, 1, font.lineHeight + 1, SHADOW_COLOR, false);
+			guiGraphics.drawString(font, line2, 0, font.lineHeight, color, false);
+		} else {
+			String text = "(" + line1 + ")";
+			guiGraphics.drawString(font, text, 1, 1, SHADOW_COLOR, false);
+			guiGraphics.drawString(font, text, 0, 0, color, false);
+		}
+		
+		guiGraphics.pose().popMatrix();
 	}
 }

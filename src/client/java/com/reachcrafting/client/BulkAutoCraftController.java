@@ -132,6 +132,7 @@ public final class BulkAutoCraftController {
 			return;
 		}
 		if (!success || !AutoCraftController.isBulkModeEnabled() || !isSupportedScreen(client.screen) || client.player == null) {
+			AutoCraftController.setEnabledMode(ReachCraftingConfig.AutoCraftMode.NORMAL);
 			clear();
 			return;
 		}
@@ -141,12 +142,14 @@ public final class BulkAutoCraftController {
 		int gainedOutputCount = currentOutputCount - activeSession.lastObservedOutputCount() + activeSession.ejectedOutputCount();
 		int craftedCopies = gainedOutputCount / outputPerCraft;
 		if (craftedCopies <= 0) {
+			AutoCraftController.setEnabledMode(ReachCraftingConfig.AutoCraftMode.NORMAL);
 			clear();
 			return;
 		}
 
 		int completedRecipeCopies = activeSession.completedRecipeCopies() + craftedCopies;
 		if (completedRecipeCopies >= activeSession.requestedRecipeCopies()) {
+			AutoCraftController.setEnabledMode(ReachCraftingConfig.AutoCraftMode.NORMAL);
 			clear();
 			return;
 		}

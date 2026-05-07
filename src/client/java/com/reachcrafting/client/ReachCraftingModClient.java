@@ -43,6 +43,13 @@ public class ReachCraftingModClient implements ClientModInitializer {
 			reachCraftingCategory
 		));
 
+		net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
+			ReachCraftingConfig config = ReachCraftingConfig.get();
+			config.setAutoCraftEnabled(false);
+			config.setAutoCraftEnabledMode(ReachCraftingConfig.AutoCraftMode.NORMAL);
+			ReachCraftingConfig.save();
+		});
+
 		int[] tickCounter = {0};
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			tickCounter[0]++;

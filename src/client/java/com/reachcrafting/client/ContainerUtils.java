@@ -257,6 +257,7 @@ public final class ContainerUtils {
 	public static void abortAllSessions() {
 		clearInputQueue();
 		AutoMoveController.abort();
+		AutoCraftController.setEnabledMode(ReachCraftingConfig.AutoCraftMode.NORMAL);
 		BulkAutoCraftController.clear();
 		NearbyContainerDryRun.abortActiveSession();
 		InventoryGridRestoreTracker.clear();
