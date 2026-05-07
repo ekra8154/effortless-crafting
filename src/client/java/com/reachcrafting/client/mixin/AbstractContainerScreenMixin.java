@@ -201,6 +201,10 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 		if (com.reachcrafting.client.ContainerUtils.isAutoMovePending()) {
 			com.reachcrafting.client.ContainerUtils.autoMoveResult(Minecraft.getInstance());
 		}
+
+		if (com.reachcrafting.client.BulkAutoCraftController.isActive()) {
+			com.reachcrafting.client.BulkAutoCraftController.tick(Minecraft.getInstance());
+		}
 	}
 
 	@Inject(method = "renderSlot", at = @At("TAIL"))

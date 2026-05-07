@@ -8,8 +8,9 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 
-final class BulkAutoCraftController {
+public final class BulkAutoCraftController {
 	private static BulkCraftSession activeSession;
+	private static int tickCounter = 0;
 
 	private BulkAutoCraftController() {
 	}
@@ -57,9 +58,10 @@ final class BulkAutoCraftController {
 
 	static void clear() {
 		activeSession = null;
+		tickCounter = 0;
 	}
 
-	static boolean isActive() {
+	public static boolean isActive() {
 		return activeSession != null;
 	}
 
@@ -110,6 +112,8 @@ final class BulkAutoCraftController {
 		return activeSession != null && activeSession.allowNearby();
 	}
 
+	private static int postAutoMoveDelayTicks = 0;
+
 	static void onAutoMoveFinished(Minecraft client, boolean success) {
 		if (activeSession == null) {
 			return;
@@ -135,12 +139,125 @@ final class BulkAutoCraftController {
 		}
 
 		activeSession = activeSession.withProgress(completedRecipeCopies, currentOutputCount);
-		RecipeBookClickCapture.scheduleReplay(
-			activeSession.action(),
-			activeSession.requestedRecipeCopies() - activeSession.completedRecipeCopies(),
-			activeSession.allowNearby(),
-			false
-		);
+		
+		// Set a delay to allow inventory to settle before the next batch starts.
+		// The actual replay is now triggered in the tick() method after this delay expires.
+		postAutoMoveDelayTicks = 2;
+		com.reachcrafting.ReachCraftingMod.LOGGER.info("[bulk_craft] Craft finished. Delaying 1 tick before next batch to prevent fragmentation.");
+	}
+
+	private static java.util.Map<Integer, String> previousSnapshot = new java.util.LinkedHashMap<>();
+
+	public static void tick(Minecraft client) {
+		if (activeSession == null || client.player == null || client.player.containerMenu == null) {
+			tickCounter = 0;
+			postAutoMoveDelayTicks = 0;
+			previousSnapshot.clear();
+			return;
+		}
+
+		if (postAutoMoveDelayTicks > 0) {
+			postAutoMoveDelayTicks--;
+			if (postAutoMoveDelayTicks == 0) {
+				com.reachcrafting.ReachCraftingMod.LOGGER.info("[bulk_craft] Delay finished. Triggering next batch.");
+				RecipeBookClickCapture.scheduleReplay(
+					activeSession.action(),
+					activeSession.requestedRecipeCopies() - activeSession.completedRecipeCopies(),
+					activeSession.allowNearby(),
+					false
+				);
+			}
+			return;
+		}
+
+		tickCounter++;
+		com.reachcrafting.ReachCraftingMod.LOGGER.info("#### TICK {} ####", tickCounter);
+
+		net.minecraft.world.inventory.AbstractContainerMenu menu = client.player.containerMenu;
+
+		// Report state of top inventory row (slots 9-17)
+		logInventoryRow(menu, "Top Row", 9, 17);
+
+		// Report state of crafting grid
+		logCraftingGrid(menu);
+
+		// Change detection: compare every slot to previous tick
+		java.util.Map<Integer, String> currentSnapshot = captureFullSnapshot(menu);
+		if (!previousSnapshot.isEmpty()) {
+			StringBuilder changes = new StringBuilder();
+			java.util.Set<Integer> allSlots = new java.util.TreeSet<>();
+			allSlots.addAll(previousSnapshot.keySet());
+			allSlots.addAll(currentSnapshot.keySet());
+			for (int slotIdx : allSlots) {
+				String prev = previousSnapshot.getOrDefault(slotIdx, "EMPTY");
+				String curr = currentSnapshot.getOrDefault(slotIdx, "EMPTY");
+				if (!prev.equals(curr)) {
+					if (changes.length() > 0) changes.append(", ");
+					changes.append("slot ").append(slotIdx).append(": ").append(prev).append(" → ").append(curr);
+				}
+			}
+			if (changes.length() > 0) {
+				com.reachcrafting.ReachCraftingMod.LOGGER.info("[CHANGES] {}", changes);
+			}
+		}
+		previousSnapshot = currentSnapshot;
+	}
+
+	private static java.util.Map<Integer, String> captureFullSnapshot(net.minecraft.world.inventory.AbstractContainerMenu menu) {
+		java.util.Map<Integer, String> snapshot = new java.util.LinkedHashMap<>();
+		for (int i = 0; i < menu.slots.size(); i++) {
+			Slot slot = menu.getSlot(i);
+			if (slot.hasItem()) {
+				String itemId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(slot.getItem().getItem()).getPath();
+				snapshot.put(i, slot.getItem().getCount() + "x" + itemId);
+			}
+		}
+		return snapshot;
+	}
+
+	private static void logInventoryRow(net.minecraft.world.inventory.AbstractContainerMenu menu, String label, int startContainerSlot, int endContainerSlot) {
+		StringBuilder sb = new StringBuilder(label + ": ");
+		boolean first = true;
+		for (int i = startContainerSlot; i <= endContainerSlot; i++) {
+			Slot found = null;
+			for (Slot s : menu.slots) {
+				if (s.container instanceof net.minecraft.world.entity.player.Inventory && s.getContainerSlot() == i) {
+					found = s;
+					break;
+				}
+			}
+
+			if (found != null && found.hasItem()) {
+				if (!first) sb.append(", ");
+				sb.append("slot ").append(i).append(": ").append(found.getItem().getCount()).append("x").append(net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(found.getItem().getItem()).getPath());
+				first = false;
+			}
+		}
+		if (first) sb.append("empty");
+		com.reachcrafting.ReachCraftingMod.LOGGER.info(sb.toString());
+	}
+
+	private static void logCraftingGrid(net.minecraft.world.inventory.AbstractContainerMenu menu) {
+		StringBuilder sb = new StringBuilder("Grid: ");
+		boolean first = true;
+		int gridSlots = 0;
+		if (menu instanceof net.minecraft.world.inventory.CraftingMenu) {
+			gridSlots = 9;
+		} else if (menu instanceof net.minecraft.world.inventory.InventoryMenu) {
+			gridSlots = 4;
+		}
+
+		for (int i = 1; i <= gridSlots; i++) {
+			if (i >= menu.slots.size()) break;
+			Slot slot = menu.getSlot(i);
+			if (slot.hasItem()) {
+				if (!first) sb.append(", ");
+				sb.append("slot ").append(i).append(": ").append(slot.getItem().getCount()).append("x").append(net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(slot.getItem().getItem()).getPath());
+				first = false;
+			}
+		}
+		if (first) sb.append("empty");
+		com.reachcrafting.ReachCraftingMod.LOGGER.info(sb.toString());
 	}
 
 	private static boolean isSupportedScreen(Screen screen) {

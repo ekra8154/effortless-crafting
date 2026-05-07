@@ -289,7 +289,15 @@ final class RecipeBookInputController {
 
 		if (!ContainerUtils.isGridEmpty(minecraft.player.containerMenu)) {
 			ContainerUtils.flushCraftingGrid(minecraft, allowNearby, true);
-			state.setReplayDelayTicks(1);
+			// During bulk mode, use a longer delay to let the server process
+			// the THROW + flush and sync grid state back. This allows us to
+			// see and eject byproducts (e.g. glass bottles) that appear in
+			// the grid server-side before handlePlaceRecipe clears them.
+			if (AutoCraftController.isBulkModeEnabled() && BulkAutoCraftController.isActive()) {
+				state.setReplayDelayTicks(1);
+			} else {
+				state.setReplayDelayTicks(1);
+			}
 		}
 
 		state.setReplayBatch(new RecipeBookClickCapture.ReplayBatch(action, remainingClicks, allowNearby, craftAll));

@@ -43,6 +43,15 @@ public abstract class MultiPlayerGameModeMixin {
 		
 		AbstractContainerMenu menu = client.player.containerMenu;
 		if (menu.containerId != containerId) return;
+
+		// DIAGNOSTIC: Log every click on the result slot (slot 0) — crafting only triggers here
+		if (slotId == 0 && com.reachcrafting.client.BulkAutoCraftController.isActive()) {
+			com.reachcrafting.ReachCraftingMod.LOGGER.info(
+				"[RESULT_SLOT_CLICK] slot=0 button={} clickType={} caller={}",
+				button, clickType,
+				new Throwable().getStackTrace()[2].getMethodName()
+			);
+		}
 		
 		// Update the inventory snapshot high-water mark after every click to capture movements
 		// BUT only if we aren't in an automated session, otherwise we'll "capture" the withdrawn items as initial state!

@@ -62,7 +62,9 @@ final class AutoMoveController {
 		Slot resultSlot = menu.getSlot(0);
 		
 		if (AutoCraftController.isBulkModeEnabled() && BulkAutoCraftController.isActive()) {
+			com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] >> sweepAndEjectByProducts entry. {}", logBottleDistribution(menu));
 			sweepAndEjectByProducts(client, menu);
+			com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] << sweepAndEjectByProducts exit.  {}", logBottleDistribution(menu));
 		}
 
 		if (!autoMoveOrganizing) {
@@ -88,22 +90,24 @@ final class AutoMoveController {
 						int emptySlots = countEmptyInventorySlots(menu);
 						int requiredSlots = BulkAutoCraftController.estimatedRequiredSlotsForNextBatch();
 						if (emptySlots <= requiredSlots + 10) {
-							com.reachcrafting.ReachCraftingMod.LOGGER.debug("[auto_move] Ejecting early! emptySlots={} required={}", emptySlots, requiredSlots);
+							com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] shouldEject=true (early) emptySlots={} required={}", emptySlots, requiredSlots);
 							shouldEject = true;
 						} else if (!canFitInInventory(menu, currentResult)) {
-							com.reachcrafting.ReachCraftingMod.LOGGER.debug("[auto_move] Ejecting because inventory full (bulk)");
+							com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] shouldEject=true (inv full, bulk)");
 							shouldEject = true;
+						} else {
+							com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] shouldEject=false emptySlots={} required={}", emptySlots, requiredSlots);
 						}
 					} else {
 						if (!canFitInInventory(menu, currentResult)) {
-							com.reachcrafting.ReachCraftingMod.LOGGER.debug("[auto_move] Ejecting because inventory full (normal)");
+							com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] shouldEject=true (inv full, normal)");
 							shouldEject = true;
 						}
 					}
 				}
 
 				if (shouldEject) {
-					com.reachcrafting.ReachCraftingMod.LOGGER.debug("[auto_move] Performing THROW click on slot {} with button 1", resultSlot.index);
+					com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] EJECT path: THROW result {} from slot {}", ContainerUtils.formatStack(currentResult), resultSlot.index);
 					client.gameMode.handleInventoryMouseClick(menu.containerId, resultSlot.index, 1, ClickType.THROW, client.player);
 					if (AutoCraftController.isBulkModeEnabled()) {
 						BulkAutoCraftController.addEjectedOutput(currentResult.getCount());
@@ -119,7 +123,7 @@ final class AutoMoveController {
 								if (gridSlot.hasItem()) {
 									String itemId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(gridSlot.getItem().getItem()).toString();
 									if (!acceptedIds.contains(itemId)) {
-										com.reachcrafting.ReachCraftingMod.LOGGER.debug("[auto_move] Ejecting by-product {} from grid slot {}", itemId, i);
+										com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] EJECT grid byproduct {} from grid slot {}", itemId, i);
 										client.gameMode.handleInventoryMouseClick(menu.containerId, gridSlot.index, 1, ClickType.THROW, client.player);
 									}
 								}
@@ -127,11 +131,13 @@ final class AutoMoveController {
 						}
 					}
 
+					com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] EJECT path done. {}", logBottleDistribution(menu));
 					pendingAutoMove = false;
 					BulkAutoCraftController.onAutoMoveFinished(client, true);
 					return;
 				}
 
+				com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] SHIFT-CLICK path: pre-shiftclick. {}", logBottleDistribution(menu));
 				autoMoveTargetStack = currentResult.copy();
 				autoMoveWaitingTicks = 0;
 				autoMoveOrganizing = true;
@@ -149,6 +155,7 @@ final class AutoMoveController {
 				}
 
 				client.gameMode.handleInventoryMouseClick(menu.containerId, resultSlot.index, 0, ClickType.QUICK_MOVE, client.player);
+				com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] SHIFT-CLICK path: post-shiftclick. {}", logBottleDistribution(menu));
 			} else {
 				autoMoveWaitingTicks++;
 				if (autoMoveWaitingTicks > 10) {
@@ -243,7 +250,7 @@ final class AutoMoveController {
 						if (gridSlot.hasItem()) {
 							String itemId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(gridSlot.getItem().getItem()).toString();
 							if (!acceptedIds.contains(itemId)) {
-								com.reachcrafting.ReachCraftingMod.LOGGER.debug("[auto_move] Ejecting by-product {} from grid slot {}", itemId, i);
+								com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] ORGANIZE eject grid byproduct {} from grid slot {}", itemId, i);
 								client.gameMode.handleInventoryMouseClick(menu.containerId, gridSlot.index, 1, ClickType.THROW, client.player);
 								movesThisTick++;
 							}
@@ -257,12 +264,13 @@ final class AutoMoveController {
 			}
 
 			if (resultSlot.hasItem() && ItemStack.isSameItemSameComponents(resultSlot.getItem(), autoMoveTargetStack)) {
-				com.reachcrafting.ReachCraftingMod.LOGGER.debug("[auto_move] Result slot still has items after organizing. Restarting loop.");
+				com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] Result slot still has items after organizing. Restarting loop.");
 				autoMoveOrganizing = false;
 				autoMoveWaitingTicks = 0;
 				return;
 			}
 
+			com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] ORGANIZE complete. {}", logBottleDistribution(menu));
 			pendingAutoMove = false;
 			autoMoveOrganizing = false;
 			autoMoveTargetStack = ItemStack.EMPTY;
@@ -369,5 +377,37 @@ final class AutoMoveController {
 			return null;
 		}
 		return menu.getSlot(InventoryMenu.SHIELD_SLOT);
+	}
+
+
+	private static String logBottleDistribution(AbstractContainerMenu menu) {
+		StringBuilder sb = new StringBuilder("inv=[");
+		boolean first = true;
+		for (int i = 0; i < 36; i++) {
+			Slot slot = findInventorySlot(menu, i);
+			if (slot != null && slot.hasItem()) {
+				String itemId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(slot.getItem().getItem()).getPath();
+				if (itemId.contains("bottle")) {
+					if (!first) sb.append(", ");
+					sb.append("inv").append(i).append(":").append(slot.getItem().getCount()).append("x").append(itemId);
+					first = false;
+				}
+			}
+		}
+		sb.append("] grid=[");
+		first = true;
+		int gridSlots = (menu instanceof net.minecraft.world.inventory.CraftingMenu) ? 9 : 4;
+		for (int i = 1; i <= gridSlots; i++) {
+			if (i >= menu.slots.size()) break;
+			Slot slot = menu.getSlot(i);
+			if (slot.hasItem()) {
+				if (!first) sb.append(", ");
+				String itemId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(slot.getItem().getItem()).getPath();
+				sb.append("g").append(i).append(":").append(slot.getItem().getCount()).append("x").append(itemId);
+				first = false;
+			}
+		}
+		sb.append("]");
+		return sb.toString();
 	}
 }

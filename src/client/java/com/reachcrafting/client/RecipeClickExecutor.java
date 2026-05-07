@@ -142,14 +142,12 @@ final class RecipeClickExecutor {
 				&& !craftAll
 				&& !immediateCraftDeficit.hasMissingIngredients()
 				&& minecraft.gameMode != null) {
-				int queueLimit = resolveRecipeQueueLimit(minecraft, selectedRecipe.recipeId(), collection);
-				if (requestedClicks >= queueLimit) {
-					minecraft.gameMode.handlePlaceRecipe(player.containerMenu.containerId, selectedRecipe.recipeId(), true);
-				} else {
-					for (int i = 0; i < Math.max(requestedClicks, 1); i++) {
-						minecraft.gameMode.handlePlaceRecipe(player.containerMenu.containerId, selectedRecipe.recipeId(), false);
-					}
-				}
+				// Always use a single handlePlaceRecipe(shift=true) to fill the grid.
+				// Calling handlePlaceRecipe(false) in a loop triggers N server-side
+				// grid clears, each of which consumes the previous result and injects
+				// byproducts into inventory via Inventory.add(), causing fragmentation.
+				ReachCraftingMod.LOGGER.info("[recipe_place] handlePlaceRecipe(shift=true) from RecipeClickExecutor NEARBY path");
+				minecraft.gameMode.handlePlaceRecipe(player.containerMenu.containerId, selectedRecipe.recipeId(), true);
 				armBulkAutoCraft(
 					selectedRecipe.recipeId(),
 					collection,

@@ -463,53 +463,73 @@ public final class InventoryGridRestoreTracker {
 				continue;
 			}
 
-			gameMode.handleInventoryMouseClick(menu.containerId, gridIdx, 0, ClickType.PICKUP, client.player);
-			while (!client.player.containerMenu.getCarried().isEmpty()) {
-				ItemStack carried = client.player.containerMenu.getCarried();
-				Slot targetSlot = findBestCompactionTarget(menu, carried);
-				if (targetSlot == null) {
-					break;
+			String itemId = BuiltInRegistries.ITEM.getKey(gridSlot.getItem().getItem()).toString();
+			String itemName = BuiltInRegistries.ITEM.getKey(gridSlot.getItem().getItem()).getPath();
+			int itemCount = gridSlot.getItem().getCount();
+
+			// During bulk crafting, throw byproducts directly instead of
+			// moving them to inventory. This prevents the last craft's
+			// byproducts (e.g. glass bottles) from fragmenting in inventory.
+			if (AutoCraftController.isBulkModeEnabled() && BulkAutoCraftController.isActive()) {
+				java.util.Set<String> acceptedIds = BulkAutoCraftController.getAcceptedItemIds();
+				if (acceptedIds != null && !acceptedIds.contains(itemId)) {
+					ReachCraftingMod.LOGGER.info("[grid_flush] THROW byproduct from grid slot {}: {}x{}", gridIdx, itemCount, itemName);
+					gameMode.handleInventoryMouseClick(menu.containerId, gridSlot.index, 1, ClickType.THROW, client.player);
+					continue;
 				}
-				gameMode.handleInventoryMouseClick(menu.containerId, targetSlot.index, 0, ClickType.PICKUP, client.player);
 			}
 
+			ReachCraftingMod.LOGGER.info("[grid_flush] Flushing grid slot {}: {}x{}", gridIdx, itemCount, itemName);
+
+			// Pick up all items from this grid slot
+			gameMode.handleInventoryMouseClick(menu.containerId, gridIdx, 0, ClickType.PICKUP, client.player);
+			if (client.player.containerMenu.getCarried().isEmpty()) {
+				continue;
+			}
+
+			// Phase 1: Merge into existing matching stacks
+			// Scan hotbar (inventory indices 0-8) first, then main inventory (9-35)
+			for (int invIdx = 0; invIdx < 36 && !client.player.containerMenu.getCarried().isEmpty(); invIdx++) {
+				int menuIdx = inventoryIndexToMenuIndex(menu, invIdx);
+				if (menuIdx == -1) continue;
+
+				Slot target = menu.getSlot(menuIdx);
+				if (!target.hasItem()) continue;
+
+				ItemStack carried = client.player.containerMenu.getCarried();
+				if (!ItemStack.isSameItemSameComponents(target.getItem(), carried)) continue;
+
+				int maxStack = Math.min(target.getMaxStackSize(), carried.getMaxStackSize());
+				if (target.getItem().getCount() >= maxStack) continue;
+
+				ReachCraftingMod.LOGGER.info("[grid_flush] Phase1 merge: inv {} (menu {}) has {}x{}, merging carried {}",
+					invIdx, menuIdx, target.getItem().getCount(), itemName, carried.getCount());
+				gameMode.handleInventoryMouseClick(menu.containerId, menuIdx, 0, ClickType.PICKUP, client.player);
+			}
+
+			// Phase 2: Deposit into empty hotbar slots left-to-right (inventory indices 0-8)
+			for (int invIdx = 0; invIdx < 9 && !client.player.containerMenu.getCarried().isEmpty(); invIdx++) {
+				int menuIdx = inventoryIndexToMenuIndex(menu, invIdx);
+				if (menuIdx == -1) continue;
+
+				Slot target = menu.getSlot(menuIdx);
+				if (target.hasItem()) continue;
+
+				ReachCraftingMod.LOGGER.info("[grid_flush] Phase2 empty hotbar: inv {} (menu {}), depositing {}",
+					invIdx, menuIdx, client.player.containerMenu.getCarried().getCount());
+				gameMode.handleInventoryMouseClick(menu.containerId, menuIdx, 0, ClickType.PICKUP, client.player);
+			}
+
+			// Phase 3: If still carrying, put back in grid and shift-click (vanilla logic)
 			if (!client.player.containerMenu.getCarried().isEmpty()) {
+				ReachCraftingMod.LOGGER.info("[grid_flush] Phase3 shift-click fallback: remaining {}",
+					client.player.containerMenu.getCarried().getCount());
 				gameMode.handleInventoryMouseClick(menu.containerId, gridIdx, 0, ClickType.PICKUP, client.player);
 				if (menu.getSlot(gridIdx).hasItem()) {
 					gameMode.handleInventoryMouseClick(menu.containerId, gridIdx, 0, ClickType.QUICK_MOVE, client.player);
 				}
 			}
 		}
-	}
-
-	private static Slot findBestCompactionTarget(AbstractContainerMenu menu, ItemStack carried) {
-		Slot bestMerge = null;
-		int bestMergeCount = -1;
-		Slot bestEmpty = null;
-
-		for (Slot slot : menu.slots) {
-			if (!(slot.container instanceof Inventory) || !slot.mayPlace(carried)) {
-				continue;
-			}
-
-			if (slot.hasItem()) {
-				if (!ItemStack.isSameItemSameComponents(slot.getItem(), carried)) {
-					continue;
-				}
-				int currentCount = slot.getItem().getCount();
-				if (currentCount >= Math.min(slot.getMaxStackSize(), carried.getMaxStackSize())) {
-					continue;
-				}
-				if (bestMerge == null || currentCount > bestMergeCount) {
-					bestMerge = slot;
-					bestMergeCount = currentCount;
-				}
-			} else if (bestEmpty == null) {
-				bestEmpty = slot;
-			}
-		}
-
-		return bestMerge != null ? bestMerge : bestEmpty;
 	}
 
 	private static int inventoryIndexToMenuIndex(AbstractContainerMenu menu, int invIdx) {
