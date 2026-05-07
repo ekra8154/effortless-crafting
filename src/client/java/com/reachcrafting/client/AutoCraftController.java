@@ -69,28 +69,42 @@ final class AutoCraftController {
 
 	static void toggleEnabledModeViaArrow() {
 		ReachCraftingConfig config = ReachCraftingConfig.get();
+		if (config.autoCraftCapability() == ReachCraftingConfig.AutoCraftCapability.NONE) {
+			return;
+		}
+		boolean bulkAllowed = config.autoCraftCapability() == ReachCraftingConfig.AutoCraftCapability.BULK;
 		if (!config.autoCraftEnabled()) {
 			config.setAutoCraftEnabled(true);
-			config.setAutoCraftEnabledMode(ReachCraftingConfig.AutoCraftMode.BULK);
+			config.setAutoCraftEnabledMode(bulkAllowed ? ReachCraftingConfig.AutoCraftMode.BULK : ReachCraftingConfig.AutoCraftMode.NORMAL);
 		} else if (config.autoCraftEnabledMode() == ReachCraftingConfig.AutoCraftMode.BULK) {
 			config.setAutoCraftEnabledMode(ReachCraftingConfig.AutoCraftMode.NORMAL);
 			BulkAutoCraftController.clear();
 		} else {
-			config.setAutoCraftEnabledMode(ReachCraftingConfig.AutoCraftMode.BULK);
+			if (bulkAllowed) {
+				config.setAutoCraftEnabledMode(ReachCraftingConfig.AutoCraftMode.BULK);
+			} else {
+				config.setAutoCraftEnabled(false);
+				BulkAutoCraftController.clear();
+			}
 		}
 		ReachCraftingConfig.save();
 	}
 
 	private static void toggleAutoCraftMode() {
+		ReachCraftingConfig config = ReachCraftingConfig.get();
+		if (config.autoCraftCapability() == ReachCraftingConfig.AutoCraftCapability.NONE) {
+			return;
+		}
+
 		long now = System.currentTimeMillis();
 		if (now - lastAutoCraftToggleTime < 50) {
 			return;
 		}
 		lastAutoCraftToggleTime = now;
 
-		boolean current = ReachCraftingConfig.get().autoCraftEnabled();
+		boolean current = config.autoCraftEnabled();
 		boolean next = !current;
-		ReachCraftingConfig.get().setAutoCraftEnabled(next);
+		config.setAutoCraftEnabled(next);
 		if (!next) {
 			BulkAutoCraftController.clear();
 		}

@@ -46,7 +46,7 @@
 	"option.reachcrafting.inventory_2x2_offhand_consolidation": "2x2 Offhand Consolidation",
 	"tooltip.reachcrafting.inventory_2x2_offhand_consolidation": "If auto craft or scroll-to-pull crafts items that are actively in the offhand, it will attempt to append them there first.",
 	"option.reachcrafting.eject_items_when_full": "Eject new items when inventory full",
-	"tooltip.reachcrafting.eject_items_when_full": "When auto-craft is on or scroll to pull is true, they will keep crafting when the inventory is full and instead throw them on the ground.",
+	"tooltip.reachcrafting.eject_items_when_full": "When auto-craft is on or scroll to pull is true, crafting can continue when inventory is full by dropping (ejecting) results onto the ground.",
 	"option.reachcrafting.restore_inventory_item_positions": "Restore Inventory Item Positions",
 	"tooltip.reachcrafting.restore_inventory_item_positions": "If you exit the crafting grid while items are still in it, attempt to return them to their original slots in your inventory.",
 	"option.reachcrafting.in_world_filter_mode": "In-world Black/Whitelist",
@@ -73,6 +73,9 @@
 	"tooltip.reachcrafting.remember_previous_search": "Restore the last used search query when opening the recipe book.",
 	"option.reachcrafting.type_to_focus_search": "Type to Focus Search",
 	"tooltip.reachcrafting.type_to_focus_search": "Automatically focus and highlight the search bar when you start typing while the recipe book is visible.",
-	"option.reachcrafting.auto_craft_mode": "Auto-Craft Mode",
-	"tooltip.reachcrafting.auto_craft_mode": "Enable the experimental automated crafting system triggered by the Alt key."
+	"option.reachcrafting.auto_craft_capability": "Auto crafting",
+	"tooltip.reachcrafting.auto_craft_capability": "When enabled, press alt to toggle autocrafting (arrow in result slot). This affects items currently in the grid when first toggled on and other non-manual crafts. \nIf bulk mode is enabled (orange outline after alt-clicking autocraft arrow), performs repeated autocrafts at a now uncapped item limit. Great for crafting dispensers, honey, etc.",
+	"enum.reachcrafting.auto_craft_capability.none": "Disabled",
+	"enum.reachcrafting.auto_craft_capability.normal": "Autocrafting",
+	"enum.reachcrafting.auto_craft_capability.bulk": "Autocrafting and Bulk Crafting"
 }

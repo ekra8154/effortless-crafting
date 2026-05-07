@@ -155,6 +155,17 @@ public final class ReachCraftingConfigScreen {
 			.setSaveConsumer(config::setEjectItemsWhenFull)
 			.build());
 
+		logicGroup.add(entries.startEnumSelector(
+				Component.translatable("option.reachcrafting.auto_craft_capability"),
+				ReachCraftingConfig.AutoCraftCapability.class,
+				config.autoCraftCapability()
+			)
+			.setDefaultValue(ReachCraftingConfig.AutoCraftCapability.NONE)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.auto_craft_capability"))
+			.setSaveConsumer(config::setAutoCraftCapability)
+			.setEnumNameProvider(value -> Component.translatable("enum.reachcrafting.auto_craft_capability." + value.name().toLowerCase()))
+			.build());
+
 
 		craftingUi.addEntry(logicGroup.build());
 

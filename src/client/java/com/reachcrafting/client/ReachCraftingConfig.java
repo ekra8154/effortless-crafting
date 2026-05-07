@@ -42,6 +42,7 @@ public final class ReachCraftingConfig {
 	private static final ScrollToPullMode DEFAULT_SCROLL_TO_PULL_MODE = ScrollToPullMode.WHILE_RESULT_OR_INVENTORY_SLOT_HOVERED;
 	private static final boolean DEFAULT_TYPE_TO_FOCUS_SEARCH = true;
 	private static final boolean DEFAULT_EJECT_ITEMS_WHEN_FULL = false;
+	private static final AutoCraftCapability DEFAULT_AUTO_CRAFT_CAPABILITY = AutoCraftCapability.NONE;
 	public static final List<String> DEFAULT_BLACKLIST = List.of(
 		"minecraft:ender_chest",
 		"minecraft:hopper",
@@ -80,6 +81,7 @@ public final class ReachCraftingConfig {
 	private ScrollToPullMode scrollToPullMode;
 	private boolean typeToFocusSearch;
 	private boolean ejectItemsWhenFull;
+	private AutoCraftCapability autoCraftCapability;
 	private Set<String> blacklistedContainerIds;
 
 	private static String lastSearchText = "";
@@ -130,6 +132,16 @@ public final class ReachCraftingConfig {
 			instance.ejectItemsWhenFull = stored.ejectItemsWhenFull != null ? stored.ejectItemsWhenFull : DEFAULT_EJECT_ITEMS_WHEN_FULL;
 			instance.autoCraftEnabled = stored.autoCraftEnabled != null ? stored.autoCraftEnabled : (stored.autoCraftMode != null ? stored.autoCraftMode : DEFAULT_AUTO_CRAFT_ENABLED);
 			instance.autoCraftEnabledMode = stored.autoCraftEnabledMode != null ? stored.autoCraftEnabledMode : DEFAULT_AUTO_CRAFT_ENABLED_MODE;
+			instance.autoCraftCapability = stored.autoCraftCapability != null ? stored.autoCraftCapability : (stored.enableEnablingBulkMode != null ? (stored.enableEnablingBulkMode ? AutoCraftCapability.BULK : AutoCraftCapability.NORMAL) : DEFAULT_AUTO_CRAFT_CAPABILITY);
+			
+			// Enforce capability gate on load
+			if (instance.autoCraftCapability == AutoCraftCapability.NONE) {
+				instance.autoCraftEnabled = false;
+			}
+			if (instance.autoCraftCapability != AutoCraftCapability.BULK && instance.autoCraftEnabledMode == AutoCraftMode.BULK) {
+				instance.autoCraftEnabledMode = AutoCraftMode.NORMAL;
+			}
+
 			instance.blacklistedContainerIds = stored.blacklistedContainerIds != null 
 				? new LinkedHashSet<>(stored.blacklistedContainerIds) 
 				: new LinkedHashSet<>(DEFAULT_BLACKLIST);
@@ -286,10 +298,13 @@ public final class ReachCraftingConfig {
 	}
 
 	public boolean autoCraftEnabled() {
-		return autoCraftEnabled;
+		return autoCraftEnabled && autoCraftCapability != AutoCraftCapability.NONE;
 	}
 
 	public void setAutoCraftEnabled(boolean autoCraftEnabled) {
+		if (autoCraftCapability == AutoCraftCapability.NONE) {
+			autoCraftEnabled = false;
+		}
 		this.autoCraftEnabled = autoCraftEnabled;
 	}
 
@@ -298,11 +313,30 @@ public final class ReachCraftingConfig {
 	}
 
 	public void setAutoCraftEnabledMode(AutoCraftMode autoCraftEnabledMode) {
+		if (autoCraftCapability != AutoCraftCapability.BULK && autoCraftEnabledMode == AutoCraftMode.BULK) {
+			autoCraftEnabledMode = AutoCraftMode.NORMAL;
+		}
 		this.autoCraftEnabledMode = autoCraftEnabledMode != null ? autoCraftEnabledMode : DEFAULT_AUTO_CRAFT_ENABLED_MODE;
 	}
 
+	public AutoCraftCapability autoCraftCapability() {
+		return autoCraftCapability;
+	}
+
+	public void setAutoCraftCapability(AutoCraftCapability capability) {
+		this.autoCraftCapability = capability != null ? capability : DEFAULT_AUTO_CRAFT_CAPABILITY;
+		if (this.autoCraftCapability == AutoCraftCapability.NONE) {
+			this.autoCraftEnabled = false;
+			this.autoCraftEnabledMode = AutoCraftMode.NORMAL;
+			BulkAutoCraftController.clear();
+		} else if (this.autoCraftCapability != AutoCraftCapability.BULK && this.autoCraftEnabledMode == AutoCraftMode.BULK) {
+			this.autoCraftEnabledMode = AutoCraftMode.NORMAL;
+			BulkAutoCraftController.clear();
+		}
+	}
+
 	public boolean isBulkAutoCraftMode() {
-		return autoCraftEnabled && autoCraftEnabledMode == AutoCraftMode.BULK;
+		return autoCraftEnabled() && autoCraftEnabledMode == AutoCraftMode.BULK && autoCraftCapability == AutoCraftCapability.BULK;
 	}
 
 	public boolean showTotalOutputCounts() {
@@ -418,6 +452,7 @@ public final class ReachCraftingConfig {
 		defaults.scrollToPullMode = DEFAULT_SCROLL_TO_PULL_MODE;
 		defaults.typeToFocusSearch = DEFAULT_TYPE_TO_FOCUS_SEARCH;
 		defaults.ejectItemsWhenFull = DEFAULT_EJECT_ITEMS_WHEN_FULL;
+		defaults.autoCraftCapability = DEFAULT_AUTO_CRAFT_CAPABILITY;
 		defaults.blacklistedContainerIds = new LinkedHashSet<>(DEFAULT_BLACKLIST);
 		return defaults;
 	}
@@ -473,6 +508,12 @@ public final class ReachCraftingConfig {
 		BULK
 	}
 
+	public enum AutoCraftCapability {
+		NONE,
+		NORMAL,
+		BULK
+	}
+
 	private static final class StoredConfig {
 		private Boolean enabled;
 		private Boolean enableNearbyContainerUsage;
@@ -498,6 +539,8 @@ public final class ReachCraftingConfig {
 		private Boolean autoCraftMode;
 		private Boolean autoCraftEnabled;
 		private AutoCraftMode autoCraftEnabledMode;
+		private AutoCraftCapability autoCraftCapability;
+		private Boolean enableEnablingBulkMode;
 		private Set<String> blacklistedContainerIds;
 
 		private StoredConfig(ReachCraftingConfig config) {
@@ -524,6 +567,7 @@ public final class ReachCraftingConfig {
 			this.ejectItemsWhenFull = config.ejectItemsWhenFull;
 			this.autoCraftEnabled = config.autoCraftEnabled;
 			this.autoCraftEnabledMode = config.autoCraftEnabledMode;
+			this.autoCraftCapability = config.autoCraftCapability;
 			this.blacklistedContainerIds = config.blacklistedContainerIds;
 		}
 	}
