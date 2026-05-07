@@ -166,6 +166,17 @@ public final class ReachCraftingConfigScreen {
 			.setEnumNameProvider(value -> Component.translatable("enum.reachcrafting.auto_craft_capability." + value.name().toLowerCase()))
 			.build());
 
+		logicGroup.add(entries.startEnumSelector(
+				Component.translatable("option.reachcrafting.auto_craft_handling"),
+				ReachCraftingConfig.AutoCraftHandling.class,
+				config.autoCraftHandling()
+			)
+			.setDefaultValue(ReachCraftingConfig.AutoCraftHandling.TOGGLE)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.auto_craft_handling"))
+			.setSaveConsumer(config::setAutoCraftHandling)
+			.setEnumNameProvider(value -> Component.translatable("enum.reachcrafting.auto_craft_handling." + value.name().toLowerCase()))
+			.build());
+
 		logicGroup.add(entries.startBooleanToggle(
 				Component.translatable("option.reachcrafting.auto_craft_off_after_bulk"),
 				config.autoCraftOffAfterBulk()

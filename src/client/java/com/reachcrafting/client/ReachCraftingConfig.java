@@ -44,6 +44,7 @@ public final class ReachCraftingConfig {
 	private static final boolean DEFAULT_EJECT_ITEMS_WHEN_FULL = true;
 	private static final AutoCraftCapability DEFAULT_AUTO_CRAFT_CAPABILITY = AutoCraftCapability.NONE;
 	private static final boolean DEFAULT_AUTO_CRAFT_OFF_AFTER_BULK = true;
+	private static final AutoCraftHandling DEFAULT_AUTO_CRAFT_HANDLING = AutoCraftHandling.TOGGLE;
 	public static final List<String> DEFAULT_BLACKLIST = List.of(
 		"minecraft:ender_chest",
 		"minecraft:hopper",
@@ -84,6 +85,7 @@ public final class ReachCraftingConfig {
 	private boolean ejectItemsWhenFull;
 	private AutoCraftCapability autoCraftCapability;
 	private boolean autoCraftOffAfterBulk;
+	private AutoCraftHandling autoCraftHandling;
 	private Set<String> blacklistedContainerIds;
 
 	private static String lastSearchText = "";
@@ -136,6 +138,7 @@ public final class ReachCraftingConfig {
 			instance.autoCraftEnabledMode = stored.autoCraftEnabledMode != null ? stored.autoCraftEnabledMode : DEFAULT_AUTO_CRAFT_ENABLED_MODE;
 			instance.autoCraftCapability = stored.autoCraftCapability != null ? stored.autoCraftCapability : (stored.enableEnablingBulkMode != null ? (stored.enableEnablingBulkMode ? AutoCraftCapability.BULK : AutoCraftCapability.NORMAL) : DEFAULT_AUTO_CRAFT_CAPABILITY);
 			instance.autoCraftOffAfterBulk = stored.autoCraftOffAfterBulk != null ? stored.autoCraftOffAfterBulk : DEFAULT_AUTO_CRAFT_OFF_AFTER_BULK;
+			instance.autoCraftHandling = stored.autoCraftHandling != null ? stored.autoCraftHandling : DEFAULT_AUTO_CRAFT_HANDLING;
 			
 			// Enforce capability gate on load
 			if (instance.autoCraftCapability == AutoCraftCapability.NONE) {
@@ -301,6 +304,9 @@ public final class ReachCraftingConfig {
 	}
 
 	public boolean autoCraftEnabled() {
+		if (autoCraftHandling == AutoCraftHandling.HOLD) {
+			return AutoCraftController.isHoldModeActive() && autoCraftCapability != AutoCraftCapability.NONE;
+		}
 		return autoCraftEnabled && autoCraftCapability != AutoCraftCapability.NONE;
 	}
 
@@ -402,6 +408,14 @@ public final class ReachCraftingConfig {
 		this.autoCraftOffAfterBulk = autoCraftOffAfterBulk;
 	}
 
+	public AutoCraftHandling autoCraftHandling() {
+		return autoCraftHandling;
+	}
+
+	public void setAutoCraftHandling(AutoCraftHandling autoCraftHandling) {
+		this.autoCraftHandling = autoCraftHandling != null ? autoCraftHandling : DEFAULT_AUTO_CRAFT_HANDLING;
+	}
+
 	public static String getLastSearchText() {
 		return lastSearchText;
 	}
@@ -469,6 +483,7 @@ public final class ReachCraftingConfig {
 		defaults.ejectItemsWhenFull = DEFAULT_EJECT_ITEMS_WHEN_FULL;
 		defaults.autoCraftCapability = DEFAULT_AUTO_CRAFT_CAPABILITY;
 		defaults.autoCraftOffAfterBulk = DEFAULT_AUTO_CRAFT_OFF_AFTER_BULK;
+		defaults.autoCraftHandling = DEFAULT_AUTO_CRAFT_HANDLING;
 		defaults.blacklistedContainerIds = new LinkedHashSet<>(DEFAULT_BLACKLIST);
 		return defaults;
 	}
@@ -519,6 +534,11 @@ public final class ReachCraftingConfig {
 		WHILE_RESULT_OR_INVENTORY_SLOT_HOVERED
 	}
 
+	public enum AutoCraftHandling {
+		TOGGLE,
+		HOLD
+	}
+
 	public enum AutoCraftMode {
 		NORMAL,
 		BULK
@@ -557,6 +577,7 @@ public final class ReachCraftingConfig {
 		private AutoCraftMode autoCraftEnabledMode;
 		private AutoCraftCapability autoCraftCapability;
 		private Boolean autoCraftOffAfterBulk;
+		private AutoCraftHandling autoCraftHandling;
 		private Boolean enableEnablingBulkMode;
 		private Set<String> blacklistedContainerIds;
 
@@ -586,6 +607,7 @@ public final class ReachCraftingConfig {
 			this.autoCraftEnabledMode = config.autoCraftEnabledMode;
 			this.autoCraftCapability = config.autoCraftCapability;
 			this.autoCraftOffAfterBulk = config.autoCraftOffAfterBulk;
+			this.autoCraftHandling = config.autoCraftHandling;
 			this.blacklistedContainerIds = config.blacklistedContainerIds;
 		}
 	}

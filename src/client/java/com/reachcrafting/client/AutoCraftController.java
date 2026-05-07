@@ -1,8 +1,11 @@
 package com.reachcrafting.client;
 
+import net.minecraft.client.Minecraft;
+
 final class AutoCraftController {
 	private static boolean autoCraftKeyHeld = false;
 	private static long lastAutoCraftToggleTime = 0;
+	private static boolean holdModeActive = false;
 
 	private AutoCraftController() {
 	}
@@ -14,7 +17,9 @@ final class AutoCraftController {
 	static void handleKeyReleased() {
 		if (autoCraftKeyHeld) {
 			autoCraftKeyHeld = false;
-			toggleAutoCraftMode();
+			if (ReachCraftingConfig.get().autoCraftHandling() == ReachCraftingConfig.AutoCraftHandling.TOGGLE) {
+				toggleAutoCraftMode();
+			}
 		}
 	}
 
@@ -27,7 +32,37 @@ final class AutoCraftController {
 	}
 
 	static boolean isEnabled() {
-		return ReachCraftingConfig.get().autoCraftEnabled();
+		ReachCraftingConfig config = ReachCraftingConfig.get();
+		if (config.autoCraftHandling() == ReachCraftingConfig.AutoCraftHandling.HOLD) {
+			return isHoldModeActive();
+		}
+		return config.autoCraftEnabled();
+	}
+
+	static boolean isHoldModeActive() {
+		Minecraft minecraft = Minecraft.getInstance();
+		boolean alt = RecipeBookFocusManager.isAltKeyDown(minecraft);
+		boolean shift = RecipeBookFocusManager.isShiftKeyDown(minecraft);
+		boolean ctrl = RecipeBookFocusManager.isControlKeyDown(minecraft);
+
+		if (alt) {
+			holdModeActive = true;
+		}
+
+		if (holdModeActive && (alt || shift || ctrl)) {
+			return true;
+		}
+
+		if (BulkAutoCraftController.isActive() || AutoMoveController.isAutomatedInteractionRunning() || RecipeBookInputController.getInstance().isInputQueueActive()) {
+			return true;
+		}
+
+		if (holdModeActive) {
+			holdModeActive = false;
+			ReachCraftingConfig.get().setAutoCraftEnabledMode(ReachCraftingConfig.AutoCraftMode.NORMAL);
+		}
+
+		return false;
 	}
 
 	static ReachCraftingConfig.AutoCraftMode enabledMode() {
