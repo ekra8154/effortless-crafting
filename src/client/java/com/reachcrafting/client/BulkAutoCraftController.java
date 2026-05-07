@@ -91,8 +91,21 @@ public final class BulkAutoCraftController {
 			return 0;
 		}
 		int remaining = remainingRequestedRecipeCopies();
-		int batchTarget = Math.min(remaining, 3);
-		return activeSession.ingredientSummary().estimateRequiredInventorySlots(batchTarget);
+		// In bulk mode, we might craft up to 64 at once if shift-clicking.
+		// Budgeting for at least 64 (if remaining allows) ensures we don't 
+		// accidentally overflow the inventory with unstackables.
+		int batchTarget = Math.min(remaining, 64);
+		int ingredientSlots = activeSession.ingredientSummary().estimateRequiredInventorySlots(batchTarget);
+		
+		ItemStack output = activeSession.expectedOutput();
+		int outputPerCraft = Math.max(output.getCount(), 1);
+		long totalOutputCount = (long) outputPerCraft * batchTarget;
+		int maxStack = output.getMaxStackSize();
+		int outputSlots = (int) ((totalOutputCount + maxStack - 1) / maxStack);
+		
+		int total = ingredientSlots + outputSlots;
+		com.reachcrafting.ReachCraftingMod.LOGGER.info("[bulk_budget] remaining={} target={} ingredients={} output={} total={}", remaining, batchTarget, ingredientSlots, outputSlots, total);
+		return total;
 	}
 
 	static void addEjectedOutput(int count) {

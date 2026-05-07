@@ -341,22 +341,21 @@ final class AutoMoveController {
 	}
 
 	private static boolean canFitInInventory(AbstractContainerMenu menu, ItemStack stack) {
+		int remaining = stack.getCount();
+		int maxStack = stack.getMaxStackSize();
+		
 		for (int i = 0; i < 36; i++) {
 			Slot slot = findInventorySlot(menu, i);
 			if (slot == null) continue;
-			if (!slot.hasItem()) return true;
-			if (ItemStack.isSameItemSameComponents(slot.getItem(), stack) && slot.getItem().getCount() + stack.getCount() <= stack.getMaxStackSize()) {
-				return true;
+			if (!slot.hasItem()) {
+				remaining -= maxStack;
+			} else if (ItemStack.isSameItemSameComponents(slot.getItem(), stack)) {
+				remaining -= (maxStack - slot.getItem().getCount());
 			}
+			if (remaining <= 0) return true;
 		}
-		Slot offhandSlot = findVisibleOffhandSlot(menu);
-		if (offhandSlot != null) {
-			if (!offhandSlot.hasItem()) return true;
-			if (ItemStack.isSameItemSameComponents(offhandSlot.getItem(), stack) && offhandSlot.getItem().getCount() + stack.getCount() <= stack.getMaxStackSize()) {
-				return true;
-			}
-		}
-		return false;
+		
+		return remaining <= 0;
 	}
 
 	private static int countEmptyInventorySlots(AbstractContainerMenu menu) {
