@@ -31,11 +31,13 @@ import net.minecraft.util.Mth;
  * Invariants: cache snapshots are independent of UI tracking; filter-dot eligibility is derived from tracked state.
  */
 public final class NearbyContainerCache {
+	private static final int PERIODIC_PRUNE_INTERVAL_TICKS = 60;
 	private static final Map<ContainerKey, ContainerSnapshot> SNAPSHOTS = new LinkedHashMap<>();
 	private static long revision;
 	private static ViewCacheKey lastViewKey;
 	private static ReachableView lastView;
 	private static final TrackedContainerContext TRACKED_CONTEXT = new TrackedContainerContext();
+	private static int pruneCooldownTicks = PERIODIC_PRUNE_INTERVAL_TICKS;
 
 	private NearbyContainerCache() {
 	}
@@ -43,6 +45,14 @@ public final class NearbyContainerCache {
 	public static void init() {
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			TRACKED_CONTEXT.tick();
+			if (client.level == null || SNAPSHOTS.isEmpty()) {
+				pruneCooldownTicks = PERIODIC_PRUNE_INTERVAL_TICKS;
+				return;
+			}
+			if (--pruneCooldownTicks <= 0) {
+				pruneCooldownTicks = PERIODIC_PRUNE_INTERVAL_TICKS;
+				pruneStaleSnapshots(client.level);
+			}
 		});
 	}
 
@@ -52,6 +62,7 @@ public final class NearbyContainerCache {
 		lastViewKey = null;
 		lastView = null;
 		TRACKED_CONTEXT.clear();
+		pruneCooldownTicks = PERIODIC_PRUNE_INTERVAL_TICKS;
 	}
 
 	public static boolean hasTrackedContainer() {
@@ -123,6 +134,8 @@ public final class NearbyContainerCache {
 		if (level == null || cameraEntity == null) {
 			return ReachableView.empty(revision);
 		}
+
+		pruneStaleSnapshots(level);
 
 		BlockPos center = BlockPos.containing(cameraEntity.getEyePosition(0));
 		ViewCacheKey cacheKey = new ViewCacheKey(level.dimension(), center, Mth.ceil(reachDistance), revision);
@@ -344,6 +357,44 @@ public final class NearbyContainerCache {
 		revision++;
 		lastViewKey = null;
 		lastView = null;
+	}
+
+	private static void pruneStaleSnapshots(Level level) {
+		if (level == null || SNAPSHOTS.isEmpty()) {
+			return;
+		}
+
+		boolean changed = false;
+		var iterator = SNAPSHOTS.entrySet().iterator();
+		while (iterator.hasNext()) {
+			Map.Entry<ContainerKey, ContainerSnapshot> entry = iterator.next();
+			if (!entry.getKey().dimension().equals(level.dimension())) {
+				continue;
+			}
+			if (!isSnapshotStillValid(level, entry.getKey())) {
+				iterator.remove();
+				changed = true;
+			}
+		}
+
+		if (changed) {
+			bumpRevision();
+		}
+	}
+
+	private static boolean isSnapshotStillValid(Level level, ContainerKey key) {
+		if ("ender_chest".equals(key.type())) {
+			return true;
+		}
+
+		BlockPos anchorPos = key.anchorPos();
+		BlockState state = level.getBlockState(anchorPos);
+		if (!ContainerUtils.isPotentiallySupportedContainer(state) || !ContainerUtils.canAttemptOpen(level, anchorPos, state)) {
+			return false;
+		}
+
+		ContainerKey currentKey = resolveContainerKey(level, anchorPos, state);
+		return key.equals(currentKey);
 	}
 
 

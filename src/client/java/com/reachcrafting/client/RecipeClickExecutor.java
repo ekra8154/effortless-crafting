@@ -137,6 +137,18 @@ final class RecipeClickExecutor {
 
 		boolean useDryRun = forceDryRun || allowNearbyChests || craftAll;
 		if (useDryRun) {
+			armBulkAutoCraft(
+				selectedRecipe.recipeId(),
+				collection,
+				displayStack,
+				mouseButton,
+				explicitVariantSelection,
+				allowNearbyChests,
+				craftAll,
+				requestedClicks,
+				selectedRecipe.displayStack(),
+				ingredientSummary
+			);
 			if (allowNearbyChests
 				&& AutoCraftController.isBulkModeEnabled()
 				&& !craftAll
@@ -148,18 +160,6 @@ final class RecipeClickExecutor {
 				// byproducts into inventory via Inventory.add(), causing fragmentation.
 				ReachCraftingMod.LOGGER.info("[recipe_place] handlePlaceRecipe(shift=true) from RecipeClickExecutor NEARBY path");
 				minecraft.gameMode.handlePlaceRecipe(player.containerMenu.containerId, selectedRecipe.recipeId(), true);
-				armBulkAutoCraft(
-					selectedRecipe.recipeId(),
-					collection,
-					displayStack,
-					mouseButton,
-					explicitVariantSelection,
-					true,
-					false,
-					requestedClicks,
-					selectedRecipe.displayStack(),
-					ingredientSummary
-				);
 				ContainerUtils.scheduleAutoMove(selectedRecipe.displayStack());
 				player.displayClientMessage(
 					Component.literal("[Effortless Crafting] Placed recipe: " + outputLabel).withStyle(ChatFormatting.YELLOW),
@@ -185,18 +185,6 @@ final class RecipeClickExecutor {
 					allowNearbyChests
 				)) {
 					if (AutoCraftController.isEnabled()) {
-						armBulkAutoCraft(
-							selectedRecipe.recipeId(),
-							collection,
-							displayStack,
-							mouseButton,
-							explicitVariantSelection,
-							allowNearbyChests,
-							craftAll,
-							requestedClicks,
-							selectedRecipe.displayStack(),
-							ingredientSummary
-						);
 						ContainerUtils.scheduleAutoMove(selectedRecipe.displayStack());
 					}
 					return;

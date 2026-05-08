@@ -84,8 +84,5 @@ TODO:
 setting: toggle autocraft off after bulk craft
 
 BUGS:
-fix first round of bulk craft doesn't seem to "count"
 
-input counter shows 2x64 thing
-
-fast scan does not use what it finds immediately, only the next time
+cant do iron bars with only 1 inventory slot

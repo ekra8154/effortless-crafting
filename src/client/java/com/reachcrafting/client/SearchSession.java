@@ -53,6 +53,8 @@ final class SearchSession extends BaseCraftSession {
 	private final RecipeCollection recipeCollection;
 	private final boolean explicitVariantSelection;
 	private final int recipeIndex;
+	private final RecipeDisplayId initialRequestedRecipeId;
+	private final String initialRequestedOutputLabel;
 	private RecipeDisplayId recipeId;
 	private String outputLabel;
 	private RecipeIngredientSummary ingredientSummary;
@@ -102,6 +104,8 @@ final class SearchSession extends BaseCraftSession {
 		super(coordinator, client, player, level, gameMode, cameraEntity);
 		this.recipeCollection = request.recipeCollection();
 		this.explicitVariantSelection = request.explicitVariantSelection();
+		this.initialRequestedRecipeId = request.recipeId();
+		this.initialRequestedOutputLabel = request.outputLabel();
 		this.recipeId = request.recipeId();
 		this.recipeIndex = request.recipeIndex();
 		this.outputLabel = request.outputLabel();
@@ -163,6 +167,15 @@ final class SearchSession extends BaseCraftSession {
 			refreshReachableView();
 			discoveredNearby.clear();
 			discoveredNearby.putAll(reachableView.countsFor(scanAcceptedItemIds));
+			ReachCraftingMod.LOGGER.info(
+				"[nearby_cache] idx={} seeded cached_items={} snapshots={} reachable_containers={} requested_recipe={} requested_output={}",
+				recipeIndex,
+				AvailableItemSnapshot.formatCounts(discoveredNearby),
+				reachableView.snapshotsByKey().size(),
+				reachableView.nearestAccessByKey().size(),
+				initialRequestedRecipeId,
+				initialRequestedOutputLabel
+			);
 			ReachCraftingMod.LOGGER.debug(
 				"[nearby_cache] idx={} seeded_from_cache={}",
 				recipeIndex,
@@ -344,6 +357,15 @@ final class SearchSession extends BaseCraftSession {
 		boolean shouldMergeDiscovery = phase == SearchPhase.DISCOVERY || !useCachedSearch;
 		if (!usefulItems.isEmpty() && shouldMergeDiscovery) {
 			usefulItems.forEach((itemId, count) -> discoveredNearby.merge(itemId, count, Integer::sum));
+			ReachCraftingMod.LOGGER.info(
+				"[nearby_discovery] idx={} pos={} merged_items={} merged_totals={} selected_recipe={} selected_output={}",
+				recipeIndex,
+				ContainerUtils.formatPos(pendingContainerPos),
+				AvailableItemSnapshot.formatCounts(usefulItems),
+				AvailableItemSnapshot.formatCounts(discoveredNearby),
+				recipeId,
+				outputLabel
+			);
 		}
 		if (!usefulItems.isEmpty()) {
 			ReachCraftingMod.LOGGER.debug(
@@ -455,6 +477,10 @@ final class SearchSession extends BaseCraftSession {
 
 	private void beginWithdrawPhaseOrResume() {
 		refreshReachableView();
+		if (useCachedSearch) {
+			discoveredNearby.clear();
+			discoveredNearby.putAll(reachableView.countsFor(scanAcceptedItemIds));
+		}
 		applySearchPlanDecision(buildSearchPlanDecision());
 	}
 
@@ -516,7 +542,7 @@ final class SearchSession extends BaseCraftSession {
 			resolvedSelection = RecipeVariantResolver.resolve(
 				client,
 				player,
-				recipeId,
+				initialRequestedRecipeId,
 				recipeCollection,
 				ItemStack.EMPTY,
 				explicitVariantSelection,
@@ -545,6 +571,22 @@ final class SearchSession extends BaseCraftSession {
 				ingredientSummary = resolvedSelection.ingredientSummary();
 			}
 		}
+		boolean hasUnscanned = reachableView.snapshotsByKey().size() < reachableView.nearestAccessByKey().size();
+		ReachCraftingMod.LOGGER.info(
+			"[recipe_variant] idx={} phase={} requested_recipe={} current_recipe={} resolved_recipe={} requested_output={} resolved_output={} total_available={} remaining={} unscanned_containers={} snapshots={} reachable_containers={}",
+			recipeIndex,
+			phase.name().toLowerCase(),
+			initialRequestedRecipeId,
+			recipeId,
+			resolvedSelection == null ? "<null>" : resolvedSelection.recipeId(),
+			initialRequestedOutputLabel,
+			resolvedSelection == null ? outputLabel : resolvedSelection.outputLabel(),
+			AvailableItemSnapshot.formatCounts(inventoryAndNearby),
+			summarizeRemainingItems(remainingItemIds),
+			hasUnscanned,
+			reachableView.snapshotsByKey().size(),
+			reachableView.nearestAccessByKey().size()
+		);
 		IngredientPlanning.Policy effectivePlanningPolicy = planningPolicyForSelection(resolvedSelection);
 		Map<String, Integer> effectivePreferenceTotals = preferenceTotalsForSelection(totalAvailable, resolvedSelection);
 		int desiredTargetCopies = committedReservedGrid
@@ -582,6 +624,31 @@ final class SearchSession extends BaseCraftSession {
 			targetCopiesPerSlot,
 			effectivePlanningPolicy
 		);
+		if (!craftAll
+			&& !originalContext.hasReservedGrid()
+			&& AutoCraftController.isBulkModeEnabled()
+			&& targetCopiesPerSlot > 0) {
+			int capacityLimitedCopies = clampTargetCopiesToInventoryCapacity(
+				planningInventoryCounts,
+				planningGridStacks,
+				totalAvailable,
+				effectivePreferenceTotals,
+				effectivePlanningPolicy,
+				targetCopiesPerSlot
+			);
+			if (capacityLimitedCopies != targetCopiesPerSlot) {
+				targetCopiesPerSlot = capacityLimitedCopies;
+				plannedResult = IngredientPlanning.plan(
+					ingredientSummary,
+					planningInventoryCounts,
+					planningGridStacks,
+					totalAvailable,
+					effectivePreferenceTotals,
+					targetCopiesPerSlot,
+					effectivePlanningPolicy
+				);
+			}
+		}
 		plannedTargets = plannedResult.slotTargets();
 		remainingItemIds.clear();
 		remainingItemIds.addAll(redistributeReservedGrid ? computeRedistributedFetchItemIds(plannedTargets) : computeFetchItemIds(plannedTargets));
@@ -623,7 +690,6 @@ final class SearchSession extends BaseCraftSession {
 
 		boolean missingEssential = targetCopiesPerSlot <= 0 || plannedResult.hasMissingIngredients();
 		boolean underServed = !craftAll && targetCopiesPerSlot < desiredTargetCopies;
-		boolean hasUnscanned = reachableView.snapshotsByKey().size() < reachableView.nearestAccessByKey().size();
 		boolean alreadyScannedInBulk = BulkAutoCraftController.isActive() && BulkAutoCraftController.hasPerformedDiscovery();
 		boolean startFallbackDiscovery = (missingEssential || underServed || hasUnscanned) 
 			&& useCachedSearch 
@@ -658,6 +724,20 @@ final class SearchSession extends BaseCraftSession {
 	}
 
 	private void applySearchPlanDecision(SearchPlanDecision decision) {
+		ReachCraftingMod.LOGGER.info(
+			"[nearby_plan] idx={} phase={} requested_recipe={} chosen_recipe={} chosen_output={} target_copies={} fetch={} withdraw_candidates={} resume={} fallback={} total_available={}",
+			recipeIndex,
+			phase.name().toLowerCase(),
+			initialRequestedRecipeId,
+			decision.resolvedRecipeId(),
+			decision.resolvedOutputLabel(),
+			decision.targetCopiesPerSlot(),
+			summarizeRemainingItems(decision.fetchItemIds()),
+			decision.withdrawCandidates().size(),
+			decision.resumeOriginalContext(),
+			decision.startFallbackDiscovery(),
+			decision.totalAvailableSummary()
+		);
 		recipeId = decision.resolvedRecipeId();
 		outputLabel = decision.resolvedOutputLabel();
 		ingredientSummary = decision.resolvedIngredientSummary();
@@ -881,6 +961,59 @@ final class SearchSession extends BaseCraftSession {
 		return maxFutureCopies == Integer.MAX_VALUE ? 0 : maxFutureCopies;
 	}
 
+	private int clampTargetCopiesToInventoryCapacity(
+		Map<String, Integer> planningInventoryCounts,
+		List<ItemStack> planningGridStacks,
+		Map<String, Integer> totalAvailable,
+		Map<String, Integer> effectivePreferenceTotals,
+		IngredientPlanning.Policy effectivePlanningPolicy,
+		int requestedCopies
+	) {
+		int low = 0;
+		int high = requestedCopies;
+		while (low < high) {
+			int mid = (low + high + 1) / 2;
+			IngredientPlanning.PlanResult midPlan = IngredientPlanning.plan(
+				ingredientSummary,
+				planningInventoryCounts,
+				planningGridStacks,
+				totalAvailable,
+				effectivePreferenceTotals,
+				mid,
+				effectivePlanningPolicy
+			);
+			if (midPlan.hasMissingIngredients() || !canStageCurrentPlan(midPlan.slotTargets(), planningInventoryCounts)) {
+				high = mid - 1;
+			} else {
+				low = mid;
+			}
+		}
+		return low;
+	}
+
+	private boolean canStageCurrentPlan(List<IngredientPlanning.SlotTarget> slotTargets, Map<String, Integer> alreadyCovered) {
+		Map<String, Integer> desiredCounts = new LinkedHashMap<>();
+		for (IngredientPlanning.SlotTarget slotTarget : slotTargets) {
+			if (slotTarget.itemId() == null || slotTarget.targetCount() <= 0) {
+				continue;
+			}
+			desiredCounts.merge(slotTarget.itemId(), slotTarget.targetCount(), Integer::sum);
+		}
+
+		List<ItemStack> simulatedInventory = snapshotPlayerInventorySlots();
+		Map<String, ItemStack> prototypes = buildItemPrototypes(desiredCounts, Map.of());
+		for (Map.Entry<String, Integer> entry : desiredCounts.entrySet()) {
+			int toStageNow = Math.max(0, entry.getValue() - alreadyCovered.getOrDefault(entry.getKey(), 0));
+			if (toStageNow <= 0) {
+				continue;
+			}
+			if (!placeIntoVirtualInventory(simulatedInventory, prototypeForItem(entry.getKey(), prototypes), toStageNow)) {
+				return false;
+			}
+		}
+		return true;
+	}
+
 	private List<ItemStack> snapshotPlayerInventorySlots() {
 		List<ItemStack> slots = new ArrayList<>();
 		for (ItemStack stack : player.getInventory().getNonEquipmentItems()) {
@@ -1050,8 +1183,19 @@ final class SearchSession extends BaseCraftSession {
 			BulkAutoCraftController.noteDiscoveryPerformed();
 		}
 		refreshReachableView();
+		ReachCraftingMod.LOGGER.info(
+			"[nearby_cache] idx={} fallback_discovery requested_recipe={} current_recipe={} current_output={} discovered={} remaining={} snapshots={} reachable_containers={}",
+			recipeIndex,
+			initialRequestedRecipeId,
+			recipeId,
+			outputLabel,
+			AvailableItemSnapshot.formatCounts(discoveredNearby),
+			summarizeRemainingItems(remainingItemIds),
+			reachableView.snapshotsByKey().size(),
+			reachableView.nearestAccessByKey().size()
+		);
 		phase = SearchPhase.DISCOVERY;
-		activeCandidates = remainingUnvisitedCandidates(candidates);
+		activeCandidates = remainingDiscoveryCandidates(candidates);
 		nextCandidateIndex = 0;
 		pendingContainerPos = null;
 		state = SearchState.OPEN_NEXT;
@@ -1111,6 +1255,23 @@ final class SearchSession extends BaseCraftSession {
 			}
 		}
 		return List.copyOf(remaining);
+	}
+
+	private List<BlockPos> remainingDiscoveryCandidates(List<BlockPos> source) {
+		List<BlockPos> unvisited = remainingUnvisitedCandidates(source);
+		if (unvisited.isEmpty()) {
+			return unvisited;
+		}
+
+		List<BlockPos> uncached = new ArrayList<>();
+		for (BlockPos pos : unvisited) {
+			var key = reachableView.accessKeyByPos().get(pos);
+			if (key == null || !reachableView.snapshotsByKey().containsKey(key)) {
+				uncached.add(pos);
+			}
+		}
+
+		return uncached.isEmpty() ? unvisited : List.copyOf(uncached);
 	}
 
 	private int cachedDistinctMatchesAt(BlockPos pos, Map<String, Integer> neededCounts) {
@@ -1375,7 +1536,15 @@ final class SearchSession extends BaseCraftSession {
 		} else if (placedPlannedGrid) {
 			sendChat("Updated grid: " + outputLabel);
 		} else if (targetCopiesPerSlot > 0 && !updatedDeficit.hasMissingIngredients() && player.containerMenu != null) {
-			ReachCraftingMod.LOGGER.info("[recipe_place] handlePlaceRecipe(shift={}) from SearchSession.tryFinishAfterResume", craftAll);
+			ReachCraftingMod.LOGGER.info(
+				"[recipe_place] from=SearchSession.tryFinishAfterResume shift={} recipe_id={} output={} target_copies={} remaining={} updated_missing={}",
+				craftAll,
+				recipeId,
+				outputLabel,
+				targetCopiesPerSlot,
+				summarizeRemainingItems(remainingItemIds),
+				updatedDeficit.compactMissingSummary()
+			);
 			gameMode.handlePlaceRecipe(player.containerMenu.containerId, recipeId, craftAll);
 			sendChat("Placed recipe: " + outputLabel);
 		} else if (!remainingItemIds.isEmpty() || inventorySpaceBlocked) {
