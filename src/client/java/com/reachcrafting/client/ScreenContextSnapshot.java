@@ -75,7 +75,7 @@ record ScreenContextSnapshot(
 				RecipeIngredientSummary.IngredientSlot ingredientSlot = ingredientSlots.get(i);
 				if (stack.isEmpty()) {
 					if (!ingredientSlot.isEmpty()) {
-						continue;
+						return false;
 					}
 					continue;
 				}

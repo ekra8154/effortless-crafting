@@ -45,13 +45,24 @@ public abstract class OverlayRecipeComponentMixin {
 			return;
 		}
 
-		RecipeBookClickCapture.onRecipeButtonClicked(
+		boolean ctrlDown = (click.modifiers() & GLFW.GLFW_MOD_CONTROL) != 0;
+		if (ctrlDown) {
+			RecipeBookClickCapture.onRecipeButtonClicked(
+				recipeId,
+				collection,
+				null,
+				click.button(),
+				(click.modifiers() & GLFW.GLFW_MOD_SHIFT) != 0,
+				true,
+				true
+			);
+			return;
+		}
+
+		RecipeBookClickCapture.onVanillaRecipeButtonClicked(
 			recipeId,
 			collection,
 			null,
-			click.button(),
-			(click.modifiers() & GLFW.GLFW_MOD_SHIFT) != 0,
-			(click.modifiers() & GLFW.GLFW_MOD_CONTROL) != 0,
 			true
 		);
 	}

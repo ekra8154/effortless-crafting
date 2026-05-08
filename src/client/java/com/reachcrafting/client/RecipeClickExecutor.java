@@ -45,6 +45,7 @@ final class RecipeClickExecutor {
 		HeldRecipeQueueState state
 	) {
 		AvailableItemSnapshot availableItems = AvailableItemSnapshot.capture(player, screen);
+		boolean vanillaShiftClick = craftAll && !forceDryRun && !allowNearbyChests;
 		ReachCraftingMod.LOGGER.debug(
 			"[recipe_capture] screen={} inventory={} grid={} slots={} pending={} replay={}",
 			screen.getClass().getSimpleName(),
@@ -59,7 +60,7 @@ final class RecipeClickExecutor {
 			? ContainerUtils.currentReservedCraftCopies(availableItems.gridStacks()) + requestedClicks
 			: Math.max(requestedClicks, 1);
 
-		boolean allowVariantSwitching = allowNearbyChests || forceDryRun;
+		boolean allowVariantSwitching = !vanillaShiftClick && (allowNearbyChests || forceDryRun);
 		String screenKind = screen instanceof InventoryScreen ? "inventory_2x2" : "crafting_table_3x3";
 		RecipeVariantResolver.Selection selectedRecipe = RecipeVariantResolver.resolve(
 			minecraft,
@@ -135,7 +136,7 @@ final class RecipeClickExecutor {
 
 		player.displayClientMessage(Component.literal("[Effortless Crafting] " + chatMessage).withStyle(ChatFormatting.YELLOW), false);
 
-		boolean useDryRun = forceDryRun || allowNearbyChests || craftAll;
+		boolean useDryRun = forceDryRun || (allowNearbyChests && !vanillaShiftClick);
 		if (useDryRun) {
 			armBulkAutoCraft(
 				selectedRecipe.recipeId(),
@@ -267,26 +268,60 @@ final class RecipeClickExecutor {
 		if (gridCount <= 0) {
 			return 0;
 		}
+		if (minecraft.player.containerMenu == null || minecraft.player.containerMenu.slots.isEmpty()) {
+			return 0;
+		}
+		ItemStack currentResult = minecraft.player.containerMenu.getSlot(0).getItem();
+		if (currentResult.isEmpty()) {
+			return 0;
+		}
 
-		RecipeVariantResolver.Selection gridSelection = RecipeVariantResolver.resolveMatchForGrid(
+		Map<RecipeDisplayId, RecipeDisplayEntry> knownRecipes = ((ClientRecipeBookAccessor) minecraft.player.getRecipeBook()).getKnown();
+		RecipeDisplayEntry entry = findRecipeEntry(collection, knownRecipes, recipeId);
+		if (entry == null) {
+			return 0;
+		}
+
+		ItemStack displayStack = RecipeVariantResolver.resolveDisplayStack(entry.display(), SlotDisplayContext.fromLevel(minecraft.level));
+		if (displayStack.isEmpty()) {
+			return 0;
+		}
+
+		return ItemStack.isSameItemSameComponents(currentResult, displayStack) ? gridCount : 0;
+	}
+
+	static ItemStack resolveExpectedOutputStack(
+		Minecraft minecraft,
+		LocalPlayer player,
+		RecipeDisplayId recipeId,
+		net.minecraft.client.gui.screens.recipebook.RecipeCollection collection,
+		ItemStack displayStack,
+		boolean explicitVariantSelection
+	) {
+		if (displayStack != null && !displayStack.isEmpty()) {
+			return displayStack.copy();
+		}
+		if (minecraft == null || player == null || minecraft.level == null || recipeId == null || collection == null) {
+			return ItemStack.EMPTY;
+		}
+
+		AvailableItemSnapshot availableItems = AvailableItemSnapshot.capture(player, minecraft.screen);
+		RecipeVariantResolver.Selection selection = RecipeVariantResolver.resolve(
 			minecraft,
-			minecraft.player,
+			player,
+			recipeId,
 			collection,
-			availableItems.gridStacks(),
+			ItemStack.EMPTY,
+			explicitVariantSelection,
+			false,
 			availableItems,
 			availableItems.inventoryCounts(),
 			availableItems.inventoryCounts(),
 			false,
-			gridCount
+			false,
+			1
 		);
-		if (gridSelection == null) {
-			return 0;
-		}
-
-		if (explicitVariantSelection) {
-			return gridSelection.recipeId().equals(recipeId) ? gridCount : 0;
-		}
-		return gridCount;
+		return selection != null ? selection.displayStack().copy() : ItemStack.EMPTY;
 	}
 
 	static int resolveRecipeQueueLimit(

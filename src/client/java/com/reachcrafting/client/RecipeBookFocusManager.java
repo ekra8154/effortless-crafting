@@ -54,6 +54,19 @@ final class RecipeBookFocusManager {
 		}
 	}
 
+	static void defocusRecipeBookSearch(Minecraft minecraft) {
+		if (!(minecraft.screen instanceof AbstractRecipeBookScreen<?> recipeBookScreen)) {
+			return;
+		}
+		RecipeBookComponentAccessor componentAccessor = (RecipeBookComponentAccessor) ((AbstractRecipeBookScreenAccessor) recipeBookScreen).getRecipeBookComponent();
+		if (componentAccessor != null) {
+			EditBox searchBox = componentAccessor.getSearchBox();
+			if (searchBox != null && searchBox.isFocused()) {
+				searchBox.setFocused(false);
+			}
+		}
+	}
+
 	static void refocusRecipeBookSearch(Minecraft minecraft, HeldRecipeQueueState state) {
 		if (!(minecraft.screen instanceof AbstractRecipeBookScreen<?> recipeBookScreen)) {
 			return;

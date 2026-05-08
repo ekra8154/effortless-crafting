@@ -36,6 +36,15 @@ public final class RecipeBookClickCapture {
 		);
 	}
 
+	public static void onVanillaRecipeButtonClicked(
+		RecipeDisplayId recipeId,
+		RecipeCollection collection,
+		ItemStack displayStack,
+		boolean explicitVariantSelection
+	) {
+		CONTROLLER.onVanillaRecipeButtonClicked(recipeId, collection, displayStack, explicitVariantSelection);
+	}
+
 	public static boolean onRecipeButtonRightClicked(
 		RecipeDisplayId recipeId,
 		RecipeCollection collection,
@@ -63,6 +72,10 @@ public final class RecipeBookClickCapture {
 
 	public static void refocusRecipeBookSearch(Minecraft minecraft) {
 		CONTROLLER.refocusRecipeBookSearch(minecraft);
+	}
+
+	public static void defocusRecipeBookSearch(Minecraft minecraft) {
+		CONTROLLER.defocusRecipeBookSearch(minecraft);
 	}
 
 	public static PendingHeldRecipe getPendingHeldRecipe() {

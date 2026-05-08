@@ -13,6 +13,9 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.display.RecipeDisplay;
 import net.minecraft.world.item.crafting.display.RecipeDisplayEntry;
 import net.minecraft.world.item.crafting.display.RecipeDisplayId;
+import net.minecraft.world.item.crafting.display.ShapedCraftingRecipeDisplay;
+import net.minecraft.world.item.crafting.display.ShapelessCraftingRecipeDisplay;
+import net.minecraft.world.item.crafting.display.SlotDisplay;
 import net.minecraft.world.item.crafting.display.SlotDisplayContext;
 
 public final class RecipeVariantResolver {
@@ -116,7 +119,7 @@ public final class RecipeVariantResolver {
 
 		if (!allowReservedGridVariantSwitch && availableItems.hasReservedGrid()) {
 			Selection gridMatch = candidates.stream()
-				.filter(candidate -> isMatchForGrid(candidate, availableItems.gridStacks()))
+				.filter(candidate -> isMatchForGrid(candidate, availableItems.gridStacks(), context))
 				.filter(candidate -> candidate.copiesAvailable() > 0)
 				.findFirst()
 				.orElse(null);
@@ -170,24 +173,155 @@ public final class RecipeVariantResolver {
 		ContextMap context = SlotDisplayContext.fromLevel(minecraft.level);
 		return collection.getRecipes().stream()
 			.map(entry -> toSelection(entry, ItemStack.EMPTY, context, availableItems, usableCounts, preferenceTotals, craftAll, desiredCopiesPerSlot))
-			.filter(candidate -> isMatchForGrid(candidate, gridStacks))
+			.filter(candidate -> isMatchForGrid(candidate, gridStacks, context))
 			.findFirst()
 			.orElse(null);
 	}
 
-	private static boolean isMatchForGrid(Selection selection, List<ItemStack> gridStacks) {
+	private static boolean isMatchForGrid(Selection selection, List<ItemStack> gridStacks, ContextMap context) {
+		RecipeDisplay display = selection.entry().display();
+		if (display instanceof ShapedCraftingRecipeDisplay shaped) {
+			return matchesShapedGrid(shaped, gridStacks, context);
+		}
+		if (display instanceof ShapelessCraftingRecipeDisplay shapeless) {
+			return matchesShapelessGrid(shapeless, gridStacks, context);
+		}
+
 		RecipeIngredientSummary summary = selection.ingredientSummary();
+		if (summary.slots().size() != gridStacks.size()) {
+			return false;
+		}
 		for (int i = 0; i < gridStacks.size(); i++) {
 			ItemStack gridStack = gridStacks.get(i);
-			if (gridStack.isEmpty()) continue;
-			if (i >= summary.slots().size()) return false;
-			
+			RecipeIngredientSummary.IngredientSlot ingredientSlot = summary.slots().get(i);
+			if (gridStack.isEmpty()) {
+				if (!ingredientSlot.isEmpty()) {
+					return false;
+				}
+				continue;
+			}
+			if (ingredientSlot.isEmpty()) {
+				return false;
+			}
+
 			String itemId = BuiltInRegistries.ITEM.getKey(gridStack.getItem()).toString();
-			if (!summary.slots().get(i).itemIds().contains(itemId)) {
+			if (!ingredientSlot.itemIds().contains(itemId)) {
 				return false;
 			}
 		}
 		return true;
+	}
+
+	private static boolean matchesShapedGrid(ShapedCraftingRecipeDisplay shaped, List<ItemStack> gridStacks, ContextMap context) {
+		GridSize gridSize = GridSize.fromSlotCount(gridStacks.size());
+		if (gridSize == null || shaped.width() > gridSize.width() || shaped.height() > gridSize.height()) {
+			return false;
+		}
+
+		List<List<String>> ingredientIds = shaped.ingredients().stream()
+			.map(slot -> resolveItemIds(slot, context))
+			.toList();
+
+		for (int offsetY = 0; offsetY <= gridSize.height() - shaped.height(); offsetY++) {
+			for (int offsetX = 0; offsetX <= gridSize.width() - shaped.width(); offsetX++) {
+				if (matchesShapedAtOffset(shaped, gridStacks, ingredientIds, gridSize, offsetX, offsetY)) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	private static boolean matchesShapedAtOffset(
+		ShapedCraftingRecipeDisplay shaped,
+		List<ItemStack> gridStacks,
+		List<List<String>> ingredientIds,
+		GridSize gridSize,
+		int offsetX,
+		int offsetY
+	) {
+		for (int gridY = 0; gridY < gridSize.height(); gridY++) {
+			for (int gridX = 0; gridX < gridSize.width(); gridX++) {
+				int gridIndex = gridY * gridSize.width() + gridX;
+				ItemStack gridStack = gridStacks.get(gridIndex);
+				boolean withinShape = gridX >= offsetX
+					&& gridX < offsetX + shaped.width()
+					&& gridY >= offsetY
+					&& gridY < offsetY + shaped.height();
+				if (!withinShape) {
+					if (!gridStack.isEmpty()) {
+						return false;
+					}
+					continue;
+				}
+
+				int recipeX = gridX - offsetX;
+				int recipeY = gridY - offsetY;
+				int recipeIndex = recipeY * shaped.width() + recipeX;
+				List<String> acceptedIds = ingredientIds.get(recipeIndex);
+				if (gridStack.isEmpty()) {
+					if (!acceptedIds.isEmpty()) {
+						return false;
+					}
+					continue;
+				}
+				if (acceptedIds.isEmpty()) {
+					return false;
+				}
+
+				String itemId = BuiltInRegistries.ITEM.getKey(gridStack.getItem()).toString();
+				if (!acceptedIds.contains(itemId)) {
+					return false;
+				}
+			}
+		}
+		return true;
+	}
+
+	private static boolean matchesShapelessGrid(ShapelessCraftingRecipeDisplay shapeless, List<ItemStack> gridStacks, ContextMap context) {
+		List<List<String>> remainingSlots = shapeless.ingredients().stream()
+			.map(slot -> resolveItemIds(slot, context))
+			.filter(ids -> !ids.isEmpty())
+			.collect(java.util.stream.Collectors.toCollection(java.util.ArrayList::new));
+		int occupiedCount = 0;
+		for (ItemStack gridStack : gridStacks) {
+			if (gridStack.isEmpty()) {
+				continue;
+			}
+			occupiedCount++;
+			String itemId = BuiltInRegistries.ITEM.getKey(gridStack.getItem()).toString();
+			boolean matched = false;
+			for (int i = 0; i < remainingSlots.size(); i++) {
+				if (remainingSlots.get(i).contains(itemId)) {
+					remainingSlots.remove(i);
+					matched = true;
+					break;
+				}
+			}
+			if (!matched) {
+				return false;
+			}
+		}
+		return occupiedCount > 0 && remainingSlots.isEmpty();
+	}
+
+	private static List<String> resolveItemIds(SlotDisplay slot, ContextMap context) {
+		return slot.resolveForStacks(context).stream()
+			.filter(stack -> !stack.isEmpty())
+			.map(stack -> BuiltInRegistries.ITEM.getKey(stack.getItem()).toString())
+			.distinct()
+			.sorted()
+			.toList();
+	}
+
+	private record GridSize(int width, int height) {
+		static GridSize fromSlotCount(int slotCount) {
+			return switch (slotCount) {
+				case 4 -> new GridSize(2, 2);
+				case 9 -> new GridSize(3, 3);
+				default -> null;
+			};
+		}
 	}
 
 	private static boolean shouldResolveCollectionVariant(

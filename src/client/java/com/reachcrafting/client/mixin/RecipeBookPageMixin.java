@@ -67,11 +67,16 @@ public abstract class RecipeBookPageMixin {
 
 		boolean ctrlDown = (click.modifiers() & GLFW.GLFW_MOD_CONTROL) != 0;
 		boolean shiftDown = (click.modifiers() & GLFW.GLFW_MOD_SHIFT) != 0;
-
-		// Intercept clicks to handle auto-crafting movement even for single clicks
+		if (shiftDown) {
+			RecipeBookClickCapture.defocusRecipeBookSearch(net.minecraft.client.Minecraft.getInstance());
+		}
 
 		OverlayRecipeComponent overlay = ((RecipeBookPageAccessor) (Object) this).getOverlay();
 		if (overlay != null && overlay.isVisible()) {
+			return;
+		}
+
+		if (!ctrlDown) {
 			return;
 		}
 
@@ -90,6 +95,43 @@ public abstract class RecipeBookPageMixin {
 				false
 			);
 			cir.setReturnValue(true);
+			return;
+		}
+	}
+
+	@Inject(
+		method = "mouseClicked(Lnet/minecraft/client/input/MouseButtonEvent;IIIIZ)Z",
+		at = @At("RETURN")
+	)
+	private void reachcrafting$afterVanillaRecipeButtonClick(
+		MouseButtonEvent click,
+		int left,
+		int top,
+		int width,
+		int height,
+		boolean filtering,
+		CallbackInfoReturnable<Boolean> cir
+	) {
+		if (!ReachCraftingConfig.get().enabled() || !cir.getReturnValueZ() || click.button() != GLFW.GLFW_MOUSE_BUTTON_LEFT) {
+			return;
+		}
+
+		boolean ctrlDown = (click.modifiers() & GLFW.GLFW_MOD_CONTROL) != 0;
+		if (ctrlDown) {
+			return;
+		}
+
+		for (RecipeButton button : this.buttons) {
+			if (!button.isMouseOver(click.x(), click.y())) {
+				continue;
+			}
+
+			RecipeBookClickCapture.onVanillaRecipeButtonClicked(
+				button.getCurrentRecipe(),
+				button.getCollection(),
+				button.getDisplayStack(),
+				false
+			);
 			return;
 		}
 	}

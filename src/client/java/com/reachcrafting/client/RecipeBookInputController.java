@@ -140,8 +140,12 @@ final class RecipeBookInputController {
 			return;
 		}
 
-		boolean craftAll = shiftModifierDown || RecipeBookFocusManager.isShiftKeyDown(minecraft);
-		boolean allowNearbyChests = (ctrlModifierDown || RecipeBookFocusManager.isControlKeyDown(minecraft))
+		if (shiftModifierDown || ctrlModifierDown) {
+			RecipeBookFocusManager.defocusRecipeBookSearch(minecraft);
+		}
+
+		boolean craftAll = shiftModifierDown;
+		boolean allowNearbyChests = ctrlModifierDown
 			&& ReachCraftingConfig.get().enableNearbyContainerUsage();
 
 		if (shouldQueueHeldRecipe(minecraft, allowNearbyChests, craftAll) && state.replayBatch() == null) {
@@ -179,6 +183,42 @@ final class RecipeBookInputController {
 			1,
 			state
 		);
+	}
+
+	void onVanillaRecipeButtonClicked(
+		RecipeDisplayId recipeId,
+		net.minecraft.client.gui.screens.recipebook.RecipeCollection collection,
+		ItemStack displayStack,
+		boolean explicitVariantSelection
+	) {
+		if (!ReachCraftingConfig.get().enabled()) {
+			return;
+		}
+		if (!AutoCraftController.isEnabled()) {
+			if (explicitVariantSelection) {
+				RecipeClickExecutor.tryCloseOverlayAfterRelease();
+			}
+			return;
+		}
+
+		Minecraft minecraft = Minecraft.getInstance();
+		LocalPlayer player = minecraft.player;
+		if (player == null || minecraft.level == null || recipeId == null || collection == null) {
+			return;
+		}
+
+		ItemStack expectedStack = RecipeClickExecutor.resolveExpectedOutputStack(
+			minecraft,
+			player,
+			recipeId,
+			collection,
+			displayStack,
+			explicitVariantSelection
+		);
+		ContainerUtils.scheduleAutoMove(expectedStack);
+		if (explicitVariantSelection) {
+			RecipeClickExecutor.tryCloseOverlayAfterRelease();
+		}
 	}
 
 	boolean onRecipeButtonRightClicked(
@@ -254,6 +294,10 @@ final class RecipeBookInputController {
 
 	void refocusRecipeBookSearch(Minecraft minecraft) {
 		RecipeBookFocusManager.refocusRecipeBookSearch(minecraft, state);
+	}
+
+	void defocusRecipeBookSearch(Minecraft minecraft) {
+		RecipeBookFocusManager.defocusRecipeBookSearch(minecraft);
 	}
 
 	RecipeBookClickCapture.PendingHeldRecipe getPendingHeldRecipe() {
@@ -598,9 +642,6 @@ final class RecipeBookInputController {
 		if (action == null || action.explicitVariantSelection() != explicitVariantSelection) {
 			return false;
 		}
-		if (explicitVariantSelection) {
-			return action.recipeId().equals(recipeId);
-		}
-		return (action.collection() != null && action.collection() == collection) || action.recipeId().equals(recipeId);
+		return action.recipeId().equals(recipeId);
 	}
 }
