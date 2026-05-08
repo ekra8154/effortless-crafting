@@ -20,6 +20,7 @@ public final class BulkAutoCraftController {
 		RecipeBookClickCapture.HeldRecipeAction action,
 		int requestedRecipeCopies,
 		boolean allowNearby,
+		VariantContinuationMode variantContinuationMode,
 		ItemStack expectedOutput,
 		RecipeIngredientSummary ingredientSummary
 	) {
@@ -41,6 +42,7 @@ public final class BulkAutoCraftController {
 				0,
 				expectedOutput.copy(),
 				allowNearby,
+				variantContinuationMode,
 				baselineOutputCount,
 				0,
 				ingredientSummary,
@@ -55,7 +57,7 @@ public final class BulkAutoCraftController {
 			return;
 		}
 
-		activeSession = activeSession.withUpdatedCycle(allowNearby, requestedRecipeCopies);
+		activeSession = activeSession.withUpdatedCycle(allowNearby, requestedRecipeCopies, variantContinuationMode);
 	}
 
 	static void clear() {
@@ -136,6 +138,45 @@ public final class BulkAutoCraftController {
 		return activeSession != null && activeSession.allowNearby();
 	}
 
+	static boolean shouldLockToCurrentVariant(
+		net.minecraft.world.item.crafting.display.RecipeDisplayId clickedRecipeId,
+		net.minecraft.client.gui.screens.recipebook.RecipeCollection collection,
+		boolean explicitVariantSelection
+	) {
+		return activeSession != null
+			&& activeSession.variantContinuationMode() == VariantContinuationMode.STRICT_CURRENT_VARIANT
+			&& activeSession.action().sameRecipe(new RecipeBookClickCapture.HeldRecipeAction(
+				clickedRecipeId,
+				collection,
+				ItemStack.EMPTY,
+				org.lwjgl.glfw.GLFW.GLFW_MOUSE_BUTTON_LEFT,
+				explicitVariantSelection
+			));
+	}
+
+	static VariantContinuationMode currentVariantContinuationMode() {
+		return activeSession == null ? null : activeSession.variantContinuationMode();
+	}
+
+	static VariantContinuationMode determineVariantContinuationMode(
+		net.minecraft.world.item.crafting.display.RecipeDisplayId clickedRecipeId,
+		net.minecraft.world.item.crafting.display.RecipeDisplayId selectedRecipeId,
+		boolean explicitVariantSelection
+	) {
+		if (explicitVariantSelection) {
+			return VariantContinuationMode.STRICT_CURRENT_VARIANT;
+		}
+
+		return switch (ReachCraftingConfig.get().revolvingCraftHandling()) {
+			case SPECIFIC_VARIANT_ONLY -> VariantContinuationMode.STRICT_CURRENT_VARIANT;
+			case ALWAYS_PREFER_BASED_ON_COUNT -> VariantContinuationMode.FAMILY_FALLBACK;
+			case PREFER_CLICKED_TYPE_WITH_COUNT_FALLBACK ->
+				clickedRecipeId != null && clickedRecipeId.equals(selectedRecipeId)
+					? VariantContinuationMode.STRICT_CURRENT_VARIANT
+					: VariantContinuationMode.FAMILY_FALLBACK;
+		};
+	}
+
 	private static int postAutoMoveDelayTicks = 0;
 
 	static void onAutoMoveFinished(Minecraft client, boolean success) {
@@ -203,15 +244,15 @@ public final class BulkAutoCraftController {
 		}
 
 		tickCounter++;
-		com.reachcrafting.ReachCraftingMod.LOGGER.info("#### TICK {} ####", tickCounter);
+		// com.reachcrafting.ReachCraftingMod.LOGGER.info("#### TICK {} ####", tickCounter);
 
 		net.minecraft.world.inventory.AbstractContainerMenu menu = client.player.containerMenu;
 
 		// Report state of top inventory row (slots 9-17)
-		logInventoryRow(menu, "Top Row", 9, 17);
+		// logInventoryRow(menu, "Top Row", 9, 17);
 
 		// Report state of crafting grid
-		logCraftingGrid(menu);
+		// logCraftingGrid(menu);
 
 		// Change detection: compare every slot to previous tick
 		java.util.Map<Integer, String> currentSnapshot = captureFullSnapshot(menu);
@@ -228,9 +269,9 @@ public final class BulkAutoCraftController {
 					changes.append("slot ").append(slotIdx).append(": ").append(prev).append(" → ").append(curr);
 				}
 			}
-			if (changes.length() > 0) {
-				com.reachcrafting.ReachCraftingMod.LOGGER.info("[CHANGES] {}", changes);
-			}
+			// if (changes.length() > 0) {
+			// 	com.reachcrafting.ReachCraftingMod.LOGGER.info("[CHANGES] {}", changes);
+			// }
 		}
 		previousSnapshot = currentSnapshot;
 	}
@@ -319,21 +360,35 @@ public final class BulkAutoCraftController {
 		int completedRecipeCopies,
 		ItemStack expectedOutput,
 		boolean allowNearby,
+		VariantContinuationMode variantContinuationMode,
 		int lastObservedOutputCount,
 		int ejectedOutputCount,
 		RecipeIngredientSummary ingredientSummary,
 		java.util.Map<String, Integer> initialInventoryCounts
 	) {
 		private BulkCraftSession withUpdatedCycle(boolean updatedAllowNearby, int requestedCopiesForCycle) {
-			return new BulkCraftSession(action, Math.max(requestedRecipeCopies, requestedCopiesForCycle), completedRecipeCopies, expectedOutput.copy(), updatedAllowNearby, lastObservedOutputCount, ejectedOutputCount, ingredientSummary, initialInventoryCounts);
+			return withUpdatedCycle(updatedAllowNearby, requestedCopiesForCycle, variantContinuationMode);
+		}
+
+		private BulkCraftSession withUpdatedCycle(boolean updatedAllowNearby, int requestedCopiesForCycle, VariantContinuationMode updatedVariantContinuationMode) {
+			VariantContinuationMode mode = updatedVariantContinuationMode == VariantContinuationMode.UNDECIDED
+				? variantContinuationMode
+				: updatedVariantContinuationMode;
+			return new BulkCraftSession(action, Math.max(requestedRecipeCopies, requestedCopiesForCycle), completedRecipeCopies, expectedOutput.copy(), updatedAllowNearby, mode, lastObservedOutputCount, ejectedOutputCount, ingredientSummary, initialInventoryCounts);
 		}
 
 		private BulkCraftSession withProgress(int updatedCompletedRecipeCopies, int updatedLastObservedOutputCount) {
-			return new BulkCraftSession(action, requestedRecipeCopies, updatedCompletedRecipeCopies, expectedOutput.copy(), allowNearby, updatedLastObservedOutputCount, 0, ingredientSummary, initialInventoryCounts);
+			return new BulkCraftSession(action, requestedRecipeCopies, updatedCompletedRecipeCopies, expectedOutput.copy(), allowNearby, variantContinuationMode, updatedLastObservedOutputCount, 0, ingredientSummary, initialInventoryCounts);
 		}
 
 		private BulkCraftSession withEjected(int newEjectedCount) {
-			return new BulkCraftSession(action, requestedRecipeCopies, completedRecipeCopies, expectedOutput.copy(), allowNearby, lastObservedOutputCount, newEjectedCount, ingredientSummary, initialInventoryCounts);
+			return new BulkCraftSession(action, requestedRecipeCopies, completedRecipeCopies, expectedOutput.copy(), allowNearby, variantContinuationMode, lastObservedOutputCount, newEjectedCount, ingredientSummary, initialInventoryCounts);
 		}
+	}
+
+	enum VariantContinuationMode {
+		UNDECIDED,
+		STRICT_CURRENT_VARIANT,
+		FAMILY_FALLBACK
 	}
 }

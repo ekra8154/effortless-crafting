@@ -139,6 +139,7 @@ final class RecipeClickExecutor {
 		boolean useDryRun = forceDryRun || (allowNearbyChests && !vanillaShiftClick);
 		if (useDryRun) {
 			armBulkAutoCraft(
+				recipeId,
 				selectedRecipe.recipeId(),
 				collection,
 				displayStack,
@@ -222,6 +223,7 @@ final class RecipeClickExecutor {
 
 			if (AutoCraftController.isEnabled()) {
 				armBulkAutoCraft(
+					recipeId,
 					selectedRecipe.recipeId(),
 					collection,
 					displayStack,
@@ -353,6 +355,7 @@ final class RecipeClickExecutor {
 	}
 
 	private static void armBulkAutoCraft(
+		RecipeDisplayId clickedRecipeId,
 		RecipeDisplayId recipeId,
 		net.minecraft.client.gui.screens.recipebook.RecipeCollection collection,
 		ItemStack displayStack,
@@ -364,7 +367,7 @@ final class RecipeClickExecutor {
 		ItemStack expectedOutput,
 		RecipeIngredientSummary ingredientSummary
 	) {
-		if (!AutoCraftController.isBulkModeEnabled() || craftAll || requestedClicks <= 1) {
+		if (!AutoCraftController.isBulkModeEnabled() || requestedClicks <= 1) {
 			BulkAutoCraftController.clear();
 			return;
 		}
@@ -379,6 +382,12 @@ final class RecipeClickExecutor {
 			),
 			requestedClicks,
 			allowNearbyChests,
+			allowNearbyChests
+				&& requestedClicks > 1
+				&& !explicitVariantSelection
+				&& ReachCraftingConfig.get().revolvingCraftHandling() == ReachCraftingConfig.RevolvingCraftHandling.PREFER_CLICKED_TYPE_WITH_COUNT_FALLBACK
+					? BulkAutoCraftController.VariantContinuationMode.UNDECIDED
+					: BulkAutoCraftController.determineVariantContinuationMode(clickedRecipeId, recipeId, explicitVariantSelection),
 			expectedOutput,
 			ingredientSummary
 		);

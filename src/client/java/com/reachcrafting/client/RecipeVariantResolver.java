@@ -1,9 +1,11 @@
 package com.reachcrafting.client;
 
+import com.reachcrafting.ReachCraftingMod;
 import com.reachcrafting.client.mixin.ClientRecipeBookAccessor;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import net.minecraft.client.ClientRecipeBook;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.recipebook.RecipeCollection;
 import net.minecraft.client.player.LocalPlayer;
@@ -71,6 +73,7 @@ public final class RecipeVariantResolver {
 			return null;
 		}
 
+		collection = resolveCanonicalCollection(player, collection, clickedRecipeId);
 		Map<RecipeDisplayId, RecipeDisplayEntry> knownRecipes = ((ClientRecipeBookAccessor) player.getRecipeBook()).getKnown();
 		RecipeDisplayEntry clickedEntry = findEntry(collection, knownRecipes, clickedRecipeId);
 		if (clickedEntry == null) {
@@ -110,6 +113,22 @@ public final class RecipeVariantResolver {
 			))
 			.toList();
 		int requestedCopies = Math.max(desiredCopiesPerSlot, 1);
+		boolean lockToCurrentVariant = handling == ReachCraftingConfig.RevolvingCraftHandling.PREFER_CLICKED_TYPE_WITH_COUNT_FALLBACK
+			&& BulkAutoCraftController.shouldLockToCurrentVariant(clickedRecipeId, collection, explicitVariantSelection);
+		ReachCraftingMod.LOGGER.info(
+			"[recipe_variant_candidates] clicked_recipe={} collection_size={} craft_all={} requested_copies={} handling={} lock_current={} candidates={}",
+			clickedRecipeId,
+			collection.getRecipes().size(),
+			craftAll,
+			requestedCopies,
+			handling,
+			lockToCurrentVariant,
+			summarizeCandidates(candidates)
+		);
+
+		if (lockToCurrentVariant) {
+			return exactSelection;
+		}
 
 		if (handling == ReachCraftingConfig.RevolvingCraftHandling.PREFER_CLICKED_TYPE_WITH_COUNT_FALLBACK
 			&& exactSelection.copiesAvailable() > 0
@@ -135,7 +154,14 @@ public final class RecipeVariantResolver {
 			return exactSelection;
 		}
 
+		boolean bulkFamilyFallback = BulkAutoCraftController.currentVariantContinuationMode() == BulkAutoCraftController.VariantContinuationMode.FAMILY_FALLBACK;
+
 		if (!craftAll) {
+			if (bulkFamilyFallback) {
+				return viableCandidates.stream()
+					.max(compareSelections(ReachCraftingConfig.get().countPreference(), false))
+					.orElse(exactSelection);
+			}
 			List<Selection> fullRequestCandidates = viableCandidates.stream()
 				.filter(candidate -> candidate.copiesAvailable() >= requestedCopies)
 				.toList();
@@ -153,6 +179,20 @@ public final class RecipeVariantResolver {
 		return viableCandidates.stream()
 			.max(compareSelections(ReachCraftingConfig.get().countPreference(), craftAll))
 			.orElse(exactSelection);
+	}
+
+	private static String summarizeCandidates(List<Selection> candidates) {
+		return candidates.stream()
+			.map(candidate -> candidate.recipeId()
+				+ "="
+				+ candidate.outputLabel()
+				+ " copies="
+				+ candidate.copiesAvailable()
+				+ " preferred_total="
+				+ candidate.preferredTotalCount()
+				+ " ingredients="
+				+ candidate.ingredientSummary().compactSummary())
+			.collect(java.util.stream.Collectors.joining(" || "));
 	}
 
 	public static Selection resolveMatchForGrid(
@@ -336,6 +376,30 @@ public final class RecipeVariantResolver {
 			&& allowVariantSwitching
 			&& !explicitVariantSelection
 			&& (!availableItems.hasReservedGrid() || allowReservedGridVariantSwitch);
+	}
+
+	private static RecipeCollection resolveCanonicalCollection(
+		LocalPlayer player,
+		RecipeCollection collection,
+		RecipeDisplayId recipeId
+	) {
+		ClientRecipeBook recipeBook = player.getRecipeBook();
+		RecipeCollection bestCollection = collection;
+		int bestSize = collection != null ? collection.getRecipes().size() : 0;
+		for (RecipeCollection candidate : recipeBook.getCollections()) {
+			boolean containsRecipe = candidate.getRecipes().stream()
+				.anyMatch(entry -> entry.id().equals(recipeId));
+			if (!containsRecipe) {
+				continue;
+			}
+
+			int candidateSize = candidate.getRecipes().size();
+			if (bestCollection == null || candidateSize > bestSize) {
+				bestCollection = candidate;
+				bestSize = candidateSize;
+			}
+		}
+		return bestCollection;
 	}
 
 	private static RecipeDisplayEntry findEntry(

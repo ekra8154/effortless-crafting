@@ -147,6 +147,9 @@ final class RecipeBookInputController {
 		boolean craftAll = shiftModifierDown;
 		boolean allowNearbyChests = ctrlModifierDown
 			&& ReachCraftingConfig.get().enableNearbyContainerUsage();
+		int requestedClicks = craftAll && allowNearbyChests && AutoCraftController.isBulkModeEnabled()
+			? RecipeClickExecutor.bulkRecipeQueueLimit()
+			: 1;
 
 		if (shouldQueueHeldRecipe(minecraft, allowNearbyChests, craftAll) && state.replayBatch() == null) {
 			boolean ctrlTriggered = ctrlModifierDown || RecipeBookFocusManager.isControlKeyDown(minecraft);
@@ -164,7 +167,7 @@ final class RecipeBookInputController {
 				mouseButton,
 				explicitVariantSelection
 			);
-			state.setReplayBatch(new RecipeBookClickCapture.ReplayBatch(action, 1, allowNearbyChests, craftAll));
+			state.setReplayBatch(new RecipeBookClickCapture.ReplayBatch(action, requestedClicks, allowNearbyChests, craftAll));
 			return;
 		}
 
@@ -180,7 +183,7 @@ final class RecipeBookInputController {
 			allowNearbyChests,
 			false,
 			explicitVariantSelection,
-			1,
+			requestedClicks,
 			state
 		);
 	}

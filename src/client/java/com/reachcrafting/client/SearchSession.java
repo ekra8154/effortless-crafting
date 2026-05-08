@@ -570,6 +570,22 @@ final class SearchSession extends BaseCraftSession {
 				outputLabel = resolvedSelection.outputLabel();
 				ingredientSummary = resolvedSelection.ingredientSummary();
 			}
+			if (BulkAutoCraftController.isActive() && requestedSingleClicks > 1) {
+				BulkAutoCraftController.startOrUpdate(
+					new RecipeBookClickCapture.HeldRecipeAction(
+						recipeId,
+						recipeCollection,
+						ItemStack.EMPTY,
+						org.lwjgl.glfw.GLFW.GLFW_MOUSE_BUTTON_LEFT,
+						explicitVariantSelection
+					),
+					requestedSingleClicks,
+					allowNearby,
+					resolveBulkVariantContinuationMode(resolvedSelection),
+					resolvedSelection.displayStack(),
+					ingredientSummary
+				);
+			}
 		}
 		boolean hasUnscanned = reachableView.snapshotsByKey().size() < reachableView.nearestAccessByKey().size();
 		ReachCraftingMod.LOGGER.info(
@@ -1407,6 +1423,26 @@ final class SearchSession extends BaseCraftSession {
 		return matched;
 	}
 
+	private BulkAutoCraftController.VariantContinuationMode resolveBulkVariantContinuationMode(RecipeVariantResolver.Selection resolvedSelection) {
+		BulkAutoCraftController.VariantContinuationMode currentMode = BulkAutoCraftController.currentVariantContinuationMode();
+		if (currentMode == BulkAutoCraftController.VariantContinuationMode.FAMILY_FALLBACK) {
+			return currentMode;
+		}
+		if (currentMode == BulkAutoCraftController.VariantContinuationMode.STRICT_CURRENT_VARIANT) {
+			return currentMode;
+		}
+		if (explicitVariantSelection
+			|| ReachCraftingConfig.get().revolvingCraftHandling() != ReachCraftingConfig.RevolvingCraftHandling.PREFER_CLICKED_TYPE_WITH_COUNT_FALLBACK) {
+			return BulkAutoCraftController.determineVariantContinuationMode(initialRequestedRecipeId, recipeId, explicitVariantSelection);
+		}
+		if (resolvedSelection == null) {
+			return BulkAutoCraftController.VariantContinuationMode.UNDECIDED;
+		}
+		return resolvedSelection.recipeId().equals(initialRequestedRecipeId)
+			? BulkAutoCraftController.VariantContinuationMode.STRICT_CURRENT_VARIANT
+			: BulkAutoCraftController.VariantContinuationMode.FAMILY_FALLBACK;
+	}
+
 
 	private void resumeOriginalContext() {
 		super.resumeOriginalContext(originalContext);
@@ -1575,6 +1611,7 @@ final class SearchSession extends BaseCraftSession {
 					),
 					requestedSingleClicks,
 					allowNearby,
+					resolveBulkVariantContinuationMode(null),
 					expectedStack,
 					ingredientSummary
 				);

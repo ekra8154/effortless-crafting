@@ -125,7 +125,16 @@ public final class RecipeBookClickCapture {
 				return recipeId.equals(other.recipeId);
 			}
 			if (collection != null && other.collection != null) {
-				return collection == other.collection || collection.equals(other.collection);
+				if (collection == other.collection || collection.equals(other.collection)) {
+					return true;
+				}
+				boolean thisCollectionContainsOther = collection.getRecipes().stream()
+					.anyMatch(entry -> entry.id().equals(other.recipeId));
+				boolean otherCollectionContainsThis = other.collection.getRecipes().stream()
+					.anyMatch(entry -> entry.id().equals(recipeId));
+				if (thisCollectionContainsOther && otherCollectionContainsThis) {
+					return true;
+				}
 			}
 			return recipeId.equals(other.recipeId);
 		}
