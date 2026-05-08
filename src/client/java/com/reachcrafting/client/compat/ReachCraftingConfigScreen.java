@@ -23,10 +23,10 @@ public final class ReachCraftingConfigScreen {
 
 		ConfigEntryBuilder entries = builder.entryBuilder();
 
-		// TAB 1: Crafting & UI
-		ConfigCategory craftingUi = builder.getOrCreateCategory(Component.translatable("category.reachcrafting.crafting_ui"));
+		// TAB 1: Crafting
+		ConfigCategory crafting = builder.getOrCreateCategory(Component.translatable("category.reachcrafting.crafting"));
 
-		craftingUi.addEntry(entries.startBooleanToggle(
+		crafting.addEntry(entries.startBooleanToggle(
 				Component.translatable("option.reachcrafting.enabled"),
 				config.enabled()
 			)
@@ -35,25 +35,11 @@ public final class ReachCraftingConfigScreen {
 			.setSaveConsumer(config::setEnabled)
 			.build());
 
-		craftingUi.addEntry(entries.startBooleanToggle(
-				Component.translatable("option.reachcrafting.show_total_output_counts"),
-				config.showTotalOutputCounts()
-			)
-			.setDefaultValue(true)
-			.setTooltip(Component.translatable("tooltip.reachcrafting.show_total_output_counts"))
-			.setSaveConsumer(config::setShowTotalOutputCounts)
-			.build());
+		// Crafting Tweaks
+		var tweaksGroup = entries.startSubCategory(Component.translatable("category.reachcrafting.sub.crafting_tweaks"));
+		tweaksGroup.setExpanded(true);
 
-		craftingUi.addEntry(entries.startBooleanToggle(
-				Component.translatable("option.reachcrafting.restore_inventory_item_positions"),
-				config.restoreInventoryItemPositions()
-			)
-			.setDefaultValue(true)
-			.setTooltip(Component.translatable("tooltip.reachcrafting.restore_inventory_item_positions"))
-			.setSaveConsumer(config::setRestoreInventoryItemPositions)
-			.build());
-
-		craftingUi.addEntry(entries.startBooleanToggle(
+		tweaksGroup.add(entries.startBooleanToggle(
 				Component.translatable("option.reachcrafting.type_to_focus_search"),
 				config.typeToFocusSearch()
 			)
@@ -62,7 +48,7 @@ public final class ReachCraftingConfigScreen {
 			.setSaveConsumer(config::setTypeToFocusSearch)
 			.build());
 
-		craftingUi.addEntry(entries.startBooleanToggle(
+		tweaksGroup.add(entries.startBooleanToggle(
 				Component.translatable("option.reachcrafting.remember_previous_search"),
 				config.rememberPreviousSearch()
 			)
@@ -71,7 +57,16 @@ public final class ReachCraftingConfigScreen {
 			.setSaveConsumer(config::setRememberPreviousSearch)
 			.build());
 
-		craftingUi.addEntry(entries.startBooleanToggle(
+		tweaksGroup.add(entries.startBooleanToggle(
+				Component.translatable("option.reachcrafting.restore_inventory_item_positions"),
+				config.restoreInventoryItemPositions()
+			)
+			.setDefaultValue(true)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.restore_inventory_item_positions"))
+			.setSaveConsumer(config::setRestoreInventoryItemPositions)
+			.build());
+
+		tweaksGroup.add(entries.startBooleanToggle(
 				Component.translatable("option.reachcrafting.reach_craft_close_overlay_after_release"),
 				config.reachCraftCloseOverlayAfterRelease()
 			)
@@ -80,33 +75,22 @@ public final class ReachCraftingConfigScreen {
 			.setSaveConsumer(config::setReachCraftCloseOverlayAfterRelease)
 			.build());
 
-		craftingUi.addEntry(entries.startEnumSelector(
-				Component.translatable("option.reachcrafting.scroll_to_pull"),
-				ReachCraftingConfig.ScrollToPullMode.class,
-				config.scrollToPullMode()
+		tweaksGroup.add(entries.startBooleanToggle(
+				Component.translatable("option.reachcrafting.show_total_output_counts"),
+				config.showTotalOutputCounts()
 			)
-			.setDefaultValue(ReachCraftingConfig.ScrollToPullMode.WHILE_RESULT_OR_INVENTORY_SLOT_HOVERED)
-			.setTooltip(Component.translatable("tooltip.reachcrafting.scroll_to_pull"))
-			.setSaveConsumer(config::setScrollToPullMode)
-			.setEnumNameProvider(value -> Component.translatable("enum.reachcrafting.scroll_to_pull." + value.name().toLowerCase()))
+			.setDefaultValue(true)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.show_total_output_counts"))
+			.setSaveConsumer(config::setShowTotalOutputCounts)
 			.build());
 
-		// Sub-Category: Planning & Logic
-		var logicGroup = entries.startSubCategory(Component.translatable("category.reachcrafting.logic_planning"));
-		logicGroup.setExpanded(true);
+		crafting.addEntry(tweaksGroup.build());
 
-		logicGroup.add(entries.startEnumSelector(
-				Component.translatable("option.reachcrafting.count_preference"),
-				IngredientPlanning.CountPreference.class,
-				config.countPreference()
-			)
-			.setDefaultValue(IngredientPlanning.CountPreference.HIGHEST_TOTAL)
-			.setTooltip(Component.translatable("tooltip.reachcrafting.count_preference"))
-			.setSaveConsumer(config::setCountPreference)
-			.setEnumNameProvider(value -> Component.translatable("enum.reachcrafting.count_preference." + value.name().toLowerCase()))
-			.build());
+		// Craft Queuing
+		var queuingGroup = entries.startSubCategory(Component.translatable("category.reachcrafting.sub.craft_queuing"));
+		queuingGroup.setExpanded(true);
 
-		logicGroup.add(entries.startEnumSelector(
+		queuingGroup.add(entries.startEnumSelector(
 				Component.translatable("option.reachcrafting.revolving_craft_handling"),
 				ReachCraftingConfig.RevolvingCraftHandling.class,
 				config.revolvingCraftHandling()
@@ -117,7 +101,27 @@ public final class ReachCraftingConfigScreen {
 			.setEnumNameProvider(value -> Component.translatable("enum.reachcrafting.revolving_craft_handling." + value.name().toLowerCase()))
 			.build());
 
-		logicGroup.add(entries.startEnumSelector(
+		queuingGroup.add(entries.startEnumSelector(
+				Component.translatable("option.reachcrafting.count_preference"),
+				IngredientPlanning.CountPreference.class,
+				config.countPreference()
+			)
+			.setDefaultValue(IngredientPlanning.CountPreference.HIGHEST_TOTAL)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.count_preference"))
+			.setSaveConsumer(config::setCountPreference)
+			.setEnumNameProvider(value -> Component.translatable("enum.reachcrafting.count_preference." + value.name().toLowerCase()))
+			.build());
+
+		queuingGroup.add(entries.startBooleanToggle(
+				Component.translatable("option.reachcrafting.redistribute_to_craft_when_needed"),
+				config.redistributeToCraftWhenNeeded()
+			)
+			.setDefaultValue(true)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.redistribute_to_craft_when_needed"))
+			.setSaveConsumer(config::setRedistributeToCraftWhenNeeded)
+			.build());
+
+		queuingGroup.add(entries.startEnumSelector(
 				Component.translatable("option.reachcrafting.input_counter_visibility"),
 				ReachCraftingConfig.InputCounterVisibility.class,
 				config.inputCounterVisibility()
@@ -128,16 +132,7 @@ public final class ReachCraftingConfigScreen {
 			.setEnumNameProvider(value -> Component.translatable("enum.reachcrafting.input_counter_visibility." + value.name().toLowerCase()))
 			.build());
 
-		logicGroup.add(entries.startBooleanToggle(
-				Component.translatable("option.reachcrafting.redistribute_to_craft_when_needed"),
-				config.redistributeToCraftWhenNeeded()
-			)
-			.setDefaultValue(true)
-			.setTooltip(Component.translatable("tooltip.reachcrafting.redistribute_to_craft_when_needed"))
-			.setSaveConsumer(config::setRedistributeToCraftWhenNeeded)
-			.build());
-
-		logicGroup.add(entries.startBooleanToggle(
+		queuingGroup.add(entries.startBooleanToggle(
 				Component.translatable("option.reachcrafting.inventory_2x2_offhand_consolidation"),
 				config.inventory2x2OffhandConsolidation()
 			)
@@ -146,16 +141,13 @@ public final class ReachCraftingConfigScreen {
 			.setSaveConsumer(config::setInventory2x2OffhandConsolidation)
 			.build());
 
-		logicGroup.add(entries.startBooleanToggle(
-				Component.translatable("option.reachcrafting.eject_items_when_full"),
-				config.ejectItemsWhenFull()
-			)
-			.setDefaultValue(false)
-			.setTooltip(Component.translatable("tooltip.reachcrafting.eject_items_when_full"))
-			.setSaveConsumer(config::setEjectItemsWhenFull)
-			.build());
+		crafting.addEntry(queuingGroup.build());
 
-		logicGroup.add(entries.startEnumSelector(
+		// Auto Crafting
+		var autoGroup = entries.startSubCategory(Component.translatable("category.reachcrafting.sub.auto_crafting"));
+		autoGroup.setExpanded(true);
+
+		autoGroup.add(entries.startEnumSelector(
 				Component.translatable("option.reachcrafting.auto_craft_capability"),
 				ReachCraftingConfig.AutoCraftCapability.class,
 				config.autoCraftCapability()
@@ -166,7 +158,7 @@ public final class ReachCraftingConfigScreen {
 			.setEnumNameProvider(value -> Component.translatable("enum.reachcrafting.auto_craft_capability." + value.name().toLowerCase()))
 			.build());
 
-		logicGroup.add(entries.startEnumSelector(
+		autoGroup.add(entries.startEnumSelector(
 				Component.translatable("option.reachcrafting.auto_craft_handling"),
 				ReachCraftingConfig.AutoCraftHandling.class,
 				config.autoCraftHandling()
@@ -177,7 +169,7 @@ public final class ReachCraftingConfigScreen {
 			.setEnumNameProvider(value -> Component.translatable("enum.reachcrafting.auto_craft_handling." + value.name().toLowerCase()))
 			.build());
 
-		logicGroup.add(entries.startBooleanToggle(
+		autoGroup.add(entries.startBooleanToggle(
 				Component.translatable("option.reachcrafting.auto_craft_off_after_bulk"),
 				config.autoCraftOffAfterBulk()
 			)
@@ -186,14 +178,37 @@ public final class ReachCraftingConfigScreen {
 			.setSaveConsumer(config::setAutoCraftOffAfterBulk)
 			.build());
 
+		autoGroup.add(entries.startEnumSelector(
+				Component.translatable("option.reachcrafting.scroll_to_pull"),
+				ReachCraftingConfig.ScrollToPullMode.class,
+				config.scrollToPullMode()
+			)
+			.setDefaultValue(ReachCraftingConfig.ScrollToPullMode.WHILE_RESULT_OR_INVENTORY_SLOT_HOVERED)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.scroll_to_pull"))
+			.setSaveConsumer(config::setScrollToPullMode)
+			.setEnumNameProvider(value -> Component.translatable("enum.reachcrafting.scroll_to_pull." + value.name().toLowerCase()))
+			.build());
 
-		craftingUi.addEntry(logicGroup.build());
+		autoGroup.add(entries.startBooleanToggle(
+				Component.translatable("option.reachcrafting.eject_items_when_full"),
+				config.ejectItemsWhenFull()
+			)
+			.setDefaultValue(false)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.eject_items_when_full"))
+			.setSaveConsumer(config::setEjectItemsWhenFull)
+			.build());
+
+		crafting.addEntry(autoGroup.build());
 
 
-		// TAB 2: Nearby Containers
-		ConfigCategory containers = builder.getOrCreateCategory(Component.translatable("category.reachcrafting.nearby_containers"));
+		// TAB 2: Chests and Containers
+		ConfigCategory containers = builder.getOrCreateCategory(Component.translatable("category.reachcrafting.chests_containers"));
 
-		containers.addEntry(entries.startBooleanToggle(
+		// Nearby Containers
+		var nearbyGroup = entries.startSubCategory(Component.translatable("category.reachcrafting.sub.nearby_containers"));
+		nearbyGroup.setExpanded(true);
+
+		nearbyGroup.add(entries.startBooleanToggle(
 				Component.translatable("option.reachcrafting.enable_nearby_container_usage"),
 				config.enableNearbyContainerUsage()
 			)
@@ -202,34 +217,7 @@ public final class ReachCraftingConfigScreen {
 			.setSaveConsumer(config::setEnableNearbyContainerUsage)
 			.build());
 
-		containers.addEntry(entries.startBooleanToggle(
-				Component.translatable("option.reachcrafting.reach_craft_prefer_inventory"),
-				config.reachCraftPreferInventory()
-			)
-			.setDefaultValue(true)
-			.setTooltip(Component.translatable("tooltip.reachcrafting.reach_craft_prefer_inventory"))
-			.setSaveConsumer(config::setReachCraftPreferInventory)
-			.build());
-
-		containers.addEntry(entries.startBooleanToggle(
-				Component.translatable("option.reachcrafting.show_nearby_craftable_indicator"),
-				config.showNearbyCraftableIndicator()
-			)
-			.setDefaultValue(true)
-			.setTooltip(Component.translatable("tooltip.reachcrafting.show_nearby_craftable_indicator"))
-			.setSaveConsumer(config::setShowNearbyCraftableIndicator)
-			.build());
-
-		containers.addEntry(entries.startBooleanToggle(
-				Component.translatable("option.reachcrafting.cache_containers_for_faster_search"),
-				config.cacheContainersForFasterSearch()
-			)
-			.setDefaultValue(true)
-			.setTooltip(Component.translatable("tooltip.reachcrafting.cache_containers_for_faster_search"))
-			.setSaveConsumer(config::setCacheContainersForFasterSearch)
-			.build());
-
-		containers.addEntry(entries.startBooleanToggle(
+		nearbyGroup.add(entries.startBooleanToggle(
 				Component.translatable("option.reachcrafting.put_pulled_resources_back"),
 				config.putPulledResourcesBack()
 			)
@@ -238,10 +226,39 @@ public final class ReachCraftingConfigScreen {
 			.setSaveConsumer(config::setPutPulledResourcesBack)
 			.build());
 
+		nearbyGroup.add(entries.startBooleanToggle(
+				Component.translatable("option.reachcrafting.reach_craft_prefer_inventory"),
+				config.reachCraftPreferInventory()
+			)
+			.setDefaultValue(true)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.reach_craft_prefer_inventory"))
+			.setSaveConsumer(config::setReachCraftPreferInventory)
+			.build());
 
-		// Sub-Category: Filtering & Highlighting
-		var filterGroup = entries.startSubCategory(Component.translatable("category.reachcrafting.filtering_highlighting"));
-		
+		nearbyGroup.add(entries.startBooleanToggle(
+				Component.translatable("option.reachcrafting.show_nearby_craftable_indicator"),
+				config.showNearbyCraftableIndicator()
+			)
+			.setDefaultValue(true)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.show_nearby_craftable_indicator"))
+			.setSaveConsumer(config::setShowNearbyCraftableIndicator)
+			.build());
+
+		nearbyGroup.add(entries.startBooleanToggle(
+				Component.translatable("option.reachcrafting.cache_containers_for_faster_search"),
+				config.cacheContainersForFasterSearch()
+			)
+			.setDefaultValue(true)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.cache_containers_for_faster_search"))
+			.setSaveConsumer(config::setCacheContainersForFasterSearch)
+			.build());
+
+		containers.addEntry(nearbyGroup.build());
+
+		// Blacklists and Filtering
+		var filterGroup = entries.startSubCategory(Component.translatable("category.reachcrafting.sub.blacklists_filtering"));
+		filterGroup.setExpanded(true);
+
 		filterGroup.add(entries.startEnumSelector(
 				Component.translatable("option.reachcrafting.in_world_filter_mode"),
 				ReachCraftingConfig.InWorldFilterMode.class,
@@ -268,7 +285,7 @@ public final class ReachCraftingConfigScreen {
 				Component.translatable("option.reachcrafting.blacklisted_container_ids"),
 				new ArrayList<>(config.blacklistedContainerIds())
 			)
-			.setExpanded(true)
+			.setExpanded(false)
 			.setDefaultValue(new ArrayList<>(ReachCraftingConfig.DEFAULT_BLACKLIST))
 			.setTooltip(Component.translatable("tooltip.reachcrafting.blacklisted_container_ids"))
 			.setSaveConsumer(list -> config.setBlacklistedContainerIds(new HashSet<>(list)))
