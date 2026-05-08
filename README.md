@@ -80,9 +80,5 @@ This project is licensed under **LGPL-3.0-or-later**. It draws inspiration and c
 
 
 TODO: 
-
-setting: toggle autocraft off after bulk craft
-
-BUGS:
-
-cant do iron bars with only 1 inventory slot
+chat messages
+3x3 offhand stacking
