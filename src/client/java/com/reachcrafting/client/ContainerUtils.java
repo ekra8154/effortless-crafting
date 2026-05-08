@@ -266,6 +266,7 @@ public final class ContainerUtils {
 		BulkAutoCraftController.clear();
 		NearbyContainerDryRun.abortActiveSession();
 		InventoryGridRestoreTracker.clear();
+		OffhandConsolidationController.swapBack(net.minecraft.client.Minecraft.getInstance());
 
 		if (wasActive) {
 			ReachCraftingModClient.sendChat("Crafting session aborted.");

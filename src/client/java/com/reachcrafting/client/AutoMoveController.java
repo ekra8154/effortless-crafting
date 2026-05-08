@@ -43,6 +43,7 @@ final class AutoMoveController {
 		autoMoveTargetStack = ItemStack.EMPTY;
 		autoMoveExpectedStack = ItemStack.EMPTY;
 		autoMoveSnapshotCounts.clear();
+		OffhandConsolidationController.swapBack(Minecraft.getInstance());
 	}
 
 	static void autoMoveResult(Minecraft client) {
@@ -80,6 +81,7 @@ final class AutoMoveController {
 					pendingAutoMove = false;
 					autoMoveOrganizing = false;
 					autoMoveTargetStack = ItemStack.EMPTY;
+					OffhandConsolidationController.swapBack(client);
 					BulkAutoCraftController.onAutoMoveFinished(client, false);
 					return;
 				}
@@ -133,11 +135,22 @@ final class AutoMoveController {
 
 					com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] EJECT path done. {}", logBottleDistribution(menu));
 					pendingAutoMove = false;
+					OffhandConsolidationController.swapBack(client);
 					BulkAutoCraftController.onAutoMoveFinished(client, true);
 					return;
 				}
 
 				com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] SHIFT-CLICK path: pre-shiftclick. {}", logBottleDistribution(menu));
+
+				if (OffhandConsolidationController.prepareSwapIfNeeded(client, currentResult)) {
+					com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] Offhand swap triggered. Delaying shift-click.");
+					return;
+				}
+
+				if (OffhandConsolidationController.isWarmupDelayActive()) {
+					return;
+				}
+
 				autoMoveTargetStack = currentResult.copy();
 				autoMoveWaitingTicks = 0;
 				autoMoveOrganizing = true;
@@ -154,6 +167,14 @@ final class AutoMoveController {
 					autoMoveSnapshotCounts.put(offhandSlot.index, offhandSlot.getItem().getCount());
 				}
 
+				int swappedSlotIndex = OffhandConsolidationController.getSwapSlotIndex(menu);
+				if (swappedSlotIndex != -1) {
+					Slot s = menu.getSlot(swappedSlotIndex);
+					if (s.hasItem()) {
+						autoMoveSnapshotCounts.put(s.index, s.getItem().getCount());
+					}
+				}
+
 				client.gameMode.handleInventoryMouseClick(menu.containerId, resultSlot.index, 0, ClickType.QUICK_MOVE, client.player);
 				com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] SHIFT-CLICK path: post-shiftclick. {}", logBottleDistribution(menu));
 			} else {
@@ -162,6 +183,7 @@ final class AutoMoveController {
 					pendingAutoMove = false;
 					autoMoveOrganizing = false;
 					autoMoveTargetStack = ItemStack.EMPTY;
+					OffhandConsolidationController.swapBack(client);
 					BulkAutoCraftController.onAutoMoveFinished(client, false);
 				}
 				return;
@@ -176,10 +198,22 @@ final class AutoMoveController {
 			Slot sourceSlot = findInventorySlot(menu, i);
 			if (sourceSlot != null && sourceSlot.hasItem() && ItemStack.isSameItemSameComponents(sourceSlot.getItem(), autoMoveTargetStack)) {
 				int currentCount = sourceSlot.getItem().getCount();
+				
+				// Never move items OUT of the offhand or the swapped offhand slot
+				Slot offhandSlot = findVisibleOffhandSlot(menu);
+				if (offhandSlot != null && sourceSlot.index == offhandSlot.index) {
+					autoMoveSnapshotCounts.put(i, currentCount);
+					continue;
+				}
+				int swappedSlotIndex = OffhandConsolidationController.getSwapSlotIndex(menu);
+				if (swappedSlotIndex != -1 && sourceSlot.index == swappedSlotIndex) {
+					autoMoveSnapshotCounts.put(i, currentCount);
+					continue;
+				}
+
 				int oldCount = autoMoveSnapshotCounts.getOrDefault(i, 0);
 
 				if (currentCount > oldCount) {
-					Slot offhandSlot = findVisibleOffhandSlot(menu);
 					if (offhandSlot != null
 						&& offhandSlot.hasItem()
 						&& ItemStack.isSameItemSameComponents(offhandSlot.getItem(), autoMoveTargetStack)
@@ -195,6 +229,21 @@ final class AutoMoveController {
 						autoMoveSnapshotCounts.put(i, 0);
 						autoMoveSnapshotCounts.put(offhandSlot.index, offhandSlot.getItem().getCount() + currentCount);
 						continue;
+					}
+					
+					if (swappedSlotIndex != -1) {
+						Slot swapSlot = menu.getSlot(swappedSlotIndex);
+						if (swapSlot.hasItem() \u0026\u0026 ItemStack.isSameItemSameComponents(swapSlot.getItem(), autoMoveTargetStack) \u0026\u0026 swapSlot.getItem().getCount() < swapSlot.getItem().getMaxStackSize()) {
+							client.gameMode.handleInventoryMouseClick(menu.containerId, sourceSlot.index, 0, ClickType.PICKUP, client.player);
+							client.gameMode.handleInventoryMouseClick(menu.containerId, swapSlot.index, 0, ClickType.PICKUP, client.player);
+							if (!client.player.containerMenu.getCarried().isEmpty()) {
+								client.gameMode.handleInventoryMouseClick(menu.containerId, sourceSlot.index, 0, ClickType.PICKUP, client.player);
+							}
+							movesThisTick++;
+							autoMoveSnapshotCounts.put(i, 0);
+							autoMoveSnapshotCounts.put(swapSlot.index, swapSlot.getItem().getCount() + currentCount);
+							continue;
+						}
 					}
 
 					for (int h = 0; h < i && h < 9; h++) {
@@ -274,6 +323,7 @@ final class AutoMoveController {
 			pendingAutoMove = false;
 			autoMoveOrganizing = false;
 			autoMoveTargetStack = ItemStack.EMPTY;
+			OffhandConsolidationController.swapBack(client);
 			BulkAutoCraftController.onAutoMoveFinished(client, true);
 		}
 	}

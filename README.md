@@ -31,6 +31,11 @@ The recipe book can surface more than vanilla craftability.
 * **Vanilla UI Driven**: Uses standard slot clicks, recipe placement, and container interactions.
 * **Configurable Workflow**: Includes options for inventory preference, search behavior, nearby-container usage, filtering, and output handling.
 
+### Crafting Tweaks
+* **Offhand Stacking**: Automatically append crafting results into your offhand if it already contains the same item. In 3x3 grids, the mod temporarily moves the offhand into your inventory to enable stacking.
+* **Scroll to Pull**: Pull crafted output to your cursor or inventory using Shift + Scroll.
+* **Auto-Focus Search**: Automatically focus the recipe book search bar.
+
 ---
 
 ## Usage
@@ -78,7 +83,11 @@ Building the project locally:
 This project is licensed under **LGPL-3.0-or-later**. It draws inspiration and certain implementation patterns from:
 * [stack-to-nearby-chests](https://github.com/xiaocihua/stack-to-nearby-chests) by xiaocihua (LGPL-3.0)
 
-
 TODO: 
 chat messages
-3x3 offhand stacking
+
+hotbar optimization moves existing items if its an item that was crafted (ex: moves torches)
+
+fix offhand stack + bulk craft
+
+test offhand stack on full inventory and with scroll to pull

@@ -60,6 +60,25 @@ public final class ScrollToPullHandler {
         
         // Cache the result item for virtual updates since the slot may appear empty after the first click
         ItemStack resultStack = resultSlot.getItem().copy();
+        
+        // Handle offhand swap accumulation and delay
+        if (OffhandConsolidationController.prepareSwapIfNeeded(minecraft, resultStack)) {
+            OffhandConsolidationController.addScrollAmount(amount);
+            return true;
+        }
+        
+        if (OffhandConsolidationController.isWarmupDelayActive()) {
+            OffhandConsolidationController.addScrollAmount(amount);
+            return true;
+        }
+        
+        double currentAmount = amount + OffhandConsolidationController.consumeAccumulatedScroll();
+        if (currentAmount == 0.0D) {
+            return false;
+        }
+        OffhandConsolidationController.resetIdleTimeout();
+
+        up = currentAmount > 0.0D;
         int countToMove = resultStack.getCount();
 
         int craftsAttempted = 0;
@@ -104,6 +123,10 @@ public final class ScrollToPullHandler {
                     break;
                 }
             }
+        }
+
+        if (craftsAttempted == 0) {
+            OffhandConsolidationController.swapBack(minecraft);
         }
 
         return craftsAttempted > 0;
@@ -175,6 +198,15 @@ public final class ScrollToPullHandler {
             && ItemStack.isSameItemSameComponents(offhandSlot.getItem(), result)
             && offhandSlot.getItem().getCount() + craftCount <= maxStack) {
             return offhandSlot.index;
+        }
+
+        // Priority 3.6: Refill matching swapped-in offhand stack (3x3)
+        int swappedSlotIndex = OffhandConsolidationController.getSwapSlotIndex(menu);
+        if (swappedSlotIndex != -1) {
+            Slot s = menu.getSlot(swappedSlotIndex);
+            if (s.hasItem() && ItemStack.isSameItemSameComponents(s.getItem(), result) && s.getItem().getCount() + craftCount <= maxStack) {
+                return s.index;
+            }
         }
 
         // Priority 4: Empty Hotbar

@@ -1,0 +1,187 @@
+package com.reachcrafting.client;
+
+import net.minecraft.client.Minecraft;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.ClickType;
+import net.minecraft.world.inventory.InventoryMenu;
+import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.item.ItemStack;
+
+/**
+ * Manages the "offhand swap" state for 3x3 crafting where the offhand slot
+ * is not natively accessible in the GUI.
+ */
+public final class OffhandConsolidationController {
+	private static int swapInventoryIndex = -1; // 0-35
+	private static int warmupDelay = 0;
+	private static int idleTimeout = 0;
+	private static boolean isSwapped = false;
+	private static ItemStack swappedItem = ItemStack.EMPTY;
+	private static double accumulatedScroll = 0.0D;
+
+	private OffhandConsolidationController() {
+	}
+
+	public static void tick(Minecraft client) {
+		if (warmupDelay > 0) {
+			warmupDelay--;
+		}
+
+		if (isSwapped) {
+			if (idleTimeout > 0) {
+				idleTimeout--;
+			}
+
+			// Immediate swap back if the slot becomes full or the item changes unexpectedly
+			if (client.player != null \u0026\u0026 client.player.containerMenu != null) {
+				Slot s = findInventorySlot(client.player.containerMenu, swapInventoryIndex);
+				if (s != null) {
+					if (s.hasItem()) {
+						if (s.getItem().getCount() >= s.getItem().getMaxStackSize()) {
+							// Stack is full, swap it back now
+							swapBack(client);
+							return;
+						}
+						if (!ItemStack.isSameItemSameComponents(s.getItem(), swappedItem)) {
+							// Item in slot changed (maybe user moved it manually), swap back to recover
+							swapBack(client);
+							return;
+						}
+					}
+				} else {
+					// Slot not found (menu changed?), force reset
+					isSwapped = false;
+					swapInventoryIndex = -1;
+				}
+			}
+
+			// Idle timeout swap back (only if no automated interaction is currently running)
+			if (idleTimeout == 0 \u0026\u0026 !AutoMoveController.isAutomatedInteractionRunning() \u0026\u0026 warmupDelay == 0) {
+				swapBack(client);
+			}
+		}
+	}
+
+	public static boolean isWarmupDelayActive() {
+		return warmupDelay > 0;
+	}
+
+	public static boolean isSwapped() {
+		return isSwapped;
+	}
+
+	public static int getSwapSlotIndex(AbstractContainerMenu menu) {
+		if (!isSwapped || swapInventoryIndex == -1) return -1;
+		Slot s = findInventorySlot(menu, swapInventoryIndex);
+		return s != null ? s.index : -1;
+	}
+
+	public static void addScrollAmount(double amount) {
+		accumulatedScroll += amount;
+	}
+
+	public static double consumeAccumulatedScroll() {
+		double amt = accumulatedScroll;
+		accumulatedScroll = 0.0D;
+		return amt;
+	}
+
+	public static boolean prepareSwapIfNeeded(Minecraft client, ItemStack resultStack) {
+		if (!ReachCraftingConfig.get().enabled() || !ReachCraftingConfig.get().inventory2x2OffhandConsolidation()) {
+			return false;
+		}
+
+		if (client.player == null || client.player.containerMenu == null) {
+			return false;
+		}
+
+		AbstractContainerMenu menu = client.player.containerMenu;
+		
+		// Only apply to 3x3 (non-InventoryMenu screens)
+		if (menu instanceof InventoryMenu) {
+			return false;
+		}
+
+		ItemStack offhand = client.player.getOffhandItem();
+		if (offhand.isEmpty() || !ItemStack.isSameItemSameComponents(offhand, resultStack)) {
+			return false;
+		}
+
+		if (offhand.getCount() >= offhand.getMaxStackSize()) {
+			return false;
+		}
+
+		// Already swapped? Just reset timeout
+		if (isSwapped) {
+			idleTimeout = 10;
+			return false;
+		}
+
+		// Find a slot to swap into (0-35)
+		int targetInvIndex = -1;
+		
+		// Priority 1: Any empty slot
+		for (int i = 0; i < 36; i++) {
+			Slot s = findInventorySlot(menu, i);
+			if (s != null \u0026\u0026 !s.hasItem()) {
+				targetInvIndex = i;
+				break;
+			}
+		}
+		
+		// Priority 2: Fallback to Top-Left of main inventory (Slot 9)
+		if (targetInvIndex == -1) {
+			targetInvIndex = 9;
+		}
+
+		Slot targetSlot = findInventorySlot(menu, targetInvIndex);
+		if (targetSlot == null) {
+			return false;
+		}
+
+		// Perform swap via ClickType.SWAP with button 40 (offhand)
+		client.gameMode.handleInventoryMouseClick(menu.containerId, targetSlot.index, 40, ClickType.SWAP, client.player);
+		
+		swapInventoryIndex = targetInvIndex;
+		isSwapped = true;
+		swappedItem = offhand.copy();
+		warmupDelay = 3;
+		idleTimeout = 10;
+		
+		return true;
+	}
+
+	public static void resetIdleTimeout() {
+		if (isSwapped) {
+			idleTimeout = 10;
+		}
+	}
+
+	public static void swapBack(Minecraft client) {
+		if (!isSwapped) return;
+		
+		if (client.player != null \u0026\u0026 client.player.containerMenu != null) {
+			AbstractContainerMenu menu = client.player.containerMenu;
+			Slot targetSlot = findInventorySlot(menu, swapInventoryIndex);
+			if (targetSlot != null) {
+				// Swap back
+				client.gameMode.handleInventoryMouseClick(menu.containerId, targetSlot.index, 40, ClickType.SWAP, client.player);
+			}
+		}
+		
+		isSwapped = false;
+		swapInventoryIndex = -1;
+		swappedItem = ItemStack.EMPTY;
+		warmupDelay = 0;
+		idleTimeout = 0;
+	}
+
+	private static Slot findInventorySlot(AbstractContainerMenu menu, int inventoryIndex) {
+		for (Slot slot : menu.slots) {
+			if (slot.container instanceof net.minecraft.world.entity.player.Inventory \u0026\u0026 slot.getContainerSlot() == inventoryIndex) {
+				return slot;
+			}
+		}
+		return null;
+	}
+}
