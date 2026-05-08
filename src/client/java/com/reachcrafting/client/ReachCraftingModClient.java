@@ -14,6 +14,13 @@ public class ReachCraftingModClient implements ClientModInitializer {
 	public static KeyMapping showFilterOutlinesKey;
 	public static KeyMapping quickCraftKey;
 	public static boolean forceNextInventorySearchFocus = false;
+	
+	public static void sendChat(String message) {
+		net.minecraft.client.Minecraft client = net.minecraft.client.Minecraft.getInstance();
+		if (client.player != null) {
+			client.player.displayClientMessage(net.minecraft.network.chat.Component.literal("[Effortless Crafting] " + message).withStyle(net.minecraft.ChatFormatting.GOLD), false);
+		}
+	}
 
 	@Override
 	public void onInitializeClient() {

@@ -255,11 +255,34 @@ public final class ContainerUtils {
 	}
 
 	public static void abortAllSessions() {
+		boolean wasActive = RecipeBookInputController.getInstance().isInputQueueActive() 
+			|| AutoMoveController.isAutomatedInteractionRunning() 
+			|| NearbyContainerDryRun.isActiveSessionRunning()
+			|| InventoryGridRestoreTracker.isRestoring();
+
 		clearInputQueue();
 		AutoMoveController.abort();
 		AutoCraftController.setEnabledMode(ReachCraftingConfig.AutoCraftMode.NORMAL);
 		BulkAutoCraftController.clear();
 		NearbyContainerDryRun.abortActiveSession();
 		InventoryGridRestoreTracker.clear();
+
+		if (wasActive) {
+			ReachCraftingModClient.sendChat("Crafting session aborted.");
+		}
+	}
+
+	public static String formatStackBreakdown(int count) {
+		if (count <= 64) {
+			return String.valueOf(count);
+		}
+		int stacks = count / 64;
+		int remainder = count % 64;
+		String breakdown = (stacks == 1 ? "64" : (stacks + "x64"));
+		if (remainder > 0) {
+			return count + " (" + breakdown + " +" + remainder + ")";
+		} else {
+			return count + " (" + breakdown + ")";
+		}
 	}
 }

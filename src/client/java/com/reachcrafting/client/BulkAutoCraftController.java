@@ -212,6 +212,12 @@ public final class BulkAutoCraftController {
 	}
 
 	private static void finishSession() {
+		if (activeSession != null && activeSession.completedRecipeCopies() > 0) {
+			String itemName = activeSession.expectedOutput().getHoverName().getString();
+			int totalGained = activeSession.completedRecipeCopies() * Math.max(activeSession.expectedOutput().getCount(), 1);
+			String formattedCount = ContainerUtils.formatStackBreakdown(totalGained);
+			ReachCraftingModClient.sendChat("Bulk craft complete: Crafted " + formattedCount + "x " + itemName);
+		}
 		AutoCraftController.setEnabledMode(ReachCraftingConfig.AutoCraftMode.NORMAL);
 		if (ReachCraftingConfig.get().autoCraftOffAfterBulk()) {
 			AutoCraftController.setEnabled(false);

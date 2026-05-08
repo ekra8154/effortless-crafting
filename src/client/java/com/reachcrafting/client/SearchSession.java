@@ -690,6 +690,7 @@ final class SearchSession extends BaseCraftSession {
 					true,
 					false,
 					blockedSummary,
+					plannedResult.compactMissingSummary(),
 					AvailableItemSnapshot.formatCounts(totalAvailable)
 				);
 			}
@@ -734,6 +735,7 @@ final class SearchSession extends BaseCraftSession {
 			resumeOriginalContext,
 			startFallbackDiscovery,
 			null,
+			plannedResult.compactMissingSummary(),
 			AvailableItemSnapshot.formatCounts(totalAvailable)
 		);
 	}
@@ -764,6 +766,12 @@ final class SearchSession extends BaseCraftSession {
 		blockedCommittedLayoutMissingSummary = decision.blockedCommittedLayoutMissingSummary();
 
 		if (decision.resumeOriginalContext()) {
+			if (decision.targetCopiesPerSlot() <= 0 && decision.hasMissingIngredients()) {
+				String missing = decision.blockedCommittedLayoutMissingSummary() != null 
+					? decision.blockedCommittedLayoutMissingSummary() 
+					: decision.compactMissingSummary();
+				sendChat("Could not craft any of " + outputLabel + ". Missing " + missing);
+			}
 			beginResume();
 			return;
 		}

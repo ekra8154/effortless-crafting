@@ -524,8 +524,9 @@ public final class ReachCraftingConfig {
 	}
 
 	public enum InputCounterVisibility {
+		SHOW_WHILE_QUEUEING,
 		ALWAYS_SHOW,
-		SHOW_WHILE_QUEUEING
+		DISABLED
 	}
 
 	public enum ScrollToPullMode {

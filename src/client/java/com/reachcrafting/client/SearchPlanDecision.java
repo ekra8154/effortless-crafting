@@ -21,6 +21,7 @@ record SearchPlanDecision(
 	boolean resumeOriginalContext,
 	boolean startFallbackDiscovery,
 	String blockedCommittedLayoutMissingSummary,
+	String compactMissingSummary,
 	String totalAvailableSummary
 ) {
 	SearchPlanDecision {

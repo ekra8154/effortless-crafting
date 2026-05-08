@@ -1,11 +1,9 @@
 package com.reachcrafting.client;
 
-import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.MultiPlayerGameMode;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
-import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
 
@@ -34,7 +32,7 @@ abstract class BaseCraftSession implements CraftSession {
 	}
 
 	protected void sendChat(String message) {
-		player.displayClientMessage(Component.literal("[Effortless Crafting] " + message).withStyle(ChatFormatting.GOLD), false);
+		ReachCraftingModClient.sendChat(message);
 	}
 
 	protected void resumeOriginalContext(ScreenContextSnapshot context) {

@@ -247,7 +247,10 @@ final class RecipeBookInputController {
 		net.minecraft.client.gui.screens.recipebook.RecipeCollection collection,
 		boolean explicitVariantSelection
 	) {
-		if (!ReachCraftingConfig.get().reachCraftHoldAndRelease() || recipeId == null || collection == null) {
+		if (ReachCraftingConfig.get().inputCounterVisibility() == ReachCraftingConfig.InputCounterVisibility.DISABLED
+			|| !ReachCraftingConfig.get().reachCraftHoldAndRelease()
+			|| recipeId == null
+			|| collection == null) {
 			return QueuedRecipeCountState.hidden();
 		}
 
@@ -606,6 +609,9 @@ final class RecipeBookInputController {
 
 	private boolean shouldShowCurrentRecipeCount(Minecraft minecraft) {
 		ReachCraftingConfig.InputCounterVisibility visibility = ReachCraftingConfig.get().inputCounterVisibility();
+		if (visibility == ReachCraftingConfig.InputCounterVisibility.DISABLED) {
+			return false;
+		}
 		if (visibility == ReachCraftingConfig.InputCounterVisibility.ALWAYS_SHOW) {
 			return true;
 		}

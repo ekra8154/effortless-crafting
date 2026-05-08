@@ -132,14 +132,6 @@ public final class ReachCraftingConfigScreen {
 			.setEnumNameProvider(value -> Component.translatable("enum.reachcrafting.input_counter_visibility." + value.name().toLowerCase()))
 			.build());
 
-		queuingGroup.add(entries.startBooleanToggle(
-				Component.translatable("option.reachcrafting.inventory_2x2_offhand_consolidation"),
-				config.inventory2x2OffhandConsolidation()
-			)
-			.setDefaultValue(true)
-			.setTooltip(Component.translatable("tooltip.reachcrafting.inventory_2x2_offhand_consolidation"))
-			.setSaveConsumer(config::setInventory2x2OffhandConsolidation)
-			.build());
 
 		crafting.addEntry(queuingGroup.build());
 
@@ -196,6 +188,15 @@ public final class ReachCraftingConfigScreen {
 			.setDefaultValue(false)
 			.setTooltip(Component.translatable("tooltip.reachcrafting.eject_items_when_full"))
 			.setSaveConsumer(config::setEjectItemsWhenFull)
+			.build());
+
+		autoGroup.add(entries.startBooleanToggle(
+				Component.translatable("option.reachcrafting.inventory_2x2_offhand_consolidation"),
+				config.inventory2x2OffhandConsolidation()
+			)
+			.setDefaultValue(true)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.inventory_2x2_offhand_consolidation"))
+			.setSaveConsumer(config::setInventory2x2OffhandConsolidation)
 			.build());
 
 		crafting.addEntry(autoGroup.build());
