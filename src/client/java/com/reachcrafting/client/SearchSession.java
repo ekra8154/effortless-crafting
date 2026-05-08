@@ -624,8 +624,7 @@ final class SearchSession extends BaseCraftSession {
 			targetCopiesPerSlot,
 			effectivePlanningPolicy
 		);
-		if (!craftAll
-			&& !originalContext.hasReservedGrid()
+		if (!originalContext.hasReservedGrid()
 			&& AutoCraftController.isBulkModeEnabled()
 			&& targetCopiesPerSlot > 0) {
 			int capacityLimitedCopies = clampTargetCopiesToInventoryCapacity(
@@ -1451,8 +1450,7 @@ final class SearchSession extends BaseCraftSession {
 
 		boolean placedPlannedGrid = false;
 		if (!originalContext.hasReservedGrid()
-			&& !craftAll
-			&& requestedSingleClicks > 1
+			&& (craftAll || requestedSingleClicks > 1)
 			&& targetCopiesPerSlot > 0
 			&& !plannedTargets.isEmpty()) {
 			PlacementAttempt seededPlacement = placePlannedGridWithVanillaShape();
