@@ -10,7 +10,7 @@ import net.minecraft.world.item.ItemStack;
 
 public final class BulkAutoCraftController {
 	private static BulkCraftSession activeSession;
-	private static int tickCounter = 0;
+	// private static int tickCounter = 0;
 	private static boolean performedDiscoveryThisSession = false;
 
 	private BulkAutoCraftController() {
@@ -49,6 +49,10 @@ public final class BulkAutoCraftController {
 				AvailableItemSnapshot.capture(client.player, client.screen).totalCounts()
 			);
 			performedDiscoveryThisSession = false;
+
+			// Trigger offhand swap immediately for 3x3 grids if needed
+			int slotsNeeded = estimatedRequiredSlotsForNextBatch();
+			OffhandConsolidationController.prepareSwapIfNeeded(client, expectedCopy, slotsNeeded);
 			return;
 		}
 
@@ -62,7 +66,7 @@ public final class BulkAutoCraftController {
 
 	static void clear() {
 		activeSession = null;
-		tickCounter = 0;
+		// tickCounter = 0;
 		performedDiscoveryThisSession = false;
 	}
 
@@ -124,6 +128,7 @@ public final class BulkAutoCraftController {
 	static void addEjectedOutput(int count) {
 		if (activeSession != null) {
 			activeSession = activeSession.withEjected(activeSession.ejectedOutputCount() + count);
+			com.reachcrafting.ReachCraftingMod.LOGGER.info("[bulk_craft] Ejected output noted: count={} total_ejected_this_batch={}", count, activeSession.ejectedOutputCount());
 		}
 	}
 
@@ -193,6 +198,8 @@ public final class BulkAutoCraftController {
 		int gainedOutputCount = currentOutputCount - activeSession.lastObservedOutputCount() + activeSession.ejectedOutputCount();
 		int craftedCopies = gainedOutputCount / outputPerCraft;
 		if (craftedCopies <= 0) {
+			com.reachcrafting.ReachCraftingMod.LOGGER.info("[bulk_craft] ABORT: No items gained. gained={} (current={} last={} ejected={})", 
+				gainedOutputCount, currentOutputCount, activeSession.lastObservedOutputCount(), activeSession.ejectedOutputCount());
 			finishSession();
 			return;
 		}
@@ -205,10 +212,11 @@ public final class BulkAutoCraftController {
 
 		activeSession = activeSession.withProgress(completedRecipeCopies, currentOutputCount);
 		
+		com.reachcrafting.ReachCraftingMod.LOGGER.info("[bulk_craft] SUCCESS: crafted_this_batch={} (gained={} ejected={}) total_completed={}/{} inv_count={}", 
+			craftedCopies, gainedOutputCount, activeSession.ejectedOutputCount(), completedRecipeCopies, activeSession.requestedRecipeCopies(), currentOutputCount);
+
 		// Set a delay to allow inventory to settle before the next batch starts.
-		// The actual replay is now triggered in the tick() method after this delay expires.
 		postAutoMoveDelayTicks = 2;
-		com.reachcrafting.ReachCraftingMod.LOGGER.info("[bulk_craft] Craft finished. Delaying 1 tick before next batch to prevent fragmentation.");
 	}
 
 	private static void finishSession() {
@@ -222,6 +230,7 @@ public final class BulkAutoCraftController {
 		if (ReachCraftingConfig.get().autoCraftOffAfterBulk()) {
 			AutoCraftController.setEnabled(false);
 		}
+		OffhandConsolidationController.swapBack(Minecraft.getInstance());
 		clear();
 	}
 
@@ -229,7 +238,7 @@ public final class BulkAutoCraftController {
 
 	public static void tick(Minecraft client) {
 		if (activeSession == null || client.player == null || client.player.containerMenu == null) {
-			tickCounter = 0;
+			// tickCounter = 0;
 			postAutoMoveDelayTicks = 0;
 			previousSnapshot.clear();
 			return;
@@ -249,10 +258,10 @@ public final class BulkAutoCraftController {
 			return;
 		}
 
-		tickCounter++;
+		// tickCounter++;
 		// com.reachcrafting.ReachCraftingMod.LOGGER.info("#### TICK {} ####", tickCounter);
 
-		net.minecraft.world.inventory.AbstractContainerMenu menu = client.player.containerMenu;
+		// net.minecraft.world.inventory.AbstractContainerMenu menu = client.player.containerMenu;
 
 		// Report state of top inventory row (slots 9-17)
 		// logInventoryRow(menu, "Top Row", 9, 17);
@@ -261,6 +270,7 @@ public final class BulkAutoCraftController {
 		// logCraftingGrid(menu);
 
 		// Change detection: compare every slot to previous tick
+		/*
 		java.util.Map<Integer, String> currentSnapshot = captureFullSnapshot(menu);
 		if (!previousSnapshot.isEmpty()) {
 			StringBuilder changes = new StringBuilder();
@@ -275,13 +285,13 @@ public final class BulkAutoCraftController {
 					changes.append("slot ").append(slotIdx).append(": ").append(prev).append(" → ").append(curr);
 				}
 			}
-			// if (changes.length() > 0) {
-			// 	com.reachcrafting.ReachCraftingMod.LOGGER.info("[CHANGES] {}", changes);
 			// }
 		}
-		previousSnapshot = currentSnapshot;
+		*/
+		OffhandConsolidationController.resetIdleTimeout();
 	}
 
+	/*
 	private static java.util.Map<Integer, String> captureFullSnapshot(net.minecraft.world.inventory.AbstractContainerMenu menu) {
 		java.util.Map<Integer, String> snapshot = new java.util.LinkedHashMap<>();
 		for (int i = 0; i < menu.slots.size(); i++) {
@@ -338,6 +348,7 @@ public final class BulkAutoCraftController {
 		if (first) sb.append("empty");
 		com.reachcrafting.ReachCraftingMod.LOGGER.info(sb.toString());
 	}
+	*/
 
 	private static boolean isSupportedScreen(Screen screen) {
 		return screen instanceof CraftingScreen || screen instanceof InventoryScreen;
@@ -357,6 +368,13 @@ public final class BulkAutoCraftController {
 				count += slot.getItem().getCount();
 			}
 		}
+
+		// Also count the offhand slot, which is not usually in the menu's slots list in 3x3
+		ItemStack offhand = client.player.getOffhandItem();
+		if (!offhand.isEmpty() && ItemStack.isSameItemSameComponents(offhand, expectedOutput)) {
+			count += offhand.getCount();
+		}
+		
 		return count;
 	}
 
@@ -372,9 +390,11 @@ public final class BulkAutoCraftController {
 		RecipeIngredientSummary ingredientSummary,
 		java.util.Map<String, Integer> initialInventoryCounts
 	) {
+		/*
 		private BulkCraftSession withUpdatedCycle(boolean updatedAllowNearby, int requestedCopiesForCycle) {
 			return withUpdatedCycle(updatedAllowNearby, requestedCopiesForCycle, variantContinuationMode);
 		}
+		*/
 
 		private BulkCraftSession withUpdatedCycle(boolean updatedAllowNearby, int requestedCopiesForCycle, VariantContinuationMode updatedVariantContinuationMode) {
 			VariantContinuationMode mode = updatedVariantContinuationMode == VariantContinuationMode.UNDECIDED

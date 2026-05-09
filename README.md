@@ -88,6 +88,4 @@ chat messages
 
 hotbar optimization moves existing items if its an item that was crafted (ex: moves torches)
 
-fix offhand stack + bulk craft
-
-test offhand stack on full inventory and with scroll to pull
+test offhand + scroll to pull

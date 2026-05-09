@@ -32,8 +32,8 @@ public final class OffhandConsolidationController {
 				idleTimeout--;
 			}
 
-			// Immediate swap back if the slot becomes full or the item changes unexpectedly
-			if (client.player != null \u0026\u0026 client.player.containerMenu != null) {
+			// Immediate swap back if the slot becomes full
+			if (client.player != null && client.player.containerMenu != null) {
 				Slot s = findInventorySlot(client.player.containerMenu, swapInventoryIndex);
 				if (s != null) {
 					if (s.hasItem()) {
@@ -42,8 +42,9 @@ public final class OffhandConsolidationController {
 							swapBack(client);
 							return;
 						}
-						if (!ItemStack.isSameItemSameComponents(s.getItem(), swappedItem)) {
-							// Item in slot changed (maybe user moved it manually), swap back to recover
+						// If item in slot changed, we only swap back if NOT in a bulk session.
+						// During bulk, byproducts might briefly touch this slot or server sync might be weird.
+						if (!AutoMoveController.isAutomatedInteractionRunning() && !ItemStack.isSameItemSameComponents(s.getItem(), swappedItem)) {
 							swapBack(client);
 							return;
 						}
@@ -56,7 +57,7 @@ public final class OffhandConsolidationController {
 			}
 
 			// Idle timeout swap back (only if no automated interaction is currently running)
-			if (idleTimeout == 0 \u0026\u0026 !AutoMoveController.isAutomatedInteractionRunning() \u0026\u0026 warmupDelay == 0) {
+			if (idleTimeout == 0 && !AutoMoveController.isAutomatedInteractionRunning() && warmupDelay == 0) {
 				swapBack(client);
 			}
 		}
@@ -86,7 +87,7 @@ public final class OffhandConsolidationController {
 		return amt;
 	}
 
-	public static boolean prepareSwapIfNeeded(Minecraft client, ItemStack resultStack) {
+	public static boolean prepareSwapIfNeeded(Minecraft client, ItemStack resultStack, int slotsNeeded) {
 		if (!ReachCraftingConfig.get().enabled() || !ReachCraftingConfig.get().inventory2x2OffhandConsolidation()) {
 			return false;
 		}
@@ -117,19 +118,43 @@ public final class OffhandConsolidationController {
 			return false;
 		}
 
+		// Count empty slots first
+		int emptyCount = 0;
+		for (int i = 0; i < 36; i++) {
+			Slot s = findInventorySlot(menu, i);
+			if (s != null && !s.hasItem()) {
+				emptyCount++;
+			}
+		}
+
 		// Find a slot to swap into (0-35)
 		int targetInvIndex = -1;
 		
-		// Priority 1: Any empty slot
-		for (int i = 0; i < 36; i++) {
-			Slot s = findInventorySlot(menu, i);
-			if (s != null \u0026\u0026 !s.hasItem()) {
-				targetInvIndex = i;
-				break;
+		// If space is tight, we must force a swap with a used slot (Slot 9) to preserve empty spots for the craft
+		if (emptyCount > slotsNeeded) {
+			// Priority 1: Search Main Inventory (9-35)
+			for (int i = 9; i < 36; i++) {
+				Slot s = findInventorySlot(menu, i);
+				if (s != null && !s.hasItem()) {
+					targetInvIndex = i;
+					break;
+				}
+			}
+
+			// Priority 2: Search Hotbar (0-8)
+			if (targetInvIndex == -1) {
+				for (int i = 0; i < 9; i++) {
+					Slot s = findInventorySlot(menu, i);
+					if (s != null && !s.hasItem()) {
+						targetInvIndex = i;
+						break;
+					}
+				}
 			}
 		}
-		
-		// Priority 2: Fallback to Top-Left of main inventory (Slot 9)
+
+		// Priority 3: Fallback to Slot 9 (Top-Left of main inventory)
+		// This happens if emptyCount <= slotsNeeded or if no empty slot was found
 		if (targetInvIndex == -1) {
 			targetInvIndex = 9;
 		}

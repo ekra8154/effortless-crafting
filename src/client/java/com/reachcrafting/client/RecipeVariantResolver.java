@@ -1,6 +1,6 @@
 package com.reachcrafting.client;
 
-import com.reachcrafting.ReachCraftingMod;
+// import com.reachcrafting.ReachCraftingMod;
 import com.reachcrafting.client.mixin.ClientRecipeBookAccessor;
 import java.util.Comparator;
 import java.util.List;
@@ -115,6 +115,7 @@ public final class RecipeVariantResolver {
 		int requestedCopies = Math.max(desiredCopiesPerSlot, 1);
 		boolean lockToCurrentVariant = handling == ReachCraftingConfig.RevolvingCraftHandling.PREFER_CLICKED_TYPE_WITH_COUNT_FALLBACK
 			&& BulkAutoCraftController.shouldLockToCurrentVariant(clickedRecipeId, collection, explicitVariantSelection);
+		/*
 		ReachCraftingMod.LOGGER.info(
 			"[recipe_variant_candidates] clicked_recipe={} collection_size={} craft_all={} requested_copies={} handling={} lock_current={} candidates={}",
 			clickedRecipeId,
@@ -125,6 +126,7 @@ public final class RecipeVariantResolver {
 			lockToCurrentVariant,
 			summarizeCandidates(candidates)
 		);
+		*/
 
 		if (lockToCurrentVariant) {
 			return exactSelection;
@@ -181,19 +183,11 @@ public final class RecipeVariantResolver {
 			.orElse(exactSelection);
 	}
 
+	/*
 	private static String summarizeCandidates(List<Selection> candidates) {
-		return candidates.stream()
-			.map(candidate -> candidate.recipeId()
-				+ "="
-				+ candidate.outputLabel()
-				+ " copies="
-				+ candidate.copiesAvailable()
-				+ " preferred_total="
-				+ candidate.preferredTotalCount()
-				+ " ingredients="
-				+ candidate.ingredientSummary().compactSummary())
-			.collect(java.util.stream.Collectors.joining(" || "));
+...
 	}
+	*/
 
 	public static Selection resolveMatchForGrid(
 		Minecraft minecraft,

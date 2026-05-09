@@ -47,15 +47,20 @@ final class AutoMoveController {
 	}
 
 	static void autoMoveResult(Minecraft client) {
-		if (client.player == null || client.player.containerMenu == null || client.screen == null) {
-			return;
-		}
-
-		if (!(client.screen instanceof CraftingScreen) && !(client.screen instanceof InventoryScreen)) {
+		if (client.player == null || client.player.containerMenu == null) {
+			pendingAutoMove = false;
 			return;
 		}
 
 		AbstractContainerMenu menu = client.player.containerMenu;
+		if (AutoCraftController.isBulkModeEnabled()) {
+			sweepAndEjectByProducts(client, menu);
+		}
+
+		if (client.screen == null || (!(client.screen instanceof CraftingScreen) && !(client.screen instanceof InventoryScreen))) {
+			return;
+		}
+
 		if (menu.slots.isEmpty()) {
 			return;
 		}
@@ -63,9 +68,9 @@ final class AutoMoveController {
 		Slot resultSlot = menu.getSlot(0);
 		
 		if (AutoCraftController.isBulkModeEnabled() && BulkAutoCraftController.isActive()) {
-			com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] >> sweepAndEjectByProducts entry. {}", logBottleDistribution(menu));
+			// com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] >> sweepAndEjectByProducts entry. {}", logBottleDistribution(menu));
 			sweepAndEjectByProducts(client, menu);
-			com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] << sweepAndEjectByProducts exit.  {}", logBottleDistribution(menu));
+			// com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] << sweepAndEjectByProducts exit.  {}", logBottleDistribution(menu));
 		}
 
 		if (!autoMoveOrganizing) {
@@ -81,31 +86,14 @@ final class AutoMoveController {
 					pendingAutoMove = false;
 					autoMoveOrganizing = false;
 					autoMoveTargetStack = ItemStack.EMPTY;
-					OffhandConsolidationController.swapBack(client);
 					BulkAutoCraftController.onAutoMoveFinished(client, false);
 					return;
 				}
 
 				boolean shouldEject = false;
-				if (ReachCraftingConfig.get().ejectItemsWhenFull()) {
-					if (AutoCraftController.isBulkModeEnabled() && BulkAutoCraftController.isActive()) {
-						int emptySlots = countEmptyInventorySlots(menu);
-						int requiredSlots = BulkAutoCraftController.estimatedRequiredSlotsForNextBatch();
-						if (emptySlots <= requiredSlots + 10) {
-							com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] shouldEject=true (early) emptySlots={} required={}", emptySlots, requiredSlots);
-							shouldEject = true;
-						} else if (!canFitInInventory(menu, currentResult)) {
-							com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] shouldEject=true (inv full, bulk)");
-							shouldEject = true;
-						} else {
-							com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] shouldEject=false emptySlots={} required={}", emptySlots, requiredSlots);
-						}
-					} else {
-						if (!canFitInInventory(menu, currentResult)) {
-							com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] shouldEject=true (inv full, normal)");
-							shouldEject = true;
-						}
-					}
+				if (ReachCraftingConfig.get().ejectItemsWhenFull() && !canFitInInventory(menu, currentResult)) {
+					shouldEject = true;
+					com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] shouldEject=true (inv full, cannot fit result)");
 				}
 
 				if (shouldEject) {
@@ -133,17 +121,21 @@ final class AutoMoveController {
 						}
 					}
 
-					com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] EJECT path done. {}", logBottleDistribution(menu));
+					// com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] EJECT path done. {}", logBottleDistribution(menu));
 					pendingAutoMove = false;
-					OffhandConsolidationController.swapBack(client);
 					BulkAutoCraftController.onAutoMoveFinished(client, true);
 					return;
 				}
 
-				com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] SHIFT-CLICK path: pre-shiftclick. {}", logBottleDistribution(menu));
+				int slotsNeeded = 0;
+				if (AutoCraftController.isBulkModeEnabled()) {
+					slotsNeeded = BulkAutoCraftController.estimatedRequiredSlotsForNextBatch();
+				} else {
+					// Single craft estimate
+					slotsNeeded = (menu instanceof net.minecraft.world.inventory.CraftingMenu) ? 9 : 4;
+				}
 
-				if (OffhandConsolidationController.prepareSwapIfNeeded(client, currentResult)) {
-					com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] Offhand swap triggered. Delaying shift-click.");
+				if (OffhandConsolidationController.prepareSwapIfNeeded(client, currentResult, slotsNeeded)) {
 					return;
 				}
 
@@ -183,7 +175,6 @@ final class AutoMoveController {
 					pendingAutoMove = false;
 					autoMoveOrganizing = false;
 					autoMoveTargetStack = ItemStack.EMPTY;
-					OffhandConsolidationController.swapBack(client);
 					BulkAutoCraftController.onAutoMoveFinished(client, false);
 				}
 				return;
@@ -319,11 +310,9 @@ final class AutoMoveController {
 				return;
 			}
 
-			com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] ORGANIZE complete. {}", logBottleDistribution(menu));
 			pendingAutoMove = false;
 			autoMoveOrganizing = false;
 			autoMoveTargetStack = ItemStack.EMPTY;
-			OffhandConsolidationController.swapBack(client);
 			BulkAutoCraftController.onAutoMoveFinished(client, true);
 		}
 	}
@@ -341,9 +330,8 @@ final class AutoMoveController {
 			return;
 		}
 
-		String outputId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(expectedOutput.getItem()).toString();
 		
-		// Map current total counts to decide what is "extra"
+		// Map current total counts to decide what is "extra", including the offhand
 		java.util.Map<String, Integer> currentCounts = new java.util.HashMap<>();
 		for (Slot slot : menu.slots) {
 			if (slot.container instanceof Inventory && slot.hasItem()) {
@@ -351,15 +339,34 @@ final class AutoMoveController {
 				currentCounts.merge(itemId, slot.getItem().getCount(), Integer::sum);
 			}
 		}
+		ItemStack offhandItem = client.player.getOffhandItem();
+		if (!offhandItem.isEmpty()) {
+			String itemId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(offhandItem.getItem()).toString();
+			currentCounts.merge(itemId, offhandItem.getCount(), Integer::sum);
+		}
+
+		int swappedSlotIndex = OffhandConsolidationController.getSwapSlotIndex(menu);
+		Slot visibleOffhand = findVisibleOffhandSlot(menu);
 
 		for (int i = 0; i < 36; i++) {
 			Slot slot = findInventorySlot(menu, i);
 			if (slot == null || !slot.hasItem()) continue;
 
+			// Never eject from the swapped offhand slot (3x3)
+			if (swappedSlotIndex != -1 && slot.index == swappedSlotIndex) {
+				continue;
+			}
+			
+			// Never eject from the actual visible offhand slot (2x2)
+			if (visibleOffhand != null && slot.index == visibleOffhand.index) {
+				continue;
+			}
+
 			ItemStack stack = slot.getItem();
 			String itemId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
 
-			if (itemId.equals(outputId) || acceptedIds.contains(itemId)) {
+			// Never eject ingredients
+			if (acceptedIds.contains(itemId)) {
 				continue;
 			}
 
@@ -367,15 +374,23 @@ final class AutoMoveController {
 			int currentTotal = currentCounts.getOrDefault(itemId, 0);
 
 			if (currentTotal > initialCount) {
-				// This item is a by-product (not output, not ingredient, and count increased)
-				// Only eject if the stack we are throwing doesn't take us below the initial count.
-				// This is a safety measure to avoid throwing away pre-existing items if they stacked.
-				if (currentTotal - stack.getCount() >= initialCount) {
-					com.reachcrafting.ReachCraftingMod.LOGGER.debug("[auto_move] Ejecting by-product {} from inventory slot {}", itemId, slot.index);
+				// This item is a by-product or extra output (count increased since session start)
+				int amountEjected = stack.getCount();
+				if (currentTotal - amountEjected >= initialCount) {
+					com.reachcrafting.ReachCraftingMod.LOGGER.debug("[auto_move] Ejecting extra/by-product {} from inventory slot {}", itemId, slot.index);
 					client.gameMode.handleInventoryMouseClick(menu.containerId, slot.index, 1, ClickType.THROW, client.player);
 					
+					// If this was extra output, report it to the bulk controller so it doesn't think progress stopped
+					String outputId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(BulkAutoCraftController.getExpectedOutput().getItem()).toString();
+					if (itemId.equals(outputId)) {
+						com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] Ejected EXTRA OUTPUT: {} matched outputId {} (count={})", itemId, outputId, amountEjected);
+						BulkAutoCraftController.addEjectedOutput(amountEjected);
+					} else {
+						com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] Ejected BYPRODUCT: {} (expected outputId: {})", itemId, outputId);
+					}
+
 					// Update current counts so we don't over-eject if there are multiple slots of the same byproduct
-					currentCounts.put(itemId, currentTotal - stack.getCount());
+					currentCounts.put(itemId, currentTotal - amountEjected);
 				}
 			}
 		}
@@ -404,20 +419,20 @@ final class AutoMoveController {
 			}
 			if (remaining <= 0) return true;
 		}
+
+		// Also check the offhand slot if it's visible (2x2)
+		Slot offhandSlot = findVisibleOffhandSlot(menu);
+		if (offhandSlot != null) {
+			if (!offhandSlot.hasItem()) {
+				remaining -= maxStack;
+			} else if (ItemStack.isSameItemSameComponents(offhandSlot.getItem(), stack)) {
+				remaining -= (maxStack - offhandSlot.getItem().getCount());
+			}
+		}
 		
 		return remaining <= 0;
 	}
 
-	private static int countEmptyInventorySlots(AbstractContainerMenu menu) {
-		int empty = 0;
-		for (int i = 0; i < 36; i++) {
-			Slot slot = findInventorySlot(menu, i);
-			if (slot != null && !slot.hasItem()) {
-				empty++;
-			}
-		}
-		return empty;
-	}
 
 	private static Slot findVisibleOffhandSlot(AbstractContainerMenu menu) {
 		if (!ReachCraftingConfig.get().inventory2x2OffhandConsolidation()

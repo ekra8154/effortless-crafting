@@ -62,7 +62,7 @@ public final class ScrollToPullHandler {
         ItemStack resultStack = resultSlot.getItem().copy();
         
         // Handle offhand swap accumulation and delay
-        if (OffhandConsolidationController.prepareSwapIfNeeded(minecraft, resultStack)) {
+        if (OffhandConsolidationController.prepareSwapIfNeeded(minecraft, resultStack, 9)) {
             OffhandConsolidationController.addScrollAmount(amount);
             return true;
         }
