@@ -216,7 +216,7 @@ public final class BulkAutoCraftController {
 			craftedCopies, gainedOutputCount, activeSession.ejectedOutputCount(), completedRecipeCopies, activeSession.requestedRecipeCopies(), currentOutputCount);
 
 		// Set a delay to allow inventory to settle before the next batch starts.
-		postAutoMoveDelayTicks = 2;
+		postAutoMoveDelayTicks = 1;
 	}
 
 	private static void finishSession() {

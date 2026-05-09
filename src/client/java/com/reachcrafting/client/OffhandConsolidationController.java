@@ -25,6 +25,9 @@ public final class OffhandConsolidationController {
 	public static void tick(Minecraft client) {
 		if (warmupDelay > 0) {
 			warmupDelay--;
+			if (warmupDelay == 0 && accumulatedScroll != 0.0D) {
+				flushAccumulatedScroll(client);
+			}
 		}
 
 		if (isSwapped) {
@@ -81,10 +84,22 @@ public final class OffhandConsolidationController {
 		accumulatedScroll += amount;
 	}
 
+	public static double getAccumulatedScroll() {
+		return accumulatedScroll;
+	}
+
 	public static double consumeAccumulatedScroll() {
 		double amt = accumulatedScroll;
 		accumulatedScroll = 0.0D;
 		return amt;
+	}
+
+	private static void flushAccumulatedScroll(Minecraft client) {
+		if (client.screen instanceof net.minecraft.client.gui.screens.inventory.AbstractContainerScreen<?> containerScreen) {
+			double mouseX = client.mouseHandler.xpos() * (double)client.getWindow().getGuiScaledWidth() / (double)client.getWindow().getScreenWidth();
+			double mouseY = client.mouseHandler.ypos() * (double)client.getWindow().getGuiScaledHeight() / (double)client.getWindow().getScreenHeight();
+			ScrollToPullHandler.handleScroll(containerScreen, mouseX, mouseY, 0.0D);
+		}
 	}
 
 	public static boolean prepareSwapIfNeeded(Minecraft client, ItemStack resultStack, int slotsNeeded) {
@@ -170,7 +185,7 @@ public final class OffhandConsolidationController {
 		swapInventoryIndex = targetInvIndex;
 		isSwapped = true;
 		swappedItem = offhand.copy();
-		warmupDelay = 3;
+		warmupDelay = 1;
 		idleTimeout = 10;
 		
 		return true;

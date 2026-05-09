@@ -98,3 +98,5 @@ ctrl shift max bulk craft didnt craft all and is laggy
 message is miscounting outputs (on ctrl shift only)
 
 ctrl shift bulk craft is laggy and stops early
+
+analyze all delays and if they can be tightened.

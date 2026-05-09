@@ -21,7 +21,8 @@ public final class ScrollToPullHandler {
 
     public static boolean handleScroll(Screen screen, double mouseX, double mouseY, double amount) {
         ReachCraftingConfig.ScrollToPullMode mode = ReachCraftingConfig.get().scrollToPullMode();
-        if (!ReachCraftingConfig.get().enabled() || mode == ReachCraftingConfig.ScrollToPullMode.NONE || amount == 0.0D) {
+        double accumulated = OffhandConsolidationController.getAccumulatedScroll();
+        if (!ReachCraftingConfig.get().enabled() || mode == ReachCraftingConfig.ScrollToPullMode.NONE || (amount == 0.0D && accumulated == 0.0D)) {
             return false;
         }
 
@@ -61,28 +62,31 @@ public final class ScrollToPullHandler {
         // Cache the result item for virtual updates since the slot may appear empty after the first click
         ItemStack resultStack = resultSlot.getItem().copy();
         
-        // Handle offhand swap accumulation and delay
-        if (OffhandConsolidationController.prepareSwapIfNeeded(minecraft, resultStack, 9)) {
-            OffhandConsolidationController.addScrollAmount(amount);
-            return true;
-        }
-        
-        if (OffhandConsolidationController.isWarmupDelayActive()) {
-            OffhandConsolidationController.addScrollAmount(amount);
-            return true;
+        // Handle offhand swap accumulation and delay - ONLY if hovering the result slot and scrolling down
+        if (hoveredSlot == resultSlot) {
+            if (amount < 0.0D && OffhandConsolidationController.prepareSwapIfNeeded(minecraft, resultStack, 9)) {
+                OffhandConsolidationController.addScrollAmount(amount);
+                return true;
+            }
+            
+            if (OffhandConsolidationController.isWarmupDelayActive()) {
+                OffhandConsolidationController.addScrollAmount(amount);
+                return true;
+            }
         }
         
         double currentAmount = amount + OffhandConsolidationController.consumeAccumulatedScroll();
         if (currentAmount == 0.0D) {
             return false;
         }
-        OffhandConsolidationController.resetIdleTimeout();
 
         up = currentAmount > 0.0D;
+        int scrollMultiplier = (int) Math.abs(currentAmount);
+        int totalAttempts = multiplier * scrollMultiplier;
         int countToMove = resultStack.getCount();
 
         int craftsAttempted = 0;
-        for (int i = 0; i < multiplier; i++) {
+        for (int i = 0; i < totalAttempts; i++) {
             if (up) {
                 // Wheel Up: To Cursor (stops at stack size)
                 if (virtualCarried.isEmpty() || (ItemStack.isSameItemSameComponents(virtualCarried, resultStack) && virtualCarried.getCount() < resultStack.getMaxStackSize())) {
@@ -105,7 +109,7 @@ public final class ScrollToPullHandler {
                 
                 if (targetSlotIndex != -1) {
                     int virtualCountAfter = virtualSlotCounts.getOrDefault(targetSlotIndex, (menu.getSlot(targetSlotIndex).hasItem() ? menu.getSlot(targetSlotIndex).getItem().getCount() : 0)) + countToMove;
-                    ReachCraftingMod.LOGGER.debug("ScrollToPull: Granular craft {}/{} -> Slot {}, New Virtual Count: {}", i + 1, multiplier, targetSlotIndex, virtualCountAfter);
+                    ReachCraftingMod.LOGGER.debug("ScrollToPull: Granular craft {}/{} -> Slot {}, New Virtual Count: {}", i + 1, totalAttempts, targetSlotIndex, virtualCountAfter);
 
                     // 2. Click Output
                     minecraft.gameMode.handleInventoryMouseClick(menu.containerId, resultSlot.index, 0, ClickType.PICKUP, minecraft.player);
