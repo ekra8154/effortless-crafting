@@ -192,22 +192,59 @@ public final class BulkAutoCraftController {
 		if (activeSession == null) {
 			return;
 		}
-		if (!success || !AutoCraftController.isBulkModeEnabled() || !isSupportedScreen(client.screen) || client.player == null) {
+		if (client.player == null) {
 			stop(true);
 			return;
 		}
 
+		boolean bulkEnabled = AutoCraftController.isBulkModeEnabled();
+		boolean supportedScreen = isSupportedScreen(client.screen);
 		int outputPerCraft = Math.max(activeSession.expectedOutput().getCount(), 1);
 		int currentOutputCount = countOutputInInventory(client, activeSession.expectedOutput());
-		int gainedOutputCount = currentOutputCount - activeSession.lastObservedOutputCount() + activeSession.ejectedOutputCount();
+		int inventoryIncrease = Math.max(0, currentOutputCount - activeSession.lastObservedOutputCount());
+		int gainedOutputCount = inventoryIncrease + activeSession.ejectedOutputCount();
 		int craftedCopies = gainedOutputCount / outputPerCraft;
+
+		com.reachcrafting.ReachCraftingMod.LOGGER.info(
+			"[bulk_craft] onAutoMoveFinished success={} bulk_enabled={} supported_screen={} inventory_increase={} ejected={} current_output={} last_output={} crafted_copies={}",
+			success,
+			bulkEnabled,
+			supportedScreen,
+			inventoryIncrease,
+			activeSession.ejectedOutputCount(),
+			currentOutputCount,
+			activeSession.lastObservedOutputCount(),
+			craftedCopies
+		);
+
+		if ((!success || !bulkEnabled || !supportedScreen) && craftedCopies <= 0) {
+			stop(true);
+			return;
+		}
+
+		if (!bulkEnabled || !supportedScreen) {
+			int completedRecipeCopies = activeSession.completedRecipeCopies() + craftedCopies;
+			activeSession = activeSession.withProgress(completedRecipeCopies, currentOutputCount);
+			stop(true);
+			return;
+		}
+
 		if (craftedCopies <= 0) {
+			com.reachcrafting.ReachCraftingMod.LOGGER.info(
+				"[bulk_craft] No progress detected. inventory_increase={} ejected={} current_output={} last_output={} output_per_craft={}",
+				inventoryIncrease,
+				activeSession.ejectedOutputCount(),
+				currentOutputCount,
+				activeSession.lastObservedOutputCount(),
+				outputPerCraft
+			);
 			stop(true);
 			return;
 		}
 
 		int completedRecipeCopies = activeSession.completedRecipeCopies() + craftedCopies;
 		if (completedRecipeCopies >= activeSession.requestedRecipeCopies()) {
+			activeSession = activeSession.withProgress(completedRecipeCopies, currentOutputCount);
 			stop(false);
 			return;
 		}

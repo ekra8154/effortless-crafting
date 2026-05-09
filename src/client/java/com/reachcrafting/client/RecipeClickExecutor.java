@@ -370,7 +370,7 @@ final class RecipeClickExecutor {
 
 		BulkAutoCraftController.startOrUpdate(
 			new RecipeBookClickCapture.HeldRecipeAction(
-				recipeId,
+				clickedRecipeId,
 				collection,
 				displayStack != null ? displayStack.copy() : ItemStack.EMPTY,
 				mouseButton,

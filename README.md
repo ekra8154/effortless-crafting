@@ -87,8 +87,6 @@ TODO:
 
 hotbar optimization moves existing items if its an item that was crafted (ex: moves torches)
 
-test offhand + scroll to pull - needs some fixing. 
-
 on bulk session abort turn off autocraft if the setting is true.
 
 it didnt search the hopper till i opened it. in fact im still getting first-join world search issues for chests. it is very hard to pin down cause the issue goes away after a couple searches and only happens sometimes in the first place.
@@ -102,3 +100,5 @@ ctrl shift bulk craft is laggy and stops early
 analyze all delays and if they can be tightened.
 
 investigate cake craft aborts that suddenly stopped happening as i tested more. caching again?
+
+optimize ejection - shouldn't eject if it can finish the craft in the current batch (with enough space)

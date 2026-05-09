@@ -573,7 +573,7 @@ final class SearchSession extends BaseCraftSession {
 			if (BulkAutoCraftController.isActive() && requestedSingleClicks > 1) {
 				BulkAutoCraftController.startOrUpdate(
 					new RecipeBookClickCapture.HeldRecipeAction(
-						recipeId,
+						initialRequestedRecipeId,
 						recipeCollection,
 						ItemStack.EMPTY,
 						org.lwjgl.glfw.GLFW.GLFW_MOUSE_BUTTON_LEFT,
@@ -1618,7 +1618,7 @@ final class SearchSession extends BaseCraftSession {
 			if (AutoCraftController.isBulkModeEnabled() && !craftAll && requestedSingleClicks > 1) {
 				BulkAutoCraftController.startOrUpdate(
 					new RecipeBookClickCapture.HeldRecipeAction(
-						recipeId,
+						initialRequestedRecipeId,
 						recipeCollection,
 						ItemStack.EMPTY,
 						org.lwjgl.glfw.GLFW.GLFW_MOUSE_BUTTON_LEFT,
