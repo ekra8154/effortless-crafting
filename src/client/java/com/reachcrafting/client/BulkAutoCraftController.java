@@ -82,6 +82,10 @@ public final class BulkAutoCraftController {
 		performedDiscoveryThisSession = true;
 	}
 
+	public static int getCompletedRecipeCopies() {
+		return activeSession != null ? activeSession.completedRecipeCopies() : 0;
+	}
+
 	static java.util.Set<String> getAcceptedItemIds() {
 		if (activeSession != null && activeSession.ingredientSummary() != null) {
 			return activeSession.ingredientSummary().acceptedItemIds();
@@ -189,7 +193,7 @@ public final class BulkAutoCraftController {
 			return;
 		}
 		if (!success || !AutoCraftController.isBulkModeEnabled() || !isSupportedScreen(client.screen) || client.player == null) {
-			finishSession();
+			stop(true);
 			return;
 		}
 
@@ -198,15 +202,13 @@ public final class BulkAutoCraftController {
 		int gainedOutputCount = currentOutputCount - activeSession.lastObservedOutputCount() + activeSession.ejectedOutputCount();
 		int craftedCopies = gainedOutputCount / outputPerCraft;
 		if (craftedCopies <= 0) {
-			com.reachcrafting.ReachCraftingMod.LOGGER.info("[bulk_craft] ABORT: No items gained. gained={} (current={} last={} ejected={})", 
-				gainedOutputCount, currentOutputCount, activeSession.lastObservedOutputCount(), activeSession.ejectedOutputCount());
-			finishSession();
+			stop(true);
 			return;
 		}
 
 		int completedRecipeCopies = activeSession.completedRecipeCopies() + craftedCopies;
 		if (completedRecipeCopies >= activeSession.requestedRecipeCopies()) {
-			finishSession();
+			stop(false);
 			return;
 		}
 
@@ -219,12 +221,13 @@ public final class BulkAutoCraftController {
 		postAutoMoveDelayTicks = 1;
 	}
 
-	private static void finishSession() {
-		if (activeSession != null && activeSession.completedRecipeCopies() > 0) {
+	public static void stop(boolean aborted) {
+		if (activeSession != null) {
 			String itemName = activeSession.expectedOutput().getHoverName().getString();
 			int totalGained = activeSession.completedRecipeCopies() * Math.max(activeSession.expectedOutput().getCount(), 1);
 			String formattedCount = ContainerUtils.formatStackBreakdown(totalGained);
-			ReachCraftingModClient.sendBulkSummaryChat("Bulk craft complete: Crafted " + formattedCount + " " + itemName);
+			String status = aborted ? "terminated" : "complete";
+			ReachCraftingModClient.sendBulkSummaryChat("Bulk craft " + status + ": Crafted " + formattedCount + " " + itemName);
 		}
 		AutoCraftController.setEnabledMode(ReachCraftingConfig.AutoCraftMode.NORMAL);
 		if (ReachCraftingConfig.get().autoCraftOffAfterBulk()) {

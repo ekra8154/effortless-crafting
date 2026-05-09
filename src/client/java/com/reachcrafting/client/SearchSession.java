@@ -1572,7 +1572,9 @@ final class SearchSession extends BaseCraftSession {
 			} else if (targetCopiesPerSlot > 0 && !updatedDeficit.hasMissingIngredients() && reservedGridMatchesRecipe && reservedGridExpanded) {
 				sendDebugChat("Updated grid: " + outputLabel);
 			} else if (updatedDeficit.hasMissingIngredients()) {
-				sendMissingIngredientsChat("Missing: " + updatedDeficit.compactMissingSummary());
+				if (!BulkAutoCraftController.isActive() || BulkAutoCraftController.getCompletedRecipeCopies() == 0) {
+					sendMissingIngredientsChat("Missing: " + updatedDeficit.compactMissingSummary());
+				}
 			} else {
 				sendDebugChat("Fetched ingredients for the next craft.");
 			}
@@ -1591,9 +1593,13 @@ final class SearchSession extends BaseCraftSession {
 			gameMode.handlePlaceRecipe(player.containerMenu.containerId, recipeId, craftAll);
 			sendDebugChat("Placed recipe: " + outputLabel);
 		} else if (!remainingItemIds.isEmpty() || inventorySpaceBlocked) {
-			sendMissingIngredientsChat("Missing: " + updatedDeficit.compactMissingSummary());
+			if (!BulkAutoCraftController.isActive() || BulkAutoCraftController.getCompletedRecipeCopies() == 0) {
+				sendMissingIngredientsChat("Missing: " + updatedDeficit.compactMissingSummary());
+			}
 		} else if (updatedDeficit.hasMissingIngredients()) {
-			sendMissingIngredientsChat("Missing: " + updatedDeficit.compactMissingSummary());
+			if (!BulkAutoCraftController.isActive() || BulkAutoCraftController.getCompletedRecipeCopies() == 0) {
+				sendMissingIngredientsChat("Missing: " + updatedDeficit.compactMissingSummary());
+			}
 		} else {
 			sendDebugChat("Ready to place: " + outputLabel);
 		}

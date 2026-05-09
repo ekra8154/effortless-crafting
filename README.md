@@ -100,3 +100,5 @@ message is miscounting outputs (on ctrl shift only)
 ctrl shift bulk craft is laggy and stops early
 
 analyze all delays and if they can be tightened.
+
+investigate cake craft aborts that suddenly stopped happening as i tested more. caching again?

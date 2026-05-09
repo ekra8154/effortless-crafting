@@ -258,12 +258,12 @@ public final class ContainerUtils {
 		boolean wasActive = RecipeBookInputController.getInstance().isInputQueueActive() 
 			|| AutoMoveController.isAutomatedInteractionRunning() 
 			|| NearbyContainerDryRun.isActiveSessionRunning()
-			|| InventoryGridRestoreTracker.isRestoring();
+			|| InventoryGridRestoreTracker.isRestoring()
+			|| BulkAutoCraftController.isActive();
 
 		clearInputQueue();
 		AutoMoveController.abort();
-		AutoCraftController.setEnabledMode(ReachCraftingConfig.AutoCraftMode.NORMAL);
-		BulkAutoCraftController.clear();
+		BulkAutoCraftController.stop(true);
 		NearbyContainerDryRun.abortActiveSession();
 		InventoryGridRestoreTracker.clear();
 		OffhandConsolidationController.swapBack(net.minecraft.client.Minecraft.getInstance());
