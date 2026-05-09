@@ -45,7 +45,7 @@ import org.lwjgl.glfw.GLFW;
  */
 final class SearchSession extends BaseCraftSession {
 	private static final int OPEN_TIMEOUT_TICKS = 40;
-	private static final int RESUME_DELAY_TICKS = 10; // Increased from 2 to 10 to prevent race conditions
+	private static final int RESUME_DELAY_TICKS = 5; // Increased from 2 to 10 to prevent race conditions
 	private static final int REOPEN_TIMEOUT_TICKS = 20;
 	private static final int RESTORE_TIMEOUT_TICKS = 10;
 	private static final int MAX_REOPEN_ATTEMPTS = 3;
