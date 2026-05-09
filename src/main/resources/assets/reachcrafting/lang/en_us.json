@@ -4,7 +4,7 @@
 	"category.reachcrafting.crafting": "Crafting",
 	"option.reachcrafting.enabled": "Mod Enabled",
 	"tooltip.reachcrafting.enabled": "Whether any of the mod's features are enabled.",
-	"category.reachcrafting.chests_containers": "Chests and Containers",
+	"category.reachcrafting.nearby_chests_advanced": "Nearby Chests & Advanced",
 	"category.reachcrafting.sub.crafting_tweaks": "Crafting Tweaks",
 	"category.reachcrafting.sub.craft_queuing": "Craft Queuing",
 	"category.reachcrafting.sub.auto_crafting": "Auto Crafting",
@@ -87,5 +87,14 @@
 	"option.reachcrafting.auto_craft_handling": "Auto Craft Handling",
 	"tooltip.reachcrafting.auto_craft_handling": "Choose how the Auto Crafting mode is toggled. Toggle keeps the current behavior (Alt key toggles the state on/off). Hold makes Auto Crafting active ONLY while the Alt key is held down.",
 	"enum.reachcrafting.auto_craft_handling.toggle": "Toggle",
-	"enum.reachcrafting.auto_craft_handling.hold": "Hold"
+	"enum.reachcrafting.auto_craft_handling.hold": "Hold",
+	"category.reachcrafting.sub.messages": "Messages",
+	"option.reachcrafting.show_craft_aborted_message": "Craft Session Aborted",
+	"tooltip.reachcrafting.show_craft_aborted_message": "Whether to show a chat message when a crafting session is aborted early by esc or for some other reason.",
+	"option.reachcrafting.show_bulk_craft_summary_message": "Bulk Craft Summary",
+	"tooltip.reachcrafting.show_bulk_craft_summary_message": "Whether to show a chat summary of the total items crafted after a bulk session.",
+	"option.reachcrafting.show_missing_ingredients_message": "Missing Ingredients",
+	"tooltip.reachcrafting.show_missing_ingredients_message": "Whether to report specifically which ingredients are missing when a craft cannot be completed.",
+	"option.reachcrafting.debug_messages_enabled": "Debug Messages Enabled",
+	"tooltip.reachcrafting.debug_messages_enabled": "Enable verbose debug logging in chat."
 }

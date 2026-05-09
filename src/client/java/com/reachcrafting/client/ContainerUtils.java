@@ -269,7 +269,7 @@ public final class ContainerUtils {
 		OffhandConsolidationController.swapBack(net.minecraft.client.Minecraft.getInstance());
 
 		if (wasActive) {
-			ReachCraftingModClient.sendChat("Crafting session aborted.");
+			ReachCraftingModClient.sendAbortedChat("Crafting session aborted.");
 		}
 	}
 
@@ -284,6 +284,18 @@ public final class ContainerUtils {
 			return count + " (" + breakdown + " +" + remainder + ")";
 		} else {
 			return count + " (" + breakdown + ")";
+		}
+	}
+
+	public static String getItemName(String itemId) {
+		try {
+			return net.minecraft.core.registries.BuiltInRegistries.ITEM.get(net.minecraft.resources.Identifier.parse(itemId))
+				.map(net.minecraft.core.Holder::value)
+				.map(net.minecraft.world.item.Item::getName)
+				.map(net.minecraft.network.chat.Component::getString)
+				.orElse(itemId);
+		} catch (Exception e) {
+			return itemId;
 		}
 	}
 }

@@ -66,7 +66,7 @@ final class ReturnSession extends BaseCraftSession {
 	@Override
 	public void start() {
 		com.reachcrafting.ReachCraftingMod.LOGGER.debug("[nearby_return] starting return session with menu {} ({} slots)", closingMenu.getClass().getSimpleName(), closingMenu.slots.size());
-		sendChat("Returning items to containers...");
+		sendDebugChat("Returning items to containers...");
 		
 		Map<String, Integer> currentCounts = new HashMap<>();
 		for (Slot slot : closingMenu.slots) {

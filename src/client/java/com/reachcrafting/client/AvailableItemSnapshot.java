@@ -89,7 +89,7 @@ public record AvailableItemSnapshot(
 		StringJoiner joiner = new StringJoiner(", ");
 		counts.entrySet().stream()
 			.sorted(Map.Entry.comparingByKey())
-			.forEach(entry -> joiner.add(entry.getValue() + "x " + entry.getKey()));
+			.forEach(entry -> joiner.add(entry.getValue() + "x " + ContainerUtils.getItemName(entry.getKey())));
 		return joiner.toString();
 	}
 

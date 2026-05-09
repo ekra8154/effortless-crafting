@@ -6,7 +6,6 @@ import com.reachcrafting.client.mixin.AbstractRecipeBookScreenAccessor;
 import com.reachcrafting.client.mixin.RecipeBookComponentAccessor;
 import com.reachcrafting.client.mixin.RecipeBookPageAccessor;
 import java.util.Map;
-import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractRecipeBookScreen;
@@ -16,7 +15,6 @@ import net.minecraft.client.gui.screens.recipebook.OverlayRecipeComponent;
 import net.minecraft.client.multiplayer.MultiPlayerGameMode;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.network.chat.Component;
 import net.minecraft.util.context.ContextMap;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.display.RecipeDisplayEntry;
@@ -106,9 +104,6 @@ final class RecipeClickExecutor {
 		);
 		String resolvedItemId = BuiltInRegistries.ITEM.getKey(resolvedDisplayStack.getItem()).toString();
 		String outputLabel = resolvedItemId + " x" + resolvedDisplayStack.getCount();
-		String chatMessage = deficitReport.hasMissingIngredients()
-			? "Missing: " + deficitReport.compactMissingSummary()
-			: "Ready: " + outputLabel;
 
 		ReachCraftingMod.LOGGER.debug(
 			"[recipe_click] screen={} button={} idx={} craftable={} shift={} ctrl={} output={}",
@@ -134,9 +129,16 @@ final class RecipeClickExecutor {
 			deficitReport.compactMissingSummary()
 		);
 
-		player.displayClientMessage(Component.literal("[Effortless Crafting] " + chatMessage).withStyle(ChatFormatting.YELLOW), false);
+		boolean useDryRun = forceDryRun || allowNearbyChests;
+		if (deficitReport.hasMissingIngredients()) {
+			ReachCraftingModClient.sendDebugChat("Missing from inventory: " + deficitReport.compactMissingSummary());
+			if (!useDryRun) {
+				ReachCraftingModClient.sendMissingIngredientsChat("Missing: " + deficitReport.compactMissingSummary());
+			}
+		} else {
+			ReachCraftingModClient.sendDebugChat("Ready: " + outputLabel);
+		}
 
-		boolean useDryRun = forceDryRun || (allowNearbyChests && !vanillaShiftClick);
 		if (useDryRun) {
 			armBulkAutoCraft(
 				recipeId,
@@ -163,10 +165,7 @@ final class RecipeClickExecutor {
 				ReachCraftingMod.LOGGER.info("[recipe_place] handlePlaceRecipe(shift=true) from RecipeClickExecutor NEARBY path");
 				minecraft.gameMode.handlePlaceRecipe(player.containerMenu.containerId, selectedRecipe.recipeId(), true);
 				ContainerUtils.scheduleAutoMove(selectedRecipe.displayStack());
-				player.displayClientMessage(
-					Component.literal("[Effortless Crafting] Placed recipe: " + outputLabel).withStyle(ChatFormatting.YELLOW),
-					false
-				);
+				ReachCraftingModClient.sendDebugChat("Placed recipe: " + outputLabel);
 				if (explicitVariantSelection) {
 					tryCloseOverlayAfterRelease();
 				}
@@ -237,10 +236,7 @@ final class RecipeClickExecutor {
 				);
 				ContainerUtils.scheduleAutoMove(selectedRecipe.displayStack());
 			}
-			player.displayClientMessage(
-				Component.literal("[Effortless Crafting] Placed recipe: " + outputLabel).withStyle(ChatFormatting.YELLOW),
-				false
-			);
+			ReachCraftingModClient.sendDebugChat("Placed recipe: " + outputLabel);
 			if (explicitVariantSelection) {
 				tryCloseOverlayAfterRelease();
 			}

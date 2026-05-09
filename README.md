@@ -84,8 +84,17 @@ This project is licensed under **LGPL-3.0-or-later**. It draws inspiration and c
 * [stack-to-nearby-chests](https://github.com/xiaocihua/stack-to-nearby-chests) by xiaocihua (LGPL-3.0)
 
 TODO: 
-chat messages
 
 hotbar optimization moves existing items if its an item that was crafted (ex: moves torches)
 
-test offhand + scroll to pull
+test offhand + scroll to pull - needs some fixing. 
+
+on bulk session abort turn off autocraft if the setting is true.
+
+it didnt search the hopper till i opened it. in fact im still getting first-join world search issues for chests. it is very hard to pin down cause the issue goes away after a couple searches and only happens sometimes in the first place.
+
+ctrl shift max bulk craft didnt craft all and is laggy
+
+message is miscounting outputs (on ctrl shift only)
+
+ctrl shift bulk craft is laggy and stops early

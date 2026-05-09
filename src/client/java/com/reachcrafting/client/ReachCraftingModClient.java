@@ -22,6 +22,30 @@ public class ReachCraftingModClient implements ClientModInitializer {
 		}
 	}
 
+	public static void sendDebugChat(String message) {
+		if (ReachCraftingConfig.get().debugMessagesEnabled()) {
+			sendChat(message);
+		}
+	}
+
+	public static void sendAbortedChat(String message) {
+		if (ReachCraftingConfig.get().showCraftAbortedMessage()) {
+			sendChat(message);
+		}
+	}
+
+	public static void sendBulkSummaryChat(String message) {
+		if (ReachCraftingConfig.get().showBulkCraftSummaryMessage()) {
+			sendChat(message);
+		}
+	}
+
+	public static void sendMissingIngredientsChat(String message) {
+		if (ReachCraftingConfig.get().showMissingIngredientsMessage()) {
+			sendChat(message);
+		}
+	}
+
 	@Override
 	public void onInitializeClient() {
 		ReachCraftingConfig.load();

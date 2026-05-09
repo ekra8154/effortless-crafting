@@ -336,7 +336,7 @@ public final class IngredientPlanning {
 
 	private static String summarizeMissing(Map<String, Integer> missingExact, Map<String, Integer> missingFlexible) {
 		List<String> missingParts = new ArrayList<>();
-		missingExact.forEach((itemId, count) -> missingParts.add(count + "x " + itemId));
+		missingExact.forEach((itemId, count) -> missingParts.add(count + "x " + ContainerUtils.getItemName(itemId)));
 		missingFlexible.forEach((display, count) -> missingParts.add(count + "x any of " + display));
 		StringJoiner joiner = new StringJoiner(", ");
 		missingParts.forEach(joiner::add);

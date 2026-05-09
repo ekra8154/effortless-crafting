@@ -45,6 +45,10 @@ public final class ReachCraftingConfig {
 	private static final AutoCraftCapability DEFAULT_AUTO_CRAFT_CAPABILITY = AutoCraftCapability.NONE;
 	private static final boolean DEFAULT_AUTO_CRAFT_OFF_AFTER_BULK = true;
 	private static final AutoCraftHandling DEFAULT_AUTO_CRAFT_HANDLING = AutoCraftHandling.TOGGLE;
+	private static final boolean DEFAULT_SHOW_CRAFT_ABORTED_MESSAGE = true;
+	private static final boolean DEFAULT_SHOW_BULK_CRAFT_SUMMARY_MESSAGE = true;
+	private static final boolean DEFAULT_SHOW_MISSING_INGREDIENTS_MESSAGE = true;
+	private static final boolean DEFAULT_DEBUG_MESSAGES_ENABLED = false;
 	public static final List<String> DEFAULT_BLACKLIST = List.of(
 		"minecraft:ender_chest",
 		"minecraft:hopper",
@@ -86,6 +90,10 @@ public final class ReachCraftingConfig {
 	private AutoCraftCapability autoCraftCapability;
 	private boolean autoCraftOffAfterBulk;
 	private AutoCraftHandling autoCraftHandling;
+	private boolean showCraftAbortedMessage;
+	private boolean showBulkCraftSummaryMessage;
+	private boolean showMissingIngredientsMessage;
+	private boolean debugMessagesEnabled;
 	private Set<String> blacklistedContainerIds;
 
 	private static String lastSearchText = "";
@@ -139,6 +147,10 @@ public final class ReachCraftingConfig {
 			instance.autoCraftCapability = stored.autoCraftCapability != null ? stored.autoCraftCapability : (stored.enableEnablingBulkMode != null ? (stored.enableEnablingBulkMode ? AutoCraftCapability.BULK : AutoCraftCapability.NORMAL) : DEFAULT_AUTO_CRAFT_CAPABILITY);
 			instance.autoCraftOffAfterBulk = stored.autoCraftOffAfterBulk != null ? stored.autoCraftOffAfterBulk : DEFAULT_AUTO_CRAFT_OFF_AFTER_BULK;
 			instance.autoCraftHandling = stored.autoCraftHandling != null ? stored.autoCraftHandling : DEFAULT_AUTO_CRAFT_HANDLING;
+			instance.showCraftAbortedMessage = stored.showCraftAbortedMessage != null ? stored.showCraftAbortedMessage : DEFAULT_SHOW_CRAFT_ABORTED_MESSAGE;
+			instance.showBulkCraftSummaryMessage = stored.showBulkCraftSummaryMessage != null ? stored.showBulkCraftSummaryMessage : DEFAULT_SHOW_BULK_CRAFT_SUMMARY_MESSAGE;
+			instance.showMissingIngredientsMessage = stored.showMissingIngredientsMessage != null ? stored.showMissingIngredientsMessage : DEFAULT_SHOW_MISSING_INGREDIENTS_MESSAGE;
+			instance.debugMessagesEnabled = stored.debugMessagesEnabled != null ? stored.debugMessagesEnabled : DEFAULT_DEBUG_MESSAGES_ENABLED;
 			
 			// Enforce capability gate on load
 			if (instance.autoCraftCapability == AutoCraftCapability.NONE) {
@@ -416,6 +428,38 @@ public final class ReachCraftingConfig {
 		this.autoCraftHandling = autoCraftHandling != null ? autoCraftHandling : DEFAULT_AUTO_CRAFT_HANDLING;
 	}
 
+	public boolean showCraftAbortedMessage() {
+		return showCraftAbortedMessage;
+	}
+
+	public void setShowCraftAbortedMessage(boolean showCraftAbortedMessage) {
+		this.showCraftAbortedMessage = showCraftAbortedMessage;
+	}
+
+	public boolean showBulkCraftSummaryMessage() {
+		return showBulkCraftSummaryMessage;
+	}
+
+	public void setShowBulkCraftSummaryMessage(boolean showBulkCraftSummaryMessage) {
+		this.showBulkCraftSummaryMessage = showBulkCraftSummaryMessage;
+	}
+
+	public boolean showMissingIngredientsMessage() {
+		return showMissingIngredientsMessage;
+	}
+
+	public void setShowMissingIngredientsMessage(boolean showMissingIngredientsMessage) {
+		this.showMissingIngredientsMessage = showMissingIngredientsMessage;
+	}
+
+	public boolean debugMessagesEnabled() {
+		return debugMessagesEnabled;
+	}
+
+	public void setDebugMessagesEnabled(boolean debugMessagesEnabled) {
+		this.debugMessagesEnabled = debugMessagesEnabled;
+	}
+
 	public static String getLastSearchText() {
 		return lastSearchText;
 	}
@@ -484,6 +528,10 @@ public final class ReachCraftingConfig {
 		defaults.autoCraftCapability = DEFAULT_AUTO_CRAFT_CAPABILITY;
 		defaults.autoCraftOffAfterBulk = DEFAULT_AUTO_CRAFT_OFF_AFTER_BULK;
 		defaults.autoCraftHandling = DEFAULT_AUTO_CRAFT_HANDLING;
+		defaults.showCraftAbortedMessage = DEFAULT_SHOW_CRAFT_ABORTED_MESSAGE;
+		defaults.showBulkCraftSummaryMessage = DEFAULT_SHOW_BULK_CRAFT_SUMMARY_MESSAGE;
+		defaults.showMissingIngredientsMessage = DEFAULT_SHOW_MISSING_INGREDIENTS_MESSAGE;
+		defaults.debugMessagesEnabled = DEFAULT_DEBUG_MESSAGES_ENABLED;
 		defaults.blacklistedContainerIds = new LinkedHashSet<>(DEFAULT_BLACKLIST);
 		return defaults;
 	}
@@ -579,6 +627,10 @@ public final class ReachCraftingConfig {
 		private AutoCraftCapability autoCraftCapability;
 		private Boolean autoCraftOffAfterBulk;
 		private AutoCraftHandling autoCraftHandling;
+		private Boolean showCraftAbortedMessage;
+		private Boolean showBulkCraftSummaryMessage;
+		private Boolean showMissingIngredientsMessage;
+		private Boolean debugMessagesEnabled;
 		private Boolean enableEnablingBulkMode;
 		private Set<String> blacklistedContainerIds;
 
@@ -609,6 +661,10 @@ public final class ReachCraftingConfig {
 			this.autoCraftCapability = config.autoCraftCapability;
 			this.autoCraftOffAfterBulk = config.autoCraftOffAfterBulk;
 			this.autoCraftHandling = config.autoCraftHandling;
+			this.showCraftAbortedMessage = config.showCraftAbortedMessage;
+			this.showBulkCraftSummaryMessage = config.showBulkCraftSummaryMessage;
+			this.showMissingIngredientsMessage = config.showMissingIngredientsMessage;
+			this.debugMessagesEnabled = config.debugMessagesEnabled;
 			this.blacklistedContainerIds = config.blacklistedContainerIds;
 		}
 	}

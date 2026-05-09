@@ -202,8 +202,8 @@ public final class ReachCraftingConfigScreen {
 		crafting.addEntry(autoGroup.build());
 
 
-		// TAB 2: Chests and Containers
-		ConfigCategory containers = builder.getOrCreateCategory(Component.translatable("category.reachcrafting.chests_containers"));
+		// TAB 2: Nearby Chests & Advanced
+		ConfigCategory containers = builder.getOrCreateCategory(Component.translatable("category.reachcrafting.nearby_chests_advanced"));
 
 		// Nearby Containers
 		var nearbyGroup = entries.startSubCategory(Component.translatable("category.reachcrafting.sub.nearby_containers"));
@@ -293,6 +293,48 @@ public final class ReachCraftingConfigScreen {
 			.build());
 
 		containers.addEntry(filterGroup.build());
+
+		// Messages
+		var messagesGroup = entries.startSubCategory(Component.translatable("category.reachcrafting.sub.messages"));
+		messagesGroup.setExpanded(true);
+
+		messagesGroup.add(entries.startBooleanToggle(
+				Component.translatable("option.reachcrafting.show_craft_aborted_message"),
+				config.showCraftAbortedMessage()
+			)
+			.setDefaultValue(true)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.show_craft_aborted_message"))
+			.setSaveConsumer(config::setShowCraftAbortedMessage)
+			.build());
+
+		messagesGroup.add(entries.startBooleanToggle(
+				Component.translatable("option.reachcrafting.show_bulk_craft_summary_message"),
+				config.showBulkCraftSummaryMessage()
+			)
+			.setDefaultValue(true)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.show_bulk_craft_summary_message"))
+			.setSaveConsumer(config::setShowBulkCraftSummaryMessage)
+			.build());
+
+		messagesGroup.add(entries.startBooleanToggle(
+				Component.translatable("option.reachcrafting.show_missing_ingredients_message"),
+				config.showMissingIngredientsMessage()
+			)
+			.setDefaultValue(true)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.show_missing_ingredients_message"))
+			.setSaveConsumer(config::setShowMissingIngredientsMessage)
+			.build());
+
+		messagesGroup.add(entries.startBooleanToggle(
+				Component.translatable("option.reachcrafting.debug_messages_enabled"),
+				config.debugMessagesEnabled()
+			)
+			.setDefaultValue(false)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.debug_messages_enabled"))
+			.setSaveConsumer(config::setDebugMessagesEnabled)
+			.build());
+
+		containers.addEntry(messagesGroup.build());
 
 		builder.setSavingRunnable(ReachCraftingConfig::save);
 		return builder.build();

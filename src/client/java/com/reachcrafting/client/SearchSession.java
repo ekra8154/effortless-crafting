@@ -186,7 +186,7 @@ final class SearchSession extends BaseCraftSession {
 		}
 
 		if (allowNearby) {
-			sendChat("Scanning nearby containers...");
+			sendDebugChat("Scanning nearby containers...");
 		}
 
 		phase = SearchPhase.DISCOVERY;
@@ -234,7 +234,7 @@ final class SearchSession extends BaseCraftSession {
 			return false;
 		}
 
-		sendChat("Updated grid: " + outputLabel);
+		sendDebugChat("Updated grid: " + outputLabel);
 		return true;
 	}
 
@@ -770,7 +770,7 @@ final class SearchSession extends BaseCraftSession {
 				String missing = decision.blockedCommittedLayoutMissingSummary() != null 
 					? decision.blockedCommittedLayoutMissingSummary() 
 					: decision.compactMissingSummary();
-				sendChat("Could not craft any of " + outputLabel + ". Missing " + missing);
+				sendMissingIngredientsChat("Missing: " + missing);
 			}
 			beginResume();
 			return;
@@ -786,7 +786,7 @@ final class SearchSession extends BaseCraftSession {
 		phase = SearchPhase.WITHDRAW;
 		activeCandidates = decision.withdrawCandidates();
 		state = SearchState.OPEN_NEXT;
-		sendChat("Fetching: " + summarizeRemainingItems(remainingItemIds));
+		sendDebugChat("Fetching: " + summarizeRemainingItems(remainingItemIds));
 	}
 
 	private List<String> computeFetchItemIds(List<IngredientPlanning.SlotTarget> slotTargets) {
@@ -1227,7 +1227,7 @@ final class SearchSession extends BaseCraftSession {
 			recipeIndex,
 			summarizeRemainingItems(remainingItemIds)
 		);
-		sendChat("Cache missed some items, scanning the rest...");
+		sendDebugChat("Cache missed some items, scanning the rest...");
 	}
 
 	private List<BlockPos> buildWithdrawCandidates() {
@@ -1515,11 +1515,12 @@ final class SearchSession extends BaseCraftSession {
 		}
 
 		Map<String, Integer> updatedCounts = AvailableItemSnapshot.mergeCounts(localItems.inventoryCounts(), withdrawnItems);
+		int reportCopies = Math.max(targetCopiesPerSlot, craftAll ? 1 : requestedSingleClicks);
 		RecipeDeficitReport updatedDeficit = RecipeDeficitReport.from(
 			ingredientSummary,
 			updatedCounts,
 			originalContext.gridStacks(),
-			targetCopiesPerSlot
+			reportCopies
 		);
 		if (originalContext.hasReservedGrid()
 			&& gridRestored
@@ -1559,7 +1560,7 @@ final class SearchSession extends BaseCraftSession {
 
 		if (originalContext.hasReservedGrid()) {
 			if (blockedCommittedLayoutMissingSummary != null) {
-				sendChat("Committed layout is out of materials: " + blockedCommittedLayoutMissingSummary);
+				sendMissingIngredientsChat("Missing (committed layout): " + blockedCommittedLayoutMissingSummary);
 			} else
 			if (!gridRestored) {
 				ReachCraftingMod.LOGGER.warn(
@@ -1567,16 +1568,16 @@ final class SearchSession extends BaseCraftSession {
 					recipeIndex,
 					lastRestoreFailure
 				);
-				sendChat("Fetched items, but couldn't fully restore the crafting grid.");
+				sendDebugChat("Fetched items, but couldn't fully restore the crafting grid.");
 			} else if (targetCopiesPerSlot > 0 && !updatedDeficit.hasMissingIngredients() && reservedGridMatchesRecipe && reservedGridExpanded) {
-				sendChat("Updated grid: " + outputLabel);
+				sendDebugChat("Updated grid: " + outputLabel);
 			} else if (updatedDeficit.hasMissingIngredients()) {
-				sendChat("Fetched what I could. Missing now: " + updatedDeficit.compactMissingSummary());
+				sendMissingIngredientsChat("Missing: " + updatedDeficit.compactMissingSummary());
 			} else {
-				sendChat("Fetched ingredients for the next craft.");
+				sendDebugChat("Fetched ingredients for the next craft.");
 			}
 		} else if (placedPlannedGrid) {
-			sendChat("Updated grid: " + outputLabel);
+			sendDebugChat("Updated grid: " + outputLabel);
 		} else if (targetCopiesPerSlot > 0 && !updatedDeficit.hasMissingIngredients() && player.containerMenu != null) {
 			ReachCraftingMod.LOGGER.info(
 				"[recipe_place] from=SearchSession.tryFinishAfterResume shift={} recipe_id={} output={} target_copies={} remaining={} updated_missing={}",
@@ -1588,13 +1589,13 @@ final class SearchSession extends BaseCraftSession {
 				updatedDeficit.compactMissingSummary()
 			);
 			gameMode.handlePlaceRecipe(player.containerMenu.containerId, recipeId, craftAll);
-			sendChat("Placed recipe: " + outputLabel);
+			sendDebugChat("Placed recipe: " + outputLabel);
 		} else if (!remainingItemIds.isEmpty() || inventorySpaceBlocked) {
-			sendChat("Fetched what I could. Missing now: " + updatedDeficit.compactMissingSummary());
+			sendMissingIngredientsChat("Missing: " + updatedDeficit.compactMissingSummary());
 		} else if (updatedDeficit.hasMissingIngredients()) {
-			sendChat("Items fetched. Remaining: " + updatedDeficit.compactMissingSummary());
+			sendMissingIngredientsChat("Missing: " + updatedDeficit.compactMissingSummary());
 		} else {
-			sendChat("Ready to place: " + outputLabel);
+			sendDebugChat("Ready to place: " + outputLabel);
 		}
 
 		coordinator.armInteractionBlock();
@@ -2083,7 +2084,7 @@ final class SearchSession extends BaseCraftSession {
 		}
 		if (executedWithdrawals.isEmpty()) {
 			if (inventorySpaceBlocked) {
-				sendChat("No inventory space for fetched items");
+				sendDebugChat("No inventory space for fetched items");
 			}
 			return;
 		}

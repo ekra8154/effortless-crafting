@@ -35,6 +35,22 @@ abstract class BaseCraftSession implements CraftSession {
 		ReachCraftingModClient.sendChat(message);
 	}
 
+	protected void sendDebugChat(String message) {
+		ReachCraftingModClient.sendDebugChat(message);
+	}
+
+	protected void sendAbortedChat(String message) {
+		ReachCraftingModClient.sendAbortedChat(message);
+	}
+
+	protected void sendBulkSummaryChat(String message) {
+		ReachCraftingModClient.sendBulkSummaryChat(message);
+	}
+
+	protected void sendMissingIngredientsChat(String message) {
+		ReachCraftingModClient.sendMissingIngredientsChat(message);
+	}
+
 	protected void resumeOriginalContext(ScreenContextSnapshot context) {
 		ScreenContextRestorer.resumeOriginalContext(context, client, player, level, gameMode, cameraEntity, coordinator);
 	}

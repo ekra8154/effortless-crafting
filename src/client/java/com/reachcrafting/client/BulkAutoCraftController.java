@@ -224,11 +224,14 @@ public final class BulkAutoCraftController {
 			String itemName = activeSession.expectedOutput().getHoverName().getString();
 			int totalGained = activeSession.completedRecipeCopies() * Math.max(activeSession.expectedOutput().getCount(), 1);
 			String formattedCount = ContainerUtils.formatStackBreakdown(totalGained);
-			ReachCraftingModClient.sendChat("Bulk craft complete: Crafted " + formattedCount + "x " + itemName);
+			ReachCraftingModClient.sendBulkSummaryChat("Bulk craft complete: Crafted " + formattedCount + " " + itemName);
 		}
 		AutoCraftController.setEnabledMode(ReachCraftingConfig.AutoCraftMode.NORMAL);
 		if (ReachCraftingConfig.get().autoCraftOffAfterBulk()) {
 			AutoCraftController.setEnabled(false);
+			ReachCraftingModClient.sendDebugChat("Auto Crafting disabled after bulk craft.");
+		} else {
+			ReachCraftingModClient.sendDebugChat("Auto Crafting mode reset to normal.");
 		}
 		OffhandConsolidationController.swapBack(Minecraft.getInstance());
 		clear();
