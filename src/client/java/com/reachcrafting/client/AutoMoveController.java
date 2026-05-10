@@ -271,14 +271,8 @@ final class AutoMoveController {
 		}
 
 		if (movesThisTick == 0 && autoMoveWaitingTicks > 1) {
-			if (!client.player.containerMenu.getCarried().isEmpty()) {
-				for (int i = 0; i < 36; i++) {
-					Slot slot = findInventorySlot(menu, i);
-					if (slot != null && !slot.hasItem()) {
-						client.gameMode.handleInventoryMouseClick(menu.containerId, slot.index, 0, ClickType.PICKUP, client.player);
-						break;
-					}
-				}
+			if (!client.player.containerMenu.getCarried().isEmpty() && !tryResolveCarriedStack(client, menu)) {
+				return;
 			}
 
 			if (ReachCraftingConfig.get().ejectItemsWhenFull() && AutoCraftController.isBulkModeEnabled()) {
@@ -394,6 +388,39 @@ final class AutoMoveController {
 				}
 			}
 		}
+	}
+
+	private static boolean tryResolveCarriedStack(Minecraft client, AbstractContainerMenu menu) {
+		ItemStack carried = client.player.containerMenu.getCarried();
+		if (carried.isEmpty()) {
+			return true;
+		}
+
+		String itemId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(carried.getItem()).toString();
+		Slot destination = MenuTransferHelper.findPlayerDestinationSlot(client.player, menu, itemId);
+		if (destination != null) {
+			int carriedBefore = carried.getCount();
+			client.gameMode.handleInventoryMouseClick(menu.containerId, destination.index, 0, ClickType.PICKUP, client.player);
+			ItemStack carriedAfter = client.player.containerMenu.getCarried();
+			if (carriedAfter.isEmpty() || carriedAfter.getCount() < carriedBefore) {
+				return carriedAfter.isEmpty();
+			}
+		}
+
+		if (ReachCraftingConfig.get().ejectItemsWhenFull()
+			&& AutoCraftController.isBulkModeEnabled()
+			&& ItemStack.isSameItemSameComponents(carried, autoMoveTargetStack)) {
+			int ejectedCount = carried.getCount();
+			client.gameMode.handleInventoryMouseClick(menu.containerId, -999, 0, ClickType.PICKUP, client.player);
+			if (client.player.containerMenu.getCarried().isEmpty()) {
+				BulkAutoCraftController.addEjectedOutput(ejectedCount);
+				com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] Ejected carried output {} while finalizing batch", ContainerUtils.formatStack(carried));
+				return true;
+			}
+		}
+
+		com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] Waiting for carried stack to resolve before finishing batch: {}", ContainerUtils.formatStack(client.player.containerMenu.getCarried()));
+		return false;
 	}
 
 	private static Slot findInventorySlot(AbstractContainerMenu menu, int inventoryIndex) {

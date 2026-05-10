@@ -35,7 +35,7 @@ public final class BulkAutoCraftController {
 
 		ItemStack expectedCopy = expectedOutput.copy();
 		if (activeSession == null || !activeSession.action().sameRecipe(action)) {
-			int baselineOutputCount = countOutputInInventory(client, expectedCopy);
+			int baselineOutputCount = countAccessibleOutput(client, expectedCopy);
 			activeSession = new BulkCraftSession(
 				action,
 				requestedRecipeCopies,
@@ -200,7 +200,7 @@ public final class BulkAutoCraftController {
 		boolean bulkEnabled = AutoCraftController.isBulkModeEnabled();
 		boolean supportedScreen = isSupportedScreen(client.screen);
 		int outputPerCraft = Math.max(activeSession.expectedOutput().getCount(), 1);
-		int currentOutputCount = countOutputInInventory(client, activeSession.expectedOutput());
+		int currentOutputCount = countAccessibleOutput(client, activeSession.expectedOutput());
 		int inventoryIncrease = Math.max(0, currentOutputCount - activeSession.lastObservedOutputCount());
 		int gainedOutputCount = inventoryIncrease + activeSession.ejectedOutputCount();
 		int craftedCopies = gainedOutputCount / outputPerCraft;
@@ -397,7 +397,7 @@ public final class BulkAutoCraftController {
 		return screen instanceof CraftingScreen || screen instanceof InventoryScreen;
 	}
 
-	private static int countOutputInInventory(Minecraft client, ItemStack expectedOutput) {
+	private static int countAccessibleOutput(Minecraft client, ItemStack expectedOutput) {
 		if (client.player == null || expectedOutput == null || expectedOutput.isEmpty()) {
 			return 0;
 		}
@@ -416,6 +416,18 @@ public final class BulkAutoCraftController {
 		ItemStack offhand = client.player.getOffhandItem();
 		if (!offhand.isEmpty() && ItemStack.isSameItemSameComponents(offhand, expectedOutput)) {
 			count += offhand.getCount();
+		}
+
+		ItemStack carried = client.player.containerMenu.getCarried();
+		if (!carried.isEmpty() && ItemStack.isSameItemSameComponents(carried, expectedOutput)) {
+			count += carried.getCount();
+		}
+
+		if (!client.player.containerMenu.slots.isEmpty()) {
+			ItemStack result = client.player.containerMenu.getSlot(0).getItem();
+			if (!result.isEmpty() && ItemStack.isSameItemSameComponents(result, expectedOutput)) {
+				count += result.getCount();
+			}
 		}
 		
 		return count;
