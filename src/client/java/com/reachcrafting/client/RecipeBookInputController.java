@@ -144,14 +144,15 @@ final class RecipeBookInputController {
 			RecipeBookFocusManager.defocusRecipeBookSearch(minecraft);
 		}
 
-		boolean craftAll = shiftModifierDown;
+		boolean maxCraftRequested = shiftModifierDown;
+		boolean craftAll = false;
 		boolean allowNearbyChests = ctrlModifierDown
 			&& ReachCraftingConfig.get().enableNearbyContainerUsage();
-		int requestedClicks = craftAll && allowNearbyChests && AutoCraftController.isBulkModeEnabled()
-			? RecipeClickExecutor.bulkRecipeQueueLimit()
+		int requestedClicks = maxCraftRequested
+			? resolveMaxCraftRequestCount(minecraft, player, recipeId, collection, displayStack, explicitVariantSelection, allowNearbyChests)
 			: 1;
 
-		if (shouldQueueHeldRecipe(minecraft, allowNearbyChests, craftAll) && state.replayBatch() == null) {
+		if (shouldQueueHeldRecipe(minecraft, allowNearbyChests, maxCraftRequested) && state.replayBatch() == null) {
 			boolean ctrlTriggered = ctrlModifierDown || RecipeBookFocusManager.isControlKeyDown(minecraft);
 			queueHeldRecipe(recipeId, collection, displayStack, mouseButton, explicitVariantSelection, allowNearbyChests, ctrlTriggered);
 			return;
@@ -380,10 +381,38 @@ final class RecipeBookInputController {
 		return RecipeVariantResolver.resolveDisplayStack(entry.display(), context);
 	}
 
-	private boolean shouldQueueHeldRecipe(Minecraft minecraft, boolean allowNearbyFallback, boolean craftAll) {
+	private boolean shouldQueueHeldRecipe(Minecraft minecraft, boolean allowNearbyFallback, boolean maxCraftRequested) {
 		return ReachCraftingConfig.get().reachCraftHoldAndRelease()
-			&& !craftAll
+			&& !maxCraftRequested
 			&& (allowNearbyFallback || RecipeBookFocusManager.isShiftKeyDown(minecraft));
+	}
+
+	private int resolveMaxCraftRequestCount(
+		Minecraft minecraft,
+		LocalPlayer player,
+		RecipeDisplayId recipeId,
+		net.minecraft.client.gui.screens.recipebook.RecipeCollection collection,
+		ItemStack displayStack,
+		boolean explicitVariantSelection,
+		boolean allowNearbyChests
+	) {
+		if (allowNearbyChests && AutoCraftController.isBulkModeEnabled()) {
+			return RecipeClickExecutor.bulkRecipeQueueLimit();
+		}
+
+		ItemStack expectedOutput = RecipeClickExecutor.resolveExpectedOutputStack(
+			minecraft,
+			player,
+			recipeId,
+			collection,
+			displayStack,
+			explicitVariantSelection
+		);
+		if (!expectedOutput.isEmpty()) {
+			return Math.max(expectedOutput.getMaxStackSize(), 1);
+		}
+
+		return Math.max(RecipeClickExecutor.resolveRecipeQueueLimit(minecraft, recipeId, collection), 1);
 	}
 
 	private void queueHeldRecipe(

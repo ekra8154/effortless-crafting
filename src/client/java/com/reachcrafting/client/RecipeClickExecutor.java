@@ -22,7 +22,7 @@ import net.minecraft.world.item.crafting.display.RecipeDisplayId;
 import net.minecraft.world.item.crafting.display.SlotDisplayContext;
 
 final class RecipeClickExecutor {
-	private static final int BULK_QUEUE_LIMIT = 1_000_000;
+	private static final int BULK_QUEUE_LIMIT = 4_096;
 
 	private RecipeClickExecutor() {
 	}
