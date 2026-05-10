@@ -170,6 +170,15 @@ public final class ReachCraftingConfigScreen {
 			.setSaveConsumer(config::setAutoCraftOffAfterBulk)
 			.build());
 
+		autoGroup.add(entries.startBooleanToggle(
+				Component.translatable("option.reachcrafting.bulk_variant_switching"),
+				config.bulkVariantSwitching()
+			)
+			.setDefaultValue(false)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.bulk_variant_switching"))
+			.setSaveConsumer(config::setBulkVariantSwitching)
+			.build());
+
 		autoGroup.add(entries.startEnumSelector(
 				Component.translatable("option.reachcrafting.scroll_to_pull"),
 				ReachCraftingConfig.ScrollToPullMode.class,

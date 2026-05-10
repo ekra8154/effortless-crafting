@@ -44,6 +44,7 @@ public final class ReachCraftingConfig {
 	private static final boolean DEFAULT_EJECT_ITEMS_WHEN_FULL = true;
 	private static final AutoCraftCapability DEFAULT_AUTO_CRAFT_CAPABILITY = AutoCraftCapability.NONE;
 	private static final boolean DEFAULT_AUTO_CRAFT_OFF_AFTER_BULK = true;
+	private static final boolean DEFAULT_BULK_VARIANT_SWITCHING = false;
 	private static final AutoCraftHandling DEFAULT_AUTO_CRAFT_HANDLING = AutoCraftHandling.TOGGLE;
 	private static final boolean DEFAULT_SHOW_CRAFT_ABORTED_MESSAGE = true;
 	private static final boolean DEFAULT_SHOW_BULK_CRAFT_SUMMARY_MESSAGE = true;
@@ -89,6 +90,7 @@ public final class ReachCraftingConfig {
 	private boolean ejectItemsWhenFull;
 	private AutoCraftCapability autoCraftCapability;
 	private boolean autoCraftOffAfterBulk;
+	private boolean bulkVariantSwitching;
 	private AutoCraftHandling autoCraftHandling;
 	private boolean showCraftAbortedMessage;
 	private boolean showBulkCraftSummaryMessage;
@@ -146,6 +148,7 @@ public final class ReachCraftingConfig {
 			instance.autoCraftEnabledMode = stored.autoCraftEnabledMode != null ? stored.autoCraftEnabledMode : DEFAULT_AUTO_CRAFT_ENABLED_MODE;
 			instance.autoCraftCapability = stored.autoCraftCapability != null ? stored.autoCraftCapability : (stored.enableEnablingBulkMode != null ? (stored.enableEnablingBulkMode ? AutoCraftCapability.BULK : AutoCraftCapability.NORMAL) : DEFAULT_AUTO_CRAFT_CAPABILITY);
 			instance.autoCraftOffAfterBulk = stored.autoCraftOffAfterBulk != null ? stored.autoCraftOffAfterBulk : DEFAULT_AUTO_CRAFT_OFF_AFTER_BULK;
+			instance.bulkVariantSwitching = stored.bulkVariantSwitching != null ? stored.bulkVariantSwitching : DEFAULT_BULK_VARIANT_SWITCHING;
 			instance.autoCraftHandling = stored.autoCraftHandling != null ? stored.autoCraftHandling : DEFAULT_AUTO_CRAFT_HANDLING;
 			instance.showCraftAbortedMessage = stored.showCraftAbortedMessage != null ? stored.showCraftAbortedMessage : DEFAULT_SHOW_CRAFT_ABORTED_MESSAGE;
 			instance.showBulkCraftSummaryMessage = stored.showBulkCraftSummaryMessage != null ? stored.showBulkCraftSummaryMessage : DEFAULT_SHOW_BULK_CRAFT_SUMMARY_MESSAGE;
@@ -420,6 +423,14 @@ public final class ReachCraftingConfig {
 		this.autoCraftOffAfterBulk = autoCraftOffAfterBulk;
 	}
 
+	public boolean bulkVariantSwitching() {
+		return bulkVariantSwitching;
+	}
+
+	public void setBulkVariantSwitching(boolean bulkVariantSwitching) {
+		this.bulkVariantSwitching = bulkVariantSwitching;
+	}
+
 	public AutoCraftHandling autoCraftHandling() {
 		return autoCraftHandling;
 	}
@@ -527,6 +538,7 @@ public final class ReachCraftingConfig {
 		defaults.ejectItemsWhenFull = DEFAULT_EJECT_ITEMS_WHEN_FULL;
 		defaults.autoCraftCapability = DEFAULT_AUTO_CRAFT_CAPABILITY;
 		defaults.autoCraftOffAfterBulk = DEFAULT_AUTO_CRAFT_OFF_AFTER_BULK;
+		defaults.bulkVariantSwitching = DEFAULT_BULK_VARIANT_SWITCHING;
 		defaults.autoCraftHandling = DEFAULT_AUTO_CRAFT_HANDLING;
 		defaults.showCraftAbortedMessage = DEFAULT_SHOW_CRAFT_ABORTED_MESSAGE;
 		defaults.showBulkCraftSummaryMessage = DEFAULT_SHOW_BULK_CRAFT_SUMMARY_MESSAGE;
@@ -626,6 +638,7 @@ public final class ReachCraftingConfig {
 		private AutoCraftMode autoCraftEnabledMode;
 		private AutoCraftCapability autoCraftCapability;
 		private Boolean autoCraftOffAfterBulk;
+		private Boolean bulkVariantSwitching;
 		private AutoCraftHandling autoCraftHandling;
 		private Boolean showCraftAbortedMessage;
 		private Boolean showBulkCraftSummaryMessage;
@@ -660,6 +673,7 @@ public final class ReachCraftingConfig {
 			this.autoCraftEnabledMode = config.autoCraftEnabledMode;
 			this.autoCraftCapability = config.autoCraftCapability;
 			this.autoCraftOffAfterBulk = config.autoCraftOffAfterBulk;
+			this.bulkVariantSwitching = config.bulkVariantSwitching;
 			this.autoCraftHandling = config.autoCraftHandling;
 			this.showCraftAbortedMessage = config.showCraftAbortedMessage;
 			this.showBulkCraftSummaryMessage = config.showBulkCraftSummaryMessage;

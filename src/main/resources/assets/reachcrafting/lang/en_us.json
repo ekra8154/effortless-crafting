@@ -84,6 +84,8 @@
 	"enum.reachcrafting.auto_craft_capability.bulk": "Auto Crafting and Bulk Crafting",
 	"option.reachcrafting.auto_craft_off_after_bulk": "Toggle Auto Craft Off After Bulk",
 	"tooltip.reachcrafting.auto_craft_off_after_bulk": "If enabled, Auto Crafting is completely disabled once a bulk session finishes. If disabled, only bulk mode resets while standard Auto Crafting stays on.",
+	"option.reachcrafting.bulk_variant_switching": "Bulk Variant Switching",
+	"tooltip.reachcrafting.bulk_variant_switching": "When disabled, bulk crafting stays on the first resolved recipe variant for the whole session. When enabled, bulk crafting may continue across family variants if the current continuation rules allow it.",
 	"option.reachcrafting.auto_craft_handling": "Auto Craft Handling",
 	"tooltip.reachcrafting.auto_craft_handling": "Choose how the Auto Crafting mode is toggled. Toggle keeps the current behavior (Alt key toggles the state on/off). Hold makes Auto Crafting active ONLY while the Alt key is held down.",
 	"enum.reachcrafting.auto_craft_handling.toggle": "Toggle",

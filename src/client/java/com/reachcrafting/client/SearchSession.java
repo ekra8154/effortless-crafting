@@ -573,7 +573,7 @@ final class SearchSession extends BaseCraftSession {
 			if (BulkAutoCraftController.isActive() && requestedSingleClicks > 1) {
 				BulkAutoCraftController.startOrUpdate(
 					new RecipeBookClickCapture.HeldRecipeAction(
-						initialRequestedRecipeId,
+						bulkContinuationRecipeId(),
 						recipeCollection,
 						ItemStack.EMPTY,
 						org.lwjgl.glfw.GLFW.GLFW_MOUSE_BUTTON_LEFT,
@@ -1512,6 +1512,9 @@ final class SearchSession extends BaseCraftSession {
 		if (currentMode == BulkAutoCraftController.VariantContinuationMode.STRICT_CURRENT_VARIANT) {
 			return currentMode;
 		}
+		if (!ReachCraftingConfig.get().bulkVariantSwitching()) {
+			return BulkAutoCraftController.VariantContinuationMode.STRICT_CURRENT_VARIANT;
+		}
 		if (explicitVariantSelection
 			|| ReachCraftingConfig.get().revolvingCraftHandling() != ReachCraftingConfig.RevolvingCraftHandling.PREFER_CLICKED_TYPE_WITH_COUNT_FALLBACK) {
 			return BulkAutoCraftController.determineVariantContinuationMode(initialRequestedRecipeId, recipeId, explicitVariantSelection);
@@ -1522,6 +1525,10 @@ final class SearchSession extends BaseCraftSession {
 		return resolvedSelection.recipeId().equals(initialRequestedRecipeId)
 			? BulkAutoCraftController.VariantContinuationMode.STRICT_CURRENT_VARIANT
 			: BulkAutoCraftController.VariantContinuationMode.FAMILY_FALLBACK;
+	}
+
+	private RecipeDisplayId bulkContinuationRecipeId() {
+		return ReachCraftingConfig.get().bulkVariantSwitching() ? initialRequestedRecipeId : recipeId;
 	}
 
 
@@ -1691,7 +1698,7 @@ final class SearchSession extends BaseCraftSession {
 			if (AutoCraftController.isBulkModeEnabled() && !craftAll && requestedSingleClicks > 1) {
 				BulkAutoCraftController.startOrUpdate(
 					new RecipeBookClickCapture.HeldRecipeAction(
-						initialRequestedRecipeId,
+						bulkContinuationRecipeId(),
 						recipeCollection,
 						ItemStack.EMPTY,
 						org.lwjgl.glfw.GLFW.GLFW_MOUSE_BUTTON_LEFT,

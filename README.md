@@ -87,8 +87,6 @@ TODO:
 
 hotbar optimization moves existing items if its an item that was crafted (ex: moves torches)
 
-on bulk session abort turn off autocraft if the setting is true.
-
 it didnt search the hopper till i opened it. in fact im still getting first-join world search issues for chests. it is very hard to pin down cause the issue goes away after a couple searches and only happens sometimes in the first place.
 
 ctrl shift max bulk craft didnt craft all and is laggy
@@ -106,3 +104,7 @@ optimize ejection - shouldn't eject if it can finish the craft in the current ba
 bulk crafting was repeatedly opening chests during slab craft that only had milk
 
 setting: close menu after autocraft
+
+change defaults to specific variant and eject true
+
+keep placeholders setting (for sorters) - would force 1 item to stay behind in each chest slot to guarantee returns for chests hooked up to sorters. would need to decide how to handle unstackables.
