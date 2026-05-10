@@ -742,13 +742,14 @@ final class SearchSession extends BaseCraftSession {
 
 	private void applySearchPlanDecision(SearchPlanDecision decision) {
 		ReachCraftingMod.LOGGER.info(
-			"[nearby_plan] idx={} phase={} requested_recipe={} chosen_recipe={} chosen_output={} target_copies={} fetch={} withdraw_candidates={} resume={} fallback={} total_available={}",
+			"[nearby_plan] idx={} phase={} requested_recipe={} chosen_recipe={} chosen_output={} target_copies={} immediate_fetch={} fetch={} withdraw_candidates={} resume={} fallback={} total_available={}",
 			recipeIndex,
 			phase.name().toLowerCase(),
 			initialRequestedRecipeId,
 			decision.resolvedRecipeId(),
 			decision.resolvedOutputLabel(),
 			decision.targetCopiesPerSlot(),
+			AvailableItemSnapshot.formatCounts(perCraftIngredientCounts(decision.plannedTargets())),
 			summarizeRemainingItems(decision.fetchItemIds()),
 			decision.withdrawCandidates().size(),
 			decision.resumeOriginalContext(),
@@ -856,39 +857,111 @@ final class SearchSession extends BaseCraftSession {
 			return;
 		}
 
-		int remainingCopies = BulkAutoCraftController.remainingRequestedRecipeCopies();
+		// Use this search session's queued request as the source of truth for staging.
+		// BulkAutoCraftController can still be in a pre-progress state while we are
+		// planning the next fetch, which makes its remaining-count snapshot too stale
+		// for recipes like buttons that need inventory staging beyond the first 64.
+		int remainingCopies = Math.max(requestedSingleClicks, 0);
 		if (remainingCopies <= 0) {
+			ReachCraftingMod.LOGGER.info(
+				"[bulk_stage] idx={} skipped reason=no_remaining_copies requested={} target_now={} desired_now={} covered_now={}",
+				recipeIndex,
+				requestedSingleClicks,
+				targetCopiesPerSlot,
+				AvailableItemSnapshot.formatCounts(desiredCounts),
+				AvailableItemSnapshot.formatCounts(alreadyCovered)
+			);
 			return;
 		}
 
 		int extraFutureCopies = Math.max(0, remainingCopies - Math.max(targetCopiesPerSlot, 1));
 		if (extraFutureCopies <= 0) {
+			ReachCraftingMod.LOGGER.info(
+				"[bulk_stage] idx={} skipped reason=no_extra_future_copies requested={} remaining={} target_now={} desired_now={} covered_now={}",
+				recipeIndex,
+				requestedSingleClicks,
+				remainingCopies,
+				targetCopiesPerSlot,
+				AvailableItemSnapshot.formatCounts(desiredCounts),
+				AvailableItemSnapshot.formatCounts(alreadyCovered)
+			);
 			return;
 		}
 
 		Map<String, Integer> perCraftCounts = perCraftIngredientCounts(slotTargets);
 		if (perCraftCounts.isEmpty()) {
+			ReachCraftingMod.LOGGER.info(
+				"[bulk_stage] idx={} skipped reason=no_per_craft_counts requested={} remaining={} target_now={} desired_now={} covered_now={}",
+				recipeIndex,
+				requestedSingleClicks,
+				remainingCopies,
+				targetCopiesPerSlot,
+				AvailableItemSnapshot.formatCounts(desiredCounts),
+				AvailableItemSnapshot.formatCounts(alreadyCovered)
+			);
 			return;
 		}
 
 		int reachableFutureCopies = computeReachableFutureCopies(desiredCounts, perCraftCounts);
 		if (reachableFutureCopies <= 0) {
+			ReachCraftingMod.LOGGER.info(
+				"[bulk_stage] idx={} capped reason=reachable requested={} remaining={} target_now={} extra_requested={} reachable_future={} per_craft={} desired_now={} covered_now={}",
+				recipeIndex,
+				requestedSingleClicks,
+				remainingCopies,
+				targetCopiesPerSlot,
+				extraFutureCopies,
+				reachableFutureCopies,
+				AvailableItemSnapshot.formatCounts(perCraftCounts),
+				AvailableItemSnapshot.formatCounts(desiredCounts),
+				AvailableItemSnapshot.formatCounts(alreadyCovered)
+			);
 			return;
 		}
 
+		int requestedStageCopies = Math.min(extraFutureCopies, reachableFutureCopies);
 		int stageableFutureCopies = computeStageableFutureCopies(
 			desiredCounts,
 			alreadyCovered,
 			perCraftCounts,
-			Math.min(extraFutureCopies, reachableFutureCopies)
+			requestedStageCopies
 		);
 		if (stageableFutureCopies <= 0) {
+			ReachCraftingMod.LOGGER.info(
+				"[bulk_stage] idx={} capped reason=inventory requested={} remaining={} target_now={} extra_requested={} reachable_future={} requested_stage={} stageable_future={} per_craft={} desired_now={} covered_now={}",
+				recipeIndex,
+				requestedSingleClicks,
+				remainingCopies,
+				targetCopiesPerSlot,
+				extraFutureCopies,
+				reachableFutureCopies,
+				requestedStageCopies,
+				stageableFutureCopies,
+				AvailableItemSnapshot.formatCounts(perCraftCounts),
+				AvailableItemSnapshot.formatCounts(desiredCounts),
+				AvailableItemSnapshot.formatCounts(alreadyCovered)
+			);
 			return;
 		}
 
 		for (Map.Entry<String, Integer> entry : perCraftCounts.entrySet()) {
 			desiredCounts.merge(entry.getKey(), entry.getValue() * stageableFutureCopies, Integer::sum);
 		}
+
+		ReachCraftingMod.LOGGER.info(
+			"[bulk_stage] idx={} planned requested={} remaining={} target_now={} extra_requested={} reachable_future={} requested_stage={} stageable_future={} per_craft={} desired_total={} covered_now={}",
+			recipeIndex,
+			requestedSingleClicks,
+			remainingCopies,
+			targetCopiesPerSlot,
+			extraFutureCopies,
+			reachableFutureCopies,
+			requestedStageCopies,
+			stageableFutureCopies,
+			AvailableItemSnapshot.formatCounts(perCraftCounts),
+			AvailableItemSnapshot.formatCounts(desiredCounts),
+			AvailableItemSnapshot.formatCounts(alreadyCovered)
+		);
 	}
 
 	private Map<String, Integer> perCraftIngredientCounts(List<IngredientPlanning.SlotTarget> slotTargets) {

@@ -1,6 +1,8 @@
 package com.reachcrafting.client;
 
+import java.util.Set;
 import net.minecraft.client.Minecraft;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.inventory.InventoryMenu;
@@ -142,10 +144,13 @@ public final class OffhandConsolidationController {
 			}
 		}
 
+		Set<String> acceptedItemIds = BulkAutoCraftController.getAcceptedItemIds();
+
 		// Find a slot to swap into (0-35)
 		int targetInvIndex = -1;
+		int safeOccupiedFallback = -1;
 		
-		// If space is tight, we must force a swap with a used slot (Slot 9) to preserve empty spots for the craft
+		// If space is available, preserve empty slots first.
 		if (emptyCount > slotsNeeded) {
 			// Priority 1: Search Main Inventory (9-35)
 			for (int i = 9; i < 36; i++) {
@@ -168,8 +173,32 @@ public final class OffhandConsolidationController {
 			}
 		}
 
-		// Priority 3: Fallback to Slot 9 (Top-Left of main inventory)
-		// This happens if emptyCount <= slotsNeeded or if no empty slot was found
+		// If we couldn't use an empty slot, prefer a non-ingredient occupied slot.
+		if (targetInvIndex == -1) {
+			for (int i = 9; i < 36; i++) {
+				Slot s = findInventorySlot(menu, i);
+				if (isSafeOccupiedSwapTarget(s, acceptedItemIds)) {
+					safeOccupiedFallback = i;
+					break;
+				}
+			}
+
+			if (safeOccupiedFallback == -1) {
+				for (int i = 0; i < 9; i++) {
+					Slot s = findInventorySlot(menu, i);
+					if (isSafeOccupiedSwapTarget(s, acceptedItemIds)) {
+						safeOccupiedFallback = i;
+						break;
+					}
+				}
+			}
+		}
+
+		if (safeOccupiedFallback != -1) {
+			targetInvIndex = safeOccupiedFallback;
+		}
+
+		// Final fallback: Slot 9, even if it holds a needed ingredient.
 		if (targetInvIndex == -1) {
 			targetInvIndex = 9;
 		}
@@ -223,5 +252,16 @@ public final class OffhandConsolidationController {
 			}
 		}
 		return null;
+	}
+
+	private static boolean isSafeOccupiedSwapTarget(Slot slot, Set<String> acceptedItemIds) {
+		if (slot == null || !slot.hasItem()) {
+			return false;
+		}
+		if (acceptedItemIds == null || acceptedItemIds.isEmpty()) {
+			return true;
+		}
+		String itemId = BuiltInRegistries.ITEM.getKey(slot.getItem().getItem()).toString();
+		return !acceptedItemIds.contains(itemId);
 	}
 }
