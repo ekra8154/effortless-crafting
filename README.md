@@ -102,3 +102,5 @@ analyze all delays and if they can be tightened.
 investigate cake craft aborts that suddenly stopped happening as i tested more. caching again?
 
 optimize ejection - shouldn't eject if it can finish the craft in the current batch (with enough space)
+
+bulk crafting was repeatedly opening chests during slab craft that only had milk

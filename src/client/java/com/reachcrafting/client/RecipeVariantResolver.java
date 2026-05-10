@@ -132,9 +132,14 @@ public final class RecipeVariantResolver {
 			return exactSelection;
 		}
 
+		boolean bulkStrictOrUndecided = !craftAll
+			&& BulkAutoCraftController.isActive()
+			&& ReachCraftingConfig.get().revolvingCraftHandling() == ReachCraftingConfig.RevolvingCraftHandling.PREFER_CLICKED_TYPE_WITH_COUNT_FALLBACK
+			&& BulkAutoCraftController.currentVariantContinuationMode() != BulkAutoCraftController.VariantContinuationMode.FAMILY_FALLBACK;
+
 		if (handling == ReachCraftingConfig.RevolvingCraftHandling.PREFER_CLICKED_TYPE_WITH_COUNT_FALLBACK
 			&& exactSelection.copiesAvailable() > 0
-			&& (craftAll || exactSelection.copiesAvailable() >= requestedCopies)) {
+			&& (craftAll || bulkStrictOrUndecided || exactSelection.copiesAvailable() >= requestedCopies)) {
 			return exactSelection;
 		}
 
