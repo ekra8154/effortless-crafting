@@ -95,7 +95,7 @@ public final class ReachCraftingConfigScreen {
 				ReachCraftingConfig.RevolvingCraftHandling.class,
 				config.revolvingCraftHandling()
 			)
-			.setDefaultValue(ReachCraftingConfig.RevolvingCraftHandling.PREFER_CLICKED_TYPE_WITH_COUNT_FALLBACK)
+			.setDefaultValue(ReachCraftingConfig.RevolvingCraftHandling.SPECIFIC_VARIANT_ONLY)
 			.setTooltip(Component.translatable("tooltip.reachcrafting.revolving_craft_handling"))
 			.setSaveConsumer(config::setRevolvingCraftHandling)
 			.setEnumNameProvider(value -> Component.translatable("enum.reachcrafting.revolving_craft_handling." + value.name().toLowerCase()))
@@ -194,7 +194,7 @@ public final class ReachCraftingConfigScreen {
 				Component.translatable("option.reachcrafting.eject_items_when_full"),
 				config.ejectItemsWhenFull()
 			)
-			.setDefaultValue(false)
+			.setDefaultValue(true)
 			.setTooltip(Component.translatable("tooltip.reachcrafting.eject_items_when_full"))
 			.setSaveConsumer(config::setEjectItemsWhenFull)
 			.build());

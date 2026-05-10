@@ -23,7 +23,7 @@ public final class ReachCraftingConfig {
 	private static final boolean DEFAULT_ENABLE_NEARBY_CONTAINER_USAGE = true;
 	private static final boolean DEFAULT_REDISTRIBUTE_TO_CRAFT_WHEN_NEEDED = true;
 	private static final InWorldFilterMode DEFAULT_IN_WORLD_FILTER_MODE = InWorldFilterMode.NONE;
-	private static final RevolvingCraftHandling DEFAULT_REVOLVING_CRAFT_HANDLING = RevolvingCraftHandling.PREFER_CLICKED_TYPE_WITH_COUNT_FALLBACK;
+	private static final RevolvingCraftHandling DEFAULT_REVOLVING_CRAFT_HANDLING = RevolvingCraftHandling.SPECIFIC_VARIANT_ONLY;
 	private static final IngredientPlanning.CountPreference DEFAULT_COUNT_PREFERENCE = IngredientPlanning.CountPreference.HIGHEST_TOTAL;
 	private static final boolean DEFAULT_SHOW_NEARBY_CRAFTABLE_INDICATOR = true;
 	private static final boolean DEFAULT_CACHE_CONTAINERS_FOR_FASTER_SEARCH = true;

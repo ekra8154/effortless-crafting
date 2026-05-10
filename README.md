@@ -103,8 +103,4 @@ optimize ejection - shouldn't eject if it can finish the craft in the current ba
 
 bulk crafting was repeatedly opening chests during slab craft that only had milk
 
-setting: close menu after autocraft
-
-change defaults to specific variant and eject true
-
-keep placeholders setting (for sorters) - would force 1 item to stay behind in each chest slot to guarantee returns for chests hooked up to sorters. would need to decide how to handle unstackables.
+new setting: keep placeholders setting (for sorters) - would force 1 item to stay behind in each chest slot to guarantee returns for chests hooked up to sorters. would need to decide how to handle unstackables.

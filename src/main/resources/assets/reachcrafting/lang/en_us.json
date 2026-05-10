@@ -25,7 +25,7 @@
 	"option.reachcrafting.reach_craft_hold_and_release": "Reach Craft Hold And Release",
 	"tooltip.reachcrafting.reach_craft_hold_and_release": "When enabled, plain Ctrl recipe clicks are queued while Ctrl is held and replayed one at a time when you release the key.",
 	"option.reachcrafting.revolving_craft_handling": "Revolving Craft Handling",
-	"tooltip.reachcrafting.revolving_craft_handling": "Controls how rotating generic recipe-book entries choose which variant of an item to use for crafting (eg: spruce vs oak fence).",
+	"tooltip.reachcrafting.revolving_craft_handling": "Controls how rotating generic recipe-book entries choose which variant of an item to use for crafting (eg: spruce vs oak fence). Right click a recipe to open the variants menu.",
 	"enum.reachcrafting.revolving_craft_handling.always_prefer_based_on_count": "Always Based On Available",
 	"enum.reachcrafting.revolving_craft_handling.prefer_clicked_type_with_count_fallback": "Current Variant with Availability Fallback",
 	"enum.reachcrafting.revolving_craft_handling.specific_variant_only": "Current Variant Only",
