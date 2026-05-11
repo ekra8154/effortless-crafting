@@ -148,6 +148,7 @@ final class RecipeBookInputController {
 		boolean craftAll = false;
 		boolean allowNearbyChests = ctrlModifierDown
 			&& ReachCraftingConfig.get().enableNearbyContainerUsage();
+		boolean refillableBulkMaxMode = maxCraftRequested && allowNearbyChests && AutoCraftController.isBulkModeEnabled();
 		int requestedClicks = maxCraftRequested
 			? resolveMaxCraftRequestCount(minecraft, player, recipeId, collection, displayStack, explicitVariantSelection, allowNearbyChests)
 			: 1;
@@ -168,7 +169,7 @@ final class RecipeBookInputController {
 				mouseButton,
 				explicitVariantSelection
 			);
-			state.setReplayBatch(new RecipeBookClickCapture.ReplayBatch(action, requestedClicks, allowNearbyChests, craftAll));
+			state.setReplayBatch(new RecipeBookClickCapture.ReplayBatch(action, requestedClicks, allowNearbyChests, craftAll, refillableBulkMaxMode));
 			return;
 		}
 
@@ -185,6 +186,7 @@ final class RecipeBookInputController {
 			false,
 			explicitVariantSelection,
 			requestedClicks,
+			refillableBulkMaxMode,
 			state
 		);
 	}
@@ -328,7 +330,7 @@ final class RecipeBookInputController {
 		}
 	}
 
-	void scheduleReplay(RecipeBookClickCapture.HeldRecipeAction action, int remainingClicks, boolean allowNearby, boolean craftAll) {
+	void scheduleReplay(RecipeBookClickCapture.HeldRecipeAction action, int remainingClicks, boolean allowNearby, boolean craftAll, boolean refillableBulkMaxMode) {
 		if (!ReachCraftingConfig.get().enabled() || action == null || remainingClicks <= 0) {
 			return;
 		}
@@ -351,7 +353,7 @@ final class RecipeBookInputController {
 			}
 		}
 
-		state.setReplayBatch(new RecipeBookClickCapture.ReplayBatch(action, remainingClicks, allowNearby, craftAll));
+		state.setReplayBatch(new RecipeBookClickCapture.ReplayBatch(action, remainingClicks, allowNearby, craftAll, refillableBulkMaxMode));
 	}
 
 	boolean hasPendingHeldRecipe(
@@ -482,6 +484,7 @@ final class RecipeBookInputController {
 			state.pendingHeldRecipe().action(),
 			state.pendingHeldRecipe().clickCount(),
 			state.pendingHeldRecipe().allowNearby(),
+			false,
 			false
 		));
 		state.setPendingHeldRecipe(null);
@@ -530,6 +533,7 @@ final class RecipeBookInputController {
 			true,
 			state.replayBatch().action().explicitVariantSelection(),
 			state.replayBatch().remainingClicks(),
+			state.replayBatch().refillableBulkMaxMode(),
 			state
 		);
 		state.setReplayBatch(null);

@@ -22,7 +22,7 @@ import net.minecraft.world.item.crafting.display.RecipeDisplayId;
 import net.minecraft.world.item.crafting.display.SlotDisplayContext;
 
 final class RecipeClickExecutor {
-	private static final int BULK_QUEUE_LIMIT = 4_096;
+	private static final int BULK_QUEUE_LIMIT = 10_000;
 
 	private RecipeClickExecutor() {
 	}
@@ -40,6 +40,7 @@ final class RecipeClickExecutor {
 		boolean forceDryRun,
 		boolean explicitVariantSelection,
 		int requestedClicks,
+		boolean refillableBulkMaxMode,
 		HeldRecipeQueueState state
 	) {
 		AvailableItemSnapshot availableItems = AvailableItemSnapshot.capture(player, screen);
@@ -150,6 +151,7 @@ final class RecipeClickExecutor {
 				allowNearbyChests,
 				craftAll,
 				requestedClicks,
+				refillableBulkMaxMode,
 				selectedRecipe.displayStack(),
 				ingredientSummary
 			);
@@ -231,6 +233,7 @@ final class RecipeClickExecutor {
 					allowNearbyChests,
 					craftAll,
 					requestedClicks,
+					refillableBulkMaxMode,
 					selectedRecipe.displayStack(),
 					ingredientSummary
 				);
@@ -360,6 +363,7 @@ final class RecipeClickExecutor {
 		boolean allowNearbyChests,
 		boolean craftAll,
 		int requestedClicks,
+		boolean refillableBulkMaxMode,
 		ItemStack expectedOutput,
 		RecipeIngredientSummary ingredientSummary
 	) {
@@ -378,6 +382,7 @@ final class RecipeClickExecutor {
 			),
 			requestedClicks,
 			allowNearbyChests,
+			refillableBulkMaxMode,
 			allowNearbyChests
 				&& requestedClicks > 1
 				&& !explicitVariantSelection

@@ -581,6 +581,7 @@ final class SearchSession extends BaseCraftSession {
 					),
 					requestedSingleClicks,
 					allowNearby,
+					BulkAutoCraftController.isRefillableBulkMaxMode(),
 					resolveBulkVariantContinuationMode(resolvedSelection),
 					resolvedSelection.displayStack(),
 					ingredientSummary
@@ -1706,6 +1707,7 @@ final class SearchSession extends BaseCraftSession {
 					),
 					requestedSingleClicks,
 					allowNearby,
+					BulkAutoCraftController.isRefillableBulkMaxMode(),
 					resolveBulkVariantContinuationMode(null),
 					expectedStack,
 					ingredientSummary
