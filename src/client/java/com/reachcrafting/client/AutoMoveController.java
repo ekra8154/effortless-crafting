@@ -19,6 +19,10 @@ final class AutoMoveController {
 	private static ItemStack autoMoveExpectedStack = ItemStack.EMPTY;
 	private static final Map<Integer, Integer> autoMoveSnapshotCounts = new HashMap<>();
 	private static boolean autoMoveOrganizing = false;
+	private static boolean directEjectAwaitingSettlement = false;
+	private static int directEjectSettlementTicks = 0;
+	private static int directEjectPendingCount = 0;
+	private static int directEjectAwaitingStagedCopiesTicks = 0;
 
 	private AutoMoveController() {
 	}
@@ -26,7 +30,14 @@ final class AutoMoveController {
 	static void scheduleAutoMove(ItemStack expectedStack) {
 		pendingAutoMove = true;
 		autoMoveWaitingTicks = 0;
+		directEjectAwaitingStagedCopiesTicks = 0;
 		autoMoveExpectedStack = expectedStack != null ? expectedStack.copy() : ItemStack.EMPTY;
+		com.reachcrafting.ReachCraftingMod.LOGGER.info(
+			"[auto_move] scheduleAutoMove expected={} bulk_active={} bulk_mode={}",
+			ContainerUtils.formatStack(autoMoveExpectedStack),
+			BulkAutoCraftController.isActive(),
+			AutoCraftController.isBulkModeEnabled()
+		);
 	}
 
 	static boolean isAutoMovePending() {
@@ -38,8 +49,21 @@ final class AutoMoveController {
 	}
 
 	static void abort() {
+		com.reachcrafting.ReachCraftingMod.LOGGER.info(
+			"[auto_move] abort pending={} organizing={} directEjectNextTick={} pendingEjected={} target={} expected={}",
+			pendingAutoMove,
+			autoMoveOrganizing,
+			directEjectAwaitingSettlement,
+			directEjectPendingCount,
+			ContainerUtils.formatStack(autoMoveTargetStack),
+			ContainerUtils.formatStack(autoMoveExpectedStack)
+		);
 		pendingAutoMove = false;
 		autoMoveOrganizing = false;
+		directEjectAwaitingSettlement = false;
+		directEjectSettlementTicks = 0;
+		directEjectPendingCount = 0;
+		directEjectAwaitingStagedCopiesTicks = 0;
 		autoMoveTargetStack = ItemStack.EMPTY;
 		autoMoveExpectedStack = ItemStack.EMPTY;
 		autoMoveSnapshotCounts.clear();
@@ -48,7 +72,9 @@ final class AutoMoveController {
 
 	static void autoMoveResult(Minecraft client) {
 		if (client.player == null || client.player.containerMenu == null) {
+			com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] autoMoveResult exiting: player_or_menu_missing");
 			pendingAutoMove = false;
+			directEjectAwaitingStagedCopiesTicks = 0;
 			return;
 		}
 
@@ -66,6 +92,46 @@ final class AutoMoveController {
 		}
 
 		Slot resultSlot = menu.getSlot(0);
+		com.reachcrafting.ReachCraftingMod.LOGGER.info(
+			"[auto_move] tick pending={} organizing={} waitTicks={} directEjectNextTick={} pendingEjected={} result={} carried={}",
+			pendingAutoMove,
+			autoMoveOrganizing,
+			autoMoveWaitingTicks,
+			directEjectAwaitingSettlement,
+			directEjectPendingCount,
+			resultSlot.hasItem() ? ContainerUtils.formatStack(resultSlot.getItem()) : "<empty>",
+			ContainerUtils.formatStack(menu.getCarried())
+		);
+
+		if (directEjectAwaitingSettlement) {
+			directEjectSettlementTicks++;
+			if (resultSlot.hasItem() || !menu.getCarried().isEmpty()) {
+				com.reachcrafting.ReachCraftingMod.LOGGER.info(
+					"[auto_move] direct eject awaiting settlement: ticks={} result_now={} carried={}",
+					directEjectSettlementTicks,
+					resultSlot.hasItem() ? ContainerUtils.formatStack(resultSlot.getItem()) : "<empty>",
+					ContainerUtils.formatStack(menu.getCarried())
+				);
+				return;
+			}
+			com.reachcrafting.ReachCraftingMod.LOGGER.info(
+				"[auto_move] direct eject settled: ticks={} crediting predicted count={}",
+				directEjectSettlementTicks,
+				directEjectPendingCount
+			);
+			directEjectAwaitingSettlement = false;
+			directEjectSettlementTicks = 0;
+			directEjectAwaitingStagedCopiesTicks = 0;
+			pendingAutoMove = false;
+			autoMoveOrganizing = false;
+			autoMoveTargetStack = ItemStack.EMPTY;
+			if (AutoCraftController.isBulkModeEnabled() && directEjectPendingCount > 0) {
+				BulkAutoCraftController.addEjectedOutput(directEjectPendingCount);
+			}
+			directEjectPendingCount = 0;
+			BulkAutoCraftController.onAutoMoveFinished(client, true);
+			return;
+		}
 		
 		if (AutoCraftController.isBulkModeEnabled() && BulkAutoCraftController.isActive()) {
 			// com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] >> sweepAndEjectByProducts entry. {}", logBottleDistribution(menu));
@@ -78,7 +144,7 @@ final class AutoMoveController {
 				ItemStack currentResult = resultSlot.getItem();
 
 				if (!autoMoveExpectedStack.isEmpty() && !ItemStack.isSameItemSameComponents(currentResult, autoMoveExpectedStack)) {
-					com.reachcrafting.ReachCraftingMod.LOGGER.debug(
+					com.reachcrafting.ReachCraftingMod.LOGGER.info(
 						"[auto_move] Recipe changed! Expected: {}, Found: {}. Stopping.",
 						ContainerUtils.formatStack(autoMoveExpectedStack),
 						ContainerUtils.formatStack(currentResult)
@@ -90,17 +156,66 @@ final class AutoMoveController {
 					return;
 				}
 
-				boolean shouldEject = false;
-				if (ReachCraftingConfig.get().ejectItemsWhenFull() && !canFitInInventory(menu, currentResult)) {
+				BulkAutoCraftController.BulkOutputDisposition bulkDisposition =
+					BulkAutoCraftController.determineCurrentBatchOutputDisposition(client, currentResult);
+				boolean bulkDirectEject = bulkDisposition == BulkAutoCraftController.BulkOutputDisposition.DIRECT_EJECT_BATCH;
+				boolean bulkFinalKeep = bulkDisposition == BulkAutoCraftController.BulkOutputDisposition.FINAL_BATCH_KEEP;
+				boolean shouldEject = bulkDirectEject;
+				int totalEjected = bulkDirectEject
+					? BulkAutoCraftController.predictedDirectEjectOutputCount(client, currentResult)
+					: currentResult.getCount();
+				if (!shouldEject
+					&& !bulkFinalKeep
+					&& ReachCraftingConfig.get().ejectItemsWhenFull()
+					&& !canFitInInventory(menu, currentResult)) {
 					shouldEject = true;
 					com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] shouldEject=true (inv full, cannot fit result)");
 				}
 
 				if (shouldEject) {
-					com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] EJECT path: THROW result {} from slot {}", ContainerUtils.formatStack(currentResult), resultSlot.index);
+					if (bulkDirectEject && totalEjected <= 0) {
+						directEjectAwaitingStagedCopiesTicks++;
+						com.reachcrafting.ReachCraftingMod.LOGGER.info(
+							"[auto_move] direct eject waiting for staged copies: waitTicks={} result={} expected={} carried={}",
+							directEjectAwaitingStagedCopiesTicks,
+							ContainerUtils.formatStack(currentResult),
+							ContainerUtils.formatStack(autoMoveExpectedStack),
+							ContainerUtils.formatStack(menu.getCarried())
+						);
+						if (directEjectAwaitingStagedCopiesTicks <= 2) {
+							return;
+						}
+						com.reachcrafting.ReachCraftingMod.LOGGER.info(
+							"[auto_move] direct eject staged-copy mismatch persisted; falling back to keep path for result {}",
+							ContainerUtils.formatStack(currentResult)
+						);
+						shouldEject = false;
+						directEjectAwaitingStagedCopiesTicks = 0;
+					} else {
+						directEjectAwaitingStagedCopiesTicks = 0;
+					}
+				}
+
+				if (shouldEject) {
+					com.reachcrafting.ReachCraftingMod.LOGGER.info(
+						"[auto_move] EJECT path: THROW result {} from slot {} predicted_ejected={} bulkDirectEject={} bulkFinalKeep={}",
+						ContainerUtils.formatStack(currentResult),
+						resultSlot.index,
+						totalEjected,
+						bulkDirectEject,
+						bulkFinalKeep
+					);
 					client.gameMode.handleInventoryMouseClick(menu.containerId, resultSlot.index, 1, ClickType.THROW, client.player);
-					if (AutoCraftController.isBulkModeEnabled()) {
-						BulkAutoCraftController.addEjectedOutput(currentResult.getCount());
+					if (bulkDirectEject) {
+						directEjectPendingCount = totalEjected;
+						directEjectAwaitingSettlement = true;
+						directEjectSettlementTicks = 0;
+						autoMoveWaitingTicks = 0;
+						com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] direct eject queued awaiting settlement: predicted_ejected={}", totalEjected);
+						return;
+					}
+					if (AutoCraftController.isBulkModeEnabled() && totalEjected > 0) {
+						BulkAutoCraftController.addEjectedOutput(totalEjected);
 					}
 
 					// Eject any by-products left in the grid
@@ -126,6 +241,7 @@ final class AutoMoveController {
 					BulkAutoCraftController.onAutoMoveFinished(client, true);
 					return;
 				}
+				directEjectAwaitingStagedCopiesTicks = 0;
 
 				int slotsNeeded = 0;
 				if (AutoCraftController.isBulkModeEnabled()) {
@@ -146,6 +262,11 @@ final class AutoMoveController {
 				autoMoveTargetStack = currentResult.copy();
 				autoMoveWaitingTicks = 0;
 				autoMoveOrganizing = true;
+				com.reachcrafting.ReachCraftingMod.LOGGER.info(
+					"[auto_move] QUICK_MOVE path starting target={} slotsNeeded={} snapshottingInventory=true",
+					ContainerUtils.formatStack(autoMoveTargetStack),
+					slotsNeeded
+				);
 
 				autoMoveSnapshotCounts.clear();
 				for (int i = 0; i < 36; i++) {
@@ -171,10 +292,18 @@ final class AutoMoveController {
 				com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] SHIFT-CLICK path: post-shiftclick. {}", logBottleDistribution(menu));
 			} else {
 				autoMoveWaitingTicks++;
-				if (autoMoveWaitingTicks > 10) {
+				com.reachcrafting.ReachCraftingMod.LOGGER.info(
+					"[auto_move] waiting_for_result waitTicks={} bulk_active={} expected={} carried={}",
+					autoMoveWaitingTicks,
+					BulkAutoCraftController.isActive(),
+					ContainerUtils.formatStack(autoMoveExpectedStack),
+					ContainerUtils.formatStack(menu.getCarried())
+				);
+				if (autoMoveWaitingTicks > 10 && !BulkAutoCraftController.isActive()) {
 					pendingAutoMove = false;
 					autoMoveOrganizing = false;
 					autoMoveTargetStack = ItemStack.EMPTY;
+					com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] waiting_for_result timeout in non-bulk mode");
 					BulkAutoCraftController.onAutoMoveFinished(client, false);
 				}
 				return;
@@ -271,6 +400,13 @@ final class AutoMoveController {
 		}
 
 		if (movesThisTick == 0 && autoMoveWaitingTicks > 1) {
+			com.reachcrafting.ReachCraftingMod.LOGGER.info(
+				"[auto_move] organize idle: movesThisTick=0 waitTicks={} target={} result={} carried={}",
+				autoMoveWaitingTicks,
+				ContainerUtils.formatStack(autoMoveTargetStack),
+				resultSlot.hasItem() ? ContainerUtils.formatStack(resultSlot.getItem()) : "<empty>",
+				ContainerUtils.formatStack(client.player.containerMenu.getCarried())
+			);
 			if (!client.player.containerMenu.getCarried().isEmpty() && !tryResolveCarriedStack(client, menu)) {
 				return;
 			}
@@ -307,6 +443,7 @@ final class AutoMoveController {
 			pendingAutoMove = false;
 			autoMoveOrganizing = false;
 			autoMoveTargetStack = ItemStack.EMPTY;
+			com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] organize complete: finishing batch");
 			BulkAutoCraftController.onAutoMoveFinished(client, true);
 		}
 	}
@@ -320,7 +457,7 @@ final class AutoMoveController {
 		java.util.Map<String, Integer> initialCounts = BulkAutoCraftController.getInitialInventoryCounts();
 		ItemStack expectedOutput = BulkAutoCraftController.getExpectedOutput();
 		
-		if (acceptedIds == null || initialCounts == null || expectedOutput.isEmpty()) {
+			if (acceptedIds == null || initialCounts == null || expectedOutput.isEmpty()) {
 			return;
 		}
 
@@ -358,9 +495,14 @@ final class AutoMoveController {
 
 			ItemStack stack = slot.getItem();
 			String itemId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+			String outputId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(expectedOutput.getItem()).toString();
 
 			// Never eject ingredients
 			if (acceptedIds.contains(itemId)) {
+				continue;
+			}
+
+			if (itemId.equals(outputId) && !BulkAutoCraftController.shouldSweepExpectedOutput()) {
 				continue;
 			}
 
@@ -375,7 +517,6 @@ final class AutoMoveController {
 					client.gameMode.handleInventoryMouseClick(menu.containerId, slot.index, 1, ClickType.THROW, client.player);
 					
 					// If this was extra output, report it to the bulk controller so it doesn't think progress stopped
-					String outputId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(BulkAutoCraftController.getExpectedOutput().getItem()).toString();
 					if (itemId.equals(outputId)) {
 						com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] Ejected EXTRA OUTPUT: {} matched outputId {} (count={})", itemId, outputId, amountEjected);
 						BulkAutoCraftController.addEjectedOutput(amountEjected);

@@ -341,6 +341,14 @@ final class RecipeBookInputController {
 		}
 
 		if (!ContainerUtils.isGridEmpty(minecraft.player.containerMenu)) {
+			com.reachcrafting.ReachCraftingMod.LOGGER.info(
+				"[recipe_replay] flushing grid before replay remainingClicks={} allowNearby={} craftAll={} refillable={} bulkActive={}",
+				remainingClicks,
+				allowNearby,
+				craftAll,
+				refillableBulkMaxMode,
+				BulkAutoCraftController.isActive()
+			);
 			ContainerUtils.flushCraftingGrid(minecraft, allowNearby, true);
 			// During bulk mode, use a longer delay to let the server process
 			// the THROW + flush and sync grid state back. This allows us to
@@ -353,6 +361,14 @@ final class RecipeBookInputController {
 			}
 		}
 
+		com.reachcrafting.ReachCraftingMod.LOGGER.info(
+			"[recipe_replay] scheduleReplay remainingClicks={} allowNearby={} craftAll={} refillable={} recipe={}",
+			remainingClicks,
+			allowNearby,
+			craftAll,
+			refillableBulkMaxMode,
+			action.recipeId()
+		);
 		state.setReplayBatch(new RecipeBookClickCapture.ReplayBatch(action, remainingClicks, allowNearby, craftAll, refillableBulkMaxMode));
 	}
 

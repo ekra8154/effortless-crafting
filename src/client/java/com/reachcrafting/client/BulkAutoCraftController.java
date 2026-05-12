@@ -12,6 +12,7 @@ public final class BulkAutoCraftController {
 	private static final int REFILL_WINDOW_COPIES = 10_000;
 	private static final int REFILL_THRESHOLD_COPIES = 5_000;
 	private static BulkCraftSession activeSession;
+	private static BulkOutputDisposition currentBatchOutputDisposition = BulkOutputDisposition.NORMAL_KEEP;
 	// private static int tickCounter = 0;
 	private static boolean performedDiscoveryThisSession = false;
 
@@ -127,6 +128,7 @@ public final class BulkAutoCraftController {
 
 	static void clear() {
 		activeSession = null;
+		currentBatchOutputDisposition = BulkOutputDisposition.NORMAL_KEEP;
 		// tickCounter = 0;
 		performedDiscoveryThisSession = false;
 	}
@@ -197,6 +199,16 @@ public final class BulkAutoCraftController {
 		}
 	}
 
+	static int predictedDirectEjectOutputCount(Minecraft client, ItemStack currentResult) {
+		if (activeSession == null || client == null || currentResult == null || currentResult.isEmpty()) {
+			return 0;
+		}
+
+		int stagedCraftCopies = getCurrentStagedCraftCopies(client);
+		int creditedCraftCopies = Math.min(stagedCraftCopies, remainingRequestedRecipeCopies());
+		return Math.max(0, creditedCraftCopies) * Math.max(currentResult.getCount(), 1);
+	}
+
 	static int remainingRequestedRecipeCopies() {
 		if (activeSession == null) {
 			return 0;
@@ -210,6 +222,45 @@ public final class BulkAutoCraftController {
 
 	static boolean shouldRetainPulledResourcesForNextBulkCraft() {
 		return activeSession != null && activeSession.allowNearby();
+	}
+
+	static BulkOutputDisposition determineCurrentBatchOutputDisposition(Minecraft client, ItemStack currentResult) {
+		if (activeSession == null
+			|| client.player == null
+			|| currentResult == null
+			|| currentResult.isEmpty()
+			|| !AutoCraftController.isBulkModeEnabled()
+			|| !ReachCraftingConfig.get().ejectItemsWhenFull()) {
+			currentBatchOutputDisposition = BulkOutputDisposition.NORMAL_KEEP;
+			return currentBatchOutputDisposition;
+		}
+
+		int stagedCraftCopies = getCurrentStagedCraftCopies(client);
+		int remainingCopies = remainingRequestedRecipeCopies();
+		currentBatchOutputDisposition = stagedCraftCopies > 0 && stagedCraftCopies >= remainingCopies
+			? BulkOutputDisposition.FINAL_BATCH_KEEP
+			: BulkOutputDisposition.DIRECT_EJECT_BATCH;
+
+		com.reachcrafting.ReachCraftingMod.LOGGER.info(
+			"[bulk_craft] batch_disposition={} staged_copies={} remaining_copies={} result={}",
+			currentBatchOutputDisposition,
+			stagedCraftCopies,
+			remainingCopies,
+			ContainerUtils.formatStack(currentResult)
+		);
+		return currentBatchOutputDisposition;
+	}
+
+	static BulkOutputDisposition currentBatchOutputDisposition() {
+		return currentBatchOutputDisposition;
+	}
+
+	static boolean shouldSweepExpectedOutput() {
+		return currentBatchOutputDisposition != BulkOutputDisposition.FINAL_BATCH_KEEP;
+	}
+
+	static void resetCurrentBatchOutputDisposition() {
+		currentBatchOutputDisposition = BulkOutputDisposition.NORMAL_KEEP;
 	}
 
 	static boolean shouldLockToCurrentVariant(
@@ -258,7 +309,7 @@ public final class BulkAutoCraftController {
 			return;
 		}
 		if (client.player == null) {
-			stop(true);
+			stop(true, "player_missing_during_auto_move_finish");
 			return;
 		}
 
@@ -283,14 +334,16 @@ public final class BulkAutoCraftController {
 		);
 
 		if ((!success || !bulkEnabled || !supportedScreen) && craftedCopies <= 0) {
-			stop(true);
+			resetCurrentBatchOutputDisposition();
+			stop(true, "auto_move_failed_without_progress success=" + success + " bulkEnabled=" + bulkEnabled + " supportedScreen=" + supportedScreen);
 			return;
 		}
 
 		if (!bulkEnabled || !supportedScreen) {
 			int completedRecipeCopies = activeSession.completedRecipeCopies() + craftedCopies;
 			activeSession = activeSession.withProgress(completedRecipeCopies, currentOutputCount);
-			stop(true);
+			resetCurrentBatchOutputDisposition();
+			stop(true, "bulk_mode_or_screen_lost_after_progress bulkEnabled=" + bulkEnabled + " supportedScreen=" + supportedScreen + " craftedCopies=" + craftedCopies);
 			return;
 		}
 
@@ -303,7 +356,8 @@ public final class BulkAutoCraftController {
 				activeSession.lastObservedOutputCount(),
 				outputPerCraft
 			);
-			stop(true);
+			resetCurrentBatchOutputDisposition();
+			stop(true, "no_progress_detected");
 			return;
 		}
 
@@ -311,18 +365,39 @@ public final class BulkAutoCraftController {
 		activeSession = activeSession.withProgress(completedRecipeCopies, currentOutputCount);
 		topUpRequestedCopiesIfNeeded("post_batch");
 		if (completedRecipeCopies >= activeSession.requestedRecipeCopies()) {
-			stop(false);
+			resetCurrentBatchOutputDisposition();
+			stop(false, "requested_copies_completed");
 			return;
 		}
 		
 		com.reachcrafting.ReachCraftingMod.LOGGER.info("[bulk_craft] SUCCESS: crafted_this_batch={} (gained={} ejected={}) total_completed={}/{} inv_count={}", 
 			craftedCopies, gainedOutputCount, activeSession.ejectedOutputCount(), completedRecipeCopies, activeSession.requestedRecipeCopies(), currentOutputCount);
 
+		resetCurrentBatchOutputDisposition();
 		// Set a delay to allow inventory to settle before the next batch starts.
 		postAutoMoveDelayTicks = 1;
 	}
 
 	public static void stop(boolean aborted) {
+		stop(aborted, aborted ? "unspecified_abort" : "unspecified_complete");
+	}
+
+	public static void stop(boolean aborted, String reason) {
+		if (activeSession != null) {
+			com.reachcrafting.ReachCraftingMod.LOGGER.info(
+				"[bulk_craft] STOP aborted={} reason={} completed={}/{} expected_output={} disposition={} refillable={} allow_nearby={}",
+				aborted,
+				reason,
+				activeSession.completedRecipeCopies(),
+				activeSession.requestedRecipeCopies(),
+				ContainerUtils.formatStack(activeSession.expectedOutput()),
+				currentBatchOutputDisposition,
+				activeSession.refillableBulkMaxMode(),
+				activeSession.allowNearby()
+			);
+		} else {
+			com.reachcrafting.ReachCraftingMod.LOGGER.info("[bulk_craft] STOP aborted={} reason={} activeSession=false", aborted, reason);
+		}
 		if (activeSession != null) {
 			String itemName = activeSession.expectedOutput().getHoverName().getString();
 			int totalGained = activeSession.completedRecipeCopies() * Math.max(activeSession.expectedOutput().getCount(), 1);
@@ -355,7 +430,13 @@ public final class BulkAutoCraftController {
 			postAutoMoveDelayTicks--;
 			if (postAutoMoveDelayTicks == 0) {
 				topUpRequestedCopiesIfNeeded("pre_replay");
-				com.reachcrafting.ReachCraftingMod.LOGGER.info("[bulk_craft] Delay finished. Triggering next batch.");
+				com.reachcrafting.ReachCraftingMod.LOGGER.info(
+					"[bulk_craft] Delay finished. Triggering next batch. remaining={} action_recipe={} allow_nearby={} refillable={}",
+					activeSession.requestedRecipeCopies() - activeSession.completedRecipeCopies(),
+					activeSession.action().recipeId(),
+					activeSession.allowNearby(),
+					activeSession.refillableBulkMaxMode()
+				);
 				RecipeBookClickCapture.scheduleReplay(
 					activeSession.action(),
 					activeSession.requestedRecipeCopies() - activeSession.completedRecipeCopies(),
@@ -461,6 +542,14 @@ public final class BulkAutoCraftController {
 
 	private static boolean isSupportedScreen(Screen screen) {
 		return screen instanceof CraftingScreen || screen instanceof InventoryScreen;
+	}
+
+	private static int getCurrentStagedCraftCopies(Minecraft client) {
+		if (client.player == null || client.screen == null) {
+			return 0;
+		}
+		AvailableItemSnapshot snapshot = AvailableItemSnapshot.capture(client.player, client.screen);
+		return ContainerUtils.currentReservedCraftCopies(snapshot.gridStacks());
 	}
 
 	private static int countAccessibleOutput(Minecraft client, ItemStack expectedOutput) {
@@ -596,5 +685,11 @@ public final class BulkAutoCraftController {
 		UNDECIDED,
 		STRICT_CURRENT_VARIANT,
 		FAMILY_FALLBACK
+	}
+
+	enum BulkOutputDisposition {
+		NORMAL_KEEP,
+		DIRECT_EJECT_BATCH,
+		FINAL_BATCH_KEEP
 	}
 }
