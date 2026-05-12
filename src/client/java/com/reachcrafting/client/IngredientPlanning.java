@@ -334,7 +334,7 @@ public final class IngredientPlanning {
 		return minStackSize == Integer.MAX_VALUE ? 0 : minStackSize;
 	}
 
-	private static String summarizeMissing(Map<String, Integer> missingExact, Map<String, Integer> missingFlexible) {
+	public static String summarizeMissing(Map<String, Integer> missingExact, Map<String, Integer> missingFlexible) {
 		List<String> missingParts = new ArrayList<>();
 		missingExact.forEach((itemId, count) -> missingParts.add(count + "x " + ContainerUtils.getItemName(itemId)));
 		missingFlexible.forEach((display, count) -> missingParts.add(count + "x any of " + display));

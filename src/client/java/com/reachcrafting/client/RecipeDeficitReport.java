@@ -94,4 +94,34 @@ public record RecipeDeficitReport(
 	public Optional<String> firstExactMissingItemId() {
 		return exactMissingCounts.keySet().stream().findFirst();
 	}
+
+	public String getBlockingDeficitSummary(RecipeIngredientSummary ingredientSummary, Map<String, Integer> availableCounts, List<ItemStack> gridStacks) {
+		// Identify what is missing for just ONE craft (the immediate blockers)
+		// We must include gridStacks in the available counts check to ensure we don't report items already staged
+		RecipeDeficitReport oneCraft = RecipeDeficitReport.from(ingredientSummary, availableCounts, gridStacks, 1);
+		
+		java.util.Set<String> blockingExact = oneCraft.exactMissingCounts().keySet();
+		java.util.Set<String> blockingFlexible = oneCraft.flexibleMissingCounts().keySet();
+
+		if (blockingExact.isEmpty() && blockingFlexible.isEmpty()) {
+			return "";
+		}
+
+		// Filter the current deficit (for the full request) down to only those items that blocked the first craft
+		Map<String, Integer> filteredExact = new java.util.LinkedHashMap<>();
+		exactMissingCounts.forEach((itemId, count) -> {
+			if (blockingExact.contains(itemId)) {
+				filteredExact.put(itemId, count);
+			}
+		});
+
+		Map<String, Integer> filteredFlexible = new java.util.LinkedHashMap<>();
+		flexibleMissingCounts.forEach((display, count) -> {
+			if (blockingFlexible.contains(display)) {
+				filteredFlexible.put(display, count);
+			}
+		});
+
+		return IngredientPlanning.summarizeMissing(filteredExact, filteredFlexible);
+	}
 }

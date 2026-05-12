@@ -703,7 +703,8 @@ final class SearchSession extends BaseCraftSession {
 					false,
 					blockedSummary,
 					plannedResult.compactMissingSummary(),
-					AvailableItemSnapshot.formatCounts(totalAvailable)
+					AvailableItemSnapshot.formatCounts(totalAvailable),
+					totalAvailable
 				);
 			}
 		}
@@ -748,7 +749,8 @@ final class SearchSession extends BaseCraftSession {
 			startFallbackDiscovery,
 			null,
 			plannedResult.compactMissingSummary(),
-			AvailableItemSnapshot.formatCounts(totalAvailable)
+			AvailableItemSnapshot.formatCounts(totalAvailable),
+			totalAvailable
 		);
 	}
 
@@ -780,10 +782,11 @@ final class SearchSession extends BaseCraftSession {
 
 		if (decision.resumeOriginalContext()) {
 			if (decision.targetCopiesPerSlot() <= 0 && decision.hasMissingIngredients()) {
-				String missing = decision.blockedCommittedLayoutMissingSummary() != null 
-					? decision.blockedCommittedLayoutMissingSummary() 
-					: decision.compactMissingSummary();
-				sendMissingIngredientsChat("Missing: " + missing);
+				String totalMissing = decision.compactMissingSummary();
+				
+				if (!totalMissing.isEmpty() && (!BulkAutoCraftController.isActive() || BulkAutoCraftController.getCompletedRecipeCopies() == 0)) {
+					sendMissingIngredientsChat("Missing: " + totalMissing);
+				}
 			}
 			beginResume();
 			return;
@@ -1628,7 +1631,10 @@ final class SearchSession extends BaseCraftSession {
 			}
 		}
 
-		Map<String, Integer> updatedCounts = AvailableItemSnapshot.mergeCounts(localItems.inventoryCounts(), withdrawnItems);
+		Map<String, Integer> updatedCounts = AvailableItemSnapshot.mergeCounts(
+			AvailableItemSnapshot.mergeCounts(localItems.totalCounts(), withdrawnItems),
+			discoveredNearby
+		);
 		int reportCopies = Math.max(targetCopiesPerSlot, craftAll ? 1 : requestedSingleClicks);
 		RecipeDeficitReport updatedDeficit = RecipeDeficitReport.from(
 			ingredientSummary,
@@ -1689,7 +1695,10 @@ final class SearchSession extends BaseCraftSession {
 				sendDebugChat("Updated grid: " + outputLabel);
 			} else if (updatedDeficit.hasMissingIngredients()) {
 				if (!BulkAutoCraftController.isActive() || BulkAutoCraftController.getCompletedRecipeCopies() == 0) {
-					sendMissingIngredientsChat("Missing: " + updatedDeficit.compactMissingSummary());
+					String blockingMissing = updatedDeficit.getBlockingDeficitSummary(ingredientSummary, updatedCounts, originalContext.gridStacks());
+					if (!blockingMissing.isEmpty()) {
+						sendMissingIngredientsChat("Missing: " + blockingMissing);
+					}
 				}
 			} else {
 				sendDebugChat("Fetched ingredients for the next craft.");
@@ -1709,13 +1718,12 @@ final class SearchSession extends BaseCraftSession {
 			gameMode.handlePlaceRecipe(player.containerMenu.containerId, recipeId, craftAll);
 			autoMoveReady = true;
 			sendDebugChat("Placed recipe: " + outputLabel);
-		} else if (!remainingItemIds.isEmpty() || inventorySpaceBlocked) {
+		} else if (!remainingItemIds.isEmpty() || inventorySpaceBlocked || updatedDeficit.hasMissingIngredients()) {
 			if (!BulkAutoCraftController.isActive() || BulkAutoCraftController.getCompletedRecipeCopies() == 0) {
-				sendMissingIngredientsChat("Missing: " + updatedDeficit.compactMissingSummary());
-			}
-		} else if (updatedDeficit.hasMissingIngredients()) {
-			if (!BulkAutoCraftController.isActive() || BulkAutoCraftController.getCompletedRecipeCopies() == 0) {
-				sendMissingIngredientsChat("Missing: " + updatedDeficit.compactMissingSummary());
+				String totalMissing = updatedDeficit.compactMissingSummary();
+				if (!totalMissing.isEmpty()) {
+					sendMissingIngredientsChat("Missing: " + totalMissing);
+				}
 			}
 		} else {
 			sendDebugChat("Ready to place: " + outputLabel);

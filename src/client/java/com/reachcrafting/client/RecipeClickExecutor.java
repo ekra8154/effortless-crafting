@@ -94,12 +94,17 @@ final class RecipeClickExecutor {
 
 		ItemStack resolvedDisplayStack = selectedRecipe.displayStack().copy();
 		RecipeIngredientSummary ingredientSummary = selectedRecipe.ingredientSummary();
+		Map<String, Integer> availableCounts = availableItems.totalCounts();
+		if (allowNearbyChests && ReachCraftingConfig.get().cacheContainersForFasterSearch()) {
+			NearbyContainerCache.ReachableView reachableView = NearbyContainerCache.getReachableView(minecraft.level, minecraft.getCameraEntity(), player.blockInteractionRange());
+			availableCounts = AvailableItemSnapshot.mergeCounts(availableCounts, reachableView.countsFor(ingredientSummary.acceptedItemIds()));
+		}
 		RecipeDeficitReport deficitReport = craftAll
-			? RecipeDeficitReport.from(ingredientSummary, availableItems.inventoryCounts(), availableItems.gridStacks(), true)
-			: RecipeDeficitReport.from(ingredientSummary, availableItems.inventoryCounts(), availableItems.gridStacks(), desiredVariantCopies);
+			? RecipeDeficitReport.from(ingredientSummary, availableCounts, availableItems.gridStacks(), true)
+			: RecipeDeficitReport.from(ingredientSummary, availableCounts, availableItems.gridStacks(), desiredVariantCopies);
 		RecipeDeficitReport immediateCraftDeficit = RecipeDeficitReport.from(
 			ingredientSummary,
-			availableItems.inventoryCounts(),
+			availableCounts,
 			availableItems.gridStacks(),
 			1
 		);
@@ -326,6 +331,11 @@ final class RecipeClickExecutor {
 		}
 
 		AvailableItemSnapshot availableItems = AvailableItemSnapshot.capture(player, minecraft.screen);
+		Map<String, Integer> availableCounts = availableItems.totalCounts();
+		if (ReachCraftingConfig.get().cacheContainersForFasterSearch()) {
+			NearbyContainerCache.ReachableView reachableView = NearbyContainerCache.getReachableView(minecraft.level, minecraft.getCameraEntity(), player.blockInteractionRange());
+			availableCounts = AvailableItemSnapshot.mergeCounts(availableCounts, reachableView.aggregateCounts());
+		}
 		RecipeVariantResolver.Selection selection = RecipeVariantResolver.resolve(
 			minecraft,
 			player,
@@ -335,8 +345,8 @@ final class RecipeClickExecutor {
 			explicitVariantSelection,
 			false,
 			availableItems,
-			availableItems.inventoryCounts(),
-			availableItems.inventoryCounts(),
+			availableCounts,
+			availableCounts,
 			false,
 			false,
 			1

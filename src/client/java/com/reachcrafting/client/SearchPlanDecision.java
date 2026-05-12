@@ -22,11 +22,17 @@ record SearchPlanDecision(
 	boolean startFallbackDiscovery,
 	String blockedCommittedLayoutMissingSummary,
 	String compactMissingSummary,
-	String totalAvailableSummary
+	String totalAvailableSummary,
+	java.util.Map<String, Integer> totalAvailableCounts
 ) {
 	SearchPlanDecision {
 		plannedTargets = List.copyOf(plannedTargets);
 		fetchItemIds = List.copyOf(fetchItemIds);
 		withdrawCandidates = List.copyOf(withdrawCandidates);
+		totalAvailableCounts = java.util.Map.copyOf(totalAvailableCounts);
+	}
+
+	public RecipeDeficitReport asDeficitReport() {
+		return RecipeDeficitReport.from(resolvedIngredientSummary, totalAvailableCounts);
 	}
 }
