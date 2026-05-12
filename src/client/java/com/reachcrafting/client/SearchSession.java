@@ -1761,6 +1761,9 @@ final class SearchSession extends BaseCraftSession {
 				summarizeRemainingItems(remainingItemIds),
 				updatedDeficit.compactMissingSummary()
 			);
+			if (BulkAutoCraftController.isActive()) {
+				BulkAutoCraftController.stop(true, "exhausted_during_nearby_search");
+			}
 		}
 		finishSession(false);
 		return true;

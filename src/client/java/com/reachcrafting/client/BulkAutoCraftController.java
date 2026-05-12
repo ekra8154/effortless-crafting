@@ -719,7 +719,9 @@ public final class BulkAutoCraftController {
 			java.util.Map<String, Integer> newSummary = new java.util.LinkedHashMap<>(summary);
 			String itemName = expectedOutput.getHoverName().getString();
 			int itemAmount = additionalCopies * Math.max(expectedOutput.getCount(), 1);
-			newSummary.put(itemName, newSummary.getOrDefault(itemName, 0) + itemAmount);
+			if (itemAmount > 0) {
+				newSummary.put(itemName, newSummary.getOrDefault(itemName, 0) + itemAmount);
+			}
 			return new BulkCraftSession(action, requestedRecipeCopies, updatedCompletedRecipeCopies, expectedOutput.copy(), allowNearby, variantContinuationMode, updatedLastObservedOutputCount, 0, refillableBulkMaxMode, ingredientSummary, initialInventoryCounts, protectedOutputInventorySlots, newSummary);
 		}
 
