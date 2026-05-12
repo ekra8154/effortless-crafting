@@ -283,7 +283,7 @@ public final class ContainerUtils {
 		int remainder = count % 64;
 		String breakdown = (stacks == 1 ? "64" : (stacks + "x64"));
 		if (remainder > 0) {
-			return count + " (" + breakdown + " +" + remainder + ")";
+			return count + " (" + breakdown + "+" + remainder + ")";
 		} else {
 			return count + " (" + breakdown + ")";
 		}

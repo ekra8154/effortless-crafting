@@ -120,7 +120,7 @@ public final class RecipeOutputCounter {
 		
 		if (remainder > 0) {
 			String line1WithParen = "(" + line1;
-			String line2 = " +" + remainder + ")";
+			String line2 = "+" + remainder + ")";
 			
 			guiGraphics.drawString(font, line1WithParen, 1, 1, SHADOW_COLOR, false);
 			guiGraphics.drawString(font, line1WithParen, 0, 0, color, false);

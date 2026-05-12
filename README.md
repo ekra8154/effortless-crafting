@@ -83,15 +83,9 @@ Building the project locally:
 This project is licensed under **LGPL-3.0-or-later**. It draws inspiration and certain implementation patterns from:
 * [stack-to-nearby-chests](https://github.com/xiaocihua/stack-to-nearby-chests) by xiaocihua (LGPL-3.0)
 
+
 TODO: 
-
-it didnt search the hopper till i opened it. in fact im still getting first-join world search issues for chests. it is very hard to pin down cause the issue goes away after a couple searches and only happens sometimes in the first place.
-
-analyze all delays and if they can be tightened.
-
-investigate cake craft aborts that suddenly stopped happening as i tested more. caching again?
-
-optimize ejection - shouldn't eject if it can finish the craft in the current batch (with enough space)
+Test other mod compatibility - mouse tweaks and one click crafting especially come to mind
 
 Future plans:
 new setting: keep placeholders setting (for sorters) - would force 1 item to stay behind in each chest slot to increase likelihood of item returns for chests hooked up to sorters. would need to decide how to handle unstackables (probably, it would be to not handle them)
