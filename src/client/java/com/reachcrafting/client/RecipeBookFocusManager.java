@@ -17,16 +17,16 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.display.RecipeDisplayId;
 import org.lwjgl.glfw.GLFW;
 
-final class RecipeBookFocusManager {
+public final class RecipeBookFocusManager {
 	private RecipeBookFocusManager() {
 	}
 
-	static boolean isShiftKeyDown(Minecraft minecraft) {
+	public static boolean isShiftKeyDown(Minecraft minecraft) {
 		return InputConstants.isKeyDown(minecraft.getWindow(), GLFW.GLFW_KEY_LEFT_SHIFT)
 			|| InputConstants.isKeyDown(minecraft.getWindow(), GLFW.GLFW_KEY_RIGHT_SHIFT);
 	}
 
-	static boolean isControlKeyDown(Minecraft minecraft) {
+	public static boolean isControlKeyDown(Minecraft minecraft) {
 		return InputConstants.isKeyDown(minecraft.getWindow(), GLFW.GLFW_KEY_LEFT_CONTROL)
 			|| InputConstants.isKeyDown(minecraft.getWindow(), GLFW.GLFW_KEY_RIGHT_CONTROL);
 	}
@@ -36,7 +36,7 @@ final class RecipeBookFocusManager {
 			|| InputConstants.isKeyDown(minecraft.getWindow(), GLFW.GLFW_KEY_RIGHT_ALT);
 	}
 
-	static boolean isSpaceKeyDown(Minecraft minecraft) {
+	public static boolean isSpaceKeyDown(Minecraft minecraft) {
 		return InputConstants.isKeyDown(minecraft.getWindow(), GLFW.GLFW_KEY_SPACE);
 	}
 

@@ -72,6 +72,7 @@
 	"enum.reachcrafting.scroll_to_pull.while_result_slot_hovered": "While Result Slot Hovered",
 	"enum.reachcrafting.scroll_to_pull.while_result_or_inventory_slot_hovered": "While Result Or Inventory Slot Hovered",
 	"key.reachcrafting.quick_craft": "Quick Craft",
+	"key.reachcrafting.toggle_craftable_filter": "Toggle craftable / uncraftable recipes",
 	"message.reachcrafting.no_crafting_table_nearby": "No crafting table in reach!",
 	"option.reachcrafting.remember_previous_search": "Search Query Persistence",
 	"tooltip.reachcrafting.remember_previous_search": "Restore the last used search query when opening the recipe book.",

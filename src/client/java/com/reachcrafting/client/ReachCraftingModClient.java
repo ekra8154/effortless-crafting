@@ -13,6 +13,7 @@ import org.lwjgl.glfw.GLFW;
 public class ReachCraftingModClient implements ClientModInitializer {
 	public static KeyMapping showFilterOutlinesKey;
 	public static KeyMapping quickCraftKey;
+	public static KeyMapping toggleCraftableFilterKey;
 	public static boolean forceNextInventorySearchFocus = false;
 	
 	public static void sendChat(String message) {
@@ -74,12 +75,14 @@ public class ReachCraftingModClient implements ClientModInitializer {
 			reachCraftingCategory
 		));
 
-		net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
-			ReachCraftingConfig config = ReachCraftingConfig.get();
-			config.setAutoCraftEnabled(false);
-			config.setAutoCraftEnabledMode(ReachCraftingConfig.AutoCraftMode.NORMAL);
-			ReachCraftingConfig.save();
-		});
+		toggleCraftableFilterKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
+			"key.reachcrafting.toggle_craftable_filter",
+			InputConstants.Type.KEYSYM,
+			GLFW.GLFW_KEY_SPACE,
+			reachCraftingCategory
+		));
+
+
 
 		int[] tickCounter = {0};
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
@@ -93,12 +96,17 @@ public class ReachCraftingModClient implements ClientModInitializer {
 			if (!ReachCraftingConfig.get().enabled()) {
 				// Flush any pending clicks/keys just in case
 				while (quickCraftKey.consumeClick());
+				while (toggleCraftableFilterKey.consumeClick());
 				return;
 			}
 
 			while (quickCraftKey.consumeClick()) {
 				attemptQuickCraft(client);
 			}
+
+			// toggleCraftableFilterKey is handled in RecipeBookComponentMixin for screens
+			// but we consume it here to prevent it from piling up if pressed outside screens
+			while (toggleCraftableFilterKey.consumeClick());
 		});
 	}
 

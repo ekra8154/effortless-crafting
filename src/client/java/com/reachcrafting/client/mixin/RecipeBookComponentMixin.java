@@ -27,6 +27,7 @@ public abstract class RecipeBookComponentMixin {
 	private long lastScreenOpenTime = 0;
 	private int reachcrafting$searchHistoryIndex = -1;
 	private String reachcrafting$searchHistoryDraft = "";
+	private boolean reachcrafting$lastKeyPressedWasToggle = false;
 
 	@Shadow
 	private String lastSearch;
@@ -79,6 +80,7 @@ public abstract class RecipeBookComponentMixin {
 	@Inject(method = "keyPressed", at = @At("HEAD"), cancellable = true)
 	private void reachcrafting$onKeyPressedHead(KeyEvent event, CallbackInfoReturnable<Boolean> cir) {
 		if (!ReachCraftingConfig.get().enabled()) return;
+		reachcrafting$lastKeyPressedWasToggle = false;
 		if (this.searchBox != null && this.searchBox.isFocused()) {
 			int key = event.key();
 			if (key == GLFW.GLFW_KEY_UP || key == GLFW.GLFW_KEY_DOWN) {
@@ -99,6 +101,25 @@ public abstract class RecipeBookComponentMixin {
 		if (event.key() == GLFW.GLFW_KEY_LEFT_ALT || event.key() == GLFW.GLFW_KEY_RIGHT_ALT) {
 			ContainerUtils.handleAutoCraftKeyPress();
 			cir.setReturnValue(true);
+		} else if (com.reachcrafting.client.ReachCraftingModClient.toggleCraftableFilterKey.matches(event)) {
+			boolean isSpace = event.key() == GLFW.GLFW_KEY_SPACE;
+			boolean multiplierModifiersHeld = com.reachcrafting.client.RecipeBookFocusManager.isControlKeyDown(this.minecraft) || com.reachcrafting.client.RecipeBookFocusManager.isShiftKeyDown(this.minecraft);
+			// Option 2: Special logic specifically for Spacebar.
+			// Spacebar can toggle while focused if the box is empty.
+			// For any other key (like 'G'), typing into the search bar takes priority if focused.
+			boolean isSearchBoxFocused = this.searchBox != null && this.searchBox.isFocused();
+			boolean canToggle = !isSearchBoxFocused || (isSpace && this.searchBox.getValue().isEmpty());
+
+			if (this.isVisible() && canToggle && !(isSpace && multiplierModifiersHeld)) {
+				net.minecraft.client.gui.components.CycleButton<Boolean> filterButton = ((RecipeBookComponentAccessor) this).getFilterButton();
+				if (filterButton != null) {
+					filterButton.setValue(!filterButton.getValue());
+					this.updateCollections(true, filterButton.getValue());
+					reachcrafting$lastKeyPressedWasToggle = true;
+					cir.setReturnValue(true);
+					return;
+				}
+			}
 		} else if (ContainerUtils.isAutoCraftTogglePending()) {
 			ContainerUtils.cancelAutoCraftToggle();
 		}
@@ -139,6 +160,11 @@ public abstract class RecipeBookComponentMixin {
 	@Inject(method = "charTyped", at = @At("HEAD"), cancellable = true)
 	private void reachcrafting$onCharTypedHead(CharacterEvent event, CallbackInfoReturnable<Boolean> cir) {
 		if (!ReachCraftingConfig.get().enabled()) return;
+		if (reachcrafting$lastKeyPressedWasToggle) {
+			reachcrafting$lastKeyPressedWasToggle = false;
+			cir.setReturnValue(true);
+			return;
+		}
 		if (this.searchBox != null && this.searchBox.isFocused()) {
 			if (Character.isDigit(event.codepoint())) {
 				cir.setReturnValue(false);
@@ -238,7 +264,8 @@ public abstract class RecipeBookComponentMixin {
 			key == GLFW.GLFW_KEY_LEFT_CONTROL || key == GLFW.GLFW_KEY_RIGHT_CONTROL ||
 			key == GLFW.GLFW_KEY_LEFT_ALT || key == GLFW.GLFW_KEY_RIGHT_ALT ||
 			key == GLFW.GLFW_KEY_LEFT_SUPER || key == GLFW.GLFW_KEY_RIGHT_SUPER ||
-			key == GLFW.GLFW_KEY_SPACE) {
+			key == GLFW.GLFW_KEY_SPACE ||
+			com.reachcrafting.client.ReachCraftingModClient.toggleCraftableFilterKey.matches(event)) {
 			return false;
 		}
 
