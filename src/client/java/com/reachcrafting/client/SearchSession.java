@@ -1830,6 +1830,16 @@ final class SearchSession extends BaseCraftSession {
 				gameMode.handlePlaceRecipe(player.containerMenu.containerId, recipeId, false);
 			}
 		}
+		AvailableItemSnapshot postPlaceSnapshot = AvailableItemSnapshot.capture(player, client.screen);
+		ReachCraftingMod.LOGGER.info(
+			"[recipe_place] post_place planned idx={} target={} queueLimit={} result={} staged_copies={} grid_reserved={}",
+			recipeIndex,
+			targetCopiesPerSlot,
+			queueLimit,
+			ContainerUtils.formatStack(player.containerMenu.getSlot(0).getItem()),
+			ContainerUtils.currentReservedCraftCopies(postPlaceSnapshot.gridStacks()),
+			postPlaceSnapshot.hasReservedGrid()
+		);
 
 		ReachCraftingMod.LOGGER.debug("[nearby_restore] idx={} placed_via_vanilla_calls target={}", recipeIndex, targetCopiesPerSlot);
 		return PlacementAttempt.SUCCESS;

@@ -159,13 +159,15 @@ final class AutoMoveController {
 				BulkAutoCraftController.BulkOutputDisposition bulkDisposition =
 					BulkAutoCraftController.determineCurrentBatchOutputDisposition(client, currentResult);
 				boolean bulkDirectEject = bulkDisposition == BulkAutoCraftController.BulkOutputDisposition.DIRECT_EJECT_BATCH;
-				boolean bulkFinalKeep = bulkDisposition == BulkAutoCraftController.BulkOutputDisposition.FINAL_BATCH_KEEP;
+				boolean bulkProtectedKeep =
+					bulkDisposition == BulkAutoCraftController.BulkOutputDisposition.FINAL_BATCH_KEEP
+					|| bulkDisposition == BulkAutoCraftController.BulkOutputDisposition.PARTIAL_STACK_KEEP;
 				boolean shouldEject = bulkDirectEject;
 				int totalEjected = bulkDirectEject
 					? BulkAutoCraftController.predictedDirectEjectOutputCount(client, currentResult)
 					: currentResult.getCount();
 				if (!shouldEject
-					&& !bulkFinalKeep
+					&& !bulkProtectedKeep
 					&& ReachCraftingConfig.get().ejectItemsWhenFull()
 					&& !canFitInInventory(menu, currentResult)) {
 					shouldEject = true;
@@ -198,12 +200,12 @@ final class AutoMoveController {
 
 				if (shouldEject) {
 					com.reachcrafting.ReachCraftingMod.LOGGER.info(
-						"[auto_move] EJECT path: THROW result {} from slot {} predicted_ejected={} bulkDirectEject={} bulkFinalKeep={}",
+						"[auto_move] EJECT path: THROW result {} from slot {} predicted_ejected={} bulkDirectEject={} bulkProtectedKeep={}",
 						ContainerUtils.formatStack(currentResult),
 						resultSlot.index,
 						totalEjected,
 						bulkDirectEject,
-						bulkFinalKeep
+						bulkProtectedKeep
 					);
 					client.gameMode.handleInventoryMouseClick(menu.containerId, resultSlot.index, 1, ClickType.THROW, client.player);
 					if (bulkDirectEject) {
@@ -292,12 +294,20 @@ final class AutoMoveController {
 				com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] SHIFT-CLICK path: post-shiftclick. {}", logBottleDistribution(menu));
 			} else {
 				autoMoveWaitingTicks++;
+				int stagedCraftCopies = 0;
+				if (BulkAutoCraftController.isActive() && client.screen != null) {
+					stagedCraftCopies = ContainerUtils.currentReservedCraftCopies(
+						AvailableItemSnapshot.capture(client.player, client.screen).gridStacks()
+					);
+				}
 				com.reachcrafting.ReachCraftingMod.LOGGER.info(
-					"[auto_move] waiting_for_result waitTicks={} bulk_active={} expected={} carried={}",
+					"[auto_move] waiting_for_result waitTicks={} bulk_active={} expected={} carried={} staged_copies={} result_now={}",
 					autoMoveWaitingTicks,
 					BulkAutoCraftController.isActive(),
 					ContainerUtils.formatStack(autoMoveExpectedStack),
-					ContainerUtils.formatStack(menu.getCarried())
+					ContainerUtils.formatStack(menu.getCarried()),
+					stagedCraftCopies,
+					resultSlot.hasItem() ? ContainerUtils.formatStack(resultSlot.getItem()) : "<empty>"
 				);
 				if (autoMoveWaitingTicks > 10 && !BulkAutoCraftController.isActive()) {
 					pendingAutoMove = false;
@@ -334,6 +344,10 @@ final class AutoMoveController {
 				int oldCount = autoMoveSnapshotCounts.getOrDefault(i, 0);
 
 				if (currentCount > oldCount) {
+					if (oldCount > 0) {
+						autoMoveSnapshotCounts.put(i, currentCount);
+						continue;
+					}
 					if (offhandSlot != null
 						&& offhandSlot.hasItem()
 						&& ItemStack.isSameItemSameComponents(offhandSlot.getItem(), autoMoveTargetStack)
@@ -369,6 +383,9 @@ final class AutoMoveController {
 					for (int h = 0; h < i && h < 9; h++) {
 						Slot targetSlot = findInventorySlot(menu, h);
 						if (targetSlot == null) {
+							continue;
+						}
+						if (autoMoveSnapshotCounts.containsKey(h)) {
 							continue;
 						}
 
@@ -503,6 +520,9 @@ final class AutoMoveController {
 			}
 
 			if (itemId.equals(outputId) && !BulkAutoCraftController.shouldSweepExpectedOutput()) {
+				continue;
+			}
+			if (itemId.equals(outputId) && BulkAutoCraftController.isProtectedOutputInventorySlot(i)) {
 				continue;
 			}
 

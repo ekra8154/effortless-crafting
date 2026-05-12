@@ -166,6 +166,15 @@ final class RecipeClickExecutor {
 				// byproducts into inventory via Inventory.add(), causing fragmentation.
 				ReachCraftingMod.LOGGER.info("[recipe_place] handlePlaceRecipe(shift=true) from RecipeClickExecutor NEARBY path");
 				minecraft.gameMode.handlePlaceRecipe(player.containerMenu.containerId, selectedRecipe.recipeId(), true);
+				AvailableItemSnapshot postPlaceSnapshot = AvailableItemSnapshot.capture(player, screen);
+				ReachCraftingMod.LOGGER.info(
+					"[recipe_place] post_place nearby result={} staged_copies={} requestedClicks={} queueLimit={} grid_reserved={}",
+					ContainerUtils.formatStack(player.containerMenu.getSlot(0).getItem()),
+					ContainerUtils.currentReservedCraftCopies(postPlaceSnapshot.gridStacks()),
+					requestedClicks,
+					resolveRecipeQueueLimit(minecraft, selectedRecipe.recipeId(), collection),
+					postPlaceSnapshot.hasReservedGrid()
+				);
 				ContainerUtils.scheduleAutoMove(selectedRecipe.displayStack());
 				ReachCraftingModClient.sendDebugChat("Placed recipe: " + outputLabel);
 				if (explicitVariantSelection) {
@@ -221,6 +230,16 @@ final class RecipeClickExecutor {
 					gameMode.handlePlaceRecipe(player.containerMenu.containerId, selectedRecipe.recipeId(), false);
 				}
 			}
+			AvailableItemSnapshot postPlaceSnapshot = AvailableItemSnapshot.capture(player, screen);
+			ReachCraftingMod.LOGGER.info(
+				"[recipe_place] post_place direct useBulkPlace={} requestedClicks={} queueLimit={} result={} staged_copies={} grid_reserved={}",
+				useBulkPlace,
+				requestedClicks,
+				queueLimit,
+				ContainerUtils.formatStack(player.containerMenu.getSlot(0).getItem()),
+				ContainerUtils.currentReservedCraftCopies(postPlaceSnapshot.gridStacks()),
+				postPlaceSnapshot.hasReservedGrid()
+			);
 
 			if (AutoCraftController.isEnabled()) {
 				armBulkAutoCraft(
