@@ -85,15 +85,7 @@ This project is licensed under **LGPL-3.0-or-later**. It draws inspiration and c
 
 TODO: 
 
-hotbar optimization moves existing items if its an item that was crafted (ex: moves torches)
-
 it didnt search the hopper till i opened it. in fact im still getting first-join world search issues for chests. it is very hard to pin down cause the issue goes away after a couple searches and only happens sometimes in the first place.
-
-ctrl shift max bulk craft didnt craft all and is laggy
-
-message is miscounting outputs (on ctrl shift only)
-
-ctrl shift bulk craft is laggy and stops early
 
 analyze all delays and if they can be tightened.
 
@@ -101,6 +93,7 @@ investigate cake craft aborts that suddenly stopped happening as i tested more. 
 
 optimize ejection - shouldn't eject if it can finish the craft in the current batch (with enough space)
 
-bulk crafting was repeatedly opening chests during slab craft that only had milk
+Future plans:
+new setting: keep placeholders setting (for sorters) - would force 1 item to stay behind in each chest slot to increase likelihood of item returns for chests hooked up to sorters. would need to decide how to handle unstackables (probably, it would be to not handle them)
 
-new setting: keep placeholders setting (for sorters) - would force 1 item to stay behind in each chest slot to guarantee returns for chests hooked up to sorters. would need to decide how to handle unstackables.
+json instructions for long dependency craft chains - export chest contents as json and then mod will attempt to make each thing in order on import and run

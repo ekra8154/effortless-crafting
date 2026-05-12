@@ -48,6 +48,7 @@ final class SearchSession extends BaseCraftSession {
 	private static final int RESUME_DELAY_TICKS = 5; // Increased from 2 to 10 to prevent race conditions
 	private static final int REOPEN_TIMEOUT_TICKS = 20;
 	private static final int RESTORE_TIMEOUT_TICKS = 10;
+	private static final int REOPEN_SETTLE_TICKS = 2;
 	private static final int MAX_REOPEN_ATTEMPTS = 3;
 
 	private final RecipeCollection recipeCollection;
@@ -80,6 +81,7 @@ final class SearchSession extends BaseCraftSession {
 	private int timeoutTicks;
 	private int restoreTicksRemaining;
 	private int reopenAttemptsRemaining;
+	private int reopenSettledTicks;
 	private int seedWaitTicksRemaining;
 	private int scannedContainers;
 	private String lastRestoreFailure = "<none>";
@@ -138,6 +140,7 @@ final class SearchSession extends BaseCraftSession {
 			&& !this.reachableView.isEmpty();
 		this.targetCopiesPerSlot = this.craftAll ? 0 : this.requestedSingleClicks;
 		this.reopenAttemptsRemaining = MAX_REOPEN_ATTEMPTS;
+		this.reopenSettledTicks = 0;
 		this.restoreTicksRemaining = RESTORE_TIMEOUT_TICKS;
 		this.seedWaitTicksRemaining = REOPEN_TIMEOUT_TICKS;
 		this.redistributeThisRun = false;
@@ -307,16 +310,23 @@ final class SearchSession extends BaseCraftSession {
 
 		if (state == SearchState.WAITING_FOR_REOPEN) {
 			if (isOriginalContextReady()) {
-				if (tryFinishAfterResume()) {
+				if (isOriginalContextSettled()) {
+					reopenSettledTicks++;
+				} else {
+					reopenSettledTicks = 0;
+				}
+				if (reopenSettledTicks >= REOPEN_SETTLE_TICKS && tryFinishAfterResume()) {
 					return;
 				}
 				return;
 			}
 
+			reopenSettledTicks = 0;
 			timeoutTicks--;
 			if (timeoutTicks <= 0) {
 				if (originalContext.kind() != ScreenKind.NONE && reopenAttemptsRemaining > 0) {
 					reopenAttemptsRemaining--;
+					reopenSettledTicks = 0;
 					ReachCraftingMod.LOGGER.debug(
 						"[nearby_restore] idx={} reopen_retry kind={} attempts_left={}",
 						recipeIndex,
@@ -472,6 +482,7 @@ final class SearchSession extends BaseCraftSession {
 		timeoutTicks = RESUME_DELAY_TICKS;
 		restoreTicksRemaining = RESTORE_TIMEOUT_TICKS;
 		reopenAttemptsRemaining = MAX_REOPEN_ATTEMPTS;
+		reopenSettledTicks = 0;
 		state = SearchState.RESUME_CONTEXT;
 	}
 
@@ -1541,6 +1552,27 @@ final class SearchSession extends BaseCraftSession {
 		return super.isOriginalContextReady(originalContext);
 	}
 
+	private boolean isOriginalContextSettled() {
+		if (!(client.screen instanceof AbstractContainerScreen<?> containerScreen)) {
+			return originalContext.kind() == ScreenKind.NONE;
+		}
+
+		AbstractContainerMenu menu = containerScreen.getMenu();
+		if (menu == null || player.containerMenu != menu) {
+			return false;
+		}
+		if (!menu.getCarried().isEmpty()) {
+			return false;
+		}
+
+		int expectedGridSlots = switch (originalContext.kind()) {
+			case INVENTORY_2X2 -> 4;
+			case CRAFTING_TABLE_3X3 -> 9;
+			case NONE -> 0;
+		};
+		return menu.slots.size() > expectedGridSlots;
+	}
+
 	private boolean tryFinishAfterResume() {
 		if (!isOriginalContextReady()) {
 			lastRestoreFailure = "context_not_ready";
@@ -1548,6 +1580,7 @@ final class SearchSession extends BaseCraftSession {
 		}
 
 		boolean gridRestored = false;
+		boolean autoMoveReady = false;
 		restoreRecipeBookSnapshot();
 		restoreMousePosition();
 		gridRestored = redistributeThisRun || restoreReservedGrid();
@@ -1609,6 +1642,7 @@ final class SearchSession extends BaseCraftSession {
 			&& reservedGridExpanded
 			&& remainingItemIds.isEmpty()
 			&& !inventorySpaceBlocked) {
+			autoMoveReady = true;
 			updatedDeficit = new RecipeDeficitReport(
 				Map.of(),
 				Map.of(),
@@ -1621,6 +1655,7 @@ final class SearchSession extends BaseCraftSession {
 			&& placedPlannedGrid
 			&& remainingItemIds.isEmpty()
 			&& !inventorySpaceBlocked) {
+			autoMoveReady = true;
 			updatedDeficit = new RecipeDeficitReport(
 				Map.of(),
 				Map.of(),
@@ -1672,6 +1707,7 @@ final class SearchSession extends BaseCraftSession {
 				updatedDeficit.compactMissingSummary()
 			);
 			gameMode.handlePlaceRecipe(player.containerMenu.containerId, recipeId, craftAll);
+			autoMoveReady = true;
 			sendDebugChat("Placed recipe: " + outputLabel);
 		} else if (!remainingItemIds.isEmpty() || inventorySpaceBlocked) {
 			if (!BulkAutoCraftController.isActive() || BulkAutoCraftController.getCompletedRecipeCopies() == 0) {
@@ -1689,7 +1725,7 @@ final class SearchSession extends BaseCraftSession {
 		if (explicitVariantSelection) {
 			RecipeBookClickCapture.tryCloseOverlayAfterRelease();
 		}
-		if (AutoCraftController.isEnabled()) {
+		if (AutoCraftController.isEnabled() && autoMoveReady) {
 			ItemStack expectedStack = ItemStack.EMPTY;
 			var knownRecipes = ((com.reachcrafting.client.mixin.ClientRecipeBookAccessor) player.getRecipeBook()).getKnown();
 			var entry = knownRecipes.get(recipeId);
@@ -1714,6 +1750,17 @@ final class SearchSession extends BaseCraftSession {
 				);
 			}
 			ContainerUtils.scheduleAutoMove(expectedStack);
+		} else if (AutoCraftController.isEnabled()) {
+			ReachCraftingMod.LOGGER.info(
+				"[auto_move] skip_schedule idx={} reason=no_craft_staged target_copies={} grid_restored={} reserved_expanded={} placed_planned={} remaining={} missing={}",
+				recipeIndex,
+				targetCopiesPerSlot,
+				gridRestored,
+				reservedGridExpanded,
+				placedPlannedGrid,
+				summarizeRemainingItems(remainingItemIds),
+				updatedDeficit.compactMissingSummary()
+			);
 		}
 		finishSession(false);
 		return true;

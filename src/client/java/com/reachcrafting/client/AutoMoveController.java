@@ -13,6 +13,7 @@ import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 
 final class AutoMoveController {
+	private static final int BULK_RESULT_WAIT_TIMEOUT_TICKS = 20;
 	private static int autoMoveWaitingTicks = 0;
 	private static boolean pendingAutoMove = false;
 	private static ItemStack autoMoveTargetStack = ItemStack.EMPTY;
@@ -314,6 +315,22 @@ final class AutoMoveController {
 					autoMoveOrganizing = false;
 					autoMoveTargetStack = ItemStack.EMPTY;
 					com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] waiting_for_result timeout in non-bulk mode");
+					BulkAutoCraftController.onAutoMoveFinished(client, false);
+				} else if (autoMoveWaitingTicks > BULK_RESULT_WAIT_TIMEOUT_TICKS
+					&& BulkAutoCraftController.isActive()
+					&& stagedCraftCopies <= 0
+					&& !resultSlot.hasItem()
+					&& menu.getCarried().isEmpty()) {
+					pendingAutoMove = false;
+					autoMoveOrganizing = false;
+					autoMoveTargetStack = ItemStack.EMPTY;
+					com.reachcrafting.ReachCraftingMod.LOGGER.warn(
+						"[auto_move] waiting_for_result timeout in bulk mode expected={} staged_copies={} carried={} result_now={}",
+						ContainerUtils.formatStack(autoMoveExpectedStack),
+						stagedCraftCopies,
+						ContainerUtils.formatStack(menu.getCarried()),
+						resultSlot.hasItem() ? ContainerUtils.formatStack(resultSlot.getItem()) : "<empty>"
+					);
 					BulkAutoCraftController.onAutoMoveFinished(client, false);
 				}
 				return;
