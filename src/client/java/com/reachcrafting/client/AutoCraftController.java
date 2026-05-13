@@ -1,6 +1,10 @@
 package com.reachcrafting.client;
 
 import net.minecraft.client.Minecraft;
+import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.client.gui.screens.inventory.CraftingScreen;
+import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 
 final class AutoCraftController {
 	private static boolean autoCraftKeyHeld = false;
@@ -9,7 +13,9 @@ final class AutoCraftController {
 	private static boolean holdSessionActive = false;
 	private static boolean holdStickyNormalLatched = false;
 	private static boolean holdStickyBulkLatched = false;
+	private static boolean holdStickyNormalAltOverride = false;
 	private static boolean holdStickyBulkAltOverride = false;
+	private static boolean holdQuickCraftCancelled = false;
 	private static int holdReleaseGraceTicks = 0;
 
 	private AutoCraftController() {
@@ -17,12 +23,15 @@ final class AutoCraftController {
 
 	static void handleKeyPress() {
 		autoCraftKeyHeld = true;
+		holdQuickCraftCancelled = false;
 		if (ReachCraftingConfig.get().autoCraftHandling() == ReachCraftingConfig.AutoCraftHandling.TOGGLE) {
 			autoCraftTogglePending = true;
 			return;
 		}
 		if (holdStickyBulkLatched) {
 			holdStickyBulkAltOverride = true;
+		} else if (holdStickyNormalLatched) {
+			holdStickyNormalAltOverride = true;
 		}
 	}
 
@@ -40,19 +49,36 @@ final class AutoCraftController {
 			return;
 		}
 
+		if ((holdStickyBulkLatched && holdStickyBulkAltOverride) || (holdStickyNormalLatched && holdStickyNormalAltOverride)) {
+			BulkAutoCraftController.stop(true, "alt_reheld_release");
+			return;
+		}
+
+		if (ReachCraftingConfig.get().autoCraftHandling() == ReachCraftingConfig.AutoCraftHandling.HOLD) {
+			if (!holdQuickCraftCancelled) {
+				Minecraft client = Minecraft.getInstance();
+				if (client.player != null && client.player.containerMenu != null && (client.screen instanceof CraftingScreen || client.screen instanceof InventoryScreen)) {
+					Slot resultSlot = client.player.containerMenu.getSlot(0);
+					if (resultSlot != null && resultSlot.hasItem()) {
+						AutoMoveController.scheduleAutoMove(ItemStack.EMPTY);
+					}
+				}
+			}
+			holdQuickCraftCancelled = false;
+		}
+
 		autoCraftTogglePending = false;
 		holdReleaseGraceTicks = 1;
-		if (holdStickyBulkLatched && holdStickyBulkAltOverride) {
-			holdStickyBulkLatched = false;
-			holdStickyNormalLatched = true;
-			holdStickyBulkAltOverride = false;
-			holdSessionActive = true;
-		}
 	}
 
 	static void cancelToggle() {
 		if (ReachCraftingConfig.get().autoCraftHandling() == ReachCraftingConfig.AutoCraftHandling.TOGGLE) {
 			autoCraftTogglePending = false;
+		} else if (ReachCraftingConfig.get().autoCraftHandling() == ReachCraftingConfig.AutoCraftHandling.HOLD) {
+			if (!holdQuickCraftCancelled) {
+				holdQuickCraftCancelled = true;
+				BulkAutoCraftController.stop(true, "hold_cancel_on_key");
+			}
 		}
 	}
 
@@ -72,7 +98,7 @@ final class AutoCraftController {
 	}
 
 	static boolean isHoldRuntimeEnabled() {
-		return isPhysicalAltHeld() || holdSessionActive || holdStickyNormalLatched || holdStickyBulkLatched;
+		return !holdQuickCraftCancelled && (isPhysicalAltHeld() || holdSessionActive || holdStickyNormalLatched || holdStickyBulkLatched);
 	}
 
 	static ReachCraftingConfig.AutoCraftMode enabledMode() {
@@ -234,6 +260,9 @@ final class AutoCraftController {
 		if (!holdStickyBulkLatched) {
 			holdStickyBulkAltOverride = false;
 		}
+		if (!holdStickyNormalLatched) {
+			holdStickyNormalAltOverride = false;
+		}
 	}
 
 	private static void toggleAutoCraftMode() {
@@ -271,7 +300,9 @@ final class AutoCraftController {
 		holdSessionActive = false;
 		holdStickyNormalLatched = false;
 		holdStickyBulkLatched = false;
+		holdStickyNormalAltOverride = false;
 		holdStickyBulkAltOverride = false;
+		holdQuickCraftCancelled = false;
 		holdReleaseGraceTicks = 0;
 		BulkAutoCraftController.clear();
 	}
