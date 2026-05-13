@@ -719,7 +719,10 @@ final class SearchSession extends BaseCraftSession {
 
 		boolean missingEssential = targetCopiesPerSlot <= 0 || plannedResult.hasMissingIngredients();
 		boolean underServed = !craftAll && targetCopiesPerSlot < desiredTargetCopies;
-		boolean alreadyScannedInBulk = BulkAutoCraftController.isActive() && BulkAutoCraftController.hasPerformedDiscovery();
+		boolean cacheExhaustedForRecipe = useCachedSearch && discoveredNearby.isEmpty();
+		boolean alreadyScannedInBulk = BulkAutoCraftController.isActive()
+			&& BulkAutoCraftController.hasPerformedDiscovery()
+			&& !cacheExhaustedForRecipe;
 		boolean startFallbackDiscovery = (missingEssential || underServed || hasUnscanned) 
 			&& useCachedSearch 
 			&& !discoveryFallbackStarted
@@ -1278,7 +1281,10 @@ final class SearchSession extends BaseCraftSession {
 			: requestedSingleClicks;
 		boolean underServed = !craftAll && targetCopiesPerSlot < desiredTargetCopies;
 		boolean hasUnscanned = reachableView.snapshotsByKey().size() < reachableView.nearestAccessByKey().size();
-		boolean alreadyScannedInBulk = BulkAutoCraftController.isActive() && BulkAutoCraftController.hasPerformedDiscovery();
+		boolean cacheExhaustedForRecipe = useCachedSearch && discoveredNearby.isEmpty();
+		boolean alreadyScannedInBulk = BulkAutoCraftController.isActive()
+			&& BulkAutoCraftController.hasPerformedDiscovery()
+			&& !cacheExhaustedForRecipe;
 
 		return useCachedSearch
 			&& allowNearby

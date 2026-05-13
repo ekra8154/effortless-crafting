@@ -386,6 +386,8 @@ public final class BulkAutoCraftController {
 			craftedCopies, gainedOutputCount, activeSession.ejectedOutputCount(), completedRecipeCopies, activeSession.requestedRecipeCopies(), currentOutputCount);
 
 		resetCurrentBatchOutputDisposition();
+		// Reset discovery flag so the next batch can re-scan if the cache becomes stale
+		performedDiscoveryThisSession = false;
 		// Set a delay to allow inventory to settle before the next batch starts.
 		postAutoMoveDelayTicks = 1;
 	}
