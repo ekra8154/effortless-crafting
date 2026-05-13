@@ -320,7 +320,7 @@ public final class ReachCraftingConfig {
 
 	public boolean autoCraftEnabled() {
 		if (autoCraftHandling == AutoCraftHandling.HOLD) {
-			return AutoCraftController.isHoldModeActive() && autoCraftCapability != AutoCraftCapability.NONE;
+			return AutoCraftController.isHoldRuntimeEnabled() && autoCraftCapability != AutoCraftCapability.NONE;
 		}
 		return autoCraftEnabled && autoCraftCapability != AutoCraftCapability.NONE;
 	}

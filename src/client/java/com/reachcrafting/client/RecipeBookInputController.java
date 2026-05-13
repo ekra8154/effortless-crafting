@@ -159,6 +159,8 @@ final class RecipeBookInputController {
 			return;
 		}
 
+		AutoCraftController.armHoldSessionForCurrentRequest();
+
 		if (!ContainerUtils.isGridEmpty(player.containerMenu)) {
 			ContainerUtils.flushCraftingGrid(minecraft, allowNearbyChests, true);
 			state.setReplayDelayTicks(1);
@@ -213,6 +215,7 @@ final class RecipeBookInputController {
 			return;
 		}
 
+		AutoCraftController.armHoldSessionForCurrentRequest();
 		ItemStack expectedStack = RecipeClickExecutor.resolveExpectedOutputStack(
 			minecraft,
 			player,
@@ -495,6 +498,7 @@ final class RecipeBookInputController {
 			ContainerUtils.flushCraftingGrid(minecraft, state.pendingHeldRecipe().allowNearby(), true);
 		}
 
+		AutoCraftController.armHoldSessionForCurrentRequest();
 		state.setReplayDelayTicks(1);
 		state.setReplayBatch(new RecipeBookClickCapture.ReplayBatch(
 			state.pendingHeldRecipe().action(),

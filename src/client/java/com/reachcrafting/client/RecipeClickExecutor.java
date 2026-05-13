@@ -94,6 +94,7 @@ final class RecipeClickExecutor {
 
 		ItemStack resolvedDisplayStack = selectedRecipe.displayStack().copy();
 		RecipeIngredientSummary ingredientSummary = selectedRecipe.ingredientSummary();
+		Map<String, Integer> localAvailableCounts = availableItems.totalCounts();
 		Map<String, Integer> availableCounts = availableItems.totalCounts();
 		if (allowNearbyChests && ReachCraftingConfig.get().cacheContainersForFasterSearch()) {
 			NearbyContainerCache.ReachableView reachableView = NearbyContainerCache.getReachableView(minecraft.level, minecraft.getCameraEntity(), player.blockInteractionRange());
@@ -105,6 +106,12 @@ final class RecipeClickExecutor {
 		RecipeDeficitReport immediateCraftDeficit = RecipeDeficitReport.from(
 			ingredientSummary,
 			availableCounts,
+			availableItems.gridStacks(),
+			1
+		);
+		RecipeDeficitReport immediateLocalCraftDeficit = RecipeDeficitReport.from(
+			ingredientSummary,
+			localAvailableCounts,
 			availableItems.gridStacks(),
 			1
 		);
@@ -163,7 +170,7 @@ final class RecipeClickExecutor {
 			if (allowNearbyChests
 				&& AutoCraftController.isBulkModeEnabled()
 				&& !craftAll
-				&& !immediateCraftDeficit.hasMissingIngredients()
+				&& !immediateLocalCraftDeficit.hasMissingIngredients()
 				&& minecraft.gameMode != null) {
 				// Always use a single handlePlaceRecipe(shift=true) to fill the grid.
 				// Calling handlePlaceRecipe(false) in a loop triggers N server-side
@@ -186,6 +193,17 @@ final class RecipeClickExecutor {
 					tryCloseOverlayAfterRelease();
 				}
 				return;
+			}
+			if (allowNearbyChests
+				&& AutoCraftController.isBulkModeEnabled()
+				&& !craftAll
+				&& !immediateCraftDeficit.hasMissingIngredients()
+				&& immediateLocalCraftDeficit.hasMissingIngredients()) {
+				ReachCraftingMod.LOGGER.info(
+					"[recipe_place] skip_direct_nearby_bulk reason=nearby_only_first_craft local_missing={} total_missing={}",
+					immediateLocalCraftDeficit.compactMissingSummary(),
+					immediateCraftDeficit.compactMissingSummary()
+				);
 			}
 
 			if (!deficitReport.hasMissingIngredients() && availableItems.hasReservedGrid()) {

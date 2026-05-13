@@ -185,6 +185,7 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 		// Detect Alt release via polling to avoid Mixin remapping issues with inherited methods
 		boolean altDown = InputConstants.isKeyDown(Minecraft.getInstance().getWindow(), GLFW.GLFW_KEY_LEFT_ALT) 
 					   || InputConstants.isKeyDown(Minecraft.getInstance().getWindow(), GLFW.GLFW_KEY_RIGHT_ALT);
+		com.reachcrafting.client.ContainerUtils.tickAutoCraftController();
 		
 		if (!Minecraft.getInstance().isWindowActive()) {
 			if (com.reachcrafting.client.ContainerUtils.isAutoCraftTogglePending()) {

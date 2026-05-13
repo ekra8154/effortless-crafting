@@ -437,6 +437,12 @@ public final class BulkAutoCraftController {
 				}
 			}
 		}
+		if (ReachCraftingConfig.get().autoCraftHandling() == ReachCraftingConfig.AutoCraftHandling.HOLD) {
+			OffhandConsolidationController.swapBack(Minecraft.getInstance());
+			clear();
+			AutoCraftController.clearHoldSession();
+			return;
+		}
 		AutoCraftController.setEnabledMode(ReachCraftingConfig.AutoCraftMode.NORMAL);
 		if (ReachCraftingConfig.get().autoCraftOffAfterBulk()) {
 			AutoCraftController.setEnabled(false);

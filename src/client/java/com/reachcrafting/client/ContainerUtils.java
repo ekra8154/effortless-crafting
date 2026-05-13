@@ -65,6 +65,10 @@ public final class ContainerUtils {
 		BulkAutoCraftController.clear();
 	}
 
+	public static void tickAutoCraftController() {
+		AutoCraftController.tick();
+	}
+
 	public static void scheduleAutoMove(ItemStack expectedStack) {
 		AutoMoveController.scheduleAutoMove(expectedStack);
 	}
@@ -268,6 +272,7 @@ public final class ContainerUtils {
 		clearInputQueue();
 		AutoMoveController.abort();
 		BulkAutoCraftController.stop(true);
+		AutoCraftController.clearHoldSession();
 		NearbyContainerDryRun.abortActiveSession();
 		InventoryGridRestoreTracker.clear();
 		OffhandConsolidationController.swapBack(net.minecraft.client.Minecraft.getInstance());
