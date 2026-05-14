@@ -113,8 +113,13 @@ public abstract class RecipeBookComponentMixin {
 			if (this.isVisible() && canToggle && !(isSpace && multiplierModifiersHeld)) {
 				net.minecraft.client.gui.components.CycleButton<Boolean> filterButton = ((RecipeBookComponentAccessor) this).getFilterButton();
 				if (filterButton != null) {
-					filterButton.setValue(!filterButton.getValue());
-					this.updateCollections(true, filterButton.getValue());
+					boolean newValue = !filterButton.getValue();
+					filterButton.setValue(newValue);
+					if (this.minecraft.player != null) {
+						this.minecraft.player.getRecipeBook().setFiltering(this.menu.getRecipeBookType(), newValue);
+						((RecipeBookComponentAccessor) this).invokeSendUpdateSettings();
+					}
+					this.updateCollections(true, newValue);
 					reachcrafting$lastKeyPressedWasToggle = true;
 					cir.setReturnValue(true);
 					return;
