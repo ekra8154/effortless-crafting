@@ -7,6 +7,7 @@ import net.minecraft.client.gui.screens.inventory.CraftingScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 
 final class AutoCraftController {
+	private static final int HOLD_RELEASE_GRACE_TICKS = 3;
 	private static boolean autoCraftKeyHeld = false;
 	private static boolean autoCraftTogglePending = false;
 	private static long lastAutoCraftToggleTime = 0;
@@ -71,7 +72,7 @@ final class AutoCraftController {
 		}
 
 		autoCraftTogglePending = false;
-		holdReleaseGraceTicks = 1;
+		holdReleaseGraceTicks = HOLD_RELEASE_GRACE_TICKS;
 	}
 
 	static void cancelToggle() {
@@ -171,58 +172,52 @@ final class AutoCraftController {
 		ReachCraftingConfig.save();
 	}
 
-	static void enableBulkViaArrow() {
-		if (ReachCraftingConfig.get().autoCraftHandling() == ReachCraftingConfig.AutoCraftHandling.HOLD) {
-			if (ReachCraftingConfig.get().autoCraftCapability() == ReachCraftingConfig.AutoCraftCapability.BULK) {
-				holdStickyBulkLatched = true;
-				holdStickyNormalLatched = false;
-				holdSessionActive = true;
-			}
+	static void toggleEnabledModeViaArrow() {
+		ReachCraftingConfig config = ReachCraftingConfig.get();
+		if (config.autoCraftCapability() != ReachCraftingConfig.AutoCraftCapability.BULK) {
 			return;
 		}
-		ReachCraftingConfig config = ReachCraftingConfig.get();
-		config.setAutoCraftEnabled(true);
-		config.setAutoCraftEnabledMode(ReachCraftingConfig.AutoCraftMode.BULK);
-		ReachCraftingConfig.save();
-	}
-
-	static void toggleEnabledModeViaArrow() {
-		if (ReachCraftingConfig.get().autoCraftHandling() == ReachCraftingConfig.AutoCraftHandling.HOLD) {
-			if (ReachCraftingConfig.get().autoCraftCapability() != ReachCraftingConfig.AutoCraftCapability.BULK) {
+		if (config.autoCraftHandling() == ReachCraftingConfig.AutoCraftHandling.HOLD) {
+			if (!isHoldRuntimeEnabled()) {
 				return;
 			}
 			if (holdStickyBulkLatched) {
-				holdStickyBulkLatched = false;
-				holdStickyNormalLatched = false;
-				holdStickyBulkAltOverride = false;
-				BulkAutoCraftController.clear();
+				demoteBulkToPhysicalHoldMode();
 			} else {
 				holdStickyBulkLatched = true;
 				holdStickyNormalLatched = false;
+				holdStickyBulkAltOverride = false;
 				holdSessionActive = true;
 			}
 			return;
 		}
-		ReachCraftingConfig config = ReachCraftingConfig.get();
-		if (config.autoCraftCapability() == ReachCraftingConfig.AutoCraftCapability.NONE) {
+		if (!config.autoCraftEnabled()) {
 			return;
 		}
-		boolean bulkAllowed = config.autoCraftCapability() == ReachCraftingConfig.AutoCraftCapability.BULK;
-		if (!config.autoCraftEnabled()) {
-			config.setAutoCraftEnabled(true);
-			config.setAutoCraftEnabledMode(bulkAllowed ? ReachCraftingConfig.AutoCraftMode.BULK : ReachCraftingConfig.AutoCraftMode.NORMAL);
-		} else if (config.autoCraftEnabledMode() == ReachCraftingConfig.AutoCraftMode.BULK) {
+		if (config.autoCraftEnabledMode() == ReachCraftingConfig.AutoCraftMode.BULK) {
 			config.setAutoCraftEnabledMode(ReachCraftingConfig.AutoCraftMode.NORMAL);
 			BulkAutoCraftController.clear();
 		} else {
-			if (bulkAllowed) {
-				config.setAutoCraftEnabledMode(ReachCraftingConfig.AutoCraftMode.BULK);
-			} else {
-				config.setAutoCraftEnabled(false);
-				BulkAutoCraftController.clear();
-			}
+			config.setAutoCraftEnabledMode(ReachCraftingConfig.AutoCraftMode.BULK);
 		}
 		ReachCraftingConfig.save();
+	}
+
+	static void resetBulkModeAfterSession(boolean preserveAutoCraft) {
+		if (ReachCraftingConfig.get().autoCraftHandling() == ReachCraftingConfig.AutoCraftHandling.HOLD) {
+			if (!preserveAutoCraft) {
+				clearHoldRuntimeState();
+				return;
+			}
+			demoteBulkToNormalHoldMode();
+			return;
+		}
+		ReachCraftingConfig config = ReachCraftingConfig.get();
+		if (config.autoCraftEnabledMode() == ReachCraftingConfig.AutoCraftMode.BULK) {
+			config.setAutoCraftEnabledMode(ReachCraftingConfig.AutoCraftMode.NORMAL);
+			ReachCraftingConfig.save();
+		}
+		BulkAutoCraftController.clear();
 	}
 
 	static void armHoldSessionForCurrentRequest(boolean altTriggered) {
@@ -251,7 +246,9 @@ final class AutoCraftController {
 			holdReleaseGraceTicks = 0;
 			holdStickyNormalLatched = false;
 			holdStickyBulkLatched = false;
+			holdStickyNormalAltOverride = false;
 			holdStickyBulkAltOverride = false;
+			holdSessionActive = false;
 		}
 
 		if (holdSessionActive
@@ -312,6 +309,24 @@ final class AutoCraftController {
 		holdQuickCraftCancelled = false;
 		holdQuickCraftConsumed = false;
 		holdReleaseGraceTicks = 0;
+		BulkAutoCraftController.clear();
+	}
+
+	private static void demoteBulkToNormalHoldMode() {
+		holdStickyBulkLatched = false;
+		holdStickyBulkAltOverride = false;
+		holdStickyNormalLatched = true;
+		holdStickyNormalAltOverride = false;
+		holdSessionActive = true;
+		BulkAutoCraftController.clear();
+	}
+
+	private static void demoteBulkToPhysicalHoldMode() {
+		holdStickyBulkLatched = false;
+		holdStickyBulkAltOverride = false;
+		holdStickyNormalLatched = false;
+		holdStickyNormalAltOverride = false;
+		holdSessionActive = isPhysicalAltHeld() || holdReleaseGraceTicks > 0;
 		BulkAutoCraftController.clear();
 	}
 }

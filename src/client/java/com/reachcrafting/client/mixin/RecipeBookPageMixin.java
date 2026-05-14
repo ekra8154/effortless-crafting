@@ -67,6 +67,7 @@ public abstract class RecipeBookPageMixin {
 
 		boolean ctrlDown = (click.modifiers() & GLFW.GLFW_MOD_CONTROL) != 0;
 		boolean shiftDown = (click.modifiers() & GLFW.GLFW_MOD_SHIFT) != 0;
+		boolean altDown = (click.modifiers() & GLFW.GLFW_MOD_ALT) != 0;
 		if (shiftDown) {
 			RecipeBookClickCapture.defocusRecipeBookSearch(net.minecraft.client.Minecraft.getInstance());
 		}
@@ -76,7 +77,8 @@ public abstract class RecipeBookPageMixin {
 			return;
 		}
 
-		if (!ctrlDown) {
+		boolean interceptWithMod = ctrlDown || (altDown && !shiftDown && ReachCraftingConfig.get().altAsRequestKey());
+		if (!interceptWithMod) {
 			return;
 		}
 
@@ -85,7 +87,6 @@ public abstract class RecipeBookPageMixin {
 				continue;
 			}
 
-			boolean altDown = (click.modifiers() & GLFW.GLFW_MOD_ALT) != 0;
 			RecipeBookClickCapture.onRecipeButtonClicked(
 				button.getCurrentRecipe(),
 				button.getCollection(),
@@ -122,6 +123,7 @@ public abstract class RecipeBookPageMixin {
 		if (ctrlDown) {
 			return;
 		}
+		boolean altDown = (click.modifiers() & GLFW.GLFW_MOD_ALT) != 0;
 
 		for (RecipeButton button : this.buttons) {
 			if (!button.isMouseOver(click.x(), click.y())) {
@@ -132,7 +134,8 @@ public abstract class RecipeBookPageMixin {
 				button.getCurrentRecipe(),
 				button.getCollection(),
 				button.getDisplayStack(),
-				false
+				false,
+				altDown
 			);
 			return;
 		}

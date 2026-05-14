@@ -444,13 +444,10 @@ public final class BulkAutoCraftController {
 				}
 			}
 		}
-		if (ReachCraftingConfig.get().autoCraftHandling() == ReachCraftingConfig.AutoCraftHandling.HOLD) {
-			OffhandConsolidationController.swapBack(Minecraft.getInstance());
-			clear();
-			AutoCraftController.clearHoldSession();
-			return;
-		}
-		AutoCraftController.setEnabledMode(ReachCraftingConfig.AutoCraftMode.NORMAL);
+		boolean preserveAutoCraft = Minecraft.getInstance().isWindowActive()
+			&& isSupportedScreen(Minecraft.getInstance().screen)
+			&& AutoCraftController.isEnabled();
+		AutoCraftController.resetBulkModeAfterSession(preserveAutoCraft);
 		if (ReachCraftingConfig.get().autoCraftOffAfterBulk()) {
 			AutoCraftController.setEnabled(false);
 			ReachCraftingModClient.sendDebugChat("Auto Crafting disabled after bulk craft.");
@@ -466,6 +463,13 @@ public final class BulkAutoCraftController {
 	public static void tick(Minecraft client) {
 		if (activeSession == null || client.player == null || client.player.containerMenu == null) {
 			// tickCounter = 0;
+			postAutoMoveDelayTicks = 0;
+			previousSnapshot.clear();
+			return;
+		}
+
+		if (!client.isWindowActive()) {
+			stop(true, "window_focus_lost");
 			postAutoMoveDelayTicks = 0;
 			previousSnapshot.clear();
 			return;

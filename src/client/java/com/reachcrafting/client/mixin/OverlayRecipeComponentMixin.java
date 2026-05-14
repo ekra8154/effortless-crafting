@@ -46,15 +46,17 @@ public abstract class OverlayRecipeComponentMixin {
 		}
 
 		boolean ctrlDown = (click.modifiers() & GLFW.GLFW_MOD_CONTROL) != 0;
-		if (ctrlDown) {
+		boolean shiftDown = (click.modifiers() & GLFW.GLFW_MOD_SHIFT) != 0;
+		boolean altDown = (click.modifiers() & GLFW.GLFW_MOD_ALT) != 0;
+		if (ctrlDown || (altDown && !shiftDown && ReachCraftingConfig.get().altAsRequestKey())) {
 			RecipeBookClickCapture.onRecipeButtonClicked(
 				recipeId,
 				collection,
 				null,
 				click.button(),
-				(click.modifiers() & GLFW.GLFW_MOD_SHIFT) != 0,
-				true,
-				(click.modifiers() & GLFW.GLFW_MOD_ALT) != 0,
+				shiftDown,
+				ctrlDown,
+				altDown,
 				true
 			);
 			return;
@@ -64,7 +66,8 @@ public abstract class OverlayRecipeComponentMixin {
 			recipeId,
 			collection,
 			null,
-			true
+			true,
+			altDown
 		);
 	}
 

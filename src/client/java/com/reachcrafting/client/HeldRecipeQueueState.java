@@ -8,6 +8,9 @@ final class HeldRecipeQueueState {
 	private boolean wasAltDown;
 	private boolean wasSearchBoxFocusedByMod;
 	private boolean wasModifierReleasedWhileSpaceHeld;
+	private int controlReleaseWindowTicks;
+	private int shiftReleaseWindowTicks;
+	private int altReleaseWindowTicks;
 	private int replayDelayTicks;
 
 	RecipeBookClickCapture.PendingHeldRecipe pendingHeldRecipe() {
@@ -66,6 +69,30 @@ final class HeldRecipeQueueState {
 		this.wasModifierReleasedWhileSpaceHeld = wasModifierReleasedWhileSpaceHeld;
 	}
 
+	int controlReleaseWindowTicks() {
+		return controlReleaseWindowTicks;
+	}
+
+	void setControlReleaseWindowTicks(int controlReleaseWindowTicks) {
+		this.controlReleaseWindowTicks = Math.max(controlReleaseWindowTicks, 0);
+	}
+
+	int shiftReleaseWindowTicks() {
+		return shiftReleaseWindowTicks;
+	}
+
+	void setShiftReleaseWindowTicks(int shiftReleaseWindowTicks) {
+		this.shiftReleaseWindowTicks = Math.max(shiftReleaseWindowTicks, 0);
+	}
+
+	int altReleaseWindowTicks() {
+		return altReleaseWindowTicks;
+	}
+
+	void setAltReleaseWindowTicks(int altReleaseWindowTicks) {
+		this.altReleaseWindowTicks = Math.max(altReleaseWindowTicks, 0);
+	}
+
 	int replayDelayTicks() {
 		return replayDelayTicks;
 	}
@@ -86,6 +113,9 @@ final class HeldRecipeQueueState {
 		wasAltDown = false;
 		wasSearchBoxFocusedByMod = false;
 		wasModifierReleasedWhileSpaceHeld = false;
+		controlReleaseWindowTicks = 0;
+		shiftReleaseWindowTicks = 0;
+		altReleaseWindowTicks = 0;
 		replayDelayTicks = 0;
 	}
 }

@@ -42,9 +42,10 @@ public final class RecipeBookClickCapture {
 		RecipeDisplayId recipeId,
 		RecipeCollection collection,
 		ItemStack displayStack,
-		boolean explicitVariantSelection
+		boolean explicitVariantSelection,
+		boolean altModifierDown
 	) {
-		CONTROLLER.onVanillaRecipeButtonClicked(recipeId, collection, displayStack, explicitVariantSelection);
+		CONTROLLER.onVanillaRecipeButtonClicked(recipeId, collection, displayStack, explicitVariantSelection, altModifierDown);
 	}
 
 	public static boolean onRecipeButtonRightClicked(
@@ -142,7 +143,7 @@ public final class RecipeBookClickCapture {
 		}
 	}
 
-	public record PendingHeldRecipe(HeldRecipeAction action, int clickCount, boolean locked, boolean allowNearby, boolean ctrlTriggered, boolean altTriggered, boolean maxCraftRequested) {
+	public record PendingHeldRecipe(HeldRecipeAction action, int clickCount, boolean locked) {
 	}
 
 	public record ReplayBatch(HeldRecipeAction action, int remainingClicks, boolean allowNearby, boolean craftAll, boolean refillableBulkMaxMode) {
