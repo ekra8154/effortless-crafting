@@ -1546,7 +1546,9 @@ final class SearchSession extends BaseCraftSession {
 				: BulkAutoCraftController.VariantContinuationMode.FAMILY_FALLBACK;
 		}
 
-		return BulkAutoCraftController.VariantContinuationMode.UNDECIDED;
+		return !ReachCraftingConfig.get().bulkVariantSwitching()
+			? BulkAutoCraftController.VariantContinuationMode.STRICT_CURRENT_VARIANT
+			: BulkAutoCraftController.VariantContinuationMode.UNDECIDED;
 	}
 
 	private RecipeDisplayId bulkContinuationRecipeId() {

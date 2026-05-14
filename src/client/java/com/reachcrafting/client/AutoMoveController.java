@@ -14,12 +14,14 @@ import net.minecraft.world.item.ItemStack;
 
 final class AutoMoveController {
 	private static final int BULK_RESULT_WAIT_TIMEOUT_TICKS = 20;
+	private static final int ORGANIZE_TARGET_ARRIVAL_WAIT_TICKS = 10;
 	private static int autoMoveWaitingTicks = 0;
 	private static boolean pendingAutoMove = false;
 	private static ItemStack autoMoveTargetStack = ItemStack.EMPTY;
 	private static ItemStack autoMoveExpectedStack = ItemStack.EMPTY;
 	private static final Map<Integer, Integer> autoMoveSnapshotCounts = new HashMap<>();
 	private static boolean autoMoveOrganizing = false;
+	private static boolean autoMoveTargetArrivalObserved = false;
 	private static boolean directEjectAwaitingSettlement = false;
 	private static int directEjectSettlementTicks = 0;
 	private static int directEjectPendingCount = 0;
@@ -31,6 +33,7 @@ final class AutoMoveController {
 	static void scheduleAutoMove(ItemStack expectedStack) {
 		pendingAutoMove = true;
 		autoMoveWaitingTicks = 0;
+		autoMoveTargetArrivalObserved = false;
 		directEjectAwaitingStagedCopiesTicks = 0;
 		autoMoveExpectedStack = expectedStack != null ? expectedStack.copy() : ItemStack.EMPTY;
 		com.reachcrafting.ReachCraftingMod.LOGGER.info(
@@ -61,6 +64,7 @@ final class AutoMoveController {
 		);
 		pendingAutoMove = false;
 		autoMoveOrganizing = false;
+		autoMoveTargetArrivalObserved = false;
 		directEjectAwaitingSettlement = false;
 		directEjectSettlementTicks = 0;
 		directEjectPendingCount = 0;
@@ -125,6 +129,7 @@ final class AutoMoveController {
 			directEjectAwaitingStagedCopiesTicks = 0;
 			pendingAutoMove = false;
 			autoMoveOrganizing = false;
+			autoMoveTargetArrivalObserved = false;
 			autoMoveTargetStack = ItemStack.EMPTY;
 			if (AutoCraftController.isBulkModeEnabled() && directEjectPendingCount > 0) {
 				BulkAutoCraftController.addEjectedOutput(directEjectPendingCount);
@@ -152,6 +157,7 @@ final class AutoMoveController {
 					);
 					pendingAutoMove = false;
 					autoMoveOrganizing = false;
+					autoMoveTargetArrivalObserved = false;
 					autoMoveTargetStack = ItemStack.EMPTY;
 					BulkAutoCraftController.onAutoMoveFinished(client, false);
 					return;
@@ -292,7 +298,11 @@ final class AutoMoveController {
 				}
 
 				client.gameMode.handleInventoryMouseClick(menu.containerId, resultSlot.index, 0, ClickType.QUICK_MOVE, client.player);
-				com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] SHIFT-CLICK path: post-shiftclick. {}", logBottleDistribution(menu));
+				com.reachcrafting.ReachCraftingMod.LOGGER.info(
+					"[auto_move] SHIFT-CLICK path: post-shiftclick. {} hotbar={}",
+					logBottleDistribution(menu),
+					logHotbarState(menu)
+				);
 			} else {
 				autoMoveWaitingTicks++;
 				int stagedCraftCopies = 0;
@@ -313,6 +323,7 @@ final class AutoMoveController {
 				if (autoMoveWaitingTicks > 10 && !BulkAutoCraftController.isActive()) {
 					pendingAutoMove = false;
 					autoMoveOrganizing = false;
+					autoMoveTargetArrivalObserved = false;
 					autoMoveTargetStack = ItemStack.EMPTY;
 					com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] waiting_for_result timeout in non-bulk mode");
 					BulkAutoCraftController.onAutoMoveFinished(client, false);
@@ -323,6 +334,7 @@ final class AutoMoveController {
 					&& menu.getCarried().isEmpty()) {
 					pendingAutoMove = false;
 					autoMoveOrganizing = false;
+					autoMoveTargetArrivalObserved = false;
 					autoMoveTargetStack = ItemStack.EMPTY;
 					com.reachcrafting.ReachCraftingMod.LOGGER.warn(
 						"[auto_move] waiting_for_result timeout in bulk mode expected={} staged_copies={} carried={} result_now={}",
@@ -361,8 +373,23 @@ final class AutoMoveController {
 				int oldCount = autoMoveSnapshotCounts.getOrDefault(i, 0);
 
 				if (currentCount > oldCount) {
+					com.reachcrafting.ReachCraftingMod.LOGGER.info(
+						"[auto_move] source candidate inv={} slot={} oldCount={} currentCount={} hotbar={} snapshot={}",
+						i,
+						sourceSlot.index,
+						oldCount,
+						currentCount,
+						logHotbarState(menu),
+						logHotbarSnapshot()
+					);
 					if (oldCount > 0) {
 						autoMoveSnapshotCounts.put(i, currentCount);
+						com.reachcrafting.ReachCraftingMod.LOGGER.info(
+							"[auto_move] source candidate ignored because slot existed in snapshot inv={} oldCount={} currentCount={}",
+							i,
+							oldCount,
+							currentCount
+						);
 						continue;
 					}
 					if (offhandSlot != null
@@ -377,8 +404,8 @@ final class AutoMoveController {
 						}
 
 						movesThisTick++;
-						autoMoveSnapshotCounts.put(i, 0);
-						autoMoveSnapshotCounts.put(offhandSlot.index, offhandSlot.getItem().getCount() + currentCount);
+						autoMoveSnapshotCounts.remove(i);
+						autoMoveSnapshotCounts.put(offhandSlot.index, Math.max(offhandSlot.getItem().getCount(), currentCount));
 						continue;
 					}
 					
@@ -391,8 +418,8 @@ final class AutoMoveController {
 								client.gameMode.handleInventoryMouseClick(menu.containerId, sourceSlot.index, 0, ClickType.PICKUP, client.player);
 							}
 							movesThisTick++;
-							autoMoveSnapshotCounts.put(i, 0);
-							autoMoveSnapshotCounts.put(swapSlot.index, swapSlot.getItem().getCount() + currentCount);
+							autoMoveSnapshotCounts.remove(i);
+							autoMoveSnapshotCounts.put(swapSlot.index, Math.max(swapSlot.getItem().getCount(), currentCount));
 							continue;
 						}
 					}
@@ -400,9 +427,18 @@ final class AutoMoveController {
 					for (int h = 0; h < i && h < 9; h++) {
 						Slot targetSlot = findInventorySlot(menu, h);
 						if (targetSlot == null) {
+							com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] target skip inv={} reason=no_slot", h);
 							continue;
 						}
-						if (autoMoveSnapshotCounts.containsKey(h)) {
+						int snapshotCount = autoMoveSnapshotCounts.getOrDefault(h, 0);
+						if (snapshotCount > 0) {
+							com.reachcrafting.ReachCraftingMod.LOGGER.info(
+								"[auto_move] target skip inv={} slot={} reason=in_snapshot snapshotCount={} current={}",
+								h,
+								targetSlot.index,
+								snapshotCount,
+								targetSlot.hasItem() ? ContainerUtils.formatStack(targetSlot.getItem()) : "<empty>"
+							);
 							continue;
 						}
 
@@ -414,6 +450,14 @@ final class AutoMoveController {
 								canMove = true;
 							}
 						}
+						com.reachcrafting.ReachCraftingMod.LOGGER.info(
+							"[auto_move] target check sourceInv={} targetInv={} targetSlot={} canMove={} targetCurrent={}",
+							i,
+							h,
+							targetSlot.index,
+							canMove,
+							targetSlot.hasItem() ? ContainerUtils.formatStack(targetSlot.getItem()) : "<empty>"
+						);
 
 						if (canMove) {
 							client.gameMode.handleInventoryMouseClick(menu.containerId, sourceSlot.index, 0, ClickType.PICKUP, client.player);
@@ -424,8 +468,14 @@ final class AutoMoveController {
 							}
 
 							movesThisTick++;
-							autoMoveSnapshotCounts.put(i, 0);
-							autoMoveSnapshotCounts.put(h, targetSlot.getItem().getCount() + currentCount);
+							autoMoveSnapshotCounts.remove(i);
+							autoMoveSnapshotCounts.put(h, Math.max(targetSlot.getItem().getCount(), currentCount));
+							com.reachcrafting.ReachCraftingMod.LOGGER.info(
+								"[auto_move] move executed sourceInv={} targetInv={} hotbarAfter={}",
+								i,
+								h,
+								logHotbarState(menu)
+							);
 							break;
 						}
 					}
@@ -441,6 +491,24 @@ final class AutoMoveController {
 				resultSlot.hasItem() ? ContainerUtils.formatStack(resultSlot.getItem()) : "<empty>",
 				ContainerUtils.formatStack(client.player.containerMenu.getCarried())
 			);
+			if (!hasObservedAutoMoveTargetArrival(menu) && autoMoveWaitingTicks <= ORGANIZE_TARGET_ARRIVAL_WAIT_TICKS) {
+				com.reachcrafting.ReachCraftingMod.LOGGER.info(
+					"[auto_move] organize waiting for target arrival: waitTicks={} target={} snapshot_known_slots={}",
+					autoMoveWaitingTicks,
+					ContainerUtils.formatStack(autoMoveTargetStack),
+					autoMoveSnapshotCounts.size()
+				);
+				return;
+			}
+			if (!autoMoveTargetArrivalObserved && hasObservedAutoMoveTargetArrival(menu)) {
+				autoMoveTargetArrivalObserved = true;
+				com.reachcrafting.ReachCraftingMod.LOGGER.info(
+					"[auto_move] organize observed target arrival: waitTicks={} target={}",
+					autoMoveWaitingTicks,
+					ContainerUtils.formatStack(autoMoveTargetStack)
+				);
+				return;
+			}
 			if (!client.player.containerMenu.getCarried().isEmpty() && !tryResolveCarriedStack(client, menu)) {
 				return;
 			}
@@ -476,6 +544,7 @@ final class AutoMoveController {
 
 			pendingAutoMove = false;
 			autoMoveOrganizing = false;
+			autoMoveTargetArrivalObserved = false;
 			autoMoveTargetStack = ItemStack.EMPTY;
 			com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] organize complete: finishing batch");
 			BulkAutoCraftController.onAutoMoveFinished(client, true);
@@ -601,6 +670,46 @@ final class AutoMoveController {
 		return false;
 	}
 
+	private static boolean hasObservedAutoMoveTargetArrival(AbstractContainerMenu menu) {
+		if (autoMoveTargetStack.isEmpty()) {
+			return true;
+		}
+
+		for (int i = 0; i < 36; i++) {
+			Slot slot = findInventorySlot(menu, i);
+			if (slot == null || !slot.hasItem() || !ItemStack.isSameItemSameComponents(slot.getItem(), autoMoveTargetStack)) {
+				continue;
+			}
+			int oldCount = autoMoveSnapshotCounts.getOrDefault(i, 0);
+			if (slot.getItem().getCount() > oldCount) {
+				return true;
+			}
+		}
+
+		Slot offhandSlot = findVisibleOffhandSlot(menu);
+		if (offhandSlot != null
+			&& offhandSlot.hasItem()
+			&& ItemStack.isSameItemSameComponents(offhandSlot.getItem(), autoMoveTargetStack)) {
+			int oldCount = autoMoveSnapshotCounts.getOrDefault(offhandSlot.index, 0);
+			if (offhandSlot.getItem().getCount() > oldCount) {
+				return true;
+			}
+		}
+
+		int swappedSlotIndex = OffhandConsolidationController.getSwapSlotIndex(menu);
+		if (swappedSlotIndex != -1) {
+			Slot swappedSlot = menu.getSlot(swappedSlotIndex);
+			if (swappedSlot.hasItem() && ItemStack.isSameItemSameComponents(swappedSlot.getItem(), autoMoveTargetStack)) {
+				int oldCount = autoMoveSnapshotCounts.getOrDefault(swappedSlot.index, 0);
+				if (swappedSlot.getItem().getCount() > oldCount) {
+					return true;
+				}
+			}
+		}
+
+		return false;
+	}
+
 	private static Slot findInventorySlot(AbstractContainerMenu menu, int inventoryIndex) {
 		for (Slot slot : menu.slots) {
 			if (slot.container instanceof Inventory && slot.getContainerSlot() == inventoryIndex) {
@@ -675,6 +784,35 @@ final class AutoMoveController {
 				sb.append("g").append(i).append(":").append(slot.getItem().getCount()).append("x").append(itemId);
 				first = false;
 			}
+		}
+		sb.append("]");
+		return sb.toString();
+	}
+
+	private static String logHotbarState(AbstractContainerMenu menu) {
+		StringBuilder sb = new StringBuilder("[");
+		for (int i = 0; i < 9; i++) {
+			if (i > 0) {
+				sb.append(", ");
+			}
+			Slot slot = findInventorySlot(menu, i);
+			if (slot == null || !slot.hasItem()) {
+				sb.append(i).append(":empty");
+				continue;
+			}
+			sb.append(i).append(":").append(ContainerUtils.formatStack(slot.getItem()));
+		}
+		sb.append("]");
+		return sb.toString();
+	}
+
+	private static String logHotbarSnapshot() {
+		StringBuilder sb = new StringBuilder("[");
+		for (int i = 0; i < 9; i++) {
+			if (i > 0) {
+				sb.append(", ");
+			}
+			sb.append(i).append(":").append(autoMoveSnapshotCounts.getOrDefault(i, 0));
 		}
 		sb.append("]");
 		return sb.toString();

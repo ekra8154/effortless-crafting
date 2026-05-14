@@ -144,7 +144,7 @@ public final class ReachCraftingConfigScreen {
 				ReachCraftingConfig.AutoCraftCapability.class,
 				config.autoCraftCapability()
 			)
-			.setDefaultValue(ReachCraftingConfig.AutoCraftCapability.NONE)
+			.setDefaultValue(ReachCraftingConfig.AutoCraftCapability.BULK)
 			.setTooltip(Component.translatable("tooltip.reachcrafting.auto_craft_capability"))
 			.setSaveConsumer(config::setAutoCraftCapability)
 			.setEnumNameProvider(value -> Component.translatable("enum.reachcrafting.auto_craft_capability." + value.name().toLowerCase()))
@@ -155,7 +155,7 @@ public final class ReachCraftingConfigScreen {
 				ReachCraftingConfig.AutoCraftHandling.class,
 				config.autoCraftHandling()
 			)
-			.setDefaultValue(ReachCraftingConfig.AutoCraftHandling.TOGGLE)
+			.setDefaultValue(ReachCraftingConfig.AutoCraftHandling.HOLD)
 			.setTooltip(Component.translatable("tooltip.reachcrafting.auto_craft_handling"))
 			.setSaveConsumer(config::setAutoCraftHandling)
 			.setEnumNameProvider(value -> Component.translatable("enum.reachcrafting.auto_craft_handling." + value.name().toLowerCase()))
@@ -174,7 +174,7 @@ public final class ReachCraftingConfigScreen {
 				Component.translatable("option.reachcrafting.auto_craft_off_after_bulk"),
 				config.autoCraftOffAfterBulk()
 			)
-			.setDefaultValue(true)
+			.setDefaultValue(false)
 			.setTooltip(Component.translatable("tooltip.reachcrafting.auto_craft_off_after_bulk"))
 			.setSaveConsumer(config::setAutoCraftOffAfterBulk)
 			.build());

@@ -280,7 +280,11 @@ public final class ContainerUtils {
 		AutoCraftController.clearHoldSession();
 		clearInputQueue();
 		AutoMoveController.abort();
-		BulkAutoCraftController.stop(true);
+		if (BulkAutoCraftController.isActive()) {
+			BulkAutoCraftController.stop(true);
+		} else {
+			BulkAutoCraftController.clear();
+		}
 		NearbyContainerDryRun.abortActiveSession();
 		InventoryGridRestoreTracker.clear();
 		OffhandConsolidationController.swapBack(net.minecraft.client.Minecraft.getInstance());

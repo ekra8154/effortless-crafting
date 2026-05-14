@@ -42,10 +42,10 @@ public final class ReachCraftingConfig {
 	private static final ScrollToPullMode DEFAULT_SCROLL_TO_PULL_MODE = ScrollToPullMode.WHILE_RESULT_OR_INVENTORY_SLOT_HOVERED;
 	private static final boolean DEFAULT_TYPE_TO_FOCUS_SEARCH = true;
 	private static final boolean DEFAULT_EJECT_ITEMS_WHEN_FULL = true;
-	private static final AutoCraftCapability DEFAULT_AUTO_CRAFT_CAPABILITY = AutoCraftCapability.NONE;
-	private static final boolean DEFAULT_AUTO_CRAFT_OFF_AFTER_BULK = true;
+	private static final AutoCraftCapability DEFAULT_AUTO_CRAFT_CAPABILITY = AutoCraftCapability.BULK;
+	private static final boolean DEFAULT_AUTO_CRAFT_OFF_AFTER_BULK = false;
 	private static final boolean DEFAULT_BULK_VARIANT_SWITCHING = false;
-	private static final AutoCraftHandling DEFAULT_AUTO_CRAFT_HANDLING = AutoCraftHandling.TOGGLE;
+	private static final AutoCraftHandling DEFAULT_AUTO_CRAFT_HANDLING = AutoCraftHandling.HOLD;
 	private static final boolean DEFAULT_SHOW_CRAFT_ABORTED_MESSAGE = true;
 	private static final boolean DEFAULT_SHOW_BULK_CRAFT_SUMMARY_MESSAGE = true;
 	private static final boolean DEFAULT_SHOW_MISSING_INGREDIENTS_MESSAGE = true;
