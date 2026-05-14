@@ -152,6 +152,7 @@ final class RecipeClickExecutor {
 			ReachCraftingModClient.sendDebugChat("Ready: " + outputLabel);
 		}
 
+		int effectiveRequestedClicks = craftAll ? deficitReport.possibleCopies() : requestedClicks;
 		if (useDryRun) {
 			armBulkAutoCraft(
 				recipeId,
@@ -162,7 +163,7 @@ final class RecipeClickExecutor {
 				explicitVariantSelection,
 				allowNearbyChests,
 				craftAll,
-				requestedClicks,
+				effectiveRequestedClicks,
 				refillableBulkMaxMode,
 				selectedRecipe.displayStack(),
 				ingredientSummary
@@ -216,7 +217,7 @@ final class RecipeClickExecutor {
 					ingredientSummary,
 					availableItems,
 					craftAll,
-					requestedClicks,
+					effectiveRequestedClicks,
 					allowNearbyChests
 				)) {
 					if (AutoCraftController.isEnabled()) {
@@ -234,7 +235,7 @@ final class RecipeClickExecutor {
 				ingredientSummary,
 				availableItems,
 				craftAll,
-				requestedClicks,
+				effectiveRequestedClicks,
 				allowNearbyChests
 			);
 			return;
@@ -248,7 +249,7 @@ final class RecipeClickExecutor {
 			if (useBulkPlace) {
 				gameMode.handlePlaceRecipe(player.containerMenu.containerId, selectedRecipe.recipeId(), true);
 			} else {
-				int iterations = AutoCraftController.isBulkModeEnabled() ? Math.max(requestedClicks, 1) : 1;
+				int iterations = AutoCraftController.isBulkModeEnabled() ? Math.max(effectiveRequestedClicks, 1) : 1;
 				for (int i = 0; i < iterations; i++) {
 					gameMode.handlePlaceRecipe(player.containerMenu.containerId, selectedRecipe.recipeId(), false);
 				}

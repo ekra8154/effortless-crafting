@@ -1662,7 +1662,8 @@ final class SearchSession extends BaseCraftSession {
 				List.of(),
 				plannedTargets,
 				"<none>",
-				false
+				false,
+				targetCopiesPerSlot
 			);
 		} else if (!originalContext.hasReservedGrid()
 			&& placedPlannedGrid
@@ -1675,7 +1676,8 @@ final class SearchSession extends BaseCraftSession {
 				List.of(),
 				plannedTargets,
 				"<none>",
-				false
+				false,
+				targetCopiesPerSlot
 			);
 		}
 		ReachCraftingMod.LOGGER.debug(

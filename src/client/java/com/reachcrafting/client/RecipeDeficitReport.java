@@ -12,7 +12,8 @@ public record RecipeDeficitReport(
 	List<String> missingItemIds,
 	List<IngredientPlanning.SlotTarget> slotTargets,
 	String compactMissingSummary,
-	boolean hasMissingIngredients
+	boolean hasMissingIngredients,
+	int possibleCopies
 ) {
 	public static RecipeDeficitReport from(RecipeIngredientSummary ingredientSummary, AvailableItemSnapshot availableItems) {
 		return from(ingredientSummary, availableItems.totalCounts(), availableItems.gridStacks(), false);
@@ -72,6 +73,16 @@ public record RecipeDeficitReport(
 					.min()
 					.orElse(0)
 				: 1;
+
+		int possibleCopies = IngredientPlanning.computeMaxCraftCopies(
+			ingredientSummary,
+			availableCounts,
+			gridStacks,
+			availableCounts,
+			availableCounts,
+			IngredientPlanning.defaultPolicy()
+		);
+
 		IngredientPlanning.PlanResult plan = IngredientPlanning.plan(
 			ingredientSummary,
 			availableCounts,
@@ -87,7 +98,8 @@ public record RecipeDeficitReport(
 			List.copyOf(plan.missingItemIds()),
 			List.copyOf(plan.slotTargets()),
 			plan.compactMissingSummary(),
-			plan.hasMissingIngredients()
+			plan.hasMissingIngredients(),
+			possibleCopies
 		);
 	}
 

@@ -42,9 +42,10 @@ final class RecipeBookInputController {
 			}
 			boolean controlDown = RecipeBookFocusManager.isControlKeyDown(client);
 			boolean shiftDown = RecipeBookFocusManager.isShiftKeyDown(client);
+			boolean altDown = RecipeBookFocusManager.isAltKeyDown(client);
 			boolean spaceDown = RecipeBookFocusManager.isSpaceKeyDown(client);
 
-			if (controlDown || shiftDown) {
+			if (controlDown || shiftDown || (altDown && ReachCraftingConfig.get().altAsRequestKey())) {
 				RecipeBookFocusManager.defocusRecipeBookSearch(client, state);
 			} else if (state.wasSearchBoxFocusedByMod()
 				&& !spaceDown
@@ -55,10 +56,12 @@ final class RecipeBookInputController {
 			}
 
 			if (state.pendingHeldRecipe() != null) {
-				boolean modifierDown = state.pendingHeldRecipe().ctrlTriggered() ? controlDown : shiftDown;
-				boolean modifierJustReleased = state.pendingHeldRecipe().ctrlTriggered()
-					? (state.wasControlDown() && !controlDown)
-					: (state.wasShiftDown() && !shiftDown);
+				boolean modifierDown = state.pendingHeldRecipe().altTriggered() ? altDown : (state.pendingHeldRecipe().ctrlTriggered() ? controlDown : shiftDown);
+				boolean modifierJustReleased = state.pendingHeldRecipe().altTriggered()
+					? (state.wasAltDown() && !altDown)
+					: (state.pendingHeldRecipe().ctrlTriggered()
+						? (state.wasControlDown() && !controlDown)
+						: (state.wasShiftDown() && !shiftDown));
 
 				if (modifierJustReleased) {
 					state.setWasModifierReleasedWhileSpaceHeld(true);
@@ -78,6 +81,7 @@ final class RecipeBookInputController {
 
 			state.setWasControlDown(controlDown);
 			state.setWasShiftDown(shiftDown);
+			state.setWasAltDown(altDown);
 
 			if (state.replayDelayTicks() > 0) {
 				state.decrementReplayDelayTicks();
@@ -85,7 +89,7 @@ final class RecipeBookInputController {
 				processReplayBatch(client);
 			}
 
-			if (!controlDown && !shiftDown && !ReachCraftingConfig.get().reachCraftHoldAndRelease()) {
+			if (!controlDown && !shiftDown && !altDown && !ReachCraftingConfig.get().reachCraftHoldAndRelease()) {
 				state.setPendingHeldRecipe(null);
 			}
 		});
@@ -122,6 +126,7 @@ final class RecipeBookInputController {
 		int mouseButton,
 		boolean shiftModifierDown,
 		boolean ctrlModifierDown,
+		boolean altModifierDown,
 		boolean explicitVariantSelection
 	) {
 		if (!ReachCraftingConfig.get().enabled()) {
@@ -144,8 +149,8 @@ final class RecipeBookInputController {
 			RecipeBookFocusManager.defocusRecipeBookSearch(minecraft);
 		}
 
-		boolean maxCraftRequested = shiftModifierDown;
-		boolean craftAll = false;
+		boolean maxCraftRequested = shiftModifierDown || (altModifierDown && ReachCraftingConfig.get().altAsRequestKey());
+		boolean craftAll = maxCraftRequested;
 		boolean allowNearbyChests = ctrlModifierDown
 			&& ReachCraftingConfig.get().enableNearbyContainerUsage();
 		boolean refillableBulkMaxMode = maxCraftRequested && allowNearbyChests && AutoCraftController.isBulkModeEnabled();
@@ -155,11 +160,15 @@ final class RecipeBookInputController {
 
 		if (shouldQueueHeldRecipe(minecraft, allowNearbyChests, maxCraftRequested) && state.replayBatch() == null) {
 			boolean ctrlTriggered = ctrlModifierDown || RecipeBookFocusManager.isControlKeyDown(minecraft);
-			queueHeldRecipe(recipeId, collection, displayStack, mouseButton, explicitVariantSelection, allowNearbyChests, ctrlTriggered);
+			boolean altTriggered = altModifierDown && ReachCraftingConfig.get().altAsRequestKey();
+			if (altTriggered) {
+				AutoCraftController.consumeQuickCraft();
+			}
+			queueHeldRecipe(recipeId, collection, displayStack, mouseButton, explicitVariantSelection, allowNearbyChests, ctrlTriggered, altTriggered, requestedClicks, maxCraftRequested);
 			return;
 		}
 
-		AutoCraftController.armHoldSessionForCurrentRequest();
+		AutoCraftController.armHoldSessionForCurrentRequest(false);
 
 		if (!ContainerUtils.isGridEmpty(player.containerMenu)) {
 			ContainerUtils.flushCraftingGrid(minecraft, allowNearbyChests, true);
@@ -215,7 +224,7 @@ final class RecipeBookInputController {
 			return;
 		}
 
-		AutoCraftController.armHoldSessionForCurrentRequest();
+		AutoCraftController.armHoldSessionForCurrentRequest(false);
 		ItemStack expectedStack = RecipeClickExecutor.resolveExpectedOutputStack(
 			minecraft,
 			player,
@@ -318,6 +327,10 @@ final class RecipeBookInputController {
 
 	boolean isInputQueueActive() {
 		return state.pendingHeldRecipe() != null || state.replayBatch() != null;
+	}
+
+	boolean isAltRequestActive() {
+		return state.pendingHeldRecipe() != null && state.pendingHeldRecipe().altTriggered();
 	}
 
 	void clearInputQueue() {
@@ -443,7 +456,10 @@ final class RecipeBookInputController {
 		int mouseButton,
 		boolean explicitVariantSelection,
 		boolean allowNearby,
-		boolean ctrlTriggered
+		boolean ctrlTriggered,
+		boolean altTriggered,
+		int initialCount,
+		boolean maxCraftRequested
 	) {
 		RecipeBookClickCapture.HeldRecipeAction action = new RecipeBookClickCapture.HeldRecipeAction(
 			recipeId,
@@ -454,29 +470,28 @@ final class RecipeBookInputController {
 		);
 
 		if (state.pendingHeldRecipe() == null) {
-			int initialCount = nextQueuedCountFromCurrentState(Minecraft.getInstance(), action, 1);
 			if (initialCount <= 0) {
 				state.setPendingHeldRecipe(null);
 				return;
 			}
-			state.setPendingHeldRecipe(new RecipeBookClickCapture.PendingHeldRecipe(action, initialCount, initialCount >= 2, allowNearby, ctrlTriggered));
+			state.setPendingHeldRecipe(new RecipeBookClickCapture.PendingHeldRecipe(action, initialCount, initialCount >= 2, allowNearby, ctrlTriggered, altTriggered, maxCraftRequested));
 			return;
 		}
 
 		if (state.pendingHeldRecipe().action().sameRecipe(action)) {
 			int delta = RecipeBookFocusManager.isSpaceKeyDown(Minecraft.getInstance()) ? 16 : 1;
 			int updatedCount = wrapQueuedCount(Minecraft.getInstance(), action, state.pendingHeldRecipe().clickCount(), delta);
-			state.setPendingHeldRecipe(new RecipeBookClickCapture.PendingHeldRecipe(action, updatedCount, updatedCount >= 2, allowNearby, ctrlTriggered));
+			state.setPendingHeldRecipe(new RecipeBookClickCapture.PendingHeldRecipe(action, updatedCount, updatedCount >= 2, allowNearby, ctrlTriggered, altTriggered, state.pendingHeldRecipe().maxCraftRequested()));
 			return;
 		}
 
 		if (!state.pendingHeldRecipe().locked()) {
-			int initialCount = nextQueuedCountFromCurrentState(Minecraft.getInstance(), action, 1);
-			if (initialCount <= 0) {
+			int newInitialCount = nextQueuedCountFromCurrentState(Minecraft.getInstance(), action, 1);
+			if (newInitialCount <= 0) {
 				state.setPendingHeldRecipe(null);
 				return;
 			}
-			state.setPendingHeldRecipe(new RecipeBookClickCapture.PendingHeldRecipe(action, initialCount, initialCount >= 2, allowNearby, ctrlTriggered));
+			state.setPendingHeldRecipe(new RecipeBookClickCapture.PendingHeldRecipe(action, newInitialCount, newInitialCount >= 2, allowNearby, ctrlTriggered, altTriggered, false));
 		}
 	}
 
@@ -498,14 +513,19 @@ final class RecipeBookInputController {
 			ContainerUtils.flushCraftingGrid(minecraft, state.pendingHeldRecipe().allowNearby(), true);
 		}
 
-		AutoCraftController.armHoldSessionForCurrentRequest();
-		state.setReplayDelayTicks(1);
+		if (state.pendingHeldRecipe().altTriggered()) {
+			AutoCraftController.consumeQuickCraft();
+		}
+
+		boolean maxCraftRequested = state.pendingHeldRecipe().maxCraftRequested();
+		boolean refillableBulkMaxMode = maxCraftRequested && state.pendingHeldRecipe().allowNearby() && AutoCraftController.isBulkModeEnabled();
+
 		state.setReplayBatch(new RecipeBookClickCapture.ReplayBatch(
 			state.pendingHeldRecipe().action(),
 			state.pendingHeldRecipe().clickCount(),
 			state.pendingHeldRecipe().allowNearby(),
-			false,
-			false
+			maxCraftRequested,
+			refillableBulkMaxMode
 		));
 		state.setPendingHeldRecipe(null);
 	}
@@ -580,7 +600,9 @@ final class RecipeBookInputController {
 	private boolean canUseHeldQueueControls(Minecraft minecraft) {
 		return ReachCraftingConfig.get().reachCraftHoldAndRelease()
 			&& state.replayBatch() == null
-			&& (RecipeBookFocusManager.isControlKeyDown(minecraft) || RecipeBookFocusManager.isShiftKeyDown(minecraft));
+			&& (RecipeBookFocusManager.isControlKeyDown(minecraft)
+				|| RecipeBookFocusManager.isShiftKeyDown(minecraft)
+				|| (RecipeBookFocusManager.isAltKeyDown(minecraft) && ReachCraftingConfig.get().altAsRequestKey()));
 	}
 
 	private boolean adjustHeldRecipeCount(Minecraft minecraft, RecipeBookClickCapture.HeldRecipeAction action, int delta) {
@@ -595,7 +617,11 @@ final class RecipeBookInputController {
 			int updatedCount = nextQueuedCountFromCurrentState(minecraft, action, effectiveDelta);
 			boolean allowNearby = RecipeBookFocusManager.isControlKeyDown(minecraft) && ReachCraftingConfig.get().enableNearbyContainerUsage();
 			boolean ctrlTriggered = RecipeBookFocusManager.isControlKeyDown(minecraft);
-			state.setPendingHeldRecipe(new RecipeBookClickCapture.PendingHeldRecipe(action, updatedCount, updatedCount >= 2, allowNearby, ctrlTriggered));
+			boolean altTriggered = RecipeBookFocusManager.isAltKeyDown(minecraft) && ReachCraftingConfig.get().altAsRequestKey();
+			if (altTriggered) {
+				AutoCraftController.consumeQuickCraft();
+			}
+			state.setPendingHeldRecipe(new RecipeBookClickCapture.PendingHeldRecipe(action, updatedCount, updatedCount >= 2, allowNearby, ctrlTriggered, altTriggered, false));
 			return true;
 		}
 
@@ -606,7 +632,9 @@ final class RecipeBookInputController {
 				updatedCount,
 				updatedCount >= 2,
 				state.pendingHeldRecipe().allowNearby(),
-				state.pendingHeldRecipe().ctrlTriggered()
+				state.pendingHeldRecipe().ctrlTriggered(),
+				state.pendingHeldRecipe().altTriggered(),
+				state.pendingHeldRecipe().maxCraftRequested()
 			));
 			return true;
 		}
@@ -615,7 +643,8 @@ final class RecipeBookInputController {
 			int updatedCount = nextQueuedCountFromCurrentState(minecraft, action, effectiveDelta);
 			boolean allowNearby = RecipeBookFocusManager.isControlKeyDown(minecraft) && ReachCraftingConfig.get().enableNearbyContainerUsage();
 			boolean ctrlTriggered = RecipeBookFocusManager.isControlKeyDown(minecraft);
-			state.setPendingHeldRecipe(new RecipeBookClickCapture.PendingHeldRecipe(action, updatedCount, updatedCount >= 2, allowNearby, ctrlTriggered));
+			boolean altTriggered = RecipeBookFocusManager.isAltKeyDown(minecraft) && ReachCraftingConfig.get().altAsRequestKey();
+			state.setPendingHeldRecipe(new RecipeBookClickCapture.PendingHeldRecipe(action, updatedCount, updatedCount >= 2, allowNearby, ctrlTriggered, altTriggered, false));
 			return true;
 		}
 
@@ -668,7 +697,9 @@ final class RecipeBookInputController {
 		if (visibility == ReachCraftingConfig.InputCounterVisibility.ALWAYS_SHOW) {
 			return true;
 		}
-		return RecipeBookFocusManager.isControlKeyDown(minecraft) || RecipeBookFocusManager.isShiftKeyDown(minecraft);
+		return RecipeBookFocusManager.isControlKeyDown(minecraft)
+			|| RecipeBookFocusManager.isShiftKeyDown(minecraft)
+			|| (RecipeBookFocusManager.isAltKeyDown(minecraft) && ReachCraftingConfig.get().altAsRequestKey());
 	}
 
 	private int wrapQueuedCount(Minecraft minecraft, RecipeBookClickCapture.HeldRecipeAction action, int currentCount, int delta) {

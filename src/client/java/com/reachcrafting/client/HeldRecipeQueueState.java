@@ -5,6 +5,7 @@ final class HeldRecipeQueueState {
 	private RecipeBookClickCapture.ReplayBatch replayBatch;
 	private boolean wasControlDown;
 	private boolean wasShiftDown;
+	private boolean wasAltDown;
 	private boolean wasSearchBoxFocusedByMod;
 	private boolean wasModifierReleasedWhileSpaceHeld;
 	private int replayDelayTicks;
@@ -41,6 +42,14 @@ final class HeldRecipeQueueState {
 		this.wasShiftDown = wasShiftDown;
 	}
 
+	boolean wasAltDown() {
+		return wasAltDown;
+	}
+
+	void setWasAltDown(boolean wasAltDown) {
+		this.wasAltDown = wasAltDown;
+	}
+
 	boolean wasSearchBoxFocusedByMod() {
 		return wasSearchBoxFocusedByMod;
 	}
@@ -72,6 +81,9 @@ final class HeldRecipeQueueState {
 	void clear() {
 		pendingHeldRecipe = null;
 		replayBatch = null;
+		wasControlDown = false;
+		wasShiftDown = false;
+		wasAltDown = false;
 		wasSearchBoxFocusedByMod = false;
 		wasModifierReleasedWhileSpaceHeld = false;
 		replayDelayTicks = 0;

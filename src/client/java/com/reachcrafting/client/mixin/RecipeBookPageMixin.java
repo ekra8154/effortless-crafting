@@ -85,6 +85,7 @@ public abstract class RecipeBookPageMixin {
 				continue;
 			}
 
+			boolean altDown = (click.modifiers() & GLFW.GLFW_MOD_ALT) != 0;
 			RecipeBookClickCapture.onRecipeButtonClicked(
 				button.getCurrentRecipe(),
 				button.getCollection(),
@@ -92,6 +93,7 @@ public abstract class RecipeBookPageMixin {
 				click.button(),
 				shiftDown,
 				ctrlDown,
+				altDown,
 				false
 			);
 			cir.setReturnValue(true);

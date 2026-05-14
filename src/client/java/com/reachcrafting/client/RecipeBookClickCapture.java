@@ -23,6 +23,7 @@ public final class RecipeBookClickCapture {
 		int mouseButton,
 		boolean shiftModifierDown,
 		boolean ctrlModifierDown,
+		boolean altModifierDown,
 		boolean explicitVariantSelection
 	) {
 		CONTROLLER.onRecipeButtonClicked(
@@ -32,6 +33,7 @@ public final class RecipeBookClickCapture {
 			mouseButton,
 			shiftModifierDown,
 			ctrlModifierDown,
+			altModifierDown,
 			explicitVariantSelection
 		);
 	}
@@ -140,7 +142,7 @@ public final class RecipeBookClickCapture {
 		}
 	}
 
-	public record PendingHeldRecipe(HeldRecipeAction action, int clickCount, boolean locked, boolean allowNearby, boolean ctrlTriggered) {
+	public record PendingHeldRecipe(HeldRecipeAction action, int clickCount, boolean locked, boolean allowNearby, boolean ctrlTriggered, boolean altTriggered, boolean maxCraftRequested) {
 	}
 
 	public record ReplayBatch(HeldRecipeAction action, int remainingClicks, boolean allowNearby, boolean craftAll, boolean refillableBulkMaxMode) {

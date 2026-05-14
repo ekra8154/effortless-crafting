@@ -91,6 +91,8 @@
 	"tooltip.reachcrafting.auto_craft_handling": "Choose how the Auto Crafting mode is toggled. Toggle keeps the current behavior (Alt key toggles the state on/off). Hold makes Auto Crafting active ONLY while the Alt key is held down.",
 	"enum.reachcrafting.auto_craft_handling.toggle": "Toggle",
 	"enum.reachcrafting.auto_craft_handling.hold": "Hold",
+	"option.reachcrafting.alt_as_request_key": "Alt as Request Key",
+	"tooltip.reachcrafting.alt_as_request_key": "Treat Alt + scroll as an alias for Shift + scroll, and automatically craft the requested items once Alt is released.",
 	"category.reachcrafting.sub.messages": "Messages",
 	"option.reachcrafting.show_craft_aborted_message": "Craft Session Aborted",
 	"tooltip.reachcrafting.show_craft_aborted_message": "Whether to show a chat message when a crafting session is aborted early by esc or for some other reason.",

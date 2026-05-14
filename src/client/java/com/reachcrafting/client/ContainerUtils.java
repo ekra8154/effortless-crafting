@@ -275,12 +275,9 @@ public final class ContainerUtils {
 	}
 
 	public static void abortAllSessions() {
+		boolean wasAnyActive = isAnySessionActive();
+
 		AutoCraftController.clearHoldSession();
-
-		if (!isAnySessionActive()) {
-			return;
-		}
-
 		clearInputQueue();
 		AutoMoveController.abort();
 		BulkAutoCraftController.stop(true);
@@ -288,7 +285,9 @@ public final class ContainerUtils {
 		InventoryGridRestoreTracker.clear();
 		OffhandConsolidationController.swapBack(net.minecraft.client.Minecraft.getInstance());
 
-		ReachCraftingModClient.sendAbortedChat("Crafting session aborted.");
+		if (wasAnyActive) {
+			ReachCraftingModClient.sendAbortedChat("Crafting session aborted.");
+		}
 	}
 
 	public static String formatStackBreakdown(int count) {

@@ -49,6 +49,7 @@ public final class ReachCraftingConfig {
 	private static final boolean DEFAULT_SHOW_CRAFT_ABORTED_MESSAGE = true;
 	private static final boolean DEFAULT_SHOW_BULK_CRAFT_SUMMARY_MESSAGE = true;
 	private static final boolean DEFAULT_SHOW_MISSING_INGREDIENTS_MESSAGE = true;
+	private static final boolean DEFAULT_ALT_AS_REQUEST_KEY = true;
 	private static final boolean DEFAULT_DEBUG_MESSAGES_ENABLED = false;
 	public static final List<String> DEFAULT_BLACKLIST = List.of(
 		"minecraft:ender_chest",
@@ -95,6 +96,7 @@ public final class ReachCraftingConfig {
 	private boolean showCraftAbortedMessage;
 	private boolean showBulkCraftSummaryMessage;
 	private boolean showMissingIngredientsMessage;
+	private boolean altAsRequestKey;
 	private boolean debugMessagesEnabled;
 	private Set<String> blacklistedContainerIds;
 
@@ -153,6 +155,7 @@ public final class ReachCraftingConfig {
 			instance.showCraftAbortedMessage = stored.showCraftAbortedMessage != null ? stored.showCraftAbortedMessage : DEFAULT_SHOW_CRAFT_ABORTED_MESSAGE;
 			instance.showBulkCraftSummaryMessage = stored.showBulkCraftSummaryMessage != null ? stored.showBulkCraftSummaryMessage : DEFAULT_SHOW_BULK_CRAFT_SUMMARY_MESSAGE;
 			instance.showMissingIngredientsMessage = stored.showMissingIngredientsMessage != null ? stored.showMissingIngredientsMessage : DEFAULT_SHOW_MISSING_INGREDIENTS_MESSAGE;
+			instance.altAsRequestKey = stored.altAsRequestKey != null ? stored.altAsRequestKey : DEFAULT_ALT_AS_REQUEST_KEY;
 			instance.debugMessagesEnabled = stored.debugMessagesEnabled != null ? stored.debugMessagesEnabled : DEFAULT_DEBUG_MESSAGES_ENABLED;
 			
 			// Enforce capability gate on load
@@ -463,6 +466,14 @@ public final class ReachCraftingConfig {
 		this.showMissingIngredientsMessage = showMissingIngredientsMessage;
 	}
 
+	public boolean altAsRequestKey() {
+		return altAsRequestKey;
+	}
+
+	public void setAltAsRequestKey(boolean altAsRequestKey) {
+		this.altAsRequestKey = altAsRequestKey;
+	}
+
 	public boolean debugMessagesEnabled() {
 		return debugMessagesEnabled;
 	}
@@ -543,6 +554,7 @@ public final class ReachCraftingConfig {
 		defaults.showCraftAbortedMessage = DEFAULT_SHOW_CRAFT_ABORTED_MESSAGE;
 		defaults.showBulkCraftSummaryMessage = DEFAULT_SHOW_BULK_CRAFT_SUMMARY_MESSAGE;
 		defaults.showMissingIngredientsMessage = DEFAULT_SHOW_MISSING_INGREDIENTS_MESSAGE;
+		defaults.altAsRequestKey = DEFAULT_ALT_AS_REQUEST_KEY;
 		defaults.debugMessagesEnabled = DEFAULT_DEBUG_MESSAGES_ENABLED;
 		defaults.blacklistedContainerIds = new LinkedHashSet<>(DEFAULT_BLACKLIST);
 		return defaults;
@@ -643,6 +655,7 @@ public final class ReachCraftingConfig {
 		private Boolean showCraftAbortedMessage;
 		private Boolean showBulkCraftSummaryMessage;
 		private Boolean showMissingIngredientsMessage;
+		private Boolean altAsRequestKey;
 		private Boolean debugMessagesEnabled;
 		private Boolean enableEnablingBulkMode;
 		private Set<String> blacklistedContainerIds;
@@ -678,6 +691,7 @@ public final class ReachCraftingConfig {
 			this.showCraftAbortedMessage = config.showCraftAbortedMessage;
 			this.showBulkCraftSummaryMessage = config.showBulkCraftSummaryMessage;
 			this.showMissingIngredientsMessage = config.showMissingIngredientsMessage;
+			this.altAsRequestKey = config.altAsRequestKey;
 			this.debugMessagesEnabled = config.debugMessagesEnabled;
 			this.blacklistedContainerIds = config.blacklistedContainerIds;
 		}

@@ -105,7 +105,7 @@ final class AutoCraftController {
 		if (config.autoCraftHandling() == ReachCraftingConfig.AutoCraftHandling.HOLD) {
 			return isHoldRuntimeEnabled();
 		}
-		return config.autoCraftEnabled();
+		return config.autoCraftEnabled() || holdSessionActive || RecipeBookInputController.getInstance().isAltRequestActive();
 	}
 
 	static boolean isHoldRuntimeEnabled() {
@@ -225,25 +225,21 @@ final class AutoCraftController {
 		ReachCraftingConfig.save();
 	}
 
-	static void armHoldSessionForCurrentRequest() {
-		if (ReachCraftingConfig.get().autoCraftHandling() != ReachCraftingConfig.AutoCraftHandling.HOLD
-			|| ReachCraftingConfig.get().autoCraftCapability() == ReachCraftingConfig.AutoCraftCapability.NONE) {
+	static void armHoldSessionForCurrentRequest(boolean altTriggered) {
+		if (ReachCraftingConfig.get().autoCraftCapability() == ReachCraftingConfig.AutoCraftCapability.NONE) {
 			return;
 		}
-		if (holdStickyNormalLatched || holdStickyBulkLatched || isPhysicalAltHeld() || holdReleaseGraceTicks > 0) {
+		if (altTriggered || holdStickyNormalLatched || holdStickyBulkLatched || isPhysicalAltHeld() || holdReleaseGraceTicks > 0) {
 			holdSessionActive = true;
 		}
 	}
 
 	static void clearHoldSession() {
-		if (ReachCraftingConfig.get().autoCraftHandling() != ReachCraftingConfig.AutoCraftHandling.HOLD) {
-			return;
-		}
 		clearHoldRuntimeState();
 	}
 
 	static void tick() {
-		if (ReachCraftingConfig.get().autoCraftHandling() != ReachCraftingConfig.AutoCraftHandling.HOLD) {
+		if (ReachCraftingConfig.get().autoCraftHandling() != ReachCraftingConfig.AutoCraftHandling.HOLD && !holdSessionActive) {
 			return;
 		}
 
