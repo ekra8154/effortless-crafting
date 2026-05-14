@@ -733,7 +733,9 @@ final class SearchSession extends BaseCraftSession {
 			&& !startFallbackDiscovery
 			&& allowNearby
 			&& ReachCraftingConfig.get().cacheContainersForFasterSearch()
-			&& withdrawCandidates.isEmpty()) {
+			&& withdrawCandidates.isEmpty()
+			&& !remainingItemIds.isEmpty()
+			&& !alreadyScannedInBulk) {
 			startFallbackDiscovery = shouldStartFallbackDiscovery();
 			resumeOriginalContext = !startFallbackDiscovery;
 		}
@@ -1388,7 +1390,7 @@ final class SearchSession extends BaseCraftSession {
 			}
 		}
 
-		return uncached.isEmpty() ? unvisited : List.copyOf(uncached);
+		return List.copyOf(uncached);
 	}
 
 	private int cachedDistinctMatchesAt(BlockPos pos, Map<String, Integer> neededCounts) {
@@ -1533,19 +1535,18 @@ final class SearchSession extends BaseCraftSession {
 		if (currentMode == BulkAutoCraftController.VariantContinuationMode.STRICT_CURRENT_VARIANT) {
 			return currentMode;
 		}
-		if (!ReachCraftingConfig.get().bulkVariantSwitching()) {
-			return BulkAutoCraftController.VariantContinuationMode.STRICT_CURRENT_VARIANT;
-		}
 		if (explicitVariantSelection
 			|| ReachCraftingConfig.get().revolvingCraftHandling() != ReachCraftingConfig.RevolvingCraftHandling.PREFER_CLICKED_TYPE_WITH_COUNT_FALLBACK) {
 			return BulkAutoCraftController.determineVariantContinuationMode(initialRequestedRecipeId, recipeId, explicitVariantSelection);
 		}
-		if (resolvedSelection == null) {
-			return BulkAutoCraftController.VariantContinuationMode.UNDECIDED;
+		
+		if (resolvedSelection != null && !resolvedSelection.recipeId().equals(initialRequestedRecipeId)) {
+			return !ReachCraftingConfig.get().bulkVariantSwitching()
+				? BulkAutoCraftController.VariantContinuationMode.STRICT_CURRENT_VARIANT
+				: BulkAutoCraftController.VariantContinuationMode.FAMILY_FALLBACK;
 		}
-		return resolvedSelection.recipeId().equals(initialRequestedRecipeId)
-			? BulkAutoCraftController.VariantContinuationMode.STRICT_CURRENT_VARIANT
-			: BulkAutoCraftController.VariantContinuationMode.FAMILY_FALLBACK;
+
+		return BulkAutoCraftController.VariantContinuationMode.UNDECIDED;
 	}
 
 	private RecipeDisplayId bulkContinuationRecipeId() {

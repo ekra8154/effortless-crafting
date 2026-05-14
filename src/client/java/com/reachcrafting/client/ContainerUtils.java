@@ -45,6 +45,14 @@ public final class ContainerUtils {
 		AutoCraftController.cancelToggle();
 	}
 
+	public static void consumeAutoCraftToggle() {
+		AutoCraftController.consumeQuickCraft();
+	}
+
+	public static void clearHoldSession() {
+		AutoCraftController.clearHoldSession();
+	}
+
 	public static boolean isAutoCraftTogglePending() {
 		return AutoCraftController.isTogglePending();
 	}
@@ -258,21 +266,24 @@ public final class ContainerUtils {
 		RecipeBookInputController.getInstance().clearInputQueue();
 	}
 
-	public static void abortAllSessions() {
-		boolean wasActive = RecipeBookInputController.getInstance().isInputQueueActive() 
+	public static boolean isAnySessionActive() {
+		return RecipeBookInputController.getInstance().isInputQueueActive() 
 			|| AutoMoveController.isAutomatedInteractionRunning() 
 			|| NearbyContainerDryRun.isActiveSessionRunning()
 			|| InventoryGridRestoreTracker.isRestoring()
 			|| BulkAutoCraftController.isActive();
+	}
 
-		if (!wasActive) {
+	public static void abortAllSessions() {
+		AutoCraftController.clearHoldSession();
+
+		if (!isAnySessionActive()) {
 			return;
 		}
 
 		clearInputQueue();
 		AutoMoveController.abort();
 		BulkAutoCraftController.stop(true);
-		AutoCraftController.clearHoldSession();
 		NearbyContainerDryRun.abortActiveSession();
 		InventoryGridRestoreTracker.clear();
 		OffhandConsolidationController.swapBack(net.minecraft.client.Minecraft.getInstance());

@@ -16,6 +16,7 @@ final class AutoCraftController {
 	private static boolean holdStickyNormalAltOverride = false;
 	private static boolean holdStickyBulkAltOverride = false;
 	private static boolean holdQuickCraftCancelled = false;
+	private static boolean holdQuickCraftConsumed = false;
 	private static int holdReleaseGraceTicks = 0;
 
 	private AutoCraftController() {
@@ -24,6 +25,7 @@ final class AutoCraftController {
 	static void handleKeyPress() {
 		autoCraftKeyHeld = true;
 		holdQuickCraftCancelled = false;
+		holdQuickCraftConsumed = false;
 		if (ReachCraftingConfig.get().autoCraftHandling() == ReachCraftingConfig.AutoCraftHandling.TOGGLE) {
 			autoCraftTogglePending = true;
 			return;
@@ -55,7 +57,7 @@ final class AutoCraftController {
 		}
 
 		if (ReachCraftingConfig.get().autoCraftHandling() == ReachCraftingConfig.AutoCraftHandling.HOLD) {
-			if (!holdQuickCraftCancelled) {
+			if (!holdQuickCraftCancelled && !holdQuickCraftConsumed) {
 				Minecraft client = Minecraft.getInstance();
 				if (client.player != null && client.player.containerMenu != null && (client.screen instanceof CraftingScreen || client.screen instanceof InventoryScreen)) {
 					Slot resultSlot = client.player.containerMenu.getSlot(0);
@@ -65,6 +67,7 @@ final class AutoCraftController {
 				}
 			}
 			holdQuickCraftCancelled = false;
+			holdQuickCraftConsumed = false;
 		}
 
 		autoCraftTogglePending = false;
@@ -79,6 +82,14 @@ final class AutoCraftController {
 				holdQuickCraftCancelled = true;
 				BulkAutoCraftController.stop(true, "hold_cancel_on_key");
 			}
+		}
+	}
+
+	static void consumeQuickCraft() {
+		if (ReachCraftingConfig.get().autoCraftHandling() == ReachCraftingConfig.AutoCraftHandling.TOGGLE) {
+			autoCraftTogglePending = false;
+		} else if (ReachCraftingConfig.get().autoCraftHandling() == ReachCraftingConfig.AutoCraftHandling.HOLD) {
+			holdQuickCraftConsumed = true;
 		}
 	}
 
@@ -177,12 +188,12 @@ final class AutoCraftController {
 
 	static void toggleEnabledModeViaArrow() {
 		if (ReachCraftingConfig.get().autoCraftHandling() == ReachCraftingConfig.AutoCraftHandling.HOLD) {
-			if (ReachCraftingConfig.get().autoCraftCapability() != ReachCraftingConfig.AutoCraftCapability.BULK || !isEnabled()) {
+			if (ReachCraftingConfig.get().autoCraftCapability() != ReachCraftingConfig.AutoCraftCapability.BULK) {
 				return;
 			}
 			if (holdStickyBulkLatched) {
 				holdStickyBulkLatched = false;
-				holdStickyNormalLatched = true;
+				holdStickyNormalLatched = false;
 				holdStickyBulkAltOverride = false;
 				BulkAutoCraftController.clear();
 			} else {
@@ -303,6 +314,7 @@ final class AutoCraftController {
 		holdStickyNormalAltOverride = false;
 		holdStickyBulkAltOverride = false;
 		holdQuickCraftCancelled = false;
+		holdQuickCraftConsumed = false;
 		holdReleaseGraceTicks = 0;
 		BulkAutoCraftController.clear();
 	}

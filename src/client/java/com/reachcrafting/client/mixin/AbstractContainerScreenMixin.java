@@ -75,10 +75,12 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 	@Inject(method = "removed", at = @At("HEAD"))
 	private void reachcrafting$cacheContainerOnClose(CallbackInfo ci) {
 		if (!ReachCraftingConfig.get().enabled()) return;
+		
 		// Final menu contents are authoritative for cache refresh, including automated open/close flows.
 		NearbyContainerCache.onContainerScreenRemoved(this.menu);
 		
-		if (!com.reachcrafting.client.ContainerUtils.isAutomatedInteractionRunning()) {
+		if (!com.reachcrafting.client.ContainerUtils.isAnySessionActive()) {
+			com.reachcrafting.client.ContainerUtils.clearHoldSession();
 			com.reachcrafting.client.PulledResourcesTracker.clear();
 			com.reachcrafting.client.InventoryGridRestoreTracker.clear();
 		}
@@ -120,7 +122,7 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 			&& ((Object) this instanceof CraftingScreen || (Object) this instanceof InventoryScreen)) {
 			Slot hoveredSlot = ((AbstractContainerScreenAccessor) this).getHoveredSlot();
 			if (hoveredSlot instanceof ResultSlot && reachcrafting$isArrowClickTarget(hoveredSlot, click.x(), click.y())) {
-				com.reachcrafting.client.ContainerUtils.cancelAutoCraftToggle();
+				com.reachcrafting.client.ContainerUtils.consumeAutoCraftToggle();
 				com.reachcrafting.client.ContainerUtils.toggleAutoCraftEnabledModeViaArrow();
 				cir.setReturnValue(true);
 				return;

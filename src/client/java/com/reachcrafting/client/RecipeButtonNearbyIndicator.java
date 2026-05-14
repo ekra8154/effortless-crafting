@@ -170,7 +170,7 @@ public final class RecipeButtonNearbyIndicator {
 	}
 
 	public static void renderGrayArrow(net.minecraft.client.gui.GuiGraphics guiGraphics, int x, int y) {
-		int color = 0xFF3D3D3D;
+		int color = 0x80000000;
 		// Stylized arrow with tail:
 		//   ###
 		//   ###

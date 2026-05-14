@@ -129,6 +129,14 @@ public final class RecipeVariantResolver {
 		*/
 
 		if (lockToCurrentVariant) {
+			net.minecraft.world.item.crafting.display.RecipeDisplayId lockedId = BulkAutoCraftController.getActiveLockedRecipeId();
+			if (lockedId != null) {
+				for (Selection selection : candidates) {
+					if (selection.recipeId().equals(lockedId)) {
+						return selection;
+					}
+				}
+			}
 			return exactSelection;
 		}
 
