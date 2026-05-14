@@ -18,7 +18,7 @@ import java.util.Set;
 
 public final class InWorldFilterManager {
 	private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-	private static final Path FILTERS_DIR = FabricLoader.getInstance().getConfigDir().resolve("reachcrafting").resolve("filters");
+	private static final Path FILTERS_DIR = FabricLoader.getInstance().getConfigDir().resolve("effortless-crafting").resolve("filters");
 	
 	private static final Set<String> INSTANCE_BLACKLIST = new HashSet<>();
 	private static final Set<String> INSTANCE_WHITELIST = new HashSet<>();
