@@ -725,10 +725,16 @@ final class RecipeBookInputController {
 		net.minecraft.client.gui.screens.recipebook.RecipeCollection collection,
 		boolean explicitVariantSelection
 	) {
-		if (action == null || action.explicitVariantSelection() != explicitVariantSelection) {
+		if (action == null) {
 			return false;
 		}
-		return action.recipeId().equals(recipeId);
+		return action.sameRecipe(new RecipeBookClickCapture.HeldRecipeAction(
+			recipeId,
+			collection,
+			ItemStack.EMPTY,
+			org.lwjgl.glfw.GLFW.GLFW_MOUSE_BUTTON_LEFT,
+			explicitVariantSelection
+		));
 	}
 
 	private void updateModifierReleaseWindows(boolean controlDown, boolean shiftDown, boolean altDown) {
