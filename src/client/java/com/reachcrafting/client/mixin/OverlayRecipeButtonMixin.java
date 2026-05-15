@@ -22,12 +22,12 @@ public abstract class OverlayRecipeButtonMixin {
 
 	@Shadow
 	@Final
-	OverlayRecipeComponent field_3113;
+	OverlayRecipeComponent this$0;
 
 	@Inject(method = "extractWidgetRenderState", at = @At("TAIL"))
 	private void reachcrafting$renderQueuedCount(GuiGraphicsExtractor guiGraphics, int mouseX, int mouseY, float partialTick, CallbackInfo ci) {
 		if (!ReachCraftingConfig.get().enabled()) return;
-		RecipeCollection collection = field_3113.getRecipeCollection();
+		RecipeCollection collection = this$0.getRecipeCollection();
 		if (collection == null) {
 			return;
 		}

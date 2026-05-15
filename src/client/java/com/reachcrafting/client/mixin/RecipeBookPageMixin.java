@@ -49,6 +49,15 @@ public abstract class RecipeBookPageMixin {
 					continue;
 				}
 
+				// Vanilla right-click on a revolving recipe button opens the
+				// explicit variant chooser. Let vanilla keep full ownership of
+				// that gesture on the main recipe page and only use our
+				// right-click clear behavior for single-variant buttons or the
+				// explicit overlay buttons.
+				if (button.getCollection() != null && button.getCollection().getRecipes().size() > 1) {
+					return;
+				}
+
 				if (RecipeBookClickCapture.onRecipeButtonRightClicked(
 					button.getCurrentRecipe(),
 					button.getCollection(),
