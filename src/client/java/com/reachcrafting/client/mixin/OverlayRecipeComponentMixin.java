@@ -71,8 +71,8 @@ public abstract class OverlayRecipeComponentMixin {
 		);
 	}
 
-	@Inject(method = "render", at = @At("TAIL"))
-	private void reachcrafting$onRender(net.minecraft.client.gui.GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick, org.spongepowered.asm.mixin.injection.callback.CallbackInfo ci) {
+	@Inject(method = "extractRenderState", at = @At("TAIL"))
+	private void reachcrafting$onRender(net.minecraft.client.gui.GuiGraphicsExtractor guiGraphics, int mouseX, int mouseY, float partialTick, org.spongepowered.asm.mixin.injection.callback.CallbackInfo ci) {
 		if (!ReachCraftingConfig.get().enabled()) return;
 		OverlayRecipeComponent overlay = (OverlayRecipeComponent) (Object) this;
 		if (!overlay.isVisible()) return;

@@ -2,7 +2,7 @@ package com.reachcrafting.client;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.inventory.ResultSlot;
@@ -18,7 +18,7 @@ public final class RecipeOutputCounter {
 	private RecipeOutputCounter() {
 	}
 
-	public static void render(GuiGraphics guiGraphics, AbstractContainerScreen<?> screen, Slot slot) {
+	public static void render(GuiGraphicsExtractor guiGraphics, AbstractContainerScreen<?> screen, Slot slot) {
 		if (!ReachCraftingConfig.get().showTotalOutputCounts()) {
 			return;
 		}
@@ -85,7 +85,7 @@ public final class RecipeOutputCounter {
 		renderCount(guiGraphics, minecraft.font, displayCount, slot.x, slot.y, color);
 	}
 
-	private static void renderCount(GuiGraphics guiGraphics, Font font, int count, int slotX, int slotY, int color) {
+	private static void renderCount(GuiGraphicsExtractor guiGraphics, Font font, int count, int slotX, int slotY, int color) {
 		String text = count > 999 ? (count / 1000) + "k" : String.valueOf(count);
 		float scale = 0.8f;
 		
@@ -98,8 +98,8 @@ public final class RecipeOutputCounter {
 		guiGraphics.pose().scale(scale, scale);
 		
 		// Draw at (0,0) relative to translated/scaled position
-		guiGraphics.drawString(font, text, 1, 1, SHADOW_COLOR, false);
-		guiGraphics.drawString(font, text, 0, 0, color, false);
+		guiGraphics.text(font, text, 1, 1, SHADOW_COLOR, false);
+		guiGraphics.text(font, text, 0, 0, color, false);
 
 		if (count > 64) {
 			int textWidth = font.width(text);
@@ -109,7 +109,7 @@ public final class RecipeOutputCounter {
 		guiGraphics.pose().popMatrix();
 	}
 
-	private static void renderBreakdown(GuiGraphics guiGraphics, Font font, int count, int x, int y, int color) {
+	private static void renderBreakdown(GuiGraphicsExtractor guiGraphics, Font font, int count, int x, int y, int color) {
 		int stacks = count / 64;
 		int remainder = count % 64;
 		String line1 = (stacks == 1 ? "64" : (stacks + "x64"));
@@ -122,15 +122,15 @@ public final class RecipeOutputCounter {
 			String line1WithParen = "(" + line1;
 			String line2 = "+" + remainder + ")";
 			
-			guiGraphics.drawString(font, line1WithParen, 1, 1, SHADOW_COLOR, false);
-			guiGraphics.drawString(font, line1WithParen, 0, 0, color, false);
+			guiGraphics.text(font, line1WithParen, 1, 1, SHADOW_COLOR, false);
+			guiGraphics.text(font, line1WithParen, 0, 0, color, false);
 			
-			guiGraphics.drawString(font, line2, 1, font.lineHeight + 1, SHADOW_COLOR, false);
-			guiGraphics.drawString(font, line2, 0, font.lineHeight, color, false);
+			guiGraphics.text(font, line2, 1, font.lineHeight + 1, SHADOW_COLOR, false);
+			guiGraphics.text(font, line2, 0, font.lineHeight, color, false);
 		} else {
 			String text = "(" + line1 + ")";
-			guiGraphics.drawString(font, text, 1, 1, SHADOW_COLOR, false);
-			guiGraphics.drawString(font, text, 0, 0, color, false);
+			guiGraphics.text(font, text, 1, 1, SHADOW_COLOR, false);
+			guiGraphics.text(font, text, 0, 0, color, false);
 		}
 		
 		guiGraphics.pose().popMatrix();

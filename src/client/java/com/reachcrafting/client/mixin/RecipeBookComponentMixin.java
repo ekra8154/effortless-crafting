@@ -189,8 +189,8 @@ public abstract class RecipeBookComponentMixin {
 		}
 	}
 
-	@Inject(method = "render", at = @At("TAIL"))
-	private void reachcrafting$onRender(net.minecraft.client.gui.GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick, CallbackInfo ci) {
+	@Inject(method = "extractRenderState", at = @At("TAIL"))
+	private void reachcrafting$onRender(net.minecraft.client.gui.GuiGraphicsExtractor guiGraphics, int mouseX, int mouseY, float partialTick, CallbackInfo ci) {
 		if (!ReachCraftingConfig.get().enabled() || !this.isVisible()) {
 			return;
 		}

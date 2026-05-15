@@ -4,7 +4,7 @@ import com.mojang.blaze3d.platform.InputConstants;
 import com.reachcrafting.ReachCraftingMod;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
+import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.resources.Identifier;
 // import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
@@ -19,7 +19,7 @@ public class ReachCraftingModClient implements ClientModInitializer {
 	public static void sendChat(String message) {
 		net.minecraft.client.Minecraft client = net.minecraft.client.Minecraft.getInstance();
 		if (client.player != null) {
-			client.player.displayClientMessage(net.minecraft.network.chat.Component.literal("[Effortless Crafting] " + message).withStyle(net.minecraft.ChatFormatting.GOLD), false);
+			client.player.sendSystemMessage(net.minecraft.network.chat.Component.literal("[Effortless Crafting] " + message).withStyle(net.minecraft.ChatFormatting.GOLD));
 		}
 	}
 
@@ -61,21 +61,21 @@ public class ReachCraftingModClient implements ClientModInitializer {
 			Identifier.fromNamespaceAndPath(ReachCraftingMod.MOD_ID, "debug")
 		);
 
-		showFilterOutlinesKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
+		showFilterOutlinesKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
 			"key.reachcrafting.show_filter_outlines",
 			InputConstants.Type.KEYSYM,
 			InputConstants.UNKNOWN.getValue(),
 			reachCraftingCategory
 		));
 
-		quickCraftKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
+		quickCraftKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
 			"key.reachcrafting.quick_craft",
 			InputConstants.Type.KEYSYM,
 			GLFW.GLFW_KEY_B,
 			reachCraftingCategory
 		));
 
-		toggleCraftableFilterKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
+		toggleCraftableFilterKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
 			"key.reachcrafting.toggle_craftable_filter",
 			InputConstants.Type.KEYSYM,
 			GLFW.GLFW_KEY_SPACE,

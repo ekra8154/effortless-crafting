@@ -12,7 +12,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.network.chat.Component;
 import net.minecraft.client.gui.screens.Screen;
 import com.mojang.blaze3d.platform.InputConstants;
@@ -86,8 +86,8 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 		}
 	}
 
-	@Inject(method = "renderLabels", at = @At("TAIL"))
-	private void reachcrafting$renderControlDot(GuiGraphics guiGraphics, int mouseX, int mouseY, CallbackInfo ci) {
+	@Inject(method = "extractLabels", at = @At("TAIL"))
+	private void reachcrafting$renderControlDot(GuiGraphicsExtractor guiGraphics, int mouseX, int mouseY, CallbackInfo ci) {
 		if (!ReachCraftingConfig.get().enabled()) return;
 		if (ReachCraftingConfig.get().inWorldFilterMode() == ReachCraftingConfig.InWorldFilterMode.NONE) return;
 
@@ -153,8 +153,8 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 		}
 	}
 
-	@Inject(method = "renderSlot", at = @At("HEAD"))
-	private void reachcrafting$renderResultArrow(GuiGraphics guiGraphics, Slot slot, int i, int j, CallbackInfo ci) {
+	@Inject(method = "extractSlot", at = @At("HEAD"))
+	private void reachcrafting$renderResultArrow(GuiGraphicsExtractor guiGraphics, Slot slot, int mouseX, int mouseY, CallbackInfo ci) {
 		if (!ReachCraftingConfig.get().enabled()) return;
 		if (com.reachcrafting.client.ContainerUtils.isAutoCraftEnabled() && slot instanceof ResultSlot) {
 			if ((Object) this instanceof CraftingScreen || (Object) this instanceof InventoryScreen) {
@@ -213,8 +213,8 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 		com.reachcrafting.client.OffhandConsolidationController.tick(Minecraft.getInstance());
 	}
 
-	@Inject(method = "renderSlot", at = @At("TAIL"))
-	private void reachcrafting$renderOutputCounter(GuiGraphics guiGraphics, Slot slot, int i, int j, CallbackInfo ci) {
+	@Inject(method = "extractSlot", at = @At("TAIL"))
+	private void reachcrafting$renderOutputCounter(GuiGraphicsExtractor guiGraphics, Slot slot, int mouseX, int mouseY, CallbackInfo ci) {
 		if (!ReachCraftingConfig.get().enabled()) return;
 		com.reachcrafting.client.RecipeOutputCounter.render(guiGraphics, (AbstractContainerScreen<?>) (Object) this, slot);
 	}

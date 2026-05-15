@@ -2,7 +2,7 @@ package com.reachcrafting.client;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.screens.recipebook.RecipeCollection;
 import net.minecraft.client.gui.screens.recipebook.RecipeButton;
@@ -18,7 +18,7 @@ public final class RecipeButtonQueuedCountIndicator {
 	private RecipeButtonQueuedCountIndicator() {
 	}
 
-	public static void render(GuiGraphics guiGraphics, RecipeButton button) {
+	public static void render(GuiGraphicsExtractor guiGraphics, RecipeButton button) {
 		if (!ReachCraftingConfig.get().enabled()) {
 			return;
 		}
@@ -41,12 +41,12 @@ public final class RecipeButtonQueuedCountIndicator {
 		// Transparent placeholder area so we have a stable badge region to skin later.
 		guiGraphics.fill(badgeX, badgeY, badgeX + BADGE_WIDTH, badgeY + BADGE_HEIGHT, BACKGROUND_COLOR);
 
-		guiGraphics.drawString(font, text, textX + 1, textY + 1, SHADOW_COLOR, false);
-		guiGraphics.drawString(font, text, textX, textY, TEXT_COLOR, false);
+		guiGraphics.text(font, text, textX + 1, textY + 1, SHADOW_COLOR, false);
+		guiGraphics.text(font, text, textX, textY, TEXT_COLOR, false);
 	}
 
 	public static void renderOverlayButton(
-		GuiGraphics guiGraphics,
+		GuiGraphicsExtractor guiGraphics,
 		int x,
 		int y,
 		int width,
@@ -72,7 +72,7 @@ public final class RecipeButtonQueuedCountIndicator {
 		int textY = badgeY;
 
 		guiGraphics.fill(badgeX, badgeY, badgeX + BADGE_WIDTH, badgeY + BADGE_HEIGHT, BACKGROUND_COLOR);
-		guiGraphics.drawString(font, text, textX + 1, textY + 1, SHADOW_COLOR, false);
-		guiGraphics.drawString(font, text, textX, textY, TEXT_COLOR, false);
+		guiGraphics.text(font, text, textX + 1, textY + 1, SHADOW_COLOR, false);
+		guiGraphics.text(font, text, textX, textY, TEXT_COLOR, false);
 	}
 }

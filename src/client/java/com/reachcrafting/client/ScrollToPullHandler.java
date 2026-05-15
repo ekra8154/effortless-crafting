@@ -7,7 +7,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.world.inventory.AbstractContainerMenu;
-import net.minecraft.world.inventory.ClickType;
+import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.InventoryMenu;
 import net.minecraft.world.inventory.ResultSlot;
 import net.minecraft.world.inventory.Slot;
@@ -90,7 +90,7 @@ public final class ScrollToPullHandler {
             if (up) {
                 // Wheel Up: To Cursor (stops at stack size)
                 if (virtualCarried.isEmpty() || (ItemStack.isSameItemSameComponents(virtualCarried, resultStack) && virtualCarried.getCount() < resultStack.getMaxStackSize())) {
-                    minecraft.gameMode.handleInventoryMouseClick(menu.containerId, resultSlot.index, 0, ClickType.PICKUP, minecraft.player);
+                    minecraft.gameMode.handleContainerInput(menu.containerId, resultSlot.index, 0, ContainerInput.PICKUP, minecraft.player);
                     
                     // Update virtual carried
                     if (virtualCarried.isEmpty()) {
@@ -112,16 +112,16 @@ public final class ScrollToPullHandler {
                     ReachCraftingMod.LOGGER.debug("ScrollToPull: Granular craft {}/{} -> Slot {}, New Virtual Count: {}", i + 1, totalAttempts, targetSlotIndex, virtualCountAfter);
 
                     // 2. Click Output
-                    minecraft.gameMode.handleInventoryMouseClick(menu.containerId, resultSlot.index, 0, ClickType.PICKUP, minecraft.player);
+                    minecraft.gameMode.handleContainerInput(menu.containerId, resultSlot.index, 0, ContainerInput.PICKUP, minecraft.player);
                     // 3. Click Target
-                    minecraft.gameMode.handleInventoryMouseClick(menu.containerId, targetSlotIndex, 0, ClickType.PICKUP, minecraft.player);
+                    minecraft.gameMode.handleContainerInput(menu.containerId, targetSlotIndex, 0, ContainerInput.PICKUP, minecraft.player);
                     
                     // 4. Update virtual state
                     virtualSlotCounts.put(targetSlotIndex, virtualCountAfter);
                     
                     craftsAttempted++;
                 } else if (hoveredSlot == resultSlot && ReachCraftingConfig.get().ejectItemsWhenFull()) {
-                    minecraft.gameMode.handleInventoryMouseClick(menu.containerId, resultSlot.index, 0, ClickType.THROW, minecraft.player);
+                    minecraft.gameMode.handleContainerInput(menu.containerId, resultSlot.index, 0, ContainerInput.THROW, minecraft.player);
                     craftsAttempted++;
                 } else {
                     break;

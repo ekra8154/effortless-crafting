@@ -119,13 +119,13 @@ public final class RecipeButtonNearbyIndicator {
 		return ContainerUtils.currentReservedCraftCopies(availableItems.gridStacks());
 	}
 
-	public static void renderOverlayButton(net.minecraft.client.gui.GuiGraphics guiGraphics, int x, int y, int width, RecipeDisplayId recipe, RecipeCollection collection) {
+	public static void renderOverlayButton(net.minecraft.client.gui.GuiGraphicsExtractor guiGraphics, int x, int y, int width, RecipeDisplayId recipe, RecipeCollection collection) {
 		if (shouldShow(recipe, collection, ItemStack.EMPTY, true)) {
 			renderDot(guiGraphics, x, y);
 		}
 	}
 
-	public static void renderDot(net.minecraft.client.gui.GuiGraphics guiGraphics, int x, int y) {
+	public static void renderDot(net.minecraft.client.gui.GuiGraphicsExtractor guiGraphics, int x, int y) {
 		int outer = 0xCC8B3A10;
 		int inner = 0xFFFFB24A;
 
@@ -136,7 +136,7 @@ public final class RecipeButtonNearbyIndicator {
 		guiGraphics.fill(x + 1, y + 1, x + 4, y + 4, inner);
 	}
 
-	public static void renderBlackDot(net.minecraft.client.gui.GuiGraphics guiGraphics, int x, int y) {
+	public static void renderBlackDot(net.minecraft.client.gui.GuiGraphicsExtractor guiGraphics, int x, int y) {
 		int outer = 0xCC000000;
 		int inner = 0xFF000000;
 
@@ -147,7 +147,7 @@ public final class RecipeButtonNearbyIndicator {
 		guiGraphics.fill(x + 1, y + 1, x + 4, y + 4, inner);
 	}
 
-	public static void renderWhiteDot(net.minecraft.client.gui.GuiGraphics guiGraphics, int x, int y) {
+	public static void renderWhiteDot(net.minecraft.client.gui.GuiGraphicsExtractor guiGraphics, int x, int y) {
 		int outer = 0xCCFFFFFF;
 		int inner = 0xFFFFFFFF;
 
@@ -158,7 +158,7 @@ public final class RecipeButtonNearbyIndicator {
 		guiGraphics.fill(x + 1, y + 1, x + 4, y + 4, inner);
 	}
 
-	public static void renderGrayDot(net.minecraft.client.gui.GuiGraphics guiGraphics, int x, int y) {
+	public static void renderGrayDot(net.minecraft.client.gui.GuiGraphicsExtractor guiGraphics, int x, int y) {
 		int outer = 0xCC888888;
 		int inner = 0xFF888888;
 
@@ -169,7 +169,7 @@ public final class RecipeButtonNearbyIndicator {
 		guiGraphics.fill(x + 1, y + 1, x + 4, y + 4, inner);
 	}
 
-	public static void renderGrayArrow(net.minecraft.client.gui.GuiGraphics guiGraphics, int x, int y) {
+	public static void renderGrayArrow(net.minecraft.client.gui.GuiGraphicsExtractor guiGraphics, int x, int y) {
 		int color = 0x80000000;
 		// Stylized arrow with tail:
 		//   ###
@@ -193,7 +193,7 @@ public final class RecipeButtonNearbyIndicator {
 	//   #####
 	//    ###
 	//     #
-	public static void renderOrangeArrowOutline(net.minecraft.client.gui.GuiGraphics guiGraphics, int x, int y) {
+	public static void renderOrangeArrowOutline(net.minecraft.client.gui.GuiGraphicsExtractor guiGraphics, int x, int y) {
 		int color = 0xFFFF9A1F;
 		guiGraphics.fill(x - 1, y - 1, x + 4, y + 2, color); // Stem (5x3)
 		guiGraphics.fill(x - 2, y + 2, x + 5, y + 5, color); // Wide base (7x3)

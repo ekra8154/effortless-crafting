@@ -2,8 +2,8 @@ package com.reachcrafting.client;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
-import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
-import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
+import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderContext;
+import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.core.BlockPos;
@@ -20,8 +20,8 @@ public final class ContainerFilterRenderer {
 	}
 
 	public static void init() {
-		// Use AFTER_ENTITIES as AFTER_TRANSLUCENT doesn't provide vertex consumers in modern Fabric/MC
-		WorldRenderEvents.AFTER_ENTITIES.register(context -> {
+		// Render after translucent world features so the outlines sit on top of normal world geometry.
+		LevelRenderEvents.AFTER_TRANSLUCENT_FEATURES.register(context -> {
 			ReachCraftingConfig config = ReachCraftingConfig.get();
 			if (!config.enabled()) {
 				return;
@@ -49,13 +49,13 @@ public final class ContainerFilterRenderer {
 		});
 	}
 
-	private static void renderList(WorldRenderContext context, Level level, Vec3 cameraPos, Set<String> keys, float r, float g, float b) {
+	private static void renderList(LevelRenderContext context, Level level, Vec3 cameraPos, Set<String> keys, float r, float g, float b) {
 		if (keys.isEmpty()) {
 			return;
 		}
 
-		PoseStack poseStack = context.matrices();
-		VertexConsumer consumer = context.consumers().getBuffer(RenderTypes.lines());
+		PoseStack poseStack = context.poseStack();
+		VertexConsumer consumer = context.bufferSource().getBuffer(RenderTypes.lines());
 
 		for (String key : keys) {
 			BlockPos pos = parsePos(level, key);

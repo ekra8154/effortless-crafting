@@ -311,8 +311,9 @@ public final class ContainerUtils {
 	public static String getItemName(String itemId) {
 		try {
 			return net.minecraft.core.registries.BuiltInRegistries.ITEM.get(net.minecraft.resources.Identifier.parse(itemId))
-				.map(net.minecraft.core.Holder::value)
-				.map(net.minecraft.world.item.Item::getName)
+				.map(net.minecraft.core.Holder.Reference::value)
+				.map(net.minecraft.world.item.ItemStack::new)
+				.map(net.minecraft.world.item.ItemStack::getHoverName)
 				.map(net.minecraft.network.chat.Component::getString)
 				.orElse(itemId);
 		} catch (Exception e) {

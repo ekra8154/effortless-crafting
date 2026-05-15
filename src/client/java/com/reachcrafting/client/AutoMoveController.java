@@ -7,7 +7,7 @@ import net.minecraft.client.gui.screens.inventory.CraftingScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.AbstractContainerMenu;
-import net.minecraft.world.inventory.ClickType;
+import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.InventoryMenu;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
@@ -214,7 +214,7 @@ final class AutoMoveController {
 						bulkDirectEject,
 						bulkProtectedKeep
 					);
-					client.gameMode.handleInventoryMouseClick(menu.containerId, resultSlot.index, 1, ClickType.THROW, client.player);
+					client.gameMode.handleContainerInput(menu.containerId, resultSlot.index, 1, ContainerInput.THROW, client.player);
 					if (bulkDirectEject) {
 						directEjectPendingCount = totalEjected;
 						directEjectAwaitingSettlement = true;
@@ -238,7 +238,7 @@ final class AutoMoveController {
 									String itemId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(gridSlot.getItem().getItem()).toString();
 									if (!acceptedIds.contains(itemId)) {
 										com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] EJECT grid byproduct {} from grid slot {}", itemId, i);
-										client.gameMode.handleInventoryMouseClick(menu.containerId, gridSlot.index, 1, ClickType.THROW, client.player);
+										client.gameMode.handleContainerInput(menu.containerId, gridSlot.index, 1, ContainerInput.THROW, client.player);
 									}
 								}
 							}
@@ -297,7 +297,7 @@ final class AutoMoveController {
 					}
 				}
 
-				client.gameMode.handleInventoryMouseClick(menu.containerId, resultSlot.index, 0, ClickType.QUICK_MOVE, client.player);
+				client.gameMode.handleContainerInput(menu.containerId, resultSlot.index, 0, ContainerInput.QUICK_MOVE, client.player);
 				com.reachcrafting.ReachCraftingMod.LOGGER.info(
 					"[auto_move] SHIFT-CLICK path: post-shiftclick. {} hotbar={}",
 					logBottleDistribution(menu),
@@ -396,11 +396,11 @@ final class AutoMoveController {
 						&& offhandSlot.hasItem()
 						&& ItemStack.isSameItemSameComponents(offhandSlot.getItem(), autoMoveTargetStack)
 						&& offhandSlot.getItem().getCount() < offhandSlot.getItem().getMaxStackSize()) {
-						client.gameMode.handleInventoryMouseClick(menu.containerId, sourceSlot.index, 0, ClickType.PICKUP, client.player);
-						client.gameMode.handleInventoryMouseClick(menu.containerId, offhandSlot.index, 0, ClickType.PICKUP, client.player);
+						client.gameMode.handleContainerInput(menu.containerId, sourceSlot.index, 0, ContainerInput.PICKUP, client.player);
+						client.gameMode.handleContainerInput(menu.containerId, offhandSlot.index, 0, ContainerInput.PICKUP, client.player);
 
 						if (!client.player.containerMenu.getCarried().isEmpty()) {
-							client.gameMode.handleInventoryMouseClick(menu.containerId, sourceSlot.index, 0, ClickType.PICKUP, client.player);
+							client.gameMode.handleContainerInput(menu.containerId, sourceSlot.index, 0, ContainerInput.PICKUP, client.player);
 						}
 
 						movesThisTick++;
@@ -412,10 +412,10 @@ final class AutoMoveController {
 					if (swappedSlotIndex != -1) {
 						Slot swapSlot = menu.getSlot(swappedSlotIndex);
 						if (swapSlot.hasItem() \u0026\u0026 ItemStack.isSameItemSameComponents(swapSlot.getItem(), autoMoveTargetStack) \u0026\u0026 swapSlot.getItem().getCount() < swapSlot.getItem().getMaxStackSize()) {
-							client.gameMode.handleInventoryMouseClick(menu.containerId, sourceSlot.index, 0, ClickType.PICKUP, client.player);
-							client.gameMode.handleInventoryMouseClick(menu.containerId, swapSlot.index, 0, ClickType.PICKUP, client.player);
+							client.gameMode.handleContainerInput(menu.containerId, sourceSlot.index, 0, ContainerInput.PICKUP, client.player);
+							client.gameMode.handleContainerInput(menu.containerId, swapSlot.index, 0, ContainerInput.PICKUP, client.player);
 							if (!client.player.containerMenu.getCarried().isEmpty()) {
-								client.gameMode.handleInventoryMouseClick(menu.containerId, sourceSlot.index, 0, ClickType.PICKUP, client.player);
+								client.gameMode.handleContainerInput(menu.containerId, sourceSlot.index, 0, ContainerInput.PICKUP, client.player);
 							}
 							movesThisTick++;
 							autoMoveSnapshotCounts.remove(i);
@@ -460,11 +460,11 @@ final class AutoMoveController {
 						);
 
 						if (canMove) {
-							client.gameMode.handleInventoryMouseClick(menu.containerId, sourceSlot.index, 0, ClickType.PICKUP, client.player);
-							client.gameMode.handleInventoryMouseClick(menu.containerId, targetSlot.index, 0, ClickType.PICKUP, client.player);
+							client.gameMode.handleContainerInput(menu.containerId, sourceSlot.index, 0, ContainerInput.PICKUP, client.player);
+							client.gameMode.handleContainerInput(menu.containerId, targetSlot.index, 0, ContainerInput.PICKUP, client.player);
 
 							if (!client.player.containerMenu.getCarried().isEmpty()) {
-								client.gameMode.handleInventoryMouseClick(menu.containerId, sourceSlot.index, 0, ClickType.PICKUP, client.player);
+								client.gameMode.handleContainerInput(menu.containerId, sourceSlot.index, 0, ContainerInput.PICKUP, client.player);
 							}
 
 							movesThisTick++;
@@ -523,7 +523,7 @@ final class AutoMoveController {
 							String itemId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(gridSlot.getItem().getItem()).toString();
 							if (!acceptedIds.contains(itemId)) {
 								com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] ORGANIZE eject grid byproduct {} from grid slot {}", itemId, i);
-								client.gameMode.handleInventoryMouseClick(menu.containerId, gridSlot.index, 1, ClickType.THROW, client.player);
+								client.gameMode.handleContainerInput(menu.containerId, gridSlot.index, 1, ContainerInput.THROW, client.player);
 								movesThisTick++;
 							}
 						}
@@ -620,7 +620,7 @@ final class AutoMoveController {
 				int amountEjected = stack.getCount();
 				if (currentTotal - amountEjected >= initialCount) {
 					com.reachcrafting.ReachCraftingMod.LOGGER.debug("[auto_move] Ejecting extra/by-product {} from inventory slot {}", itemId, slot.index);
-					client.gameMode.handleInventoryMouseClick(menu.containerId, slot.index, 1, ClickType.THROW, client.player);
+					client.gameMode.handleContainerInput(menu.containerId, slot.index, 1, ContainerInput.THROW, client.player);
 					
 					// If this was extra output, report it to the bulk controller so it doesn't think progress stopped
 					if (itemId.equals(outputId)) {
@@ -647,7 +647,7 @@ final class AutoMoveController {
 		Slot destination = MenuTransferHelper.findPlayerDestinationSlot(client.player, menu, itemId);
 		if (destination != null) {
 			int carriedBefore = carried.getCount();
-			client.gameMode.handleInventoryMouseClick(menu.containerId, destination.index, 0, ClickType.PICKUP, client.player);
+			client.gameMode.handleContainerInput(menu.containerId, destination.index, 0, ContainerInput.PICKUP, client.player);
 			ItemStack carriedAfter = client.player.containerMenu.getCarried();
 			if (carriedAfter.isEmpty() || carriedAfter.getCount() < carriedBefore) {
 				return carriedAfter.isEmpty();
@@ -658,7 +658,7 @@ final class AutoMoveController {
 			&& AutoCraftController.isBulkModeEnabled()
 			&& ItemStack.isSameItemSameComponents(carried, autoMoveTargetStack)) {
 			int ejectedCount = carried.getCount();
-			client.gameMode.handleInventoryMouseClick(menu.containerId, -999, 0, ClickType.PICKUP, client.player);
+			client.gameMode.handleContainerInput(menu.containerId, -999, 0, ContainerInput.PICKUP, client.player);
 			if (client.player.containerMenu.getCarried().isEmpty()) {
 				BulkAutoCraftController.addEjectedOutput(ejectedCount);
 				com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] Ejected carried output {} while finalizing batch", ContainerUtils.formatStack(carried));
@@ -818,3 +818,4 @@ final class AutoMoveController {
 		return sb.toString();
 	}
 }
+
