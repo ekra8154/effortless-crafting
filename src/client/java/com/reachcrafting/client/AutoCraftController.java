@@ -205,11 +205,11 @@ final class AutoCraftController {
 
 	static void resetBulkModeAfterSession(boolean preserveAutoCraft) {
 		if (ReachCraftingConfig.get().autoCraftHandling() == ReachCraftingConfig.AutoCraftHandling.HOLD) {
-			if (!preserveAutoCraft) {
+			if (!preserveAutoCraft || !isPhysicalAltHeld()) {
 				clearHoldRuntimeState();
 				return;
 			}
-			demoteBulkToNormalHoldMode();
+			demoteBulkToPhysicalHoldMode();
 			return;
 		}
 		ReachCraftingConfig config = ReachCraftingConfig.get();
