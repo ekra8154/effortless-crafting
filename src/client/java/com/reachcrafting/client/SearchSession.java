@@ -1529,6 +1529,16 @@ final class SearchSession extends BaseCraftSession {
 
 	private BulkAutoCraftController.VariantContinuationMode resolveBulkVariantContinuationMode(RecipeVariantResolver.Selection resolvedSelection) {
 		BulkAutoCraftController.VariantContinuationMode currentMode = BulkAutoCraftController.currentVariantContinuationMode();
+		if (!ReachCraftingConfig.get().bulkVariantSwitching()) {
+			com.reachcrafting.ReachCraftingMod.LOGGER.info(
+				"[bulk_variant_mode] force_strict requested_recipe={} current_recipe={} resolved_recipe={} current_mode={} reason=bulk_variant_switching_disabled",
+				initialRequestedRecipeId,
+				recipeId,
+				resolvedSelection == null ? "<null>" : resolvedSelection.recipeId(),
+				currentMode
+			);
+			return BulkAutoCraftController.VariantContinuationMode.STRICT_CURRENT_VARIANT;
+		}
 		if (currentMode == BulkAutoCraftController.VariantContinuationMode.FAMILY_FALLBACK) {
 			return currentMode;
 		}
@@ -1546,9 +1556,7 @@ final class SearchSession extends BaseCraftSession {
 				: BulkAutoCraftController.VariantContinuationMode.FAMILY_FALLBACK;
 		}
 
-		return !ReachCraftingConfig.get().bulkVariantSwitching()
-			? BulkAutoCraftController.VariantContinuationMode.STRICT_CURRENT_VARIANT
-			: BulkAutoCraftController.VariantContinuationMode.UNDECIDED;
+		return BulkAutoCraftController.VariantContinuationMode.UNDECIDED;
 	}
 
 	private RecipeDisplayId bulkContinuationRecipeId() {
@@ -1751,7 +1759,24 @@ final class SearchSession extends BaseCraftSession {
 			if (entry != null) {
 				expectedStack = RecipeVariantResolver.resolveDisplayStack(entry.display(), net.minecraft.world.item.crafting.display.SlotDisplayContext.fromLevel(level));
 			}
-			if (AutoCraftController.isBulkModeEnabled() && !craftAll && requestedSingleClicks > 1) {
+			com.reachcrafting.ReachCraftingMod.LOGGER.info(
+				"[bulk_place] bulk_mode={} craftAll={} requestedSingleClicks={} autoMoveReady={} expected={} chosen_recipe={}",
+				AutoCraftController.isBulkModeEnabled(),
+				craftAll,
+				requestedSingleClicks,
+				autoMoveReady,
+				ContainerUtils.formatStack(expectedStack),
+				recipeId
+			);
+			if (AutoCraftController.isBulkModeEnabled() && requestedSingleClicks > 1) {
+				BulkAutoCraftController.VariantContinuationMode continuationMode = resolveBulkVariantContinuationMode(null);
+				com.reachcrafting.ReachCraftingMod.LOGGER.info(
+					"[bulk_place] start_or_update recipe={} continuation_recipe={} continuation_mode={} refillable={}",
+					recipeId,
+					bulkContinuationRecipeId(),
+					continuationMode,
+					BulkAutoCraftController.isRefillableBulkMaxMode()
+				);
 				BulkAutoCraftController.startOrUpdate(
 					new RecipeBookClickCapture.HeldRecipeAction(
 						bulkContinuationRecipeId(),
@@ -1763,9 +1788,16 @@ final class SearchSession extends BaseCraftSession {
 					requestedSingleClicks,
 					allowNearby,
 					BulkAutoCraftController.isRefillableBulkMaxMode(),
-					resolveBulkVariantContinuationMode(null),
+					continuationMode,
 					expectedStack,
 					ingredientSummary
+				);
+			} else {
+				com.reachcrafting.ReachCraftingMod.LOGGER.info(
+					"[bulk_place] skip_start_or_update reason={} bulk_mode={} requestedSingleClicks={}",
+					!AutoCraftController.isBulkModeEnabled() ? "bulk_mode_disabled" : "requested_clicks_too_small",
+					AutoCraftController.isBulkModeEnabled(),
+					requestedSingleClicks
 				);
 			}
 			ContainerUtils.scheduleAutoMove(expectedStack);

@@ -282,8 +282,14 @@ public final class BulkAutoCraftController {
 		net.minecraft.client.gui.screens.recipebook.RecipeCollection collection,
 		boolean explicitVariantSelection
 	) {
+		if (activeSession == null || activeSession.variantContinuationMode() != VariantContinuationMode.STRICT_CURRENT_VARIANT) {
+			return false;
+		}
+		boolean committedConcreteVariant = activeSession.completedRecipeCopies() > 0
+			|| clickedRecipeId == null
+			|| !activeSession.action().recipeId().equals(clickedRecipeId);
 		return activeSession != null
-			&& activeSession.variantContinuationMode() == VariantContinuationMode.STRICT_CURRENT_VARIANT
+			&& committedConcreteVariant
 			&& activeSession.action().sameRecipe(new RecipeBookClickCapture.HeldRecipeAction(
 				clickedRecipeId,
 				collection,
