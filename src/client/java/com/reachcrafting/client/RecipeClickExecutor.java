@@ -152,7 +152,11 @@ final class RecipeClickExecutor {
 			ReachCraftingModClient.sendDebugChat("Ready: " + outputLabel);
 		}
 
-		int effectiveRequestedClicks = craftAll ? deficitReport.possibleCopies() : requestedClicks;
+		int effectiveRequestedClicks = refillableBulkMaxMode
+			? Math.max(requestedClicks, 1)
+			: craftAll
+				? deficitReport.possibleCopies()
+				: requestedClicks;
 		if (useDryRun) {
 			armBulkAutoCraft(
 				recipeId,
@@ -415,14 +419,52 @@ final class RecipeClickExecutor {
 		ItemStack expectedOutput,
 		RecipeIngredientSummary ingredientSummary
 	) {
+		com.reachcrafting.ReachCraftingMod.LOGGER.info(
+			"[bulk_arm] clicked_recipe={} resolved_recipe={} requestedClicks={} craftAll={} allowNearby={} bulk_mode={} explicit_variant={} refillable={} expected_output={}",
+			clickedRecipeId,
+			recipeId,
+			requestedClicks,
+			craftAll,
+			allowNearbyChests,
+			AutoCraftController.isBulkModeEnabled(),
+			explicitVariantSelection,
+			refillableBulkMaxMode,
+			ContainerUtils.formatStack(expectedOutput)
+		);
 		if (!AutoCraftController.isBulkModeEnabled() || requestedClicks <= 1) {
+			com.reachcrafting.ReachCraftingMod.LOGGER.info(
+				"[bulk_arm] clear reason={} bulk_mode={} requestedClicks={}",
+				!AutoCraftController.isBulkModeEnabled() ? "bulk_mode_disabled" : "requested_clicks_too_small",
+				AutoCraftController.isBulkModeEnabled(),
+				requestedClicks
+			);
 			BulkAutoCraftController.clear();
 			return;
 		}
 
+		boolean keepFamilyContinuation = ReachCraftingConfig.get().bulkVariantSwitching();
+		RecipeDisplayId continuationRecipeId = keepFamilyContinuation ? clickedRecipeId : recipeId;
+		BulkAutoCraftController.VariantContinuationMode continuationMode;
+		if (!keepFamilyContinuation) {
+			continuationMode = BulkAutoCraftController.VariantContinuationMode.STRICT_CURRENT_VARIANT;
+		} else if (allowNearbyChests
+			&& requestedClicks > 1
+			&& !explicitVariantSelection
+			&& ReachCraftingConfig.get().revolvingCraftHandling() == ReachCraftingConfig.RevolvingCraftHandling.PREFER_CLICKED_TYPE_WITH_COUNT_FALLBACK) {
+			continuationMode = BulkAutoCraftController.VariantContinuationMode.UNDECIDED;
+		} else {
+			continuationMode = BulkAutoCraftController.determineVariantContinuationMode(clickedRecipeId, recipeId, explicitVariantSelection);
+		}
+		com.reachcrafting.ReachCraftingMod.LOGGER.info(
+			"[bulk_arm] start continuation_recipe={} continuation_mode={} keep_family={}",
+			continuationRecipeId,
+			continuationMode,
+			keepFamilyContinuation
+		);
+
 		BulkAutoCraftController.startOrUpdate(
 			new RecipeBookClickCapture.HeldRecipeAction(
-				clickedRecipeId,
+				continuationRecipeId,
 				collection,
 				displayStack != null ? displayStack.copy() : ItemStack.EMPTY,
 				mouseButton,
@@ -431,12 +473,7 @@ final class RecipeClickExecutor {
 			requestedClicks,
 			allowNearbyChests,
 			refillableBulkMaxMode,
-			allowNearbyChests
-				&& requestedClicks > 1
-				&& !explicitVariantSelection
-				&& ReachCraftingConfig.get().revolvingCraftHandling() == ReachCraftingConfig.RevolvingCraftHandling.PREFER_CLICKED_TYPE_WITH_COUNT_FALLBACK
-					? BulkAutoCraftController.VariantContinuationMode.UNDECIDED
-					: BulkAutoCraftController.determineVariantContinuationMode(clickedRecipeId, recipeId, explicitVariantSelection),
+			continuationMode,
 			expectedOutput,
 			ingredientSummary
 		);

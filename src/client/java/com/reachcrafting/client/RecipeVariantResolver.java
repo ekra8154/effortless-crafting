@@ -113,8 +113,7 @@ public final class RecipeVariantResolver {
 			))
 			.toList();
 		int requestedCopies = Math.max(desiredCopiesPerSlot, 1);
-		boolean lockToCurrentVariant = handling == ReachCraftingConfig.RevolvingCraftHandling.PREFER_CLICKED_TYPE_WITH_COUNT_FALLBACK
-			&& BulkAutoCraftController.shouldLockToCurrentVariant(clickedRecipeId, collection, explicitVariantSelection);
+		boolean lockToCurrentVariant = BulkAutoCraftController.shouldLockToCurrentVariant(clickedRecipeId, collection, explicitVariantSelection);
 		/*
 		ReachCraftingMod.LOGGER.info(
 			"[recipe_variant_candidates] clicked_recipe={} collection_size={} craft_all={} requested_copies={} handling={} lock_current={} candidates={}",
@@ -142,7 +141,6 @@ public final class RecipeVariantResolver {
 
 		boolean bulkStrictOrUndecided = !craftAll
 			&& BulkAutoCraftController.isActive()
-			&& ReachCraftingConfig.get().revolvingCraftHandling() == ReachCraftingConfig.RevolvingCraftHandling.PREFER_CLICKED_TYPE_WITH_COUNT_FALLBACK
 			&& BulkAutoCraftController.currentVariantContinuationMode() != BulkAutoCraftController.VariantContinuationMode.FAMILY_FALLBACK;
 
 		if (handling == ReachCraftingConfig.RevolvingCraftHandling.PREFER_CLICKED_TYPE_WITH_COUNT_FALLBACK
