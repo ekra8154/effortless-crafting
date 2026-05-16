@@ -158,7 +158,7 @@ final class RecipeBookInputController {
 			? resolveMaxCraftRequestCount(minecraft, player, recipeId, collection, displayStack, explicitVariantSelection, allowNearbyChests)
 			: 1;
 
-		if (shouldQueueHeldRecipe(minecraft, maxCraftRequested) && state.replayBatch() == null) {
+		if (shouldQueueHeldRecipe(minecraft, maxCraftRequested, autoCraftRequested) && state.replayBatch() == null) {
 			if (autoCraftRequested) {
 				AutoCraftController.consumeQuickCraft();
 			}
@@ -421,7 +421,10 @@ final class RecipeBookInputController {
 		return RecipeVariantResolver.resolveDisplayStack(entry.display(), context);
 	}
 
-	private boolean shouldQueueHeldRecipe(Minecraft minecraft, boolean maxCraftRequested) {
+	private boolean shouldQueueHeldRecipe(Minecraft minecraft, boolean maxCraftRequested, boolean autoCraftRequested) {
+		if (autoCraftRequested && ReachCraftingConfig.get().altClickInstantCraft()) {
+			return false;
+		}
 		return ReachCraftingConfig.get().reachCraftHoldAndRelease()
 			&& !maxCraftRequested
 			&& (RecipeBookFocusManager.isControlKeyDown(minecraft)
