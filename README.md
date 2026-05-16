@@ -1,90 +1,164 @@
 # Effortless Crafting
 
-**Effortless Crafting** is a powerful client-side Fabric mod for Minecraft 1.21.11 that drastically streamlines crafting by pulling items directly from your inventory and nearby containers.
+**Effortless Crafting** is a client-side Fabric mod for Minecraft 1.21.11 that streamlines crafting by pulling items from your inventory and nearby containers along with some crafting quality of life tweaks, all while staying vanilla-compatible.
 
-It is designed for strict vanilla-compatible play. The mod operates entirely client-side, using standard container interactions and recipe placement that a vanilla client can already perform—meaning it works seamlessly on vanilla servers!
+The mod works entirely through standard container interaction and recipe placement that a vanilla client can already perform, so it works cleanly on vanilla servers.
 
 ---
 
-## Keybindings & Controls
+## Quick Start
 
-The mod introduces several new interactions to make crafting effortless, while ensuring that vanilla **normal clicking and shift-clicking recipes remain entirely untouched**.
+Most of the mod's power comes from **recipe requests**:
 
-| Action | Result |
-| :--- | :--- |
-| **Ctrl + Hover + Click/Scroll** | **Nearby Craft**: Queue ingredients to pull from nearby containers and inventory. |
-| **Shift + Hover + Scroll** | **Inventory Craft**: Queue ingredients to use from your inventory only. |
-| **Ctrl + Shift + Click** | **Max Craft**: Crafts as much as will fit into the crafting grid simultaneously. Like a Vanilla shift + click but with nearby containers. |
-| **Ctrl + Shift + Click (Bulk Enabled)** | **Max Bulk Craft**: Continuous max crafts until containers and inventory run out or until aborted. |
-| **Alt (Held or Toggled)** | **Auto-Craft**: Signals and engages the auto-crafting mode. |
-| **Alt + Click Result Slot** | **Enable Bulk Craft**: Temporarily enables bulk craft mode. |
-| **Spacebar (Held during queuing or pulling)** | **x16 Multiplier**: Scales your requested craft count or scroll to pull amount by 16 at a time. Works with scrolling wraparound. |
-| **Spacebar (Default)** | **Recipe Filter Toggle**: Instantly toggles the recipe book filter between craftable and uncraftable. |
-| **Right Click (Revolving Recipe)** | **Open Variant Menu**: Vanilla behavior that allows explicit variant requests regardless of the variant setting. |
-| **B (Default Hotkey)** | **Quick Craft**: Auto-opens a nearby 3x3 crafting table if available; otherwise opens the 2x2 inventory grid and auto-focuses the search bar. |
-| **ESC** | **Abort**: Immediately cancels any active or queued crafting session early. |
+1. Hover a recipe.
+2. Hold a modifier key.
+3. Scroll to choose how much you want.
+4. Release the modifier to send the request.
+
+The three main modifiers are:
+
+- `Shift`: queue a normal inventory-only craft
+- `Ctrl`: allow nearby containers to be used
+- `Alt`: queue the craft as an autocraft request
+
+If you prefer clicking, the same modifiers also change what recipe clicks do.
+
+---
+
+## Vanilla Still Matters
+
+- Normal recipe clicks still behave like vanilla.
+- Vanilla `Shift + click` remains the familiar max-craft action unless you combine it with the mod's other modifiers.
+- Vanilla right click on a revolving recipe opens the variant picker.
+- That variant picker matters if you want one exact variant instead of letting the mod resolve from the whole recipe family.
+
+---
+
+## Modifier Controls
+
+Combinations of these modifiers stack naturally.
+
+| Modifier | Main meaning | On click | On scroll |
+| :--- | :--- | :--- | :--- |
+| `Shift` | Inventory-only recipe request | Elevates request to a max craft (as much as will fit in the grid at once) | Changes the queued amount, and on releasing all held modifiers sends the request. |
+| `Ctrl` | Enable nearby containers | Adds 1 to the request with access to nearby containers | Changes the queued amount, and on releasing all held modifiers sends the request with access to nearby chests/barrels etc. |
+| `Alt` | Autocraft this request | Instantly crafts 1 if enabled, otherwise adds 1 to the request | Changes the queued amount, and on releasing all held modifiers sends the request with autocraft applied to that request. |
+
+`Spacebar` acts as an `x16` multiplier while queuing or scroll-pulling.  
+`Right Click` or `Esc` cancels any queued input before release while a request is being queued.  
+`Esc` will immediately abort any crafting session initiated by the mod.  
+
+---
+
+## Common Combos
+
+- `Ctrl + Shift + click`: nearby max craft
+- `Ctrl + Shift + click` with bulk enabled: repeated nearby max crafts until resources run out or the session is stopped
+- `Alt + Shift + click`: inventory-only max craft with autocraft enabled
+- `Ctrl + Alt + Shift + click`: nearby max craft with autocraft enabled
+- `Ctrl + Alt + scroll`: nearby autocraft request
+- `Shift + Alt + scroll`: inventory autocraft request (same as just alt + scroll)
+
+---
+
+## Good To Know
+
+- Turning autocraft on will craft whatever is currently in the grid. This makes it possible to request a recipe first, then autocraft it afterward without rebuilding the request.
+- Manual recipes are not auto-crafted unless autocraft is turned on while something is already staged in the grid.
+- `Alt + click` can instantly craft 1 when **Alt Click Instant Craft** is enabled.
+- Bulk mode removes the normal queue cap and enables repeated autocrafts and repeated max crafts.
+- `Shift + scroll` over the result slot can also be used as a fast **scroll to pull** shortcut for crafted results.
+
+---
+## Auto-Crafting
+
+- **Hold vs Toggle modes**: By default, autocraft uses hold mode. Holding `Alt` signals autocraft behavior for the current request. If preferred, autocraft can also be configured to use a toggle mode in settings. When autocraft is active, the arrow in the result slot indicates it.
+- **Quick autocraft from the grid**: If a recipe is already staged, tapping `Alt` can craft it without needing to rebuild the request.
+- **Instant craft option**: `Alt + click` can instantly craft 1 of the hovered recipe when **Alt Click Instant Craft** is enabled. If disabled, it behaves like a normal Alt request click instead.
+- **Smart placement**: Autocrafted items are placed intelligently, including left-to-right hotbar filling instead of vanilla's usual right-to-left behavior.
+- **Offhand stacking**: Autocraft can stack compatible outputs into the offhand slot and works for both 2x2 and 3x3 crafting grids.
+- **Manual recipe safeguard**: Recipes placed into the grid manually are never auto-crafted unless autocraft is turned on while that recipe is already staged.
+
+---
+
+## Bulk Crafting
+
+- **Enable bulk mode**: Hold `Alt` and click the crafting result arrow. Bulk mode is shown with an orange outline around the arrow. It remains on even after alt is released until a craft has been completed or aborted, or toggled back off. 
+- **What bulk changes**: Bulk uncaps the normal queue limit, making it practical to craft large amounts of stackable and nonstackable items such as dispensers or cake if you wish. 
+- **Bulk max craft**: `Ctrl + Shift + click` while bulk is enabled repeatedly performs nearby max crafts until resources run out or the session is aborted.
+- **Dynamic staging and ejection**: Bulk craft brings in as many items as possible at a time and can eject outputs when needed to keep large sessions moving.
+- **Variant continuation**: Bulk can keep crafting the same variant or switch to another available variant in the same family depending on your settings.
+- **Safe shutdown**: Bulk sessions shut off automatically when finished, when manually aborted with `ESC`, or when the game window loses focus.
+
+---
+
+## Scroll To Pull
+
+Scroll to pull is a specialized fast-output workflow that pairs well with the `Spacebar` x16 multiplier.
+
+- `Shift + scroll down` while hovering the result slot pulls the crafted result into your inventory, or ejects it if inventory space is unavailable.
+- `Shift + scroll down` while hovering an inventory slot tries to pull the crafted result directly into that slot.
+- `Shift + scroll up` appends the crafted result to your cursor stack.
 
 ---
 
 ## Core Mechanics
 
 ### Intelligent Resource Management
-* **Variant Resolution**: The mod intelligently resolves recipe variants (e.g., different types of wood or colors of wool) based on your request and what is currently available in storage.
-* **Smart Chest Interaction**: Prioritizes pulling from near-empty slots to help keep chests clean and consolidated.
-* **Item Return & Inventory Restore**: Remembers your inventory layout and attempts to place items back exactly where they were after a craft is finished.
-* **High-Performance Caching**: Caches nearby container contents to significantly speed up same-session crafts and to drive UI indicators showing what can be crafted.
 
-### Auto-Crafting
-* **Toggle or Hold Modes**: Configure the mod to auto-craft by pressing (default) or holding Alt to toggle it on/off. Signaled with an arrow in the crafting result slot.
-* **Quick Toggle**: Engaging auto-crafting for whatever recipe is currently staged in the grid will autocraft it without needing to use the mouse.
-* **Strict Manual Override**: Manual crafts are never automatically crafted unless it is toggled while items are already staged in the grid.
+- **Variant resolution**: The mod can resolve revolving recipe variants based on your request, the selected variant, your settings, and the resources currently available.
+- **Smart chest interaction**: Nearby pulls favor near-empty slots to help keep storage clean and consolidated.
+- **Item return and inventory restore**: The mod remembers your inventory and chest layout and tries to return items to their original places after crafting.
+- **High-performance caching**: Nearby container contents can be cached to speed up repeated crafts and improve craftability feedback.
 
-### Bulk Crafting
-* **Operation** Hold Alt and click the arrow in the crafting result slot to temporarily enable bulk craft mode, signaled with an orange outline around the arrow. This uncaps the item queuing limit, allowing for quantities greater than 64
-* **Nonstackable Crafting** Bulk craft large quantities of nonstackable items or any type of item with repeated autocrafts. This removes all of the vanilla tediousness of crafting dispensers, cakes, or large quantities of other items
-* **Dynamic Staging & Ejection**: Calculates available inventory space and stages bulk crafts to execute the maximum possible amount at a time, ejecting outputs to optimize space and increase speeds.
-* **Family Switching**: Can seamlessly transition between available variants in a recipe family (like switching from Oak to Jungle planks) when materials run out mid-batch if the setting is enabled. 
-* **Bulk Max Craft**: Continuously crafts the requested item until all nearby resources are exhausted or the session is aborted.
-* **Safe Disable**: Automatically disables crafting sessions upon completion, manual abort (ESC), or if the game window loses focus, preventing unwanted items from being crafted.
+### Nearby Crafting
 
-### Scroll to Pull
-A specialized form of auto-crafting designed for rapid, controlled output that works perfectly alongside the Spacebar x16 multiplier
-* **Shift + Scroll Down (Result slot hovered)**: Pulls the crafted result directly into your inventory (or automatically ejects it if your inventory is full).
-* **Shift + Scroll Down (Inventory slot hovered)**: Pulls the crafted result directly into the hovered inventory slot if possible.
-* **Shift + Scroll Up**: Appends the crafted result directly to your cursor stack.
+- **Nearby container usage**: `Ctrl` lets recipe requests use reachable storage around you in addition to your inventory.
+- **Exact variant requests**: Right click on revolving recipes to open vanilla's variant picker when you want one exact recipe instead of family-based resolution.
+- **Large nearby requests**: Nearby requests can combine with autocraft and bulk for large multi-stage crafting sessions.
 
 ---
 
-## Quality of Life Tweaks
+## Quality Of Life Tweaks
 
 ### Smart Item Transfer
-* **Hotbar Left-to-Right**: Intelligently fills your hotbar from left to right when automatically placing items in-inventory rather than the vanilla right to left, making newly crafted items more accessible. Vanilla style can still be achieved through normal shift clicks.
-* **Grow Existing Stacks**: Prioritizes appending to existing item stacks in your inventory before occupying empty slots.
-* **Offhand Stacking**: Supports stacking crafted items into your offhand slot and works cleanly for both 2x2 and 3x3 grids. (For 3x3, temporarily swaps the offhand item into the inventory)
 
-### Recipe Book & UI Enhancements
-* **Type to Search**: Typing can automatically type immediately into the search bar, only ignoring special keys such as the drop key
-* **Search History**: Navigate through your previous recipe book searches with up and down arrows.
-* **3x3 Auto-Focus**: Search bar is automatically focused when opening a crafting table.
-* **Yield & Queue Indicators**: Shows the exact yield total if all are crafted in that specific stack size.
-* **Chat Reporting & Feedback**: Dynamic, localized deficit reports tell you exactly what ingredients are missing, and bulk craft reports summarize all of the crafted items during the session. 
+- **Hotbar left-to-right**: Automatically placed crafted items fill the hotbar from left to right instead of vanilla's usual right-to-left behavior.
+- **Offhand stacking**: Crafted items can be stacked into the offhand slot and work for both 2x2 and 3x3 crafting grids.
+
+### Recipe Book And UI Enhancements
+
+- **Type to search**: Typing can jump directly into the recipe book search bar while ignoring keys that should not become text input.
+- **Search history**: Use the up and down arrows to cycle through previous recipe book searches.
+- **3x3 auto-focus**: The search bar is automatically focused when opening a crafting table.
+- **Yield and queue indicators**: The UI can show output totals and queued counts directly on recipes.
+- **Chat feedback**: Missing ingredient reports and bulk craft summaries are surfaced in chat.
+- **Recipe filter toggle**: `Spacebar` still supports the craftable/uncraftable recipe filter toggle when not being used for request scaling.
+
+### Extra Controls
+
+- **Quick Craft hotkey**: `B` by default opens a nearby 3x3 crafting table when possible, otherwise falls back to the 2x2 inventory grid and focuses search.
 
 ---
 
-## Customization & Filtering
+## Customization And Filtering
 
 ### High Customizability
-Effortless Crafting is designed to fit your playstyle. Almost every feature can be tweaked in the mod settings (requires Mod Menu and Cloth Config). You can adjust timings, change auto-craft behavior, or even **disable the mod entirely** with a single toggle. This way, regardless of server rules, capabilities of effortless crafting can be used. 
+
+Effortless Crafting is designed to fit different playstyles. Most behavior can be adjusted in the mod settings with Mod Menu and Cloth Config, including autocraft handling, variant behavior, queue behavior, and whether the mod is enabled at all.
 
 ### Container Filtering System
-* **Global Container Types Blacklist** Globally stop certain container types like hoppers or enderchests from having items pulled from them unless a specific in world one explicitly whitelisted. 
-* **In-World Blacklist/Whitelist**: Gain complete control over which containers the mod is allowed to interact with. When this setting is enabled, hold ctrl while in a container UI to view and change its black/unset/whitelist status by clicking the dot at the top.
-* **Visual Wireframes**: Toggleable in-world wireframes clearly display the status of filtered containers.
+
+- **Global container blacklist**: Prevent entire container types such as hoppers or ender chests from being used unless explicitly allowed with the in-world whitelist.
+- **In-world blacklist / whitelist**: With in-world filtering enabled, hold `Ctrl` inside a container UI to inspect and change that container's blacklist, neutral, or whitelist state via a clickable dot near the top of the container's UI.
+- **Visual wireframes**: Optional wireframes show filtered container states in the world.
 
 ---
 
-### Credits & License
-This project is licensed under **LGPL-3.0-or-later**. It draws inspiration and certain implementation patterns from:
-* [stack-to-nearby-chests](https://github.com/xiaocihua/stack-to-nearby-chests) by xiaocihua (LGPL-3.0)
+## Credits And License
 
----
+This project is licensed under **LGPL-3.0-or-later**.
+
+It draws inspiration and certain implementation patterns from:
+
+- [stack-to-nearby-chests](https://github.com/xiaocihua/stack-to-nearby-chests) by xiaocihua (LGPL-3.0)
