@@ -31,7 +31,7 @@ public final class RecipeBookFocusManager {
 			|| InputConstants.isKeyDown(minecraft.getWindow(), GLFW.GLFW_KEY_RIGHT_CONTROL);
 	}
 
-	static boolean isAltKeyDown(Minecraft minecraft) {
+	public static boolean isAltKeyDown(Minecraft minecraft) {
 		return InputConstants.isKeyDown(minecraft.getWindow(), GLFW.GLFW_KEY_LEFT_ALT)
 			|| InputConstants.isKeyDown(minecraft.getWindow(), GLFW.GLFW_KEY_RIGHT_ALT);
 	}

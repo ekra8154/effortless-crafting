@@ -103,14 +103,16 @@ public abstract class RecipeBookComponentMixin {
 			cir.setReturnValue(true);
 		} else if (com.reachcrafting.client.ReachCraftingModClient.toggleCraftableFilterKey.matches(event)) {
 			boolean isSpace = event.key() == GLFW.GLFW_KEY_SPACE;
-			boolean multiplierModifiersHeld = com.reachcrafting.client.RecipeBookFocusManager.isControlKeyDown(this.minecraft) || com.reachcrafting.client.RecipeBookFocusManager.isShiftKeyDown(this.minecraft);
+			boolean requestModifierHeld = com.reachcrafting.client.RecipeBookFocusManager.isControlKeyDown(this.minecraft)
+				|| com.reachcrafting.client.RecipeBookFocusManager.isShiftKeyDown(this.minecraft)
+				|| (ReachCraftingConfig.get().altAsRequestKey() && com.reachcrafting.client.RecipeBookFocusManager.isAltKeyDown(this.minecraft));
 			// Option 2: Special logic specifically for Spacebar.
 			// Spacebar can toggle while focused if the box is empty.
 			// For any other key (like 'G'), typing into the search bar takes priority if focused.
 			boolean isSearchBoxFocused = this.searchBox != null && this.searchBox.isFocused();
 			boolean canToggle = !isSearchBoxFocused || (isSpace && this.searchBox.getValue().isEmpty());
 
-			if (this.isVisible() && canToggle && !(isSpace && multiplierModifiersHeld)) {
+			if (this.isVisible() && canToggle && !(isSpace && requestModifierHeld)) {
 				net.minecraft.client.gui.components.CycleButton<Boolean> filterButton = ((RecipeBookComponentAccessor) this).getFilterButton();
 				if (filterButton != null) {
 					boolean newValue = !filterButton.getValue();
