@@ -93,6 +93,8 @@
 	"enum.reachcrafting.auto_craft_handling.hold": "Hold",
 	"option.reachcrafting.alt_as_request_key": "Alt as Request Key",
 	"tooltip.reachcrafting.alt_as_request_key": "Treat Alt + scroll as an alias for Shift + scroll, and automatically craft the requested items once Alt is released.",
+	"option.reachcrafting.alt_click_instant_craft": "Alt Click Instant Craft",
+	"tooltip.reachcrafting.alt_click_instant_craft": "If enabled, Alt + click instantly crafts 1 of the requested item instead of queuing it until Alt is released.",
 	"category.reachcrafting.sub.messages": "Messages",
 	"option.reachcrafting.show_craft_aborted_message": "Craft Session Aborted",
 	"tooltip.reachcrafting.show_craft_aborted_message": "Whether to show a chat message when a crafting session is aborted early by esc or for some other reason.",

@@ -171,6 +171,15 @@ public final class ReachCraftingConfigScreen {
 			.build());
 
 		autoGroup.add(entries.startBooleanToggle(
+				Component.translatable("option.reachcrafting.alt_click_instant_craft"),
+				config.altClickInstantCraft()
+			)
+			.setDefaultValue(true)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.alt_click_instant_craft"))
+			.setSaveConsumer(config::setAltClickInstantCraft)
+			.build());
+
+		autoGroup.add(entries.startBooleanToggle(
 				Component.translatable("option.reachcrafting.auto_craft_off_after_bulk"),
 				config.autoCraftOffAfterBulk()
 			)
