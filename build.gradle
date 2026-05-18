@@ -1,5 +1,5 @@
 plugins {
-	id 'net.fabricmc.fabric-loom' version "${loom_version}"
+	id 'net.fabricmc.fabric-loom-remap' version "${loom_version}"
 	id 'maven-publish'
 }
 
@@ -16,6 +16,7 @@ repositories {
 }
 
 loom {
+	enableTransitiveAccessWideners = false
 	splitEnvironmentSourceSets()
 
 	mods {
@@ -29,15 +30,14 @@ loom {
 
 dependencies {
 	minecraft "com.mojang:minecraft:${project.minecraft_version}"
+	mappings loom.officialMojangMappings()
 	implementation "net.fabricmc:fabric-loader:${project.loader_version}"
 
 	implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
 
 	// Optional compile/runtime integrations for config UI support.
-	compileOnly "me.shedaniel.cloth:cloth-config-fabric:${project.cloth_config_version}"
-	runtimeOnly "me.shedaniel.cloth:cloth-config-fabric:${project.cloth_config_version}"
-	compileOnly "com.terraformersmc:modmenu:${project.modmenu_version}"
-	runtimeOnly "com.terraformersmc:modmenu:${project.modmenu_version}"
+	compileOnly files("D:/Programs/Modrinth App/ModrinthApp/profiles/Fabric 1.20.1/mods/cloth-config-11.1.136-fabric.jar")
+	compileOnly files("D:/Programs/Modrinth App/ModrinthApp/profiles/Fabric 1.20.1/mods/modmenu-7.2.2.jar")
 }
 
 processResources {
@@ -49,13 +49,13 @@ processResources {
 }
 
 tasks.withType(JavaCompile).configureEach {
-	options.release = 25
+	options.release = 17
 }
 
 java {
 	withSourcesJar()
 	toolchain {
-		languageVersion = JavaLanguageVersion.of(25)
+		languageVersion = JavaLanguageVersion.of(17)
 	}
 }
 
