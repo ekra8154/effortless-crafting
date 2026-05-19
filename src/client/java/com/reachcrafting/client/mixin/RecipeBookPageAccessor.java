@@ -17,9 +17,6 @@ public interface RecipeBookPageAccessor {
 	@Accessor("buttons")
 	List<RecipeButton> getButtons();
 
-	@Accessor("isFiltering")
-	boolean getIsFiltering();
-
 	@Accessor("currentPage")
 	int getCurrentPage();
 

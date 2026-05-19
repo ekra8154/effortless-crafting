@@ -19,6 +19,9 @@ public interface RecipeBookComponentAccessor {
 	@Accessor("selectedTab")
 	RecipeBookTabButton getSelectedTab();
 
+	@Accessor("selectedTab")
+	void setSelectedTab(RecipeBookTabButton button);
+
 	@Accessor("filterButton")
 	StateSwitchingButton getFilterButton();
 
@@ -37,14 +40,8 @@ public interface RecipeBookComponentAccessor {
 	@Accessor("minecraft")
 	Minecraft getMinecraft();
 
-	@Invoker("replaceSelected")
-	void invokeReplaceSelected(RecipeBookTabButton button);
-
-	@Invoker("getXOrigin")
-	int invokeGetXOrigin();
-
-	@Invoker("getYOrigin")
-	int invokeGetYOrigin();
+	@Accessor("xOffset")
+	int getXOffset();
 
 	@Invoker("updateCollections")
 	void invokeUpdateCollections(boolean resetPage);

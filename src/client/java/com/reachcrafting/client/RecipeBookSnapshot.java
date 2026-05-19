@@ -25,6 +25,10 @@ record RecipeBookSnapshot(
 	boolean overlayVisible,
 	net.minecraft.client.gui.screens.recipebook.RecipeCollection overlayCollection
 ) {
+	private static final int RECIPE_BOOK_PANEL_WIDTH = 147;
+	private static final int RECIPE_BOOK_PANEL_HEIGHT = 166;
+	private static final int OVERLAY_CENTER_Y_OFFSET = 13;
+
 	static RecipeBookSnapshot capture(RecipeUpdateListener screen) {
 		RecipeBookComponent component = screen.getRecipeBookComponent();
 		RecipeBookComponentAccessor accessor = (RecipeBookComponentAccessor) component;
@@ -83,7 +87,8 @@ record RecipeBookSnapshot(
 		if (selectedCategory != null) {
 			for (RecipeBookTabButton tabButton : accessor.getTabButtons()) {
 				if (selectedCategory.equals(tabButton.getCategory())) {
-					accessor.invokeReplaceSelected(tabButton);
+					accessor.setSelectedTab(tabButton);
+					accessor.invokeUpdateCollections(true);
 					break;
 				}
 			}
@@ -118,17 +123,15 @@ record RecipeBookSnapshot(
 			return;
 		}
 
-		int left = accessor.invokeGetXOrigin();
-		int top = accessor.invokeGetYOrigin();
-		int width = accessor.getWidth();
-		int height = accessor.getHeight();
+		int left = (accessor.getWidth() - RECIPE_BOOK_PANEL_WIDTH) / 2 - accessor.getXOffset();
+		int top = (accessor.getHeight() - RECIPE_BOOK_PANEL_HEIGHT) / 2;
 		overlay.init(
 			minecraft,
 			overlayCollection,
 			matchingButton.getX(),
 			matchingButton.getY(),
-			left + width / 2,
-			top + 13 + height / 2,
+			left + RECIPE_BOOK_PANEL_WIDTH / 2,
+			top + OVERLAY_CENTER_Y_OFFSET + RECIPE_BOOK_PANEL_HEIGHT / 2,
 			matchingButton.getWidth()
 		);
 	}
