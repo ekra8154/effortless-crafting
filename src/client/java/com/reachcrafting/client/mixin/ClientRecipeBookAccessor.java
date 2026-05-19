@@ -1,14 +1,13 @@
 package com.reachcrafting.client.mixin;
 
-import java.util.Map;
+import java.util.Set;
 import net.minecraft.client.ClientRecipeBook;
-import net.minecraft.world.item.crafting.display.RecipeDisplayEntry;
-import net.minecraft.world.item.crafting.display.RecipeDisplayId;
+import net.minecraft.resources.ResourceLocation;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
 
 @Mixin(ClientRecipeBook.class)
 public interface ClientRecipeBookAccessor {
 	@Accessor
-	Map<RecipeDisplayId, RecipeDisplayEntry> getKnown();
+	Set<ResourceLocation> getKnown();
 }

@@ -7,7 +7,7 @@ import net.minecraft.client.gui.screens.inventory.CraftingScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.AbstractContainerMenu;
-import net.minecraft.world.inventory.ContainerInput;
+import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.inventory.InventoryMenu;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
@@ -149,7 +149,7 @@ final class AutoMoveController {
 			if (resultSlot.hasItem() && resultSlot.mayPickup(client.player)) {
 				ItemStack currentResult = resultSlot.getItem();
 
-				if (!autoMoveExpectedStack.isEmpty() && !ItemStack.isSameItemSameComponents(currentResult, autoMoveExpectedStack)) {
+				if (!autoMoveExpectedStack.isEmpty() && !ItemStack.isSameItemSameTags(currentResult, autoMoveExpectedStack)) {
 					com.reachcrafting.ReachCraftingMod.LOGGER.info(
 						"[auto_move] Recipe changed! Expected: {}, Found: {}. Stopping.",
 						ContainerUtils.formatStack(autoMoveExpectedStack),
@@ -214,7 +214,7 @@ final class AutoMoveController {
 						bulkDirectEject,
 						bulkProtectedKeep
 					);
-					client.gameMode.handleContainerInput(menu.containerId, resultSlot.index, 1, ContainerInput.THROW, client.player);
+					client.gameMode.handleInventoryMouseClick(menu.containerId, resultSlot.index, 1, ClickType.THROW, client.player);
 					if (bulkDirectEject) {
 						directEjectPendingCount = totalEjected;
 						directEjectAwaitingSettlement = true;
@@ -238,7 +238,7 @@ final class AutoMoveController {
 									String itemId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(gridSlot.getItem().getItem()).toString();
 									if (!acceptedIds.contains(itemId)) {
 										com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] EJECT grid byproduct {} from grid slot {}", itemId, i);
-										client.gameMode.handleContainerInput(menu.containerId, gridSlot.index, 1, ContainerInput.THROW, client.player);
+										client.gameMode.handleInventoryMouseClick(menu.containerId, gridSlot.index, 1, ClickType.THROW, client.player);
 									}
 								}
 							}
@@ -297,7 +297,7 @@ final class AutoMoveController {
 					}
 				}
 
-				client.gameMode.handleContainerInput(menu.containerId, resultSlot.index, 0, ContainerInput.QUICK_MOVE, client.player);
+				client.gameMode.handleInventoryMouseClick(menu.containerId, resultSlot.index, 0, ClickType.QUICK_MOVE, client.player);
 				com.reachcrafting.ReachCraftingMod.LOGGER.info(
 					"[auto_move] SHIFT-CLICK path: post-shiftclick. {} hotbar={}",
 					logBottleDistribution(menu),
@@ -355,7 +355,7 @@ final class AutoMoveController {
 
 		for (int i = 0; i < 36 && movesThisTick < maxMovesPerTick; i++) {
 			Slot sourceSlot = findInventorySlot(menu, i);
-			if (sourceSlot != null && sourceSlot.hasItem() && ItemStack.isSameItemSameComponents(sourceSlot.getItem(), autoMoveTargetStack)) {
+			if (sourceSlot != null && sourceSlot.hasItem() && ItemStack.isSameItemSameTags(sourceSlot.getItem(), autoMoveTargetStack)) {
 				int currentCount = sourceSlot.getItem().getCount();
 				
 				// Never move items OUT of the offhand or the swapped offhand slot
@@ -394,13 +394,13 @@ final class AutoMoveController {
 					}
 					if (offhandSlot != null
 						&& offhandSlot.hasItem()
-						&& ItemStack.isSameItemSameComponents(offhandSlot.getItem(), autoMoveTargetStack)
+						&& ItemStack.isSameItemSameTags(offhandSlot.getItem(), autoMoveTargetStack)
 						&& offhandSlot.getItem().getCount() < offhandSlot.getItem().getMaxStackSize()) {
-						client.gameMode.handleContainerInput(menu.containerId, sourceSlot.index, 0, ContainerInput.PICKUP, client.player);
-						client.gameMode.handleContainerInput(menu.containerId, offhandSlot.index, 0, ContainerInput.PICKUP, client.player);
+						client.gameMode.handleInventoryMouseClick(menu.containerId, sourceSlot.index, 0, ClickType.PICKUP, client.player);
+						client.gameMode.handleInventoryMouseClick(menu.containerId, offhandSlot.index, 0, ClickType.PICKUP, client.player);
 
 						if (!client.player.containerMenu.getCarried().isEmpty()) {
-							client.gameMode.handleContainerInput(menu.containerId, sourceSlot.index, 0, ContainerInput.PICKUP, client.player);
+							client.gameMode.handleInventoryMouseClick(menu.containerId, sourceSlot.index, 0, ClickType.PICKUP, client.player);
 						}
 
 						movesThisTick++;
@@ -411,11 +411,11 @@ final class AutoMoveController {
 					
 					if (swappedSlotIndex != -1) {
 						Slot swapSlot = menu.getSlot(swappedSlotIndex);
-						if (swapSlot.hasItem() \u0026\u0026 ItemStack.isSameItemSameComponents(swapSlot.getItem(), autoMoveTargetStack) \u0026\u0026 swapSlot.getItem().getCount() < swapSlot.getItem().getMaxStackSize()) {
-							client.gameMode.handleContainerInput(menu.containerId, sourceSlot.index, 0, ContainerInput.PICKUP, client.player);
-							client.gameMode.handleContainerInput(menu.containerId, swapSlot.index, 0, ContainerInput.PICKUP, client.player);
+						if (swapSlot.hasItem() \u0026\u0026 ItemStack.isSameItemSameTags(swapSlot.getItem(), autoMoveTargetStack) \u0026\u0026 swapSlot.getItem().getCount() < swapSlot.getItem().getMaxStackSize()) {
+							client.gameMode.handleInventoryMouseClick(menu.containerId, sourceSlot.index, 0, ClickType.PICKUP, client.player);
+							client.gameMode.handleInventoryMouseClick(menu.containerId, swapSlot.index, 0, ClickType.PICKUP, client.player);
 							if (!client.player.containerMenu.getCarried().isEmpty()) {
-								client.gameMode.handleContainerInput(menu.containerId, sourceSlot.index, 0, ContainerInput.PICKUP, client.player);
+								client.gameMode.handleInventoryMouseClick(menu.containerId, sourceSlot.index, 0, ClickType.PICKUP, client.player);
 							}
 							movesThisTick++;
 							autoMoveSnapshotCounts.remove(i);
@@ -445,7 +445,7 @@ final class AutoMoveController {
 						boolean canMove = false;
 						if (!targetSlot.hasItem()) {
 							canMove = true;
-						} else if (ItemStack.isSameItemSameComponents(targetSlot.getItem(), autoMoveTargetStack)) {
+						} else if (ItemStack.isSameItemSameTags(targetSlot.getItem(), autoMoveTargetStack)) {
 							if (targetSlot.getItem().getCount() < targetSlot.getItem().getMaxStackSize()) {
 								canMove = true;
 							}
@@ -460,11 +460,11 @@ final class AutoMoveController {
 						);
 
 						if (canMove) {
-							client.gameMode.handleContainerInput(menu.containerId, sourceSlot.index, 0, ContainerInput.PICKUP, client.player);
-							client.gameMode.handleContainerInput(menu.containerId, targetSlot.index, 0, ContainerInput.PICKUP, client.player);
+							client.gameMode.handleInventoryMouseClick(menu.containerId, sourceSlot.index, 0, ClickType.PICKUP, client.player);
+							client.gameMode.handleInventoryMouseClick(menu.containerId, targetSlot.index, 0, ClickType.PICKUP, client.player);
 
 							if (!client.player.containerMenu.getCarried().isEmpty()) {
-								client.gameMode.handleContainerInput(menu.containerId, sourceSlot.index, 0, ContainerInput.PICKUP, client.player);
+								client.gameMode.handleInventoryMouseClick(menu.containerId, sourceSlot.index, 0, ClickType.PICKUP, client.player);
 							}
 
 							movesThisTick++;
@@ -523,7 +523,7 @@ final class AutoMoveController {
 							String itemId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(gridSlot.getItem().getItem()).toString();
 							if (!acceptedIds.contains(itemId)) {
 								com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] ORGANIZE eject grid byproduct {} from grid slot {}", itemId, i);
-								client.gameMode.handleContainerInput(menu.containerId, gridSlot.index, 1, ContainerInput.THROW, client.player);
+								client.gameMode.handleInventoryMouseClick(menu.containerId, gridSlot.index, 1, ClickType.THROW, client.player);
 								movesThisTick++;
 							}
 						}
@@ -535,7 +535,7 @@ final class AutoMoveController {
 				}
 			}
 
-			if (resultSlot.hasItem() && ItemStack.isSameItemSameComponents(resultSlot.getItem(), autoMoveTargetStack)) {
+			if (resultSlot.hasItem() && ItemStack.isSameItemSameTags(resultSlot.getItem(), autoMoveTargetStack)) {
 				com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] Result slot still has items after organizing. Restarting loop.");
 				autoMoveOrganizing = false;
 				autoMoveWaitingTicks = 0;
@@ -620,7 +620,7 @@ final class AutoMoveController {
 				int amountEjected = stack.getCount();
 				if (currentTotal - amountEjected >= initialCount) {
 					com.reachcrafting.ReachCraftingMod.LOGGER.debug("[auto_move] Ejecting extra/by-product {} from inventory slot {}", itemId, slot.index);
-					client.gameMode.handleContainerInput(menu.containerId, slot.index, 1, ContainerInput.THROW, client.player);
+					client.gameMode.handleInventoryMouseClick(menu.containerId, slot.index, 1, ClickType.THROW, client.player);
 					
 					// If this was extra output, report it to the bulk controller so it doesn't think progress stopped
 					if (itemId.equals(outputId)) {
@@ -647,7 +647,7 @@ final class AutoMoveController {
 		Slot destination = MenuTransferHelper.findPlayerDestinationSlot(client.player, menu, itemId);
 		if (destination != null) {
 			int carriedBefore = carried.getCount();
-			client.gameMode.handleContainerInput(menu.containerId, destination.index, 0, ContainerInput.PICKUP, client.player);
+			client.gameMode.handleInventoryMouseClick(menu.containerId, destination.index, 0, ClickType.PICKUP, client.player);
 			ItemStack carriedAfter = client.player.containerMenu.getCarried();
 			if (carriedAfter.isEmpty() || carriedAfter.getCount() < carriedBefore) {
 				return carriedAfter.isEmpty();
@@ -656,9 +656,9 @@ final class AutoMoveController {
 
 		if (ReachCraftingConfig.get().ejectItemsWhenFull()
 			&& AutoCraftController.isBulkModeEnabled()
-			&& ItemStack.isSameItemSameComponents(carried, autoMoveTargetStack)) {
+			&& ItemStack.isSameItemSameTags(carried, autoMoveTargetStack)) {
 			int ejectedCount = carried.getCount();
-			client.gameMode.handleContainerInput(menu.containerId, -999, 0, ContainerInput.PICKUP, client.player);
+			client.gameMode.handleInventoryMouseClick(menu.containerId, -999, 0, ClickType.PICKUP, client.player);
 			if (client.player.containerMenu.getCarried().isEmpty()) {
 				BulkAutoCraftController.addEjectedOutput(ejectedCount);
 				com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] Ejected carried output {} while finalizing batch", ContainerUtils.formatStack(carried));
@@ -677,7 +677,7 @@ final class AutoMoveController {
 
 		for (int i = 0; i < 36; i++) {
 			Slot slot = findInventorySlot(menu, i);
-			if (slot == null || !slot.hasItem() || !ItemStack.isSameItemSameComponents(slot.getItem(), autoMoveTargetStack)) {
+			if (slot == null || !slot.hasItem() || !ItemStack.isSameItemSameTags(slot.getItem(), autoMoveTargetStack)) {
 				continue;
 			}
 			int oldCount = autoMoveSnapshotCounts.getOrDefault(i, 0);
@@ -689,7 +689,7 @@ final class AutoMoveController {
 		Slot offhandSlot = findVisibleOffhandSlot(menu);
 		if (offhandSlot != null
 			&& offhandSlot.hasItem()
-			&& ItemStack.isSameItemSameComponents(offhandSlot.getItem(), autoMoveTargetStack)) {
+			&& ItemStack.isSameItemSameTags(offhandSlot.getItem(), autoMoveTargetStack)) {
 			int oldCount = autoMoveSnapshotCounts.getOrDefault(offhandSlot.index, 0);
 			if (offhandSlot.getItem().getCount() > oldCount) {
 				return true;
@@ -699,7 +699,7 @@ final class AutoMoveController {
 		int swappedSlotIndex = OffhandConsolidationController.getSwapSlotIndex(menu);
 		if (swappedSlotIndex != -1) {
 			Slot swappedSlot = menu.getSlot(swappedSlotIndex);
-			if (swappedSlot.hasItem() && ItemStack.isSameItemSameComponents(swappedSlot.getItem(), autoMoveTargetStack)) {
+			if (swappedSlot.hasItem() && ItemStack.isSameItemSameTags(swappedSlot.getItem(), autoMoveTargetStack)) {
 				int oldCount = autoMoveSnapshotCounts.getOrDefault(swappedSlot.index, 0);
 				if (swappedSlot.getItem().getCount() > oldCount) {
 					return true;
@@ -728,7 +728,7 @@ final class AutoMoveController {
 			if (slot == null) continue;
 			if (!slot.hasItem()) {
 				remaining -= maxStack;
-			} else if (ItemStack.isSameItemSameComponents(slot.getItem(), stack)) {
+			} else if (ItemStack.isSameItemSameTags(slot.getItem(), stack)) {
 				remaining -= (maxStack - slot.getItem().getCount());
 			}
 			if (remaining <= 0) return true;
@@ -739,7 +739,7 @@ final class AutoMoveController {
 		if (offhandSlot != null) {
 			if (!offhandSlot.hasItem()) {
 				remaining -= maxStack;
-			} else if (ItemStack.isSameItemSameComponents(offhandSlot.getItem(), stack)) {
+			} else if (ItemStack.isSameItemSameTags(offhandSlot.getItem(), stack)) {
 				remaining -= (maxStack - offhandSlot.getItem().getCount());
 			}
 		}
@@ -818,4 +818,5 @@ final class AutoMoveController {
 		return sb.toString();
 	}
 }
+
 

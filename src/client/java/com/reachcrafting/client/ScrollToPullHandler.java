@@ -7,7 +7,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.world.inventory.AbstractContainerMenu;
-import net.minecraft.world.inventory.ContainerInput;
+import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.inventory.InventoryMenu;
 import net.minecraft.world.inventory.ResultSlot;
 import net.minecraft.world.inventory.Slot;
@@ -89,8 +89,8 @@ public final class ScrollToPullHandler {
         for (int i = 0; i < totalAttempts; i++) {
             if (up) {
                 // Wheel Up: To Cursor (stops at stack size)
-                if (virtualCarried.isEmpty() || (ItemStack.isSameItemSameComponents(virtualCarried, resultStack) && virtualCarried.getCount() < resultStack.getMaxStackSize())) {
-                    minecraft.gameMode.handleContainerInput(menu.containerId, resultSlot.index, 0, ContainerInput.PICKUP, minecraft.player);
+                if (virtualCarried.isEmpty() || (ItemStack.isSameItemSameTags(virtualCarried, resultStack) && virtualCarried.getCount() < resultStack.getMaxStackSize())) {
+                    minecraft.gameMode.handleInventoryMouseClick(menu.containerId, resultSlot.index, 0, ClickType.PICKUP, minecraft.player);
                     
                     // Update virtual carried
                     if (virtualCarried.isEmpty()) {
@@ -112,16 +112,16 @@ public final class ScrollToPullHandler {
                     ReachCraftingMod.LOGGER.debug("ScrollToPull: Granular craft {}/{} -> Slot {}, New Virtual Count: {}", i + 1, totalAttempts, targetSlotIndex, virtualCountAfter);
 
                     // 2. Click Output
-                    minecraft.gameMode.handleContainerInput(menu.containerId, resultSlot.index, 0, ContainerInput.PICKUP, minecraft.player);
+                    minecraft.gameMode.handleInventoryMouseClick(menu.containerId, resultSlot.index, 0, ClickType.PICKUP, minecraft.player);
                     // 3. Click Target
-                    minecraft.gameMode.handleContainerInput(menu.containerId, targetSlotIndex, 0, ContainerInput.PICKUP, minecraft.player);
+                    minecraft.gameMode.handleInventoryMouseClick(menu.containerId, targetSlotIndex, 0, ClickType.PICKUP, minecraft.player);
                     
                     // 4. Update virtual state
                     virtualSlotCounts.put(targetSlotIndex, virtualCountAfter);
                     
                     craftsAttempted++;
                 } else if (hoveredSlot == resultSlot && ReachCraftingConfig.get().ejectItemsWhenFull()) {
-                    minecraft.gameMode.handleContainerInput(menu.containerId, resultSlot.index, 0, ContainerInput.THROW, minecraft.player);
+                    minecraft.gameMode.handleInventoryMouseClick(menu.containerId, resultSlot.index, 0, ClickType.THROW, minecraft.player);
                     craftsAttempted++;
                 } else {
                     break;
@@ -168,7 +168,7 @@ public final class ScrollToPullHandler {
             int virtualCount = virtualSlotCounts.get(slotIndex);
             if (virtualCount + craftCount <= maxStack) {
                 // If it has a real item, must match. 
-                if (!s.hasItem() || ItemStack.isSameItemSameComponents(s.getItem(), result)) {
+                if (!s.hasItem() || ItemStack.isSameItemSameTags(s.getItem(), result)) {
                     return s.index;
                 }
             }
@@ -177,7 +177,7 @@ public final class ScrollToPullHandler {
         // Priority 2: Stacking in existing stacks in Hotbar
         for (int i = 0; i < 9; i++) {
             Slot s = findInventorySlot(menu, i);
-            if (s != null && s.hasItem() && !virtualSlotCounts.containsKey(s.index) && ItemStack.isSameItemSameComponents(s.getItem(), result)) {
+            if (s != null && s.hasItem() && !virtualSlotCounts.containsKey(s.index) && ItemStack.isSameItemSameTags(s.getItem(), result)) {
                 if (s.getItem().getCount() + craftCount <= maxStack) {
                     return s.index;
                 }
@@ -187,7 +187,7 @@ public final class ScrollToPullHandler {
         // Priority 3: Stacking in existing stacks in Main
         for (int i = 9; i < 36; i++) {
             Slot s = findInventorySlot(menu, i);
-            if (s != null && s.hasItem() && !virtualSlotCounts.containsKey(s.index) && ItemStack.isSameItemSameComponents(s.getItem(), result)) {
+            if (s != null && s.hasItem() && !virtualSlotCounts.containsKey(s.index) && ItemStack.isSameItemSameTags(s.getItem(), result)) {
                 if (s.getItem().getCount() + craftCount <= maxStack) {
                     return s.index;
                 }
@@ -199,7 +199,7 @@ public final class ScrollToPullHandler {
         if (offhandSlot != null
             && offhandSlot.hasItem()
             && !virtualSlotCounts.containsKey(offhandSlot.index)
-            && ItemStack.isSameItemSameComponents(offhandSlot.getItem(), result)
+            && ItemStack.isSameItemSameTags(offhandSlot.getItem(), result)
             && offhandSlot.getItem().getCount() + craftCount <= maxStack) {
             return offhandSlot.index;
         }
@@ -208,7 +208,7 @@ public final class ScrollToPullHandler {
         int swappedSlotIndex = OffhandConsolidationController.getSwapSlotIndex(menu);
         if (swappedSlotIndex != -1) {
             Slot s = menu.getSlot(swappedSlotIndex);
-            if (s.hasItem() && ItemStack.isSameItemSameComponents(s.getItem(), result) && s.getItem().getCount() + craftCount <= maxStack) {
+            if (s.hasItem() && ItemStack.isSameItemSameTags(s.getItem(), result) && s.getItem().getCount() + craftCount <= maxStack) {
                 return s.index;
             }
         }
@@ -278,7 +278,7 @@ public final class ScrollToPullHandler {
 
     private static boolean canAppendWholeCraft(Slot slot, ItemStack result, java.util.Map<Integer, Integer> virtualSlotCounts) {
         int currentCount = virtualSlotCounts.getOrDefault(slot.index, slot.hasItem() ? slot.getItem().getCount() : 0);
-        if (slot.hasItem() && !ItemStack.isSameItemSameComponents(slot.getItem(), result)) {
+        if (slot.hasItem() && !ItemStack.isSameItemSameTags(slot.getItem(), result)) {
             return false;
         }
         return currentCount + result.getCount() <= result.getMaxStackSize();
@@ -293,11 +293,13 @@ public final class ScrollToPullHandler {
     }
 
     private static boolean isShiftKeyDown(Minecraft minecraft) {
-        return InputConstants.isKeyDown(minecraft.getWindow(), GLFW.GLFW_KEY_LEFT_SHIFT)
-            || InputConstants.isKeyDown(minecraft.getWindow(), GLFW.GLFW_KEY_RIGHT_SHIFT);
+        long window = minecraft.getWindow().getWindow();
+        return InputConstants.isKeyDown(window, GLFW.GLFW_KEY_LEFT_SHIFT)
+            || InputConstants.isKeyDown(window, GLFW.GLFW_KEY_RIGHT_SHIFT);
     }
 
     private static boolean isSpaceKeyDown(Minecraft minecraft) {
-        return InputConstants.isKeyDown(minecraft.getWindow(), GLFW.GLFW_KEY_SPACE);
+        return InputConstants.isKeyDown(minecraft.getWindow().getWindow(), GLFW.GLFW_KEY_SPACE);
     }
 }
+

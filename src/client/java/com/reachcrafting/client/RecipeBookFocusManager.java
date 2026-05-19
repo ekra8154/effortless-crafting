@@ -10,11 +10,11 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.gui.screens.inventory.AbstractRecipeBookScreen;
 import net.minecraft.client.gui.screens.recipebook.OverlayRecipeComponent;
 import net.minecraft.client.gui.screens.recipebook.RecipeButton;
+import net.minecraft.client.gui.screens.recipebook.RecipeUpdateListener;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.crafting.display.RecipeDisplayId;
+import net.minecraft.world.item.crafting.Recipe;
 import org.lwjgl.glfw.GLFW;
 
 public final class RecipeBookFocusManager {
@@ -22,26 +22,29 @@ public final class RecipeBookFocusManager {
 	}
 
 	public static boolean isShiftKeyDown(Minecraft minecraft) {
-		return InputConstants.isKeyDown(minecraft.getWindow(), GLFW.GLFW_KEY_LEFT_SHIFT)
-			|| InputConstants.isKeyDown(minecraft.getWindow(), GLFW.GLFW_KEY_RIGHT_SHIFT);
+		long window = minecraft.getWindow().getWindow();
+		return InputConstants.isKeyDown(window, GLFW.GLFW_KEY_LEFT_SHIFT)
+			|| InputConstants.isKeyDown(window, GLFW.GLFW_KEY_RIGHT_SHIFT);
 	}
 
 	public static boolean isControlKeyDown(Minecraft minecraft) {
-		return InputConstants.isKeyDown(minecraft.getWindow(), GLFW.GLFW_KEY_LEFT_CONTROL)
-			|| InputConstants.isKeyDown(minecraft.getWindow(), GLFW.GLFW_KEY_RIGHT_CONTROL);
+		long window = minecraft.getWindow().getWindow();
+		return InputConstants.isKeyDown(window, GLFW.GLFW_KEY_LEFT_CONTROL)
+			|| InputConstants.isKeyDown(window, GLFW.GLFW_KEY_RIGHT_CONTROL);
 	}
 
 	public static boolean isAltKeyDown(Minecraft minecraft) {
-		return InputConstants.isKeyDown(minecraft.getWindow(), GLFW.GLFW_KEY_LEFT_ALT)
-			|| InputConstants.isKeyDown(minecraft.getWindow(), GLFW.GLFW_KEY_RIGHT_ALT);
+		long window = minecraft.getWindow().getWindow();
+		return InputConstants.isKeyDown(window, GLFW.GLFW_KEY_LEFT_ALT)
+			|| InputConstants.isKeyDown(window, GLFW.GLFW_KEY_RIGHT_ALT);
 	}
 
 	public static boolean isSpaceKeyDown(Minecraft minecraft) {
-		return InputConstants.isKeyDown(minecraft.getWindow(), GLFW.GLFW_KEY_SPACE);
+		return InputConstants.isKeyDown(minecraft.getWindow().getWindow(), GLFW.GLFW_KEY_SPACE);
 	}
 
 	static void defocusRecipeBookSearch(Minecraft minecraft, HeldRecipeQueueState state) {
-		if (!(minecraft.screen instanceof AbstractRecipeBookScreen<?> recipeBookScreen)) {
+		if (!(minecraft.screen instanceof RecipeUpdateListener recipeBookScreen)) {
 			return;
 		}
 		RecipeBookComponentAccessor componentAccessor = (RecipeBookComponentAccessor) ((AbstractRecipeBookScreenAccessor) recipeBookScreen).getRecipeBookComponent();
@@ -55,7 +58,7 @@ public final class RecipeBookFocusManager {
 	}
 
 	static void defocusRecipeBookSearch(Minecraft minecraft) {
-		if (!(minecraft.screen instanceof AbstractRecipeBookScreen<?> recipeBookScreen)) {
+		if (!(minecraft.screen instanceof RecipeUpdateListener recipeBookScreen)) {
 			return;
 		}
 		RecipeBookComponentAccessor componentAccessor = (RecipeBookComponentAccessor) ((AbstractRecipeBookScreenAccessor) recipeBookScreen).getRecipeBookComponent();
@@ -68,7 +71,7 @@ public final class RecipeBookFocusManager {
 	}
 
 	static void refocusRecipeBookSearch(Minecraft minecraft, HeldRecipeQueueState state) {
-		if (!(minecraft.screen instanceof AbstractRecipeBookScreen<?> recipeBookScreen)) {
+		if (!(minecraft.screen instanceof RecipeUpdateListener recipeBookScreen)) {
 			return;
 		}
 		RecipeBookComponentAccessor componentAccessor = (RecipeBookComponentAccessor) ((AbstractRecipeBookScreenAccessor) recipeBookScreen).getRecipeBookComponent();
@@ -84,7 +87,8 @@ public final class RecipeBookFocusManager {
 	}
 
 	static RecipeBookClickCapture.HeldRecipeAction findHoveredHeldRecipeAction(Screen screen, double mouseX, double mouseY) {
-		if (!(screen instanceof AbstractRecipeBookScreen<?> recipeBookScreen)) {
+		Minecraft minecraft = Minecraft.getInstance();
+		if (!(screen instanceof RecipeUpdateListener recipeBookScreen)) {
 			return null;
 		}
 
@@ -96,12 +100,13 @@ public final class RecipeBookFocusManager {
 				if (!(entry instanceof AbstractWidget widget) || !widget.isMouseOver(mouseX, mouseY)) {
 					continue;
 				}
-				RecipeDisplayId recipeId = ((OverlayRecipeButtonAccessor) entry).getRecipe();
-				if (recipeId == null) {
+				Recipe<?> recipe = ((OverlayRecipeButtonAccessor) entry).getRecipe();
+				if (recipe == null) {
 					continue;
 				}
 				return new RecipeBookClickCapture.HeldRecipeAction(
-					recipeId,
+					recipe,
+					recipe.getId(),
 					overlay.getRecipeCollection(),
 					ItemStack.EMPTY,
 					GLFW.GLFW_MOUSE_BUTTON_LEFT,
@@ -112,13 +117,14 @@ public final class RecipeBookFocusManager {
 		}
 
 		for (RecipeButton button : pageAccessor.getButtons()) {
-			if (!button.isMouseOver(mouseX, mouseY) || button.getCurrentRecipe() == null || button.getCollection() == null) {
+			if (!button.isMouseOver(mouseX, mouseY) || button.getRecipe() == null || button.getCollection() == null) {
 				continue;
 			}
 			return new RecipeBookClickCapture.HeldRecipeAction(
-				button.getCurrentRecipe(),
+				button.getRecipe(),
+				button.getRecipe().getId(),
 				button.getCollection(),
-				button.getDisplayStack().copy(),
+				RecipeVariantResolver.resolveDisplayStack(button.getRecipe(), minecraft),
 				GLFW.GLFW_MOUSE_BUTTON_LEFT,
 				false
 			);
@@ -126,3 +132,4 @@ public final class RecipeBookFocusManager {
 		return null;
 	}
 }
+

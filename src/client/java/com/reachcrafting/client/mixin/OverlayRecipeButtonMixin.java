@@ -2,11 +2,11 @@ package com.reachcrafting.client.mixin;
 
 import com.reachcrafting.client.ReachCraftingConfig;
 import com.reachcrafting.client.RecipeButtonNearbyIndicator;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.screens.recipebook.OverlayRecipeComponent;
 import net.minecraft.client.gui.screens.recipebook.RecipeCollection;
-import net.minecraft.world.item.crafting.display.RecipeDisplayId;
+import net.minecraft.world.item.crafting.Recipe;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -18,14 +18,14 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class OverlayRecipeButtonMixin {
 	@Shadow
 	@Final
-	private RecipeDisplayId recipe;
+	private Recipe<?> recipe;
 
 	@Shadow
 	@Final
 	OverlayRecipeComponent this$0;
 
-	@Inject(method = "extractWidgetRenderState", at = @At("TAIL"))
-	private void reachcrafting$renderQueuedCount(GuiGraphicsExtractor guiGraphics, int mouseX, int mouseY, float partialTick, CallbackInfo ci) {
+	@Inject(method = "renderWidget", at = @At("TAIL"))
+	private void reachcrafting$renderQueuedCount(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick, CallbackInfo ci) {
 		if (!ReachCraftingConfig.get().enabled()) return;
 		RecipeCollection collection = this$0.getRecipeCollection();
 		if (collection == null) {

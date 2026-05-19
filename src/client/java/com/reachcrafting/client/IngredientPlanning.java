@@ -92,7 +92,7 @@ public final class IngredientPlanning {
 		if (groupSlots.isEmpty()) {
 			return;
 		}
-		if (groupSlots.getFirst().ingredientSlot().isExact()) {
+		if (groupSlots.get(0).ingredientSlot().isExact()) {
 			planExactGroup(groupSlots, remainingUsable, copiesPerSlot, missingExact, missingItemIds, slotTargets);
 			return;
 		}
@@ -121,20 +121,20 @@ public final class IngredientPlanning {
 		}
 
 		List<String> orderedVariants = orderVariants(
-			groupSlots.getFirst().ingredientSlot().itemIds(),
+			groupSlots.get(0).ingredientSlot().itemIds(),
 			committedVariants,
 			inventoryCounts,
 			preferenceTotals,
 			policy
 		);
 		if (orderedVariants.isEmpty()) {
-			recordFlexibleMissing(groupSlots.getFirst().ingredientSlot().display(), copiesPerSlot, emptySlots.size(), missingFlexible);
+			recordFlexibleMissing(groupSlots.get(0).ingredientSlot().display(), copiesPerSlot, emptySlots.size(), missingFlexible);
 			return;
 		}
 
 		List<SlotState> unassigned = new ArrayList<>(emptySlots);
 
-		boolean hasPreferredVariants = groupSlots.getFirst().ingredientSlot().itemIds().stream()
+		boolean hasPreferredVariants = groupSlots.get(0).ingredientSlot().itemIds().stream()
 			.anyMatch(policy.preferredVariants()::contains);
 
 		// Pass 1: Try to satisfy slots using ONLY what we have in inventory (if preferInventory is on).
@@ -147,7 +147,7 @@ public final class IngredientPlanning {
 				int invCount = inventoryCounts.getOrDefault(variant, 0);
 				int capacity = invCount / copiesPerSlot;
 				while (capacity > 0 && !unassigned.isEmpty()) {
-					SlotState slotState = unassigned.removeFirst();
+					SlotState slotState = unassigned.remove(0);
 					assignSlot(slotState, variant, copiesPerSlot, remainingUsable, slotTargets);
 					capacity--;
 				}
@@ -155,14 +155,14 @@ public final class IngredientPlanning {
 		}
 
 		// Pass 2: Use the rest of the materials based on strict preference (no inventory bias)
-		List<String> preferenceOrdered = groupSlots.getFirst().ingredientSlot().itemIds().stream()
+		List<String> preferenceOrdered = groupSlots.get(0).ingredientSlot().itemIds().stream()
 			.sorted(compareByPreference(preferenceTotals, Map.of(), policy)) // Pass empty map to ignore inventory bias
 			.toList();
 
 		for (String variant : preferenceOrdered) {
 			int capacity = remainingUsable.getOrDefault(variant, 0) / copiesPerSlot;
 			while (capacity > 0 && !unassigned.isEmpty()) {
-				SlotState slotState = unassigned.removeFirst();
+				SlotState slotState = unassigned.remove(0);
 				assignSlot(slotState, variant, copiesPerSlot, remainingUsable, slotTargets);
 				capacity--;
 			}
@@ -172,7 +172,7 @@ public final class IngredientPlanning {
 		}
 
 		if (!unassigned.isEmpty()) {
-			recordFlexibleMissing(groupSlots.getFirst().ingredientSlot().display(), copiesPerSlot, unassigned.size(), missingFlexible);
+			recordFlexibleMissing(groupSlots.get(0).ingredientSlot().display(), copiesPerSlot, unassigned.size(), missingFlexible);
 		}
 	}
 
@@ -184,7 +184,7 @@ public final class IngredientPlanning {
 		List<String> missingItemIds,
 		List<SlotTarget> slotTargets
 	) {
-		String itemId = groupSlots.getFirst().ingredientSlot().itemIds().getFirst();
+		String itemId = groupSlots.get(0).ingredientSlot().itemIds().get(0);
 		for (SlotState slotState : groupSlots) {
 			int currentCount = slotState.currentItemId() == null ? 0 : slotState.currentCount();
 			int targetCount = Math.max(currentCount, copiesPerSlot);

@@ -8,7 +8,7 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.inventory.AbstractContainerMenu;
-import net.minecraft.world.inventory.ContainerInput;
+import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.phys.BlockHitResult;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -35,8 +35,8 @@ public abstract class MultiPlayerGameModeMixin {
 		NearbyContainerCache.notePotentialContainerInteraction(player.level(), hitResult.getBlockPos());
 	}
 
-	@Inject(method = "handleContainerInput", at = @At("HEAD"))
-	private void reachcrafting$onHandleInventoryMouseClick(int containerId, int slotId, int button, ContainerInput clickType, net.minecraft.world.entity.player.Player player, CallbackInfo ci) {
+	@Inject(method = "handleInventoryMouseClick", at = @At("HEAD"))
+	private void reachcrafting$onHandleInventoryMouseClick(int containerId, int slotId, int button, ClickType clickType, net.minecraft.world.entity.player.Player player, CallbackInfo ci) {
 		if (!ReachCraftingConfig.get().enabled()) return;
 		Minecraft client = Minecraft.getInstance();
 		if (client.player == null || client.player.containerMenu == null) return;
@@ -58,15 +58,16 @@ public abstract class MultiPlayerGameModeMixin {
 		if (!com.reachcrafting.client.ContainerUtils.isAutomatedInteractionRunning()) {
 			com.reachcrafting.client.PulledResourcesTracker.updateSnapshot(client.player);
 
-			if (clickType == ContainerInput.PICKUP) {
+			if (clickType == ClickType.PICKUP) {
 				if (menu.getCarried().isEmpty()) {
 					InventoryGridRestoreTracker.recordPotentialSource(slotId, clickType, menu);
 				} else {
 					InventoryGridRestoreTracker.recordPotentialDestination(slotId, button, clickType, menu);
 				}
-			} else if (clickType == ContainerInput.QUICK_CRAFT) {
+			} else if (clickType == ClickType.QUICK_CRAFT) {
 				InventoryGridRestoreTracker.recordPotentialDestination(slotId, button, clickType, menu);
 			}
 		}
 	}
 }
+

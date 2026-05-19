@@ -3,8 +3,9 @@ package com.reachcrafting.client;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.recipebook.RecipeButton;
 import net.minecraft.client.gui.screens.recipebook.RecipeCollection;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.crafting.display.RecipeDisplayId;
+import net.minecraft.world.item.crafting.Recipe;
 
 public final class RecipeBookClickCapture {
 	private static final RecipeBookInputController CONTROLLER = RecipeBookInputController.getInstance();
@@ -17,7 +18,7 @@ public final class RecipeBookClickCapture {
 	}
 
 	public static void onRecipeButtonClicked(
-		RecipeDisplayId recipeId,
+		Recipe<?> recipe,
 		RecipeCollection collection,
 		ItemStack displayStack,
 		int mouseButton,
@@ -27,7 +28,7 @@ public final class RecipeBookClickCapture {
 		boolean explicitVariantSelection
 	) {
 		CONTROLLER.onRecipeButtonClicked(
-			recipeId,
+			recipe,
 			collection,
 			displayStack,
 			mouseButton,
@@ -39,30 +40,30 @@ public final class RecipeBookClickCapture {
 	}
 
 	public static void onVanillaRecipeButtonClicked(
-		RecipeDisplayId recipeId,
+		Recipe<?> recipe,
 		RecipeCollection collection,
 		ItemStack displayStack,
 		boolean explicitVariantSelection,
 		boolean altModifierDown
 	) {
-		CONTROLLER.onVanillaRecipeButtonClicked(recipeId, collection, displayStack, explicitVariantSelection, altModifierDown);
+		CONTROLLER.onVanillaRecipeButtonClicked(recipe, collection, displayStack, explicitVariantSelection, altModifierDown);
 	}
 
 	public static boolean onRecipeButtonRightClicked(
-		RecipeDisplayId recipeId,
+		Recipe<?> recipe,
 		RecipeCollection collection,
 		ItemStack displayStack,
 		boolean explicitVariantSelection
 	) {
-		return CONTROLLER.onRecipeButtonRightClicked(recipeId, collection, displayStack, explicitVariantSelection);
+		return CONTROLLER.onRecipeButtonRightClicked(recipe, collection, displayStack, explicitVariantSelection);
 	}
 
 	public static int getHeldQueuedCount(
-		RecipeDisplayId recipeId,
+		Recipe<?> recipe,
 		RecipeCollection collection,
 		boolean explicitVariantSelection
 	) {
-		return CONTROLLER.getHeldQueuedCount(recipeId, collection, explicitVariantSelection);
+		return CONTROLLER.getHeldQueuedCount(recipe, collection, explicitVariantSelection);
 	}
 
 	public static void tryCloseOverlayAfterRelease() {
@@ -90,11 +91,11 @@ public final class RecipeBookClickCapture {
 	}
 
 	public static QueuedRecipeCountState getQueuedCountState(
-		RecipeDisplayId recipeId,
+		Recipe<?> recipe,
 		RecipeCollection collection,
 		boolean explicitVariantSelection
 	) {
-		return CONTROLLER.getQueuedCountState(recipeId, collection, explicitVariantSelection);
+		return CONTROLLER.getQueuedCountState(recipe, collection, explicitVariantSelection);
 	}
 
 	public static QueuedRecipeCountState getQueuedCountState(RecipeButton button) {
@@ -102,11 +103,11 @@ public final class RecipeBookClickCapture {
 	}
 
 	public static boolean hasPendingHeldRecipe(
-		RecipeDisplayId recipeId,
+		Recipe<?> recipe,
 		RecipeCollection collection,
 		boolean explicitVariantSelection
 	) {
-		return CONTROLLER.hasPendingHeldRecipe(recipeId, collection, explicitVariantSelection);
+		return CONTROLLER.hasPendingHeldRecipe(recipe, collection, explicitVariantSelection);
 	}
 
 	public static ItemStack resolvePendingOutputStack(Minecraft minecraft) {
@@ -114,7 +115,8 @@ public final class RecipeBookClickCapture {
 	}
 
 	public record HeldRecipeAction(
-		RecipeDisplayId recipeId,
+		Recipe<?> recipe,
+		ResourceLocation recipeId,
 		RecipeCollection collection,
 		ItemStack displayStack,
 		int mouseButton,
@@ -132,9 +134,9 @@ public final class RecipeBookClickCapture {
 					return true;
 				}
 				boolean thisCollectionContainsOther = collection.getRecipes().stream()
-					.anyMatch(entry -> entry.id().equals(other.recipeId));
+					.anyMatch(candidate -> candidate.getId().equals(other.recipeId));
 				boolean otherCollectionContainsThis = other.collection.getRecipes().stream()
-					.anyMatch(entry -> entry.id().equals(recipeId));
+					.anyMatch(candidate -> candidate.getId().equals(recipeId));
 				if (thisCollectionContainsOther && otherCollectionContainsThis) {
 					return true;
 				}

@@ -1,12 +1,13 @@
 package com.reachcrafting.client.mixin;
 
-import net.minecraft.client.gui.screens.inventory.AbstractRecipeBookScreen;
+import net.minecraft.client.gui.screens.inventory.CraftingScreen;
+import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.client.gui.screens.recipebook.RecipeBookComponent;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.gen.Accessor;
 
-@Mixin(AbstractRecipeBookScreen.class)
+@Mixin({CraftingScreen.class, InventoryScreen.class})
 public interface AbstractRecipeBookScreenAccessor {
 	@Accessor("recipeBookComponent")
-	RecipeBookComponent<?> getRecipeBookComponent();
+	RecipeBookComponent getRecipeBookComponent();
 }

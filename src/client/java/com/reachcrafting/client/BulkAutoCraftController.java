@@ -4,9 +4,11 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.CraftingScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.crafting.Recipe;
 
 public final class BulkAutoCraftController {
 	private static final int REFILL_WINDOW_COPIES = 10_000;
@@ -83,7 +85,7 @@ public final class BulkAutoCraftController {
 			return;
 		}
 
-		if (!ItemStack.isSameItemSameComponents(activeSession.expectedOutput(), expectedCopy)) {
+		if (!ItemStack.isSameItemSameTags(activeSession.expectedOutput(), expectedCopy)) {
 			if (sameRecipe) {
 				String previousOutputName = activeSession.expectedOutput().getHoverName().getString();
 				int baselineOutputCount = countAccessibleOutput(client, expectedCopy);
@@ -278,7 +280,7 @@ public final class BulkAutoCraftController {
 	}
 
 	static boolean shouldLockToCurrentVariant(
-		net.minecraft.world.item.crafting.display.RecipeDisplayId clickedRecipeId,
+		ResourceLocation clickedRecipeId,
 		net.minecraft.client.gui.screens.recipebook.RecipeCollection collection,
 		boolean explicitVariantSelection
 	) {
@@ -291,6 +293,7 @@ public final class BulkAutoCraftController {
 		return activeSession != null
 			&& committedConcreteVariant
 			&& activeSession.action().sameRecipe(new RecipeBookClickCapture.HeldRecipeAction(
+				null,
 				clickedRecipeId,
 				collection,
 				ItemStack.EMPTY,
@@ -299,7 +302,7 @@ public final class BulkAutoCraftController {
 			));
 	}
 
-	public static net.minecraft.world.item.crafting.display.RecipeDisplayId getActiveLockedRecipeId() {
+	public static ResourceLocation getActiveLockedRecipeId() {
 		return activeSession != null ? activeSession.action().recipeId() : null;
 	}
 
@@ -308,8 +311,8 @@ public final class BulkAutoCraftController {
 	}
 
 	static VariantContinuationMode determineVariantContinuationMode(
-		net.minecraft.world.item.crafting.display.RecipeDisplayId clickedRecipeId,
-		net.minecraft.world.item.crafting.display.RecipeDisplayId selectedRecipeId,
+		ResourceLocation clickedRecipeId,
+		ResourceLocation selectedRecipeId,
 		boolean explicitVariantSelection
 	) {
 		if (explicitVariantSelection) {
@@ -617,25 +620,25 @@ public final class BulkAutoCraftController {
 			if (!(slot.container instanceof Inventory) || !slot.hasItem()) {
 				continue;
 			}
-			if (ItemStack.isSameItemSameComponents(slot.getItem(), expectedOutput)) {
+			if (ItemStack.isSameItemSameTags(slot.getItem(), expectedOutput)) {
 				count += slot.getItem().getCount();
 			}
 		}
 
 		// Also count the offhand slot, which is not usually in the menu's slots list in 3x3
 		ItemStack offhand = client.player.getOffhandItem();
-		if (!offhand.isEmpty() && ItemStack.isSameItemSameComponents(offhand, expectedOutput)) {
+		if (!offhand.isEmpty() && ItemStack.isSameItemSameTags(offhand, expectedOutput)) {
 			count += offhand.getCount();
 		}
 
 		ItemStack carried = client.player.containerMenu.getCarried();
-		if (!carried.isEmpty() && ItemStack.isSameItemSameComponents(carried, expectedOutput)) {
+		if (!carried.isEmpty() && ItemStack.isSameItemSameTags(carried, expectedOutput)) {
 			count += carried.getCount();
 		}
 
 		if (!client.player.containerMenu.slots.isEmpty()) {
 			ItemStack result = client.player.containerMenu.getSlot(0).getItem();
-			if (!result.isEmpty() && ItemStack.isSameItemSameComponents(result, expectedOutput)) {
+			if (!result.isEmpty() && ItemStack.isSameItemSameTags(result, expectedOutput)) {
 				count += result.getCount();
 			}
 		}
@@ -653,14 +656,14 @@ public final class BulkAutoCraftController {
 				continue;
 			}
 			ItemStack stack = slot.getItem();
-			if (ItemStack.isSameItemSameComponents(stack, expectedOutput) && stack.getCount() < stack.getMaxStackSize()) {
+			if (ItemStack.isSameItemSameTags(stack, expectedOutput) && stack.getCount() < stack.getMaxStackSize()) {
 				return true;
 			}
 		}
 
 		ItemStack offhand = client.player.getOffhandItem();
 		return !offhand.isEmpty()
-			&& ItemStack.isSameItemSameComponents(offhand, expectedOutput)
+			&& ItemStack.isSameItemSameTags(offhand, expectedOutput)
 			&& offhand.getCount() < offhand.getMaxStackSize();
 	}
 
@@ -674,7 +677,7 @@ public final class BulkAutoCraftController {
 			if (!(slot.container instanceof Inventory) || !slot.hasItem()) {
 				continue;
 			}
-			if (ItemStack.isSameItemSameComponents(slot.getItem(), expectedOutput)) {
+			if (ItemStack.isSameItemSameTags(slot.getItem(), expectedOutput)) {
 				protectedSlots.add(slot.getContainerSlot());
 			}
 		}
@@ -800,3 +803,4 @@ public final class BulkAutoCraftController {
 		PARTIAL_STACK_KEEP
 	}
 }
+

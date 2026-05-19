@@ -1,7 +1,6 @@
 package com.reachcrafting.client;
 
-// import com.reachcrafting.ReachCraftingMod;
-import com.reachcrafting.client.mixin.ClientRecipeBookAccessor;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -10,15 +9,13 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.recipebook.RecipeCollection;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.util.context.ContextMap;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.crafting.display.RecipeDisplay;
-import net.minecraft.world.item.crafting.display.RecipeDisplayEntry;
-import net.minecraft.world.item.crafting.display.RecipeDisplayId;
-import net.minecraft.world.item.crafting.display.ShapedCraftingRecipeDisplay;
-import net.minecraft.world.item.crafting.display.ShapelessCraftingRecipeDisplay;
-import net.minecraft.world.item.crafting.display.SlotDisplay;
-import net.minecraft.world.item.crafting.display.SlotDisplayContext;
+import net.minecraft.world.item.crafting.CraftingRecipe;
+import net.minecraft.world.item.crafting.Ingredient;
+import net.minecraft.world.item.crafting.Recipe;
+import net.minecraft.world.item.crafting.ShapedRecipe;
+import net.minecraft.world.item.crafting.ShapelessRecipe;
 
 public final class RecipeVariantResolver {
 	private RecipeVariantResolver() {
@@ -27,7 +24,7 @@ public final class RecipeVariantResolver {
 	public static Selection resolve(
 		Minecraft minecraft,
 		LocalPlayer player,
-		RecipeDisplayId clickedRecipeId,
+		Recipe<?> clickedRecipe,
 		RecipeCollection collection,
 		ItemStack clickedDisplayStack,
 		boolean explicitVariantSelection,
@@ -40,7 +37,7 @@ public final class RecipeVariantResolver {
 		return resolve(
 			minecraft,
 			player,
-			clickedRecipeId,
+			clickedRecipe,
 			collection,
 			clickedDisplayStack,
 			explicitVariantSelection,
@@ -57,7 +54,7 @@ public final class RecipeVariantResolver {
 	public static Selection resolve(
 		Minecraft minecraft,
 		LocalPlayer player,
-		RecipeDisplayId clickedRecipeId,
+		Recipe<?> clickedRecipe,
 		RecipeCollection collection,
 		ItemStack clickedDisplayStack,
 		boolean explicitVariantSelection,
@@ -69,22 +66,15 @@ public final class RecipeVariantResolver {
 		boolean allowReservedGridVariantSwitch,
 		int desiredCopiesPerSlot
 	) {
-		if (minecraft.level == null) {
+		if (minecraft.level == null || clickedRecipe == null) {
 			return null;
 		}
 
-		collection = resolveCanonicalCollection(player, collection, clickedRecipeId);
-		Map<RecipeDisplayId, RecipeDisplayEntry> knownRecipes = ((ClientRecipeBookAccessor) player.getRecipeBook()).getKnown();
-		RecipeDisplayEntry clickedEntry = findEntry(collection, knownRecipes, clickedRecipeId);
-		if (clickedEntry == null) {
-			return null;
-		}
-
-		ContextMap context = SlotDisplayContext.fromLevel(minecraft.level);
+		collection = resolveCanonicalCollection(player, collection, clickedRecipe);
 		Selection exactSelection = toSelection(
-			clickedEntry,
+			minecraft,
+			clickedRecipe,
 			clickedDisplayStack,
-			context,
 			availableItems,
 			usableCounts,
 			preferenceTotals,
@@ -101,10 +91,10 @@ public final class RecipeVariantResolver {
 		}
 
 		List<Selection> candidates = collection.getRecipes().stream()
-			.map(entry -> toSelection(
-				entry,
-				entry.id().equals(clickedRecipeId) ? clickedDisplayStack : ItemStack.EMPTY,
-				context,
+			.map(candidate -> toSelection(
+				minecraft,
+				candidate,
+				candidate.getId().equals(clickedRecipe.getId()) ? clickedDisplayStack : ItemStack.EMPTY,
 				availableItems,
 				usableCounts,
 				preferenceTotals,
@@ -113,22 +103,10 @@ public final class RecipeVariantResolver {
 			))
 			.toList();
 		int requestedCopies = Math.max(desiredCopiesPerSlot, 1);
-		boolean lockToCurrentVariant = BulkAutoCraftController.shouldLockToCurrentVariant(clickedRecipeId, collection, explicitVariantSelection);
-		/*
-		ReachCraftingMod.LOGGER.info(
-			"[recipe_variant_candidates] clicked_recipe={} collection_size={} craft_all={} requested_copies={} handling={} lock_current={} candidates={}",
-			clickedRecipeId,
-			collection.getRecipes().size(),
-			craftAll,
-			requestedCopies,
-			handling,
-			lockToCurrentVariant,
-			summarizeCandidates(candidates)
-		);
-		*/
+		boolean lockToCurrentVariant = BulkAutoCraftController.shouldLockToCurrentVariant(clickedRecipe.getId(), collection, explicitVariantSelection);
 
 		if (lockToCurrentVariant) {
-			net.minecraft.world.item.crafting.display.RecipeDisplayId lockedId = BulkAutoCraftController.getActiveLockedRecipeId();
+			ResourceLocation lockedId = BulkAutoCraftController.getActiveLockedRecipeId();
 			if (lockedId != null) {
 				for (Selection selection : candidates) {
 					if (selection.recipeId().equals(lockedId)) {
@@ -151,7 +129,7 @@ public final class RecipeVariantResolver {
 
 		if (!allowReservedGridVariantSwitch && availableItems.hasReservedGrid()) {
 			Selection gridMatch = candidates.stream()
-				.filter(candidate -> isMatchForGrid(candidate, availableItems.gridStacks(), context))
+				.filter(candidate -> isMatchForGrid(candidate.recipe(), availableItems.gridStacks()))
 				.filter(candidate -> candidate.copiesAvailable() > 0)
 				.findFirst()
 				.orElse(null);
@@ -190,15 +168,9 @@ public final class RecipeVariantResolver {
 		}
 
 		return viableCandidates.stream()
-			.max(compareSelections(ReachCraftingConfig.get().countPreference(), craftAll))
+			.max(compareSelections(ReachCraftingConfig.get().countPreference(), true))
 			.orElse(exactSelection);
 	}
-
-	/*
-	private static String summarizeCandidates(List<Selection> candidates) {
-...
-	}
-	*/
 
 	public static Selection resolveMatchForGrid(
 		Minecraft minecraft,
@@ -215,24 +187,22 @@ public final class RecipeVariantResolver {
 			return null;
 		}
 
-		ContextMap context = SlotDisplayContext.fromLevel(minecraft.level);
 		return collection.getRecipes().stream()
-			.map(entry -> toSelection(entry, ItemStack.EMPTY, context, availableItems, usableCounts, preferenceTotals, craftAll, desiredCopiesPerSlot))
-			.filter(candidate -> isMatchForGrid(candidate, gridStacks, context))
+			.map(candidate -> toSelection(minecraft, candidate, ItemStack.EMPTY, availableItems, usableCounts, preferenceTotals, craftAll, desiredCopiesPerSlot))
+			.filter(candidate -> isMatchForGrid(candidate.recipe(), gridStacks))
 			.findFirst()
 			.orElse(null);
 	}
 
-	private static boolean isMatchForGrid(Selection selection, List<ItemStack> gridStacks, ContextMap context) {
-		RecipeDisplay display = selection.entry().display();
-		if (display instanceof ShapedCraftingRecipeDisplay shaped) {
-			return matchesShapedGrid(shaped, gridStacks, context);
+	private static boolean isMatchForGrid(Recipe<?> recipe, List<ItemStack> gridStacks) {
+		if (recipe instanceof ShapedRecipe shaped) {
+			return matchesShapedGrid(shaped, gridStacks);
 		}
-		if (display instanceof ShapelessCraftingRecipeDisplay shapeless) {
-			return matchesShapelessGrid(shapeless, gridStacks, context);
+		if (recipe instanceof ShapelessRecipe shapeless) {
+			return matchesShapelessGrid(shapeless, gridStacks);
 		}
 
-		RecipeIngredientSummary summary = selection.ingredientSummary();
+		RecipeIngredientSummary summary = RecipeIngredientSummary.fromRecipe(recipe, gridStacks.size());
 		if (summary.slots().size() != gridStacks.size()) {
 			return false;
 		}
@@ -257,18 +227,18 @@ public final class RecipeVariantResolver {
 		return true;
 	}
 
-	private static boolean matchesShapedGrid(ShapedCraftingRecipeDisplay shaped, List<ItemStack> gridStacks, ContextMap context) {
+	private static boolean matchesShapedGrid(ShapedRecipe shaped, List<ItemStack> gridStacks) {
 		GridSize gridSize = GridSize.fromSlotCount(gridStacks.size());
-		if (gridSize == null || shaped.width() > gridSize.width() || shaped.height() > gridSize.height()) {
+		if (gridSize == null || shaped.getWidth() > gridSize.width() || shaped.getHeight() > gridSize.height()) {
 			return false;
 		}
 
-		List<List<String>> ingredientIds = shaped.ingredients().stream()
-			.map(slot -> resolveItemIds(slot, context))
+		List<List<String>> ingredientIds = shaped.getIngredients().stream()
+			.map(RecipeVariantResolver::resolveItemIds)
 			.toList();
 
-		for (int offsetY = 0; offsetY <= gridSize.height() - shaped.height(); offsetY++) {
-			for (int offsetX = 0; offsetX <= gridSize.width() - shaped.width(); offsetX++) {
+		for (int offsetY = 0; offsetY <= gridSize.height() - shaped.getHeight(); offsetY++) {
+			for (int offsetX = 0; offsetX <= gridSize.width() - shaped.getWidth(); offsetX++) {
 				if (matchesShapedAtOffset(shaped, gridStacks, ingredientIds, gridSize, offsetX, offsetY)) {
 					return true;
 				}
@@ -278,7 +248,7 @@ public final class RecipeVariantResolver {
 	}
 
 	private static boolean matchesShapedAtOffset(
-		ShapedCraftingRecipeDisplay shaped,
+		ShapedRecipe shaped,
 		List<ItemStack> gridStacks,
 		List<List<String>> ingredientIds,
 		GridSize gridSize,
@@ -290,9 +260,9 @@ public final class RecipeVariantResolver {
 				int gridIndex = gridY * gridSize.width() + gridX;
 				ItemStack gridStack = gridStacks.get(gridIndex);
 				boolean withinShape = gridX >= offsetX
-					&& gridX < offsetX + shaped.width()
+					&& gridX < offsetX + shaped.getWidth()
 					&& gridY >= offsetY
-					&& gridY < offsetY + shaped.height();
+					&& gridY < offsetY + shaped.getHeight();
 				if (!withinShape) {
 					if (!gridStack.isEmpty()) {
 						return false;
@@ -302,7 +272,7 @@ public final class RecipeVariantResolver {
 
 				int recipeX = gridX - offsetX;
 				int recipeY = gridY - offsetY;
-				int recipeIndex = recipeY * shaped.width() + recipeX;
+				int recipeIndex = recipeY * shaped.getWidth() + recipeX;
 				List<String> acceptedIds = ingredientIds.get(recipeIndex);
 				if (gridStack.isEmpty()) {
 					if (!acceptedIds.isEmpty()) {
@@ -323,11 +293,11 @@ public final class RecipeVariantResolver {
 		return true;
 	}
 
-	private static boolean matchesShapelessGrid(ShapelessCraftingRecipeDisplay shapeless, List<ItemStack> gridStacks, ContextMap context) {
-		List<List<String>> remainingSlots = shapeless.ingredients().stream()
-			.map(slot -> resolveItemIds(slot, context))
+	private static boolean matchesShapelessGrid(ShapelessRecipe shapeless, List<ItemStack> gridStacks) {
+		List<List<String>> remainingSlots = shapeless.getIngredients().stream()
+			.map(RecipeVariantResolver::resolveItemIds)
 			.filter(ids -> !ids.isEmpty())
-			.collect(java.util.stream.Collectors.toCollection(java.util.ArrayList::new));
+			.collect(java.util.stream.Collectors.toCollection(ArrayList::new));
 		int occupiedCount = 0;
 		for (ItemStack gridStack : gridStacks) {
 			if (gridStack.isEmpty()) {
@@ -350,8 +320,8 @@ public final class RecipeVariantResolver {
 		return occupiedCount > 0 && remainingSlots.isEmpty();
 	}
 
-	private static List<String> resolveItemIds(SlotDisplay slot, ContextMap context) {
-		return slot.resolveForStacks(context).stream()
+	private static List<String> resolveItemIds(Ingredient ingredient) {
+		return java.util.Arrays.stream(ingredient.getItems())
 			.filter(stack -> !stack.isEmpty())
 			.map(stack -> BuiltInRegistries.ITEM.getKey(stack.getItem()).toString())
 			.distinct()
@@ -386,14 +356,14 @@ public final class RecipeVariantResolver {
 	private static RecipeCollection resolveCanonicalCollection(
 		LocalPlayer player,
 		RecipeCollection collection,
-		RecipeDisplayId recipeId
+		Recipe<?> recipe
 	) {
 		ClientRecipeBook recipeBook = player.getRecipeBook();
 		RecipeCollection bestCollection = collection;
 		int bestSize = collection != null ? collection.getRecipes().size() : 0;
 		for (RecipeCollection candidate : recipeBook.getCollections()) {
 			boolean containsRecipe = candidate.getRecipes().stream()
-				.anyMatch(entry -> entry.id().equals(recipeId));
+				.anyMatch(entry -> entry.getId().equals(recipe.getId()));
 			if (!containsRecipe) {
 				continue;
 			}
@@ -407,32 +377,17 @@ public final class RecipeVariantResolver {
 		return bestCollection;
 	}
 
-	private static RecipeDisplayEntry findEntry(
-		RecipeCollection collection,
-		Map<RecipeDisplayId, RecipeDisplayEntry> knownRecipes,
-		RecipeDisplayId recipeId
-	) {
-		if (collection != null) {
-			for (RecipeDisplayEntry entry : collection.getRecipes()) {
-				if (entry.id().equals(recipeId)) {
-					return entry;
-				}
-			}
-		}
-		return knownRecipes.get(recipeId);
-	}
-
 	private static Selection toSelection(
-		RecipeDisplayEntry entry,
+		Minecraft minecraft,
+		Recipe<?> recipe,
 		ItemStack preferredDisplayStack,
-		ContextMap context,
 		AvailableItemSnapshot availableItems,
 		Map<String, Integer> usableCounts,
 		Map<String, Integer> preferenceTotals,
 		boolean craftAll,
 		int desiredCopiesPerSlot
 	) {
-		RecipeIngredientSummary ingredientSummary = RecipeIngredientSummary.fromDisplay(entry.display(), context);
+		RecipeIngredientSummary ingredientSummary = RecipeIngredientSummary.fromRecipe(recipe, availableItems.gridStacks().size());
 		IngredientPlanning.Policy policy = ReachCraftingConfig.get().toPlanningPolicy();
 		int maxPossible = IngredientPlanning.computeMaxCraftCopies(
 			ingredientSummary,
@@ -446,13 +401,15 @@ public final class RecipeVariantResolver {
 
 		ItemStack displayStack = !preferredDisplayStack.isEmpty()
 			? preferredDisplayStack.copy()
-			: resolveDisplayStack(entry.display(), context);
-		String outputItemId = BuiltInRegistries.ITEM.getKey(displayStack.getItem()).toString();
-		String outputLabel = outputItemId + " x" + displayStack.getCount();
+			: resolveDisplayStack(recipe, minecraft);
+		String outputItemId = displayStack.isEmpty()
+			? "<empty>"
+			: BuiltInRegistries.ITEM.getKey(displayStack.getItem()).toString();
+		String outputLabel = outputItemId + " x" + Math.max(displayStack.getCount(), 1);
 		int preferredTotalCount = ingredientSummary.acceptedItemIds().stream()
 			.mapToInt(itemId -> preferenceTotals.getOrDefault(itemId, 0))
 			.sum();
-		return new Selection(entry.id(), entry, ingredientSummary, displayStack, outputItemId, outputLabel, copiesAvailable, preferredTotalCount);
+		return new Selection(recipe, recipe.getId(), ingredientSummary, displayStack, outputItemId, outputLabel, copiesAvailable, preferredTotalCount);
 	}
 
 	private static Comparator<Selection> compareSelections(IngredientPlanning.CountPreference countPreference, boolean craftAll) {
@@ -475,17 +432,16 @@ public final class RecipeVariantResolver {
 		return byCopies.thenComparing(byPreferredCount).thenComparing(Selection::outputItemId);
 	}
 
-	public static ItemStack resolveDisplayStack(RecipeDisplay display, ContextMap context) {
-		return display.result().resolveForStacks(context).stream()
-			.filter(stack -> !stack.isEmpty())
-			.findFirst()
-			.map(ItemStack::copy)
-			.orElse(ItemStack.EMPTY);
+	public static ItemStack resolveDisplayStack(Recipe<?> recipe, Minecraft minecraft) {
+		if (recipe == null || minecraft.level == null) {
+			return ItemStack.EMPTY;
+		}
+		return recipe.getResultItem(minecraft.level.registryAccess()).copy();
 	}
 
 	public record Selection(
-		RecipeDisplayId recipeId,
-		RecipeDisplayEntry entry,
+		Recipe<?> recipe,
+		ResourceLocation recipeId,
 		RecipeIngredientSummary ingredientSummary,
 		ItemStack displayStack,
 		String outputItemId,

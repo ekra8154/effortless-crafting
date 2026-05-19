@@ -2,58 +2,53 @@ package com.reachcrafting.client.mixin;
 
 import com.reachcrafting.client.ReachCraftingConfig;
 import com.reachcrafting.client.RecipeBookClickCapture;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.AbstractWidget;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.recipebook.OverlayRecipeComponent;
 import net.minecraft.client.gui.screens.recipebook.RecipeCollection;
-import net.minecraft.client.input.MouseButtonEvent;
-import net.minecraft.world.item.crafting.display.RecipeDisplayId;
+import net.minecraft.world.item.crafting.Recipe;
 import org.lwjgl.glfw.GLFW;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(OverlayRecipeComponent.class)
 public abstract class OverlayRecipeComponentMixin {
-	@Inject(
-		method = "mouseClicked(Lnet/minecraft/client/input/MouseButtonEvent;Z)Z",
-		at = @At("RETURN")
-	)
-	private void reachcrafting$onOverlayRecipeClicked(MouseButtonEvent click, boolean filtering, CallbackInfoReturnable<Boolean> cir) {
+	@Inject(method = "mouseClicked", at = @At("RETURN"))
+	private void reachcrafting$onOverlayRecipeClicked(double mouseX, double mouseY, int button, CallbackInfoReturnable<Boolean> cir) {
 		if (!ReachCraftingConfig.get().enabled()) {
 			return;
 		}
 		OverlayRecipeComponent overlay = (OverlayRecipeComponent) (Object) this;
-		RecipeDisplayId recipeId = overlay.getLastRecipeClicked();
+		Recipe<?> recipe = overlay.getLastRecipeClicked();
 		RecipeCollection collection = overlay.getRecipeCollection();
-		if (recipeId == null || collection == null) {
+		if (recipe == null || collection == null) {
 			return;
 		}
 
-		if (click.button() == GLFW.GLFW_MOUSE_BUTTON_RIGHT) {
+		if (button == GLFW.GLFW_MOUSE_BUTTON_RIGHT) {
 			if (cir.getReturnValueZ()) {
-				RecipeBookClickCapture.onRecipeButtonRightClicked(
-					recipeId,
-					collection,
-					null,
-					true
-				);
+				RecipeBookClickCapture.onRecipeButtonRightClicked(recipe, collection, null, true);
 			}
 			return;
 		}
 
-		if (!cir.getReturnValueZ() || click.button() != GLFW.GLFW_MOUSE_BUTTON_LEFT) {
+		if (!cir.getReturnValueZ() || button != GLFW.GLFW_MOUSE_BUTTON_LEFT) {
 			return;
 		}
 
-		boolean ctrlDown = (click.modifiers() & GLFW.GLFW_MOD_CONTROL) != 0;
-		boolean shiftDown = (click.modifiers() & GLFW.GLFW_MOD_SHIFT) != 0;
-		boolean altDown = (click.modifiers() & GLFW.GLFW_MOD_ALT) != 0;
+		boolean ctrlDown = Screen.hasControlDown();
+		boolean shiftDown = Screen.hasShiftDown();
+		boolean altDown = Screen.hasAltDown();
 		if (ctrlDown || (altDown && !shiftDown && ReachCraftingConfig.get().altAsRequestKey())) {
 			RecipeBookClickCapture.onRecipeButtonClicked(
-				recipeId,
+				recipe,
 				collection,
 				null,
-				click.button(),
+				button,
 				shiftDown,
 				ctrlDown,
 				altDown,
@@ -62,38 +57,35 @@ public abstract class OverlayRecipeComponentMixin {
 			return;
 		}
 
-		RecipeBookClickCapture.onVanillaRecipeButtonClicked(
-			recipeId,
-			collection,
-			null,
-			true,
-			altDown
-		);
+		RecipeBookClickCapture.onVanillaRecipeButtonClicked(recipe, collection, null, true, altDown);
 	}
 
-	@Inject(method = "extractRenderState", at = @At("TAIL"))
-	private void reachcrafting$onRender(net.minecraft.client.gui.GuiGraphicsExtractor guiGraphics, int mouseX, int mouseY, float partialTick, org.spongepowered.asm.mixin.injection.callback.CallbackInfo ci) {
-		if (!ReachCraftingConfig.get().enabled()) return;
+	@Inject(method = "render", at = @At("TAIL"))
+	private void reachcrafting$onRender(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick, CallbackInfo ci) {
+		if (!ReachCraftingConfig.get().enabled()) {
+			return;
+		}
 		OverlayRecipeComponent overlay = (OverlayRecipeComponent) (Object) this;
-		if (!overlay.isVisible()) return;
+		if (!overlay.isVisible()) {
+			return;
+		}
 
 		RecipeCollection collection = overlay.getRecipeCollection();
-		if (collection == null) return;
+		if (collection == null) {
+			return;
+		}
 
-		java.util.List<Object> buttons = ((OverlayRecipeComponentAccessor) overlay).getRecipeButtons();
-		for (Object buttonObj : buttons) {
-			if (buttonObj instanceof net.minecraft.client.gui.components.AbstractWidget widget) {
-				if (widget.visible) {
-					net.minecraft.world.item.crafting.display.RecipeDisplayId recipeId = ((OverlayRecipeButtonAccessor) widget).getRecipe();
-					com.reachcrafting.client.RecipeButtonQueuedCountIndicator.renderOverlayButton(
-						guiGraphics,
-						widget.getX(),
-						widget.getY(),
-						widget.getWidth(),
-						recipeId,
-						collection
-					);
-				}
+		for (Object buttonObj : ((OverlayRecipeComponentAccessor) overlay).getRecipeButtons()) {
+			if (buttonObj instanceof AbstractWidget widget && widget.visible) {
+				Recipe<?> recipe = ((OverlayRecipeButtonAccessor) widget).getRecipe();
+				com.reachcrafting.client.RecipeButtonQueuedCountIndicator.renderOverlayButton(
+					guiGraphics,
+					widget.getX(),
+					widget.getY(),
+					widget.getWidth(),
+					recipe,
+					collection
+				);
 			}
 		}
 	}

@@ -2,29 +2,29 @@ package com.reachcrafting.client;
 
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.StringJoiner;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.util.context.ContextMap;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.crafting.display.ShapedCraftingRecipeDisplay;
-import net.minecraft.world.item.crafting.display.ShapelessCraftingRecipeDisplay;
-import net.minecraft.world.item.crafting.display.SlotDisplay;
+import net.minecraft.world.item.crafting.CraftingRecipe;
+import net.minecraft.world.item.crafting.Ingredient;
+import net.minecraft.world.item.crafting.Recipe;
+import net.minecraft.world.item.crafting.ShapedRecipe;
 
 public record RecipeIngredientSummary(List<IngredientSlot> slots, List<String> rawSlots, String compactSummary) {
-	public static RecipeIngredientSummary fromDisplay(Object display, ContextMap context) {
-		List<SlotDisplay> ingredients = extractIngredients(display);
+	public static RecipeIngredientSummary fromRecipe(Recipe<?> recipe, int craftingGridSlotCount) {
+		List<Ingredient> ingredients = extractIngredients(recipe, craftingGridSlotCount);
 		List<IngredientSlot> slots = new ArrayList<>();
 		List<String> rawSlots = new ArrayList<>();
 		Map<String, Integer> aggregate = new LinkedHashMap<>();
 
-		for (SlotDisplay ingredient : ingredients) {
-			IngredientSlot slot = describeSlot(ingredient.resolveForStacks(context));
+		for (Ingredient ingredient : ingredients) {
+			IngredientSlot slot = describeSlot(ingredient.getItems());
 			slots.add(slot);
 			rawSlots.add(slot.display());
 			if (!slot.isEmpty()) {
@@ -68,25 +68,48 @@ public record RecipeIngredientSummary(List<IngredientSlot> slots, List<String> r
 		return requiredSlots;
 	}
 
-	private static List<SlotDisplay> extractIngredients(Object display) {
-		if (display instanceof ShapedCraftingRecipeDisplay shaped) {
-			return shaped.ingredients();
-		}
-		if (display instanceof ShapelessCraftingRecipeDisplay shapeless) {
-			return shapeless.ingredients();
+	private static List<Ingredient> extractIngredients(Recipe<?> recipe, int craftingGridSlotCount) {
+		if (!(recipe instanceof CraftingRecipe craftingRecipe)) {
+			return List.of();
 		}
 
-		return List.of();
+		if (recipe instanceof ShapedRecipe shapedRecipe) {
+			return expandShapedIngredients(shapedRecipe, craftingGridSlotCount);
+		}
+
+		return List.copyOf(craftingRecipe.getIngredients());
 	}
 
-	private static IngredientSlot describeSlot(List<ItemStack> resolvedStacks) {
-		List<String> itemIds = resolvedStacks.stream()
+	private static List<Ingredient> expandShapedIngredients(ShapedRecipe shapedRecipe, int craftingGridSlotCount) {
+		GridSize gridSize = GridSize.fromSlotCount(craftingGridSlotCount);
+		if (gridSize == null) {
+			return List.copyOf(shapedRecipe.getIngredients());
+		}
+
+		List<Ingredient> expanded = new ArrayList<>(java.util.Collections.nCopies(craftingGridSlotCount, Ingredient.EMPTY));
+		int width = Math.min(shapedRecipe.getWidth(), gridSize.width());
+		int height = Math.min(shapedRecipe.getHeight(), gridSize.height());
+		List<Ingredient> recipeItems = shapedRecipe.getIngredients();
+		for (int recipeY = 0; recipeY < height; recipeY++) {
+			for (int recipeX = 0; recipeX < width; recipeX++) {
+				int recipeIndex = recipeY * shapedRecipe.getWidth() + recipeX;
+				int gridIndex = recipeY * gridSize.width() + recipeX;
+				if (recipeIndex < recipeItems.size() && gridIndex < expanded.size()) {
+					expanded.set(gridIndex, recipeItems.get(recipeIndex));
+				}
+			}
+		}
+		return expanded;
+	}
+
+	private static IngredientSlot describeSlot(ItemStack[] resolvedStacks) {
+		List<String> itemIds = java.util.Arrays.stream(resolvedStacks)
 			.filter(stack -> !stack.isEmpty())
 			.map(stack -> BuiltInRegistries.ITEM.getKey(stack.getItem()).toString())
 			.distinct()
 			.sorted(Comparator.naturalOrder())
 			.toList();
-		int stackLimit = resolvedStacks.stream()
+		int stackLimit = java.util.Arrays.stream(resolvedStacks)
 			.filter(stack -> !stack.isEmpty())
 			.mapToInt(ItemStack::getMaxStackSize)
 			.min()
@@ -104,6 +127,16 @@ public record RecipeIngredientSummary(List<IngredientSlot> slots, List<String> r
 			.filter(Objects::nonNull)
 			.forEach(joiner::add);
 		return new IngredientSlot(itemIds, joiner.toString(), stackLimit);
+	}
+
+	private record GridSize(int width, int height) {
+		static GridSize fromSlotCount(int slotCount) {
+			return switch (slotCount) {
+				case 4 -> new GridSize(2, 2);
+				case 9 -> new GridSize(3, 3);
+				default -> null;
+			};
+		}
 	}
 
 	public record IngredientSlot(List<String> itemIds, String display, int maxStackSize) {

@@ -1,10 +1,12 @@
 package com.reachcrafting.client;
 
 import net.minecraft.client.gui.screens.recipebook.RecipeCollection;
-import net.minecraft.world.item.crafting.display.RecipeDisplayId;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.crafting.Recipe;
 
 record SearchRequest(
-	RecipeDisplayId recipeId,
+	Recipe<?> recipe,
+	ResourceLocation recipeId,
 	RecipeCollection recipeCollection,
 	boolean explicitVariantSelection,
 	int recipeIndex,

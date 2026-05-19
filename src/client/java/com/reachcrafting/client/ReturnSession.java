@@ -149,13 +149,14 @@ final class ReturnSession extends BaseCraftSession {
 			BlockState blockState = level.getBlockState(pos);
 			if (!InWorldFilterManager.isContainerActive(level, pos, blockState)) continue;
 			if (!ContainerUtils.canAttemptOpen(level, pos, blockState)) continue;
-			if (ContainerUtils.squaredDistanceToBlock(eyePos, pos) > net.minecraft.util.Mth.square(player.blockInteractionRange())) continue;
+			if (ContainerUtils.squaredDistanceToBlock(eyePos, pos) > net.minecraft.util.Mth.square(gameMode != null ? gameMode.getPickRange() : 4.5D)) continue;
 
 			Vec3 hitPos = ContainerUtils.closestPointOnUnitBlock(eyePos, pos);
-			Direction face = Direction.getApproximateNearest(hitPos.subtract(eyePos)).getOpposite();
+			Vec3 delta = hitPos.subtract(eyePos);
+			Direction face = Direction.getNearest(delta.x, delta.y, delta.z).getOpposite();
 			BlockHitResult hitResult = new BlockHitResult(hitPos, face, pos, false);
 			
-			boolean wasSneaking = player.isShiftKeyDown() || (player.input != null && player.input.keyPresses != null && player.input.keyPresses.shift());
+			boolean wasSneaking = player.isShiftKeyDown() || (player.input != null && player.input.shiftKeyDown);
 			withSuppressedSecondaryUse(() -> {
 				if (wasSneaking) {
 					sendShiftOverride(client, player, false);
@@ -379,7 +380,7 @@ final class ReturnSession extends BaseCraftSession {
 			}
 
 			ItemStack current = targetSlot.getItem();
-			if (!current.isEmpty() && !ItemStack.isSameItemSameComponents(current, snapshot)) {
+			if (!current.isEmpty() && !ItemStack.isSameItemSameTags(current, snapshot)) {
 				continue;
 			}
 
@@ -435,7 +436,7 @@ final class ReturnSession extends BaseCraftSession {
 			if (slot.getContainerSlot() == excludedInventorySlot) {
 				continue;
 			}
-			if (!ItemStack.isSameItemSameComponents(slot.getItem(), desiredStack)) {
+			if (!ItemStack.isSameItemSameTags(slot.getItem(), desiredStack)) {
 				continue;
 			}
 
@@ -461,7 +462,7 @@ final class ReturnSession extends BaseCraftSession {
 		if (count == 0) return true;
 		
 		ItemStack current = slot.hasItem() ? slot.getItem() : ItemStack.EMPTY;
-		boolean same = current.isEmpty() || ItemStack.isSameItemSameComponents(current, stack);
+		boolean same = current.isEmpty() || ItemStack.isSameItemSameTags(current, stack);
 		return same && count < max;
 	}
 
@@ -518,3 +519,5 @@ final class ReturnSession extends BaseCraftSession {
 		PulledResourcesTracker.clear();
 	}
 }
+
+

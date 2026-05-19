@@ -3,8 +3,9 @@ package com.reachcrafting.client;
 import java.util.List;
 import net.minecraft.client.gui.screens.recipebook.RecipeCollection;
 import net.minecraft.client.Minecraft;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.inventory.AbstractContainerMenu;
-import net.minecraft.world.item.crafting.display.RecipeDisplayId;
+import net.minecraft.world.item.crafting.Recipe;
 
 public final class NearbyContainerDryRun {
 	private static final NearbyCraftCoordinator COORDINATOR = NearbyCraftCoordinator.getInstance();
@@ -17,7 +18,8 @@ public final class NearbyContainerDryRun {
 	}
 
 	public static void start(
-		RecipeDisplayId recipeId,
+		ResourceLocation recipeId,
+		Recipe<?> recipe,
 		RecipeCollection recipeCollection,
 		boolean explicitVariantSelection,
 		int recipeIndex,
@@ -29,6 +31,7 @@ public final class NearbyContainerDryRun {
 		boolean allowNearby
 	) {
 		COORDINATOR.start(new SearchRequest(
+			recipe,
 			recipeId,
 			recipeCollection,
 			explicitVariantSelection,
@@ -43,7 +46,8 @@ public final class NearbyContainerDryRun {
 	}
 
 	public static boolean tryExpandReservedGrid(
-		RecipeDisplayId recipeId,
+		ResourceLocation recipeId,
+		Recipe<?> recipe,
 		RecipeCollection recipeCollection,
 		boolean explicitVariantSelection,
 		int recipeIndex,
@@ -55,6 +59,7 @@ public final class NearbyContainerDryRun {
 		boolean allowNearby
 	) {
 		return COORDINATOR.tryExpandReservedGrid(new SearchRequest(
+			recipe,
 			recipeId,
 			recipeCollection,
 			explicitVariantSelection,

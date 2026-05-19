@@ -4,7 +4,7 @@ import java.util.Set;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.inventory.AbstractContainerMenu;
-import net.minecraft.world.inventory.ContainerInput;
+import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.inventory.InventoryMenu;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
@@ -49,7 +49,7 @@ public final class OffhandConsolidationController {
 						}
 						// If item in slot changed, we only swap back if NOT in a bulk session.
 						// During bulk, byproducts might briefly touch this slot or server sync might be weird.
-						if (!AutoMoveController.isAutomatedInteractionRunning() && !ItemStack.isSameItemSameComponents(s.getItem(), swappedItem)) {
+						if (!AutoMoveController.isAutomatedInteractionRunning() && !ItemStack.isSameItemSameTags(s.getItem(), swappedItem)) {
 							swapBack(client);
 							return;
 						}
@@ -121,7 +121,7 @@ public final class OffhandConsolidationController {
 		}
 
 		ItemStack offhand = client.player.getOffhandItem();
-		if (offhand.isEmpty() || !ItemStack.isSameItemSameComponents(offhand, resultStack)) {
+		if (offhand.isEmpty() || !ItemStack.isSameItemSameTags(offhand, resultStack)) {
 			return false;
 		}
 
@@ -208,8 +208,8 @@ public final class OffhandConsolidationController {
 			return false;
 		}
 
-		// Perform swap via ContainerInput.SWAP with button 40 (offhand)
-		client.gameMode.handleContainerInput(menu.containerId, targetSlot.index, 40, ContainerInput.SWAP, client.player);
+		// Perform swap via ClickType.SWAP with button 40 (offhand)
+		client.gameMode.handleInventoryMouseClick(menu.containerId, targetSlot.index, 40, ClickType.SWAP, client.player);
 		
 		swapInventoryIndex = targetInvIndex;
 		isSwapped = true;
@@ -234,7 +234,7 @@ public final class OffhandConsolidationController {
 			Slot targetSlot = findInventorySlot(menu, swapInventoryIndex);
 			if (targetSlot != null) {
 				// Swap back
-				client.gameMode.handleContainerInput(menu.containerId, targetSlot.index, 40, ContainerInput.SWAP, client.player);
+				client.gameMode.handleInventoryMouseClick(menu.containerId, targetSlot.index, 40, ClickType.SWAP, client.player);
 			}
 		}
 		
@@ -265,3 +265,4 @@ public final class OffhandConsolidationController {
 		return !acceptedItemIds.contains(itemId);
 	}
 }
+

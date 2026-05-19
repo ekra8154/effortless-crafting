@@ -1,7 +1,5 @@
 package com.reachcrafting.client;
 
-import com.reachcrafting.client.mixin.ClientRecipeBookAccessor;
-import java.util.Map;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenMouseEvents;
@@ -11,11 +9,8 @@ import net.minecraft.client.gui.screens.inventory.CraftingScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.client.gui.screens.recipebook.RecipeButton;
 import net.minecraft.client.player.LocalPlayer;
-import net.minecraft.util.context.ContextMap;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.crafting.display.RecipeDisplayEntry;
-import net.minecraft.world.item.crafting.display.RecipeDisplayId;
-import net.minecraft.world.item.crafting.display.SlotDisplayContext;
+import net.minecraft.world.item.crafting.Recipe;
 import org.lwjgl.glfw.GLFW;
 
 final class RecipeBookInputController {
@@ -93,14 +88,14 @@ final class RecipeBookInputController {
 			}
 		});
 		ScreenEvents.AFTER_INIT.register((client, screen, scaledWidth, scaledHeight) -> {
-			ScreenMouseEvents.allowMouseClick(screen).register((currentScreen, event) -> {
+			ScreenMouseEvents.allowMouseClick(screen).register((currentScreen, mouseX, mouseY, button) -> {
 				if (!ReachCraftingConfig.get().enabled()) {
 					return true;
 				}
-				if (event.button() != GLFW.GLFW_MOUSE_BUTTON_RIGHT) {
+				if (button != GLFW.GLFW_MOUSE_BUTTON_RIGHT) {
 					return true;
 				}
-				RecipeBookClickCapture.HeldRecipeAction action = RecipeBookFocusManager.findHoveredHeldRecipeAction(currentScreen, event.x(), event.y());
+				RecipeBookClickCapture.HeldRecipeAction action = RecipeBookFocusManager.findHoveredHeldRecipeAction(currentScreen, mouseX, mouseY);
 				return action == null || !clearHeldRecipe(action);
 			});
 			ScreenMouseEvents.allowMouseScroll(screen).register((currentScreen, mouseX, mouseY, horizontalAmount, verticalAmount) -> {
@@ -119,7 +114,7 @@ final class RecipeBookInputController {
 	}
 
 	void onRecipeButtonClicked(
-		RecipeDisplayId recipeId,
+		Recipe<?> recipe,
 		net.minecraft.client.gui.screens.recipebook.RecipeCollection collection,
 		ItemStack displayStack,
 		int mouseButton,
@@ -155,14 +150,14 @@ final class RecipeBookInputController {
 			&& ReachCraftingConfig.get().enableNearbyContainerUsage();
 		boolean refillableBulkMaxMode = maxCraftRequested && allowNearbyChests && AutoCraftController.isBulkModeEnabled();
 		int requestedClicks = maxCraftRequested
-			? resolveMaxCraftRequestCount(minecraft, player, recipeId, collection, displayStack, explicitVariantSelection, allowNearbyChests)
+			? resolveMaxCraftRequestCount(minecraft, player, recipe, collection, displayStack, explicitVariantSelection, allowNearbyChests)
 			: 1;
 
 		if (shouldQueueHeldRecipe(minecraft, maxCraftRequested, autoCraftRequested) && state.replayBatch() == null) {
 			if (autoCraftRequested) {
 				AutoCraftController.consumeQuickCraft();
 			}
-			queueHeldRecipe(recipeId, collection, displayStack, mouseButton, explicitVariantSelection, requestedClicks);
+			queueHeldRecipe(recipe, collection, displayStack, mouseButton, explicitVariantSelection, requestedClicks);
 			return;
 		}
 
@@ -175,7 +170,8 @@ final class RecipeBookInputController {
 			ContainerUtils.flushCraftingGrid(minecraft, allowNearbyChests, true);
 			state.setReplayDelayTicks(1);
 			RecipeBookClickCapture.HeldRecipeAction action = new RecipeBookClickCapture.HeldRecipeAction(
-				recipeId,
+				recipe,
+				recipe.getId(),
 				collection,
 				displayStack != null ? displayStack.copy() : ItemStack.EMPTY,
 				mouseButton,
@@ -189,7 +185,7 @@ final class RecipeBookInputController {
 			minecraft,
 			player,
 			screen,
-			recipeId,
+			recipe,
 			collection,
 			displayStack,
 			mouseButton,
@@ -204,7 +200,7 @@ final class RecipeBookInputController {
 	}
 
 	void onVanillaRecipeButtonClicked(
-		RecipeDisplayId recipeId,
+		Recipe<?> recipe,
 		net.minecraft.client.gui.screens.recipebook.RecipeCollection collection,
 		ItemStack displayStack,
 		boolean explicitVariantSelection,
@@ -227,14 +223,14 @@ final class RecipeBookInputController {
 
 		Minecraft minecraft = Minecraft.getInstance();
 		LocalPlayer player = minecraft.player;
-		if (player == null || minecraft.level == null || recipeId == null || collection == null) {
+		if (player == null || minecraft.level == null || recipe == null || collection == null) {
 			return;
 		}
 
 		ItemStack expectedStack = RecipeClickExecutor.resolveExpectedOutputStack(
 			minecraft,
 			player,
-			recipeId,
+			recipe,
 			collection,
 			displayStack,
 			explicitVariantSelection
@@ -246,16 +242,17 @@ final class RecipeBookInputController {
 	}
 
 	boolean onRecipeButtonRightClicked(
-		RecipeDisplayId recipeId,
+		Recipe<?> recipe,
 		net.minecraft.client.gui.screens.recipebook.RecipeCollection collection,
 		ItemStack displayStack,
 		boolean explicitVariantSelection
 	) {
-		if (!ReachCraftingConfig.get().enabled() || recipeId == null || collection == null) {
+		if (!ReachCraftingConfig.get().enabled() || recipe == null || collection == null) {
 			return false;
 		}
 		return clearHeldRecipe(new RecipeBookClickCapture.HeldRecipeAction(
-			recipeId,
+			recipe,
+			recipe.getId(),
 			collection,
 			displayStack != null ? displayStack.copy() : ItemStack.EMPTY,
 			GLFW.GLFW_MOUSE_BUTTON_LEFT,
@@ -264,18 +261,18 @@ final class RecipeBookInputController {
 	}
 
 	QueuedRecipeCountState getQueuedCountState(
-		RecipeDisplayId recipeId,
+		Recipe<?> recipe,
 		net.minecraft.client.gui.screens.recipebook.RecipeCollection collection,
 		boolean explicitVariantSelection
 	) {
 		if (ReachCraftingConfig.get().inputCounterVisibility() == ReachCraftingConfig.InputCounterVisibility.DISABLED
 			|| !ReachCraftingConfig.get().reachCraftHoldAndRelease()
-			|| recipeId == null
+			|| recipe == null
 			|| collection == null) {
 			return QueuedRecipeCountState.hidden();
 		}
 
-		if (state.pendingHeldRecipe() != null && matchesAction(state.pendingHeldRecipe().action(), recipeId, collection, explicitVariantSelection)) {
+		if (state.pendingHeldRecipe() != null && matchesAction(state.pendingHeldRecipe().action(), recipe, collection, explicitVariantSelection)) {
 			return QueuedRecipeCountState.visible(
 				state.pendingHeldRecipe().clickCount(),
 				true,
@@ -288,7 +285,7 @@ final class RecipeBookInputController {
 			return QueuedRecipeCountState.hidden();
 		}
 
-		int currentCount = RecipeClickExecutor.resolveGridMatchedCount(minecraft, recipeId, collection, explicitVariantSelection);
+		int currentCount = RecipeClickExecutor.resolveGridMatchedCount(minecraft, recipe, collection, explicitVariantSelection);
 		if (currentCount <= 0) {
 			return QueuedRecipeCountState.hidden();
 		}
@@ -297,18 +294,18 @@ final class RecipeBookInputController {
 	}
 
 	QueuedRecipeCountState getQueuedCountState(RecipeButton button) {
-		if (button == null || button.getCollection() == null || button.getCurrentRecipe() == null) {
+		if (button == null || button.getCollection() == null || button.getRecipe() == null) {
 			return QueuedRecipeCountState.hidden();
 		}
-		return getQueuedCountState(button.getCurrentRecipe(), button.getCollection(), false);
+		return getQueuedCountState(button.getRecipe(), button.getCollection(), false);
 	}
 
 	int getHeldQueuedCount(
-		RecipeDisplayId recipeId,
+		Recipe<?> recipe,
 		net.minecraft.client.gui.screens.recipebook.RecipeCollection collection,
 		boolean explicitVariantSelection
 	) {
-		return getQueuedCountState(recipeId, collection, explicitVariantSelection).displayedCount();
+		return getQueuedCountState(recipe, collection, explicitVariantSelection).displayedCount();
 	}
 
 	int getHeldQueuedCount(RecipeButton button) {
@@ -395,30 +392,23 @@ final class RecipeBookInputController {
 	}
 
 	boolean hasPendingHeldRecipe(
-		RecipeDisplayId recipeId,
+		Recipe<?> recipe,
 		net.minecraft.client.gui.screens.recipebook.RecipeCollection collection,
 		boolean explicitVariantSelection
 	) {
 		if (state.pendingHeldRecipe() == null) {
 			return false;
 		}
-		return matchesAction(state.pendingHeldRecipe().action(), recipeId, collection, explicitVariantSelection);
+		return matchesAction(state.pendingHeldRecipe().action(), recipe, collection, explicitVariantSelection);
 	}
 
 	ItemStack resolvePendingOutputStack(Minecraft minecraft) {
-		if (state.pendingHeldRecipe() == null || minecraft.level == null || minecraft.player == null) {
+		if (state.pendingHeldRecipe() == null || minecraft.level == null) {
 			return ItemStack.EMPTY;
 		}
 
 		RecipeBookClickCapture.HeldRecipeAction action = state.pendingHeldRecipe().action();
-		Map<RecipeDisplayId, RecipeDisplayEntry> knownRecipes = ((ClientRecipeBookAccessor) minecraft.player.getRecipeBook()).getKnown();
-		RecipeDisplayEntry entry = knownRecipes.get(action.recipeId());
-		if (entry == null) {
-			return ItemStack.EMPTY;
-		}
-
-		ContextMap context = SlotDisplayContext.fromLevel(minecraft.level);
-		return RecipeVariantResolver.resolveDisplayStack(entry.display(), context);
+		return RecipeVariantResolver.resolveDisplayStack(action.recipe(), minecraft);
 	}
 
 	private boolean shouldQueueHeldRecipe(Minecraft minecraft, boolean maxCraftRequested, boolean autoCraftRequested) {
@@ -435,7 +425,7 @@ final class RecipeBookInputController {
 	private int resolveMaxCraftRequestCount(
 		Minecraft minecraft,
 		LocalPlayer player,
-		RecipeDisplayId recipeId,
+		Recipe<?> recipe,
 		net.minecraft.client.gui.screens.recipebook.RecipeCollection collection,
 		ItemStack displayStack,
 		boolean explicitVariantSelection,
@@ -448,7 +438,7 @@ final class RecipeBookInputController {
 		ItemStack expectedOutput = RecipeClickExecutor.resolveExpectedOutputStack(
 			minecraft,
 			player,
-			recipeId,
+			recipe,
 			collection,
 			displayStack,
 			explicitVariantSelection
@@ -457,11 +447,11 @@ final class RecipeBookInputController {
 			return Math.max(expectedOutput.getMaxStackSize(), 1);
 		}
 
-		return Math.max(RecipeClickExecutor.resolveRecipeQueueLimit(minecraft, recipeId, collection), 1);
+		return Math.max(RecipeClickExecutor.resolveRecipeQueueLimit(minecraft, recipe, collection), 1);
 	}
 
 	private void queueHeldRecipe(
-		RecipeDisplayId recipeId,
+		Recipe<?> recipe,
 		net.minecraft.client.gui.screens.recipebook.RecipeCollection collection,
 		ItemStack displayStack,
 		int mouseButton,
@@ -469,7 +459,8 @@ final class RecipeBookInputController {
 		int initialCount
 	) {
 		RecipeBookClickCapture.HeldRecipeAction action = new RecipeBookClickCapture.HeldRecipeAction(
-			recipeId,
+			recipe,
+			recipe.getId(),
 			collection,
 			displayStack != null ? displayStack.copy() : ItemStack.EMPTY,
 			mouseButton,
@@ -560,7 +551,7 @@ final class RecipeBookInputController {
 		com.reachcrafting.ReachCraftingMod.LOGGER.debug(
 			"[recipe_replay] screen={} recipe_idx={} remaining_clicks={} allow_nearby={} craft_all={}",
 			screen.getClass().getSimpleName(),
-			state.replayBatch().action().recipeId().index(),
+			state.replayBatch().action().recipeId(),
 			state.replayBatch().remainingClicks(),
 			state.replayBatch().allowNearby(),
 			state.replayBatch().craftAll()
@@ -570,7 +561,7 @@ final class RecipeBookInputController {
 			minecraft,
 			player,
 			screen,
-			state.replayBatch().action().recipeId(),
+			state.replayBatch().action().recipe(),
 			state.replayBatch().action().collection(),
 			state.replayBatch().action().displayStack().copy(),
 			state.replayBatch().action().mouseButton(),
@@ -649,7 +640,7 @@ final class RecipeBookInputController {
 
 	private boolean clearHeldRecipe(RecipeBookClickCapture.HeldRecipeAction action) {
 		Minecraft minecraft = Minecraft.getInstance();
-		boolean hasDisplayedCount = getHeldQueuedCount(action.recipeId(), action.collection(), action.explicitVariantSelection()) > 0;
+		boolean hasDisplayedCount = getHeldQueuedCount(action.recipe(), action.collection(), action.explicitVariantSelection()) > 0;
 		if (!hasDisplayedCount) {
 			return false;
 		}
@@ -669,7 +660,7 @@ final class RecipeBookInputController {
 	private int nextQueuedCountFromCurrentState(Minecraft minecraft, RecipeBookClickCapture.HeldRecipeAction action, int delta) {
 		int queueLimit = resolveQueueLimit(minecraft, action);
 		int baseCount = Math.min(
-			RecipeClickExecutor.resolveGridMatchedCount(minecraft, action.recipeId(), action.collection(), action.explicitVariantSelection()),
+			RecipeClickExecutor.resolveGridMatchedCount(minecraft, action.recipe(), action.collection(), action.explicitVariantSelection()),
 			queueLimit
 		);
 		if (AutoCraftController.isBulkModeEnabled()) {
@@ -707,7 +698,7 @@ final class RecipeBookInputController {
 	}
 
 	private int resolveQueueLimit(Minecraft minecraft, RecipeBookClickCapture.HeldRecipeAction action) {
-		int queueLimit = Math.max(RecipeClickExecutor.resolveRecipeQueueLimit(minecraft, action.recipeId(), action.collection()), 1);
+		int queueLimit = Math.max(RecipeClickExecutor.resolveRecipeQueueLimit(minecraft, action.recipe(), action.collection()), 1);
 		if (AutoCraftController.isBulkModeEnabled()) {
 			return Math.max(queueLimit, RecipeClickExecutor.bulkRecipeQueueLimit());
 		}
@@ -724,7 +715,7 @@ final class RecipeBookInputController {
 
 	private boolean matchesAction(
 		RecipeBookClickCapture.HeldRecipeAction action,
-		RecipeDisplayId recipeId,
+		Recipe<?> recipe,
 		net.minecraft.client.gui.screens.recipebook.RecipeCollection collection,
 		boolean explicitVariantSelection
 	) {
@@ -732,7 +723,8 @@ final class RecipeBookInputController {
 			return false;
 		}
 		return action.sameRecipe(new RecipeBookClickCapture.HeldRecipeAction(
-			recipeId,
+			recipe,
+			recipe.getId(),
 			collection,
 			ItemStack.EMPTY,
 			org.lwjgl.glfw.GLFW.GLFW_MOUSE_BUTTON_LEFT,

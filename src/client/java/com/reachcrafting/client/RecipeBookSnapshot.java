@@ -1,38 +1,35 @@
 package com.reachcrafting.client;
 
 import com.reachcrafting.ReachCraftingMod;
-import com.reachcrafting.client.mixin.AbstractRecipeBookScreenAccessor;
 import com.reachcrafting.client.mixin.RecipeBookComponentAccessor;
 import com.reachcrafting.client.mixin.RecipeBookPageAccessor;
+import net.minecraft.client.RecipeBookCategories;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.components.CycleButton;
 import net.minecraft.client.gui.components.EditBox;
-import net.minecraft.client.gui.screens.inventory.AbstractRecipeBookScreen;
+import net.minecraft.client.gui.components.StateSwitchingButton;
 import net.minecraft.client.gui.screens.recipebook.OverlayRecipeComponent;
 import net.minecraft.client.gui.screens.recipebook.RecipeButton;
 import net.minecraft.client.gui.screens.recipebook.RecipeBookComponent;
 import net.minecraft.client.gui.screens.recipebook.RecipeBookPage;
 import net.minecraft.client.gui.screens.recipebook.RecipeBookTabButton;
+import net.minecraft.client.gui.screens.recipebook.RecipeUpdateListener;
 import net.minecraft.util.Mth;
-import net.minecraft.util.context.ContextMap;
-import net.minecraft.world.item.crafting.ExtendedRecipeBookCategory;
-import net.minecraft.world.item.crafting.display.SlotDisplayContext;
 
 record RecipeBookSnapshot(
 	boolean visible,
 	boolean filtering,
 	String searchText,
 	boolean focused,
-	ExtendedRecipeBookCategory selectedCategory,
+	RecipeBookCategories selectedCategory,
 	int currentPage,
 	boolean overlayVisible,
 	net.minecraft.client.gui.screens.recipebook.RecipeCollection overlayCollection
 ) {
-	static RecipeBookSnapshot capture(AbstractRecipeBookScreen<?> screen) {
-		RecipeBookComponent<?> component = ((AbstractRecipeBookScreenAccessor) screen).getRecipeBookComponent();
+	static RecipeBookSnapshot capture(RecipeUpdateListener screen) {
+		RecipeBookComponent component = screen.getRecipeBookComponent();
 		RecipeBookComponentAccessor accessor = (RecipeBookComponentAccessor) component;
 		RecipeBookTabButton selectedTab = accessor.getSelectedTab();
-		CycleButton<Boolean> filterButton = accessor.getFilterButton();
+		StateSwitchingButton filterButton = accessor.getFilterButton();
 		EditBox searchBox = accessor.getSearchBox();
 		RecipeBookPageAccessor pageAccessor = (RecipeBookPageAccessor) accessor.getRecipeBookPage();
 		OverlayRecipeComponent overlay = pageAccessor.getOverlay();
@@ -43,7 +40,7 @@ record RecipeBookSnapshot(
 		ReachCraftingMod.LOGGER.debug("[nearby_capture] Captured search text: '{}' (focused={})", text, searchBox != null && searchBox.isFocused());
 		return new RecipeBookSnapshot(
 			component.isVisible(),
-			filterButton != null && Boolean.TRUE.equals(filterButton.getValue()),
+			filterButton != null && filterButton.isStateTriggered(),
 			text,
 			searchBox != null && searchBox.isFocused(),
 			selectedTab != null ? selectedTab.getCategory() : null,
@@ -57,16 +54,16 @@ record RecipeBookSnapshot(
 		return new RecipeBookSnapshot(false, false, "", false, null, 0, false, null);
 	}
 
-	void restore(AbstractRecipeBookScreen<?> screen) {
-		RecipeBookComponent<?> component = ((AbstractRecipeBookScreenAccessor) screen).getRecipeBookComponent();
+	void restore(RecipeUpdateListener screen) {
+		RecipeBookComponent component = screen.getRecipeBookComponent();
 		RecipeBookComponentAccessor accessor = (RecipeBookComponentAccessor) component;
 		if (component.isVisible() != visible) {
 			component.toggleVisibility();
 		}
 
-		CycleButton<Boolean> filterButton = accessor.getFilterButton();
-		if (filterButton != null && Boolean.TRUE.equals(filterButton.getValue()) != filtering) {
-			filterButton.setValue(filtering);
+		StateSwitchingButton filterButton = accessor.getFilterButton();
+		if (filterButton != null && filterButton.isStateTriggered() != filtering) {
+			filterButton.setStateTriggered(filtering);
 		}
 
 		EditBox searchBox = accessor.getSearchBox();
@@ -121,15 +118,13 @@ record RecipeBookSnapshot(
 			return;
 		}
 
-		ContextMap context = SlotDisplayContext.fromLevel(minecraft.level);
 		int left = accessor.invokeGetXOrigin();
 		int top = accessor.invokeGetYOrigin();
 		int width = accessor.getWidth();
 		int height = accessor.getHeight();
 		overlay.init(
+			minecraft,
 			overlayCollection,
-			context,
-			pageAccessor.getIsFiltering(),
 			matchingButton.getX(),
 			matchingButton.getY(),
 			left + width / 2,

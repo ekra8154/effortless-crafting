@@ -7,7 +7,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.MultiPlayerGameMode;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.AbstractContainerMenu;
-import net.minecraft.world.inventory.ContainerInput;
+import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.inventory.CraftingMenu;
 import net.minecraft.world.inventory.InventoryMenu;
 import net.minecraft.world.inventory.Slot;
@@ -30,19 +30,19 @@ public final class InventoryGridRestoreTracker {
 	private InventoryGridRestoreTracker() {
 	}
 
-	public static void recordPotentialSource(int slotId, ContainerInput clickType, AbstractContainerMenu menu) {
+	public static void recordPotentialSource(int slotId, ClickType clickType, AbstractContainerMenu menu) {
 		if (menu == null || slotId < 0 || slotId >= menu.slots.size()) return;
 
 		Slot slot = menu.getSlot(slotId);
 		if (slot.container instanceof Inventory) {
-			if (clickType == ContainerInput.PICKUP) {
+			if (clickType == ClickType.PICKUP) {
 				lastInventorySlotClicked = slotId;
 				ReachCraftingMod.LOGGER.debug("[grid_restore] Recorded potential source slot: {}", slotId);
 			}
 		}
 	}
 
-	public static void recordPotentialDestination(int slotId, int button, ContainerInput clickType, AbstractContainerMenu menu) {
+	public static void recordPotentialDestination(int slotId, int button, ClickType clickType, AbstractContainerMenu menu) {
 		if (menu == null || slotId < 0 || slotId >= menu.slots.size()) return;
 
 		boolean isGrid = isGridSlot(menu, slotId);
@@ -50,10 +50,10 @@ public final class InventoryGridRestoreTracker {
 		boolean isInventory = slot.container instanceof Inventory;
 
 		if (isGrid) {
-			if (clickType == ContainerInput.PICKUP && lastInventorySlotClicked != -1) {
+			if (clickType == ClickType.PICKUP && lastInventorySlotClicked != -1) {
 				GRID_TO_ORIGINAL_SLOT.put(slotId, lastInventorySlotClicked);
 				ReachCraftingMod.LOGGER.debug("[grid_restore] Linked grid slot {} to original inventory slot {}", slotId, lastInventorySlotClicked);
-			} else if (clickType == ContainerInput.QUICK_CRAFT && lastInventorySlotClicked != -1) {
+			} else if (clickType == ClickType.QUICK_CRAFT && lastInventorySlotClicked != -1) {
 				// Dragging phase (button & 3): 1 = add slot, 2 = end drag
 				int phase = button & 3;
 				if (phase == 1 || phase == 2) {
@@ -62,7 +62,7 @@ public final class InventoryGridRestoreTracker {
 				}
 			}
 		} else if (isInventory) {
-			if (clickType == ContainerInput.PICKUP) {
+			if (clickType == ClickType.PICKUP) {
 				// Moving between inventory slots.
 				if (lastInventorySlotClicked != -1) {
 					updateOriginalSlotMappings(lastInventorySlotClicked, slotId);
@@ -70,7 +70,7 @@ public final class InventoryGridRestoreTracker {
 				lastInventorySlotClicked = -1;
 			}
 		} else {
-			if (clickType == ContainerInput.PICKUP) {
+			if (clickType == ClickType.PICKUP) {
 				lastInventorySlotClicked = -1;
 			}
 		}
@@ -201,7 +201,7 @@ public final class InventoryGridRestoreTracker {
 			trackedItemIds.add(itemId);
 			int targetMenuIdx = inventoryIndexToMenuIndex(menu, entry.getKey());
 			Slot target = targetMenuIdx >= 0 ? menu.getSlot(targetMenuIdx) : null;
-			int currentCount = target != null && target.hasItem() && ItemStack.isSameItemSameComponents(target.getItem(), snapshot) ? target.getItem().getCount() : 0;
+			int currentCount = target != null && target.hasItem() && ItemStack.isSameItemSameTags(target.getItem(), snapshot) ? target.getItem().getCount() : 0;
 			if (!first) {
 				targets.append(", ");
 			}
@@ -235,7 +235,7 @@ public final class InventoryGridRestoreTracker {
 
 	private static void restoreSnapshotBaseline(AbstractContainerMenu menu, MultiPlayerGameMode gameMode, int targetMenuIdx, ItemStack snapshot, Set<Integer> processedGridSlots) {
 		Slot target = menu.getSlot(targetMenuIdx);
-		if (target.hasItem() && !ItemStack.isSameItemSameComponents(target.getItem(), snapshot)) {
+		if (target.hasItem() && !ItemStack.isSameItemSameTags(target.getItem(), snapshot)) {
 			return;
 		}
 
@@ -250,7 +250,7 @@ public final class InventoryGridRestoreTracker {
 
 	private static void topOffSnapshotSlot(AbstractContainerMenu menu, MultiPlayerGameMode gameMode, int targetMenuIdx, ItemStack snapshot, Set<Integer> processedGridSlots) {
 		Slot target = menu.getSlot(targetMenuIdx);
-		if (!target.hasItem() || !ItemStack.isSameItemSameComponents(target.getItem(), snapshot)) {
+		if (!target.hasItem() || !ItemStack.isSameItemSameTags(target.getItem(), snapshot)) {
 			return;
 		}
 
@@ -275,7 +275,7 @@ public final class InventoryGridRestoreTracker {
 			}
 
 			Slot gridSlot = menu.getSlot(gridIdx);
-			if (!gridSlot.hasItem() || !ItemStack.isSameItemSameComponents(gridSlot.getItem(), desiredStack)) {
+			if (!gridSlot.hasItem() || !ItemStack.isSameItemSameTags(gridSlot.getItem(), desiredStack)) {
 				continue;
 			}
 
@@ -301,7 +301,7 @@ public final class InventoryGridRestoreTracker {
 			}
 
 			Slot gridSlot = menu.getSlot(gridIdx);
-			if (!gridSlot.hasItem() || !ItemStack.isSameItemSameComponents(gridSlot.getItem(), desiredStack)) {
+			if (!gridSlot.hasItem() || !ItemStack.isSameItemSameTags(gridSlot.getItem(), desiredStack)) {
 				continue;
 			}
 
@@ -335,14 +335,14 @@ public final class InventoryGridRestoreTracker {
 			return 0;
 		}
 
-		gameMode.handleContainerInput(menu.containerId, sourceIdx, 0, ContainerInput.PICKUP, client.player);
+		gameMode.handleInventoryMouseClick(menu.containerId, sourceIdx, 0, ClickType.PICKUP, client.player);
 		int remainder = sourceStack.getCount() - moveCount;
 		for (int i = 0; i < remainder; i++) {
-			gameMode.handleContainerInput(menu.containerId, sourceIdx, 1, ContainerInput.PICKUP, client.player);
+			gameMode.handleInventoryMouseClick(menu.containerId, sourceIdx, 1, ClickType.PICKUP, client.player);
 		}
-		gameMode.handleContainerInput(menu.containerId, targetIdx, 0, ContainerInput.PICKUP, client.player);
+		gameMode.handleInventoryMouseClick(menu.containerId, targetIdx, 0, ClickType.PICKUP, client.player);
 		if (!client.player.containerMenu.getCarried().isEmpty()) {
-			gameMode.handleContainerInput(menu.containerId, sourceIdx, 0, ContainerInput.PICKUP, client.player);
+			gameMode.handleInventoryMouseClick(menu.containerId, sourceIdx, 0, ClickType.PICKUP, client.player);
 		}
 		return moveCount;
 	}
@@ -367,12 +367,12 @@ public final class InventoryGridRestoreTracker {
 			return 0;
 		}
 
-		gameMode.handleContainerInput(menu.containerId, sourceIdx, 0, ContainerInput.PICKUP, client.player);
+		gameMode.handleInventoryMouseClick(menu.containerId, sourceIdx, 0, ClickType.PICKUP, client.player);
 		for (int i = 0; i < moveCount; i++) {
-			gameMode.handleContainerInput(menu.containerId, targetIdx, 1, ContainerInput.PICKUP, client.player);
+			gameMode.handleInventoryMouseClick(menu.containerId, targetIdx, 1, ClickType.PICKUP, client.player);
 		}
 		if (!client.player.containerMenu.getCarried().isEmpty()) {
-			gameMode.handleContainerInput(menu.containerId, sourceIdx, 0, ContainerInput.PICKUP, client.player);
+			gameMode.handleInventoryMouseClick(menu.containerId, sourceIdx, 0, ClickType.PICKUP, client.player);
 		}
 		return moveCount;
 	}
@@ -435,14 +435,14 @@ public final class InventoryGridRestoreTracker {
 			return false;
 		}
 
-		gameMode.handleContainerInput(menu.containerId, source.index, 0, ContainerInput.PICKUP, client.player);
+		gameMode.handleInventoryMouseClick(menu.containerId, source.index, 0, ClickType.PICKUP, client.player);
 		int remainder = sourceCount - moveCount;
 		for (int i = 0; i < remainder; i++) {
-			gameMode.handleContainerInput(menu.containerId, source.index, 1, ContainerInput.PICKUP, client.player);
+			gameMode.handleInventoryMouseClick(menu.containerId, source.index, 1, ClickType.PICKUP, client.player);
 		}
-		gameMode.handleContainerInput(menu.containerId, target.index, 0, ContainerInput.PICKUP, client.player);
+		gameMode.handleInventoryMouseClick(menu.containerId, target.index, 0, ClickType.PICKUP, client.player);
 		if (!client.player.containerMenu.getCarried().isEmpty()) {
-			gameMode.handleContainerInput(menu.containerId, source.index, 0, ContainerInput.PICKUP, client.player);
+			gameMode.handleInventoryMouseClick(menu.containerId, source.index, 0, ClickType.PICKUP, client.player);
 		}
 		return true;
 	}
@@ -474,7 +474,7 @@ public final class InventoryGridRestoreTracker {
 				java.util.Set<String> acceptedIds = BulkAutoCraftController.getAcceptedItemIds();
 				if (acceptedIds != null && !acceptedIds.contains(itemId)) {
 					ReachCraftingMod.LOGGER.info("[grid_flush] THROW byproduct from grid slot {}: {}x{}", gridIdx, itemCount, itemName);
-					gameMode.handleContainerInput(menu.containerId, gridSlot.index, 1, ContainerInput.THROW, client.player);
+					gameMode.handleInventoryMouseClick(menu.containerId, gridSlot.index, 1, ClickType.THROW, client.player);
 					continue;
 				}
 			}
@@ -482,7 +482,7 @@ public final class InventoryGridRestoreTracker {
 			ReachCraftingMod.LOGGER.info("[grid_flush] Flushing grid slot {}: {}x{}", gridIdx, itemCount, itemName);
 
 			// Pick up all items from this grid slot
-			gameMode.handleContainerInput(menu.containerId, gridIdx, 0, ContainerInput.PICKUP, client.player);
+			gameMode.handleInventoryMouseClick(menu.containerId, gridIdx, 0, ClickType.PICKUP, client.player);
 			if (client.player.containerMenu.getCarried().isEmpty()) {
 				continue;
 			}
@@ -497,14 +497,14 @@ public final class InventoryGridRestoreTracker {
 				if (!target.hasItem()) continue;
 
 				ItemStack carried = client.player.containerMenu.getCarried();
-				if (!ItemStack.isSameItemSameComponents(target.getItem(), carried)) continue;
+				if (!ItemStack.isSameItemSameTags(target.getItem(), carried)) continue;
 
 				int maxStack = Math.min(target.getMaxStackSize(), carried.getMaxStackSize());
 				if (target.getItem().getCount() >= maxStack) continue;
 
 				ReachCraftingMod.LOGGER.info("[grid_flush] Phase1 merge: inv {} (menu {}) has {}x{}, merging carried {}",
 					invIdx, menuIdx, target.getItem().getCount(), itemName, carried.getCount());
-				gameMode.handleContainerInput(menu.containerId, menuIdx, 0, ContainerInput.PICKUP, client.player);
+				gameMode.handleInventoryMouseClick(menu.containerId, menuIdx, 0, ClickType.PICKUP, client.player);
 			}
 
 			// Phase 2: Deposit into empty hotbar slots left-to-right (inventory indices 0-8)
@@ -517,16 +517,16 @@ public final class InventoryGridRestoreTracker {
 
 				ReachCraftingMod.LOGGER.info("[grid_flush] Phase2 empty hotbar: inv {} (menu {}), depositing {}",
 					invIdx, menuIdx, client.player.containerMenu.getCarried().getCount());
-				gameMode.handleContainerInput(menu.containerId, menuIdx, 0, ContainerInput.PICKUP, client.player);
+				gameMode.handleInventoryMouseClick(menu.containerId, menuIdx, 0, ClickType.PICKUP, client.player);
 			}
 
 			// Phase 3: If still carrying, put back in grid and shift-click (vanilla logic)
 			if (!client.player.containerMenu.getCarried().isEmpty()) {
 				ReachCraftingMod.LOGGER.info("[grid_flush] Phase3 shift-click fallback: remaining {}",
 					client.player.containerMenu.getCarried().getCount());
-				gameMode.handleContainerInput(menu.containerId, gridIdx, 0, ContainerInput.PICKUP, client.player);
+				gameMode.handleInventoryMouseClick(menu.containerId, gridIdx, 0, ClickType.PICKUP, client.player);
 				if (menu.getSlot(gridIdx).hasItem()) {
-					gameMode.handleContainerInput(menu.containerId, gridIdx, 0, ContainerInput.QUICK_MOVE, client.player);
+					gameMode.handleInventoryMouseClick(menu.containerId, gridIdx, 0, ClickType.QUICK_MOVE, client.player);
 				}
 			}
 		}
@@ -549,24 +549,24 @@ public final class InventoryGridRestoreTracker {
 		if (!source.hasItem()) return;
 
 		// 1. Pick up from source
-		gameMode.handleContainerInput(menu.containerId, sourceIdx, 0, ContainerInput.PICKUP, client.player);
+		gameMode.handleInventoryMouseClick(menu.containerId, sourceIdx, 0, ClickType.PICKUP, client.player);
 		
 		// 2. Try to place into target (only if it won't cause a swap)
 		if (!client.player.containerMenu.getCarried().isEmpty()) {
 			Slot target = menu.getSlot(targetIdx);
 			boolean canMerge = !target.hasItem() || 
-				(ItemStack.isSameItemSameComponents(target.getItem(), client.player.containerMenu.getCarried()) 
+				(ItemStack.isSameItemSameTags(target.getItem(), client.player.containerMenu.getCarried()) 
 				 && target.getItem().getCount() < target.getItem().getMaxStackSize());
             
 			if (canMerge) {
-				gameMode.handleContainerInput(menu.containerId, targetIdx, 0, ContainerInput.PICKUP, client.player);
+				gameMode.handleInventoryMouseClick(menu.containerId, targetIdx, 0, ClickType.PICKUP, client.player);
 			}
 		}
 		
 		// 3. If still carrying (target was full), put back in source and Shift-Click it to consolidate
 		if (!client.player.containerMenu.getCarried().isEmpty()) {
-			gameMode.handleContainerInput(menu.containerId, sourceIdx, 0, ContainerInput.PICKUP, client.player);
-			gameMode.handleContainerInput(menu.containerId, sourceIdx, 0, ContainerInput.QUICK_MOVE, client.player);
+			gameMode.handleInventoryMouseClick(menu.containerId, sourceIdx, 0, ClickType.PICKUP, client.player);
+			gameMode.handleInventoryMouseClick(menu.containerId, sourceIdx, 0, ClickType.QUICK_MOVE, client.player);
 		}
 	}
 
@@ -580,3 +580,4 @@ public final class InventoryGridRestoreTracker {
 		return false;
 	}
 }
+

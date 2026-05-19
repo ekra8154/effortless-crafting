@@ -310,14 +310,16 @@ public final class ContainerUtils {
 
 	public static String getItemName(String itemId) {
 		try {
-			return net.minecraft.core.registries.BuiltInRegistries.ITEM.get(net.minecraft.resources.Identifier.parse(itemId))
-				.map(net.minecraft.core.Holder.Reference::value)
-				.map(net.minecraft.world.item.ItemStack::new)
-				.map(net.minecraft.world.item.ItemStack::getHoverName)
-				.map(net.minecraft.network.chat.Component::getString)
-				.orElse(itemId);
+			net.minecraft.resources.ResourceLocation resourceLocation = new net.minecraft.resources.ResourceLocation(itemId);
+			if (!net.minecraft.core.registries.BuiltInRegistries.ITEM.containsKey(resourceLocation)) {
+				return itemId;
+			}
+			return new net.minecraft.world.item.ItemStack(
+				net.minecraft.core.registries.BuiltInRegistries.ITEM.get(resourceLocation)
+			).getHoverName().getString();
 		} catch (Exception e) {
 			return itemId;
 		}
 	}
 }
+

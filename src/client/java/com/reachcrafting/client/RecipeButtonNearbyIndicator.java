@@ -1,6 +1,7 @@
 package com.reachcrafting.client;
 
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.CraftingScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
@@ -8,7 +9,7 @@ import net.minecraft.client.gui.screens.recipebook.RecipeButton;
 import net.minecraft.client.player.LocalPlayer;
 import java.util.Map;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.crafting.display.RecipeDisplayId;
+import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.client.gui.screens.recipebook.RecipeCollection;
 
 public final class RecipeButtonNearbyIndicator {
@@ -16,10 +17,10 @@ public final class RecipeButtonNearbyIndicator {
 	}
 
 	public static boolean shouldShow(RecipeButton button) {
-		return shouldShow(button.getCurrentRecipe(), button.getCollection(), button.getDisplayStack().copy(), false);
+		return shouldShow(button.getRecipe(), button.getCollection(), RecipeVariantResolver.resolveDisplayStack(button.getRecipe(), Minecraft.getInstance()), false);
 	}
 
-	public static boolean shouldShow(RecipeDisplayId recipe, RecipeCollection collection, ItemStack displayStack, boolean explicitVariantSelection) {
+	public static boolean shouldShow(Recipe<?> recipe, RecipeCollection collection, ItemStack displayStack, boolean explicitVariantSelection) {
 		if (!ReachCraftingConfig.get().enabled()
 			|| !ReachCraftingConfig.get().enableNearbyContainerUsage()
 			|| !ReachCraftingConfig.get().showNearbyCraftableIndicator()
@@ -44,7 +45,7 @@ public final class RecipeButtonNearbyIndicator {
 		NearbyContainerCache.ReachableView reachableView = NearbyContainerCache.getReachableView(
 			minecraft.level,
 			minecraft.getCameraEntity(),
-			player.blockInteractionRange()
+			minecraft.gameMode != null ? minecraft.gameMode.getPickRange() : 4.5D
 		);
 		if (reachableView.isEmpty()) {
 			return false;
@@ -119,13 +120,13 @@ public final class RecipeButtonNearbyIndicator {
 		return ContainerUtils.currentReservedCraftCopies(availableItems.gridStacks());
 	}
 
-	public static void renderOverlayButton(net.minecraft.client.gui.GuiGraphicsExtractor guiGraphics, int x, int y, int width, RecipeDisplayId recipe, RecipeCollection collection) {
-		if (shouldShow(recipe, collection, ItemStack.EMPTY, true)) {
+	public static void renderOverlayButton(GuiGraphics guiGraphics, int x, int y, int width, Recipe<?> recipe, RecipeCollection collection) {
+		if (shouldShow(recipe, collection, RecipeVariantResolver.resolveDisplayStack(recipe, Minecraft.getInstance()), true)) {
 			renderDot(guiGraphics, x, y);
 		}
 	}
 
-	public static void renderDot(net.minecraft.client.gui.GuiGraphicsExtractor guiGraphics, int x, int y) {
+	public static void renderDot(GuiGraphics guiGraphics, int x, int y) {
 		int outer = 0xCC8B3A10;
 		int inner = 0xFFFFB24A;
 
@@ -136,7 +137,7 @@ public final class RecipeButtonNearbyIndicator {
 		guiGraphics.fill(x + 1, y + 1, x + 4, y + 4, inner);
 	}
 
-	public static void renderBlackDot(net.minecraft.client.gui.GuiGraphicsExtractor guiGraphics, int x, int y) {
+	public static void renderBlackDot(GuiGraphics guiGraphics, int x, int y) {
 		int outer = 0xCC000000;
 		int inner = 0xFF000000;
 
@@ -147,7 +148,7 @@ public final class RecipeButtonNearbyIndicator {
 		guiGraphics.fill(x + 1, y + 1, x + 4, y + 4, inner);
 	}
 
-	public static void renderWhiteDot(net.minecraft.client.gui.GuiGraphicsExtractor guiGraphics, int x, int y) {
+	public static void renderWhiteDot(GuiGraphics guiGraphics, int x, int y) {
 		int outer = 0xCCFFFFFF;
 		int inner = 0xFFFFFFFF;
 
@@ -158,7 +159,7 @@ public final class RecipeButtonNearbyIndicator {
 		guiGraphics.fill(x + 1, y + 1, x + 4, y + 4, inner);
 	}
 
-	public static void renderGrayDot(net.minecraft.client.gui.GuiGraphicsExtractor guiGraphics, int x, int y) {
+	public static void renderGrayDot(GuiGraphics guiGraphics, int x, int y) {
 		int outer = 0xCC888888;
 		int inner = 0xFF888888;
 
@@ -169,7 +170,7 @@ public final class RecipeButtonNearbyIndicator {
 		guiGraphics.fill(x + 1, y + 1, x + 4, y + 4, inner);
 	}
 
-	public static void renderGrayArrow(net.minecraft.client.gui.GuiGraphicsExtractor guiGraphics, int x, int y) {
+	public static void renderGrayArrow(GuiGraphics guiGraphics, int x, int y) {
 		int color = 0x80000000;
 		// Stylized arrow with tail:
 		//   ###
@@ -193,7 +194,7 @@ public final class RecipeButtonNearbyIndicator {
 	//   #####
 	//    ###
 	//     #
-	public static void renderOrangeArrowOutline(net.minecraft.client.gui.GuiGraphicsExtractor guiGraphics, int x, int y) {
+	public static void renderOrangeArrowOutline(GuiGraphics guiGraphics, int x, int y) {
 		int color = 0xFFFF9A1F;
 		guiGraphics.fill(x - 1, y - 1, x + 4, y + 2, color); // Stem (5x3)
 		guiGraphics.fill(x - 2, y + 2, x + 5, y + 5, color); // Wide base (7x3)
@@ -201,3 +202,5 @@ public final class RecipeButtonNearbyIndicator {
 		guiGraphics.fill(x + 0, y + 6, x + 3, y + 7, color); // Taper 2 (3x1)
 	}
 }
+
+

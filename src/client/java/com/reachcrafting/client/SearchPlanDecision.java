@@ -2,14 +2,16 @@ package com.reachcrafting.client;
 
 import java.util.List;
 import net.minecraft.core.BlockPos;
-import net.minecraft.world.item.crafting.display.RecipeDisplayId;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.crafting.Recipe;
 
 /**
  * Immutable output of the search planning phase.
  * SearchSession applies this decision, but does not re-derive planning branches afterwards.
  */
 record SearchPlanDecision(
-	RecipeDisplayId resolvedRecipeId,
+	Recipe<?> resolvedRecipe,
+	ResourceLocation resolvedRecipeId,
 	String resolvedOutputLabel,
 	RecipeIngredientSummary resolvedIngredientSummary,
 	boolean redistributeReservedGrid,

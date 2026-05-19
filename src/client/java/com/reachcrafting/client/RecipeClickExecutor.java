@@ -1,25 +1,20 @@
 package com.reachcrafting.client;
 
 import com.reachcrafting.ReachCraftingMod;
-import com.reachcrafting.client.mixin.ClientRecipeBookAccessor;
-import com.reachcrafting.client.mixin.AbstractRecipeBookScreenAccessor;
 import com.reachcrafting.client.mixin.RecipeBookComponentAccessor;
 import com.reachcrafting.client.mixin.RecipeBookPageAccessor;
 import java.util.Map;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.gui.screens.inventory.AbstractRecipeBookScreen;
 import net.minecraft.client.gui.screens.inventory.CraftingScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.client.gui.screens.recipebook.OverlayRecipeComponent;
+import net.minecraft.client.gui.screens.recipebook.RecipeUpdateListener;
 import net.minecraft.client.multiplayer.MultiPlayerGameMode;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.util.context.ContextMap;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.crafting.display.RecipeDisplayEntry;
-import net.minecraft.world.item.crafting.display.RecipeDisplayId;
-import net.minecraft.world.item.crafting.display.SlotDisplayContext;
+import net.minecraft.world.item.crafting.Recipe;
 
 final class RecipeClickExecutor {
 	private static final int BULK_QUEUE_LIMIT = 10_000;
@@ -31,7 +26,7 @@ final class RecipeClickExecutor {
 		Minecraft minecraft,
 		LocalPlayer player,
 		Screen screen,
-		RecipeDisplayId recipeId,
+		Recipe<?> recipe,
 		net.minecraft.client.gui.screens.recipebook.RecipeCollection collection,
 		ItemStack displayStack,
 		int mouseButton,
@@ -51,8 +46,8 @@ final class RecipeClickExecutor {
 			availableItems.inventorySummary(),
 			availableItems.gridSummary(),
 			AvailableItemSnapshot.formatInventorySlots(player),
-			state.pendingHeldRecipe() != null ? state.pendingHeldRecipe().action().recipeId().index() + "x" + state.pendingHeldRecipe().clickCount() : "<none>",
-			state.replayBatch() != null ? state.replayBatch().action().recipeId().index() + "x" + state.replayBatch().remainingClicks() : "<none>"
+			state.pendingHeldRecipe() != null ? state.pendingHeldRecipe().action().recipeId() + "x" + state.pendingHeldRecipe().clickCount() : "<none>",
+			state.replayBatch() != null ? state.replayBatch().action().recipeId() + "x" + state.replayBatch().remainingClicks() : "<none>"
 		);
 		boolean allowReservedGridVariantSwitch = false;
 		int desiredVariantCopies = availableItems.hasReservedGrid() && !craftAll
@@ -64,7 +59,7 @@ final class RecipeClickExecutor {
 		RecipeVariantResolver.Selection selectedRecipe = RecipeVariantResolver.resolve(
 			minecraft,
 			player,
-			recipeId,
+			recipe,
 			collection,
 			displayStack != null ? displayStack.copy() : ItemStack.EMPTY,
 			explicitVariantSelection,
@@ -77,16 +72,16 @@ final class RecipeClickExecutor {
 			desiredVariantCopies
 		);
 		if (selectedRecipe == null) {
-			ReachCraftingMod.LOGGER.warn("[recipe_click] missing RecipeDisplayEntry for recipe_index={}", recipeId.index());
+			ReachCraftingMod.LOGGER.warn("[recipe_click] missing recipe for id={}", recipe.getId());
 			return;
 		}
-		boolean craftable = collection.isCraftable(recipeId);
-		int recipeIndex = selectedRecipe.recipeId().index();
-		if (!selectedRecipe.recipeId().equals(recipeId)) {
+		boolean craftable = collection != null && collection.isCraftable(selectedRecipe.recipe());
+		int recipeIndex = collection != null ? collection.getRecipes().indexOf(selectedRecipe.recipe()) : -1;
+		if (!selectedRecipe.recipeId().equals(recipe.getId())) {
 			ReachCraftingMod.LOGGER.debug(
-				"[recipe_variant] clicked_idx={} selected_idx={} mode={} output={}",
-				recipeId.index(),
-				selectedRecipe.recipeId().index(),
+				"[recipe_variant] clicked_id={} selected_id={} mode={} output={}",
+				recipe.getId(),
+				selectedRecipe.recipeId(),
 				ReachCraftingConfig.get().revolvingCraftHandling().name().toLowerCase(),
 				selectedRecipe.outputLabel()
 			);
@@ -97,7 +92,7 @@ final class RecipeClickExecutor {
 		Map<String, Integer> localAvailableCounts = availableItems.totalCounts();
 		Map<String, Integer> availableCounts = availableItems.totalCounts();
 		if (allowNearbyChests && ReachCraftingConfig.get().cacheContainersForFasterSearch()) {
-			NearbyContainerCache.ReachableView reachableView = NearbyContainerCache.getReachableView(minecraft.level, minecraft.getCameraEntity(), player.blockInteractionRange());
+			NearbyContainerCache.ReachableView reachableView = NearbyContainerCache.getReachableView(minecraft.level, minecraft.getCameraEntity(), reachDistance(minecraft, player));
 			availableCounts = AvailableItemSnapshot.mergeCounts(availableCounts, reachableView.countsFor(ingredientSummary.acceptedItemIds()));
 		}
 		RecipeDeficitReport deficitReport = craftAll
@@ -159,7 +154,9 @@ final class RecipeClickExecutor {
 				: requestedClicks;
 		if (useDryRun) {
 			armBulkAutoCraft(
-				recipeId,
+				recipe,
+				recipe.getId(),
+				selectedRecipe.recipe(),
 				selectedRecipe.recipeId(),
 				collection,
 				displayStack,
@@ -182,14 +179,14 @@ final class RecipeClickExecutor {
 				// grid clears, each of which consumes the previous result and injects
 				// byproducts into inventory via Inventory.add(), causing fragmentation.
 				ReachCraftingMod.LOGGER.info("[recipe_place] handlePlaceRecipe(shift=true) from RecipeClickExecutor NEARBY path");
-				minecraft.gameMode.handlePlaceRecipe(player.containerMenu.containerId, selectedRecipe.recipeId(), true);
+				minecraft.gameMode.handlePlaceRecipe(player.containerMenu.containerId, selectedRecipe.recipe(), true);
 				AvailableItemSnapshot postPlaceSnapshot = AvailableItemSnapshot.capture(player, screen);
 				ReachCraftingMod.LOGGER.info(
 					"[recipe_place] post_place nearby result={} staged_copies={} requestedClicks={} queueLimit={} grid_reserved={}",
 					ContainerUtils.formatStack(player.containerMenu.getSlot(0).getItem()),
 					ContainerUtils.currentReservedCraftCopies(postPlaceSnapshot.gridStacks()),
 					requestedClicks,
-					resolveRecipeQueueLimit(minecraft, selectedRecipe.recipeId(), collection),
+					resolveRecipeQueueLimit(minecraft, selectedRecipe.recipe(), collection),
 					postPlaceSnapshot.hasReservedGrid()
 				);
 				ContainerUtils.scheduleAutoMove(selectedRecipe.displayStack());
@@ -214,6 +211,7 @@ final class RecipeClickExecutor {
 			if (!deficitReport.hasMissingIngredients() && availableItems.hasReservedGrid()) {
 				if (NearbyContainerDryRun.tryExpandReservedGrid(
 					selectedRecipe.recipeId(),
+					selectedRecipe.recipe(),
 					collection,
 					explicitVariantSelection,
 					recipeIndex,
@@ -232,6 +230,7 @@ final class RecipeClickExecutor {
 			}
 			NearbyContainerDryRun.start(
 				selectedRecipe.recipeId(),
+				selectedRecipe.recipe(),
 				collection,
 				explicitVariantSelection,
 				recipeIndex,
@@ -247,15 +246,15 @@ final class RecipeClickExecutor {
 
 		MultiPlayerGameMode gameMode = minecraft.gameMode;
 		if (gameMode != null) {
-			int queueLimit = resolveRecipeQueueLimit(minecraft, selectedRecipe.recipeId(), collection);
+			int queueLimit = resolveRecipeQueueLimit(minecraft, selectedRecipe.recipe(), collection);
 			boolean useBulkPlace = craftAll || (AutoCraftController.isBulkModeEnabled() && requestedClicks >= queueLimit);
 
 			if (useBulkPlace) {
-				gameMode.handlePlaceRecipe(player.containerMenu.containerId, selectedRecipe.recipeId(), true);
+				gameMode.handlePlaceRecipe(player.containerMenu.containerId, selectedRecipe.recipe(), true);
 			} else {
 				int iterations = AutoCraftController.isBulkModeEnabled() ? Math.max(effectiveRequestedClicks, 1) : 1;
 				for (int i = 0; i < iterations; i++) {
-					gameMode.handlePlaceRecipe(player.containerMenu.containerId, selectedRecipe.recipeId(), false);
+					gameMode.handlePlaceRecipe(player.containerMenu.containerId, selectedRecipe.recipe(), false);
 				}
 			}
 			AvailableItemSnapshot postPlaceSnapshot = AvailableItemSnapshot.capture(player, screen);
@@ -271,7 +270,9 @@ final class RecipeClickExecutor {
 
 			if (AutoCraftController.isEnabled()) {
 				armBulkAutoCraft(
-					recipeId,
+					recipe,
+					recipe.getId(),
+					selectedRecipe.recipe(),
 					selectedRecipe.recipeId(),
 					collection,
 					displayStack,
@@ -295,11 +296,11 @@ final class RecipeClickExecutor {
 
 	static int resolveGridMatchedCount(
 		Minecraft minecraft,
-		RecipeDisplayId recipeId,
+		Recipe<?> recipe,
 		net.minecraft.client.gui.screens.recipebook.RecipeCollection collection,
 		boolean explicitVariantSelection
 	) {
-		if (minecraft == null || minecraft.player == null || minecraft.level == null || recipeId == null || collection == null) {
+		if (minecraft == null || minecraft.player == null || minecraft.level == null || recipe == null || collection == null) {
 			return 0;
 		}
 		Screen screen = minecraft.screen;
@@ -324,24 +325,25 @@ final class RecipeClickExecutor {
 			return 0;
 		}
 
-		Map<RecipeDisplayId, RecipeDisplayEntry> knownRecipes = ((ClientRecipeBookAccessor) minecraft.player.getRecipeBook()).getKnown();
-		RecipeDisplayEntry entry = findRecipeEntry(collection, knownRecipes, recipeId);
-		if (entry == null) {
-			return 0;
-		}
-
-		ItemStack displayStack = RecipeVariantResolver.resolveDisplayStack(entry.display(), SlotDisplayContext.fromLevel(minecraft.level));
+		ItemStack displayStack = resolveExpectedOutputStack(
+			minecraft,
+			minecraft.player,
+			recipe,
+			collection,
+			ItemStack.EMPTY,
+			explicitVariantSelection
+		);
 		if (displayStack.isEmpty()) {
 			return 0;
 		}
 
-		return ItemStack.isSameItemSameComponents(currentResult, displayStack) ? gridCount : 0;
+		return ItemStack.isSameItemSameTags(currentResult, displayStack) ? gridCount : 0;
 	}
 
 	static ItemStack resolveExpectedOutputStack(
 		Minecraft minecraft,
 		LocalPlayer player,
-		RecipeDisplayId recipeId,
+		Recipe<?> recipe,
 		net.minecraft.client.gui.screens.recipebook.RecipeCollection collection,
 		ItemStack displayStack,
 		boolean explicitVariantSelection
@@ -349,20 +351,20 @@ final class RecipeClickExecutor {
 		if (displayStack != null && !displayStack.isEmpty()) {
 			return displayStack.copy();
 		}
-		if (minecraft == null || player == null || minecraft.level == null || recipeId == null || collection == null) {
+		if (minecraft == null || player == null || minecraft.level == null || recipe == null || collection == null) {
 			return ItemStack.EMPTY;
 		}
 
 		AvailableItemSnapshot availableItems = AvailableItemSnapshot.capture(player, minecraft.screen);
 		Map<String, Integer> availableCounts = availableItems.totalCounts();
 		if (ReachCraftingConfig.get().cacheContainersForFasterSearch()) {
-			NearbyContainerCache.ReachableView reachableView = NearbyContainerCache.getReachableView(minecraft.level, minecraft.getCameraEntity(), player.blockInteractionRange());
+			NearbyContainerCache.ReachableView reachableView = NearbyContainerCache.getReachableView(minecraft.level, minecraft.getCameraEntity(), reachDistance(minecraft, player));
 			availableCounts = AvailableItemSnapshot.mergeCounts(availableCounts, reachableView.aggregateCounts());
 		}
 		RecipeVariantResolver.Selection selection = RecipeVariantResolver.resolve(
 			minecraft,
 			player,
-			recipeId,
+			recipe,
 			collection,
 			ItemStack.EMPTY,
 			explicitVariantSelection,
@@ -379,21 +381,15 @@ final class RecipeClickExecutor {
 
 	static int resolveRecipeQueueLimit(
 		Minecraft minecraft,
-		RecipeDisplayId recipeId,
+		Recipe<?> recipe,
 		net.minecraft.client.gui.screens.recipebook.RecipeCollection collection
 	) {
-		if (minecraft == null || minecraft.player == null || minecraft.level == null || recipeId == null) {
+		if (minecraft == null || minecraft.player == null || minecraft.level == null || recipe == null) {
 			return 64;
 		}
 
-		Map<RecipeDisplayId, RecipeDisplayEntry> knownRecipes = ((ClientRecipeBookAccessor) minecraft.player.getRecipeBook()).getKnown();
-		RecipeDisplayEntry entry = findRecipeEntry(collection, knownRecipes, recipeId);
-		if (entry == null) {
-			return 64;
-		}
-
-		ContextMap context = SlotDisplayContext.fromLevel(minecraft.level);
-		RecipeIngredientSummary ingredientSummary = RecipeIngredientSummary.fromDisplay(entry.display(), context);
+		int craftingGridSlotCount = minecraft.screen instanceof InventoryScreen ? 4 : 9;
+		RecipeIngredientSummary ingredientSummary = RecipeIngredientSummary.fromRecipe(recipe, craftingGridSlotCount);
 		return ingredientSummary.slots().stream()
 			.filter(slot -> !slot.isEmpty())
 			.mapToInt(RecipeIngredientSummary.IngredientSlot::maxStackSize)
@@ -406,8 +402,10 @@ final class RecipeClickExecutor {
 	}
 
 	private static void armBulkAutoCraft(
-		RecipeDisplayId clickedRecipeId,
-		RecipeDisplayId recipeId,
+		Recipe<?> clickedRecipe,
+		net.minecraft.resources.ResourceLocation clickedRecipeId,
+		Recipe<?> recipe,
+		net.minecraft.resources.ResourceLocation recipeId,
 		net.minecraft.client.gui.screens.recipebook.RecipeCollection collection,
 		ItemStack displayStack,
 		int mouseButton,
@@ -443,7 +441,7 @@ final class RecipeClickExecutor {
 		}
 
 		boolean keepFamilyContinuation = ReachCraftingConfig.get().bulkVariantSwitching();
-		RecipeDisplayId continuationRecipeId = keepFamilyContinuation ? clickedRecipeId : recipeId;
+		net.minecraft.resources.ResourceLocation continuationRecipeId = keepFamilyContinuation ? clickedRecipeId : recipeId;
 		BulkAutoCraftController.VariantContinuationMode continuationMode;
 		if (!keepFamilyContinuation) {
 			continuationMode = BulkAutoCraftController.VariantContinuationMode.STRICT_CURRENT_VARIANT;
@@ -464,6 +462,7 @@ final class RecipeClickExecutor {
 
 		BulkAutoCraftController.startOrUpdate(
 			new RecipeBookClickCapture.HeldRecipeAction(
+				clickedRecipe,
 				continuationRecipeId,
 				collection,
 				displayStack != null ? displayStack.copy() : ItemStack.EMPTY,
@@ -479,34 +478,26 @@ final class RecipeClickExecutor {
 		);
 	}
 
-	private static RecipeDisplayEntry findRecipeEntry(
-		net.minecraft.client.gui.screens.recipebook.RecipeCollection collection,
-		Map<RecipeDisplayId, RecipeDisplayEntry> knownRecipes,
-		RecipeDisplayId recipeId
-	) {
-		if (collection != null) {
-			for (RecipeDisplayEntry entry : collection.getRecipes()) {
-				if (entry.id().equals(recipeId)) {
-					return entry;
-				}
-			}
-		}
-		return knownRecipes.get(recipeId);
-	}
-
 	static void tryCloseOverlayAfterRelease() {
 		if (!ReachCraftingConfig.get().reachCraftCloseOverlayAfterRelease()) {
 			return;
 		}
 		Minecraft minecraft = Minecraft.getInstance();
-		if (!(minecraft.screen instanceof AbstractRecipeBookScreen<?> recipeBookScreen)) {
+		if (!(minecraft.screen instanceof RecipeUpdateListener recipeUpdateListener)) {
 			return;
 		}
-		RecipeBookComponentAccessor componentAccessor = (RecipeBookComponentAccessor) ((AbstractRecipeBookScreenAccessor) recipeBookScreen).getRecipeBookComponent();
+		RecipeBookComponentAccessor componentAccessor = (RecipeBookComponentAccessor) recipeUpdateListener.getRecipeBookComponent();
 		RecipeBookPageAccessor pageAccessor = (RecipeBookPageAccessor) componentAccessor.getRecipeBookPage();
 		OverlayRecipeComponent overlay = pageAccessor.getOverlay();
 		if (overlay != null && overlay.isVisible()) {
 			((com.reachcrafting.client.mixin.OverlayRecipeComponentAccessor) overlay).setIsVisible(false);
 		}
+	}
+
+	private static double reachDistance(Minecraft minecraft, LocalPlayer player) {
+		if (minecraft.gameMode != null) {
+			return minecraft.gameMode.getPickRange();
+		}
+		return 4.5D;
 	}
 }

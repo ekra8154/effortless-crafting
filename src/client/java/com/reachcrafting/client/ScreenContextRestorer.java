@@ -3,9 +3,9 @@ package com.reachcrafting.client;
 import com.reachcrafting.ReachCraftingMod;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.gui.screens.inventory.AbstractRecipeBookScreen;
 import net.minecraft.client.gui.screens.inventory.CraftingScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
+import net.minecraft.client.gui.screens.recipebook.RecipeUpdateListener;
 import net.minecraft.client.multiplayer.MultiPlayerGameMode;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
@@ -54,11 +54,12 @@ final class ScreenContextRestorer {
 		if (context.kind() == ScreenKind.CRAFTING_TABLE_3X3 && context.craftingTablePos() != null) {
 			Vec3 eyePos = cameraEntity.getEyePosition(0);
 			BlockPos pos = context.craftingTablePos();
-			if (level.getBlockState(pos).is(Blocks.CRAFTING_TABLE) && ContainerUtils.squaredDistanceToBlock(eyePos, pos) <= Mth.square(player.blockInteractionRange())) {
+			if (level.getBlockState(pos).is(Blocks.CRAFTING_TABLE) && ContainerUtils.squaredDistanceToBlock(eyePos, pos) <= Mth.square(gameMode != null ? gameMode.getPickRange() : 4.5D)) {
 				Vec3 hitPos = ContainerUtils.closestPointOnUnitBlock(eyePos, pos);
-				Direction face = Direction.getApproximateNearest(hitPos.subtract(eyePos)).getOpposite();
+				Vec3 delta = hitPos.subtract(eyePos);
+				Direction face = Direction.getNearest(delta.x, delta.y, delta.z).getOpposite();
 				BlockHitResult hitResult = new BlockHitResult(hitPos, face, pos, false);
-				boolean wasSneaking = player.isShiftKeyDown() || (player.input != null && player.input.keyPresses != null && player.input.keyPresses.shift());
+				boolean wasSneaking = player.isShiftKeyDown() || (player.input != null && player.input.shiftKeyDown);
 				coordinator.withSuppressedSecondaryUse(() -> {
 					if (wasSneaking) {
 						coordinator.sendShiftOverride(client, player, false);
@@ -85,7 +86,7 @@ final class ScreenContextRestorer {
 	}
 
 	static void restoreRecipeBookState(ScreenContextSnapshot context, Screen screen) {
-		if (screen instanceof AbstractRecipeBookScreen<?> recipeBookScreen) {
+		if (screen instanceof RecipeUpdateListener recipeBookScreen) {
 			context.recipeBookState().restore(recipeBookScreen);
 		}
 	}
@@ -98,6 +99,7 @@ final class ScreenContextRestorer {
 		double clampedX = Mth.clamp(context.mouseX(), 0.0D, Math.max(0.0D, client.getWindow().getScreenWidth() - 1.0D));
 		double clampedY = Mth.clamp(context.mouseY(), 0.0D, Math.max(0.0D, client.getWindow().getScreenHeight() - 1.0D));
 		client.mouseHandler.setIgnoreFirstMove();
-		GLFW.glfwSetCursorPos(client.getWindow().handle(), clampedX, clampedY);
+		GLFW.glfwSetCursorPos(client.getWindow().getWindow(), clampedX, clampedY);
 	}
 }
+

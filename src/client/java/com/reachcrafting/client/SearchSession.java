@@ -12,26 +12,24 @@ import java.util.Map;
 import java.util.Set;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
-import net.minecraft.client.gui.screens.inventory.AbstractRecipeBookScreen;
 import net.minecraft.client.gui.screens.inventory.CraftingScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.client.gui.screens.recipebook.RecipeCollection;
+import net.minecraft.client.gui.screens.recipebook.RecipeUpdateListener;
 import net.minecraft.client.multiplayer.MultiPlayerGameMode;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
-import net.minecraft.util.context.ContextMap;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.crafting.display.RecipeDisplayId;
-import net.minecraft.world.item.crafting.display.SlotDisplayContext;
+import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
@@ -54,9 +52,11 @@ final class SearchSession extends BaseCraftSession {
 	private final RecipeCollection recipeCollection;
 	private final boolean explicitVariantSelection;
 	private final int recipeIndex;
-	private final RecipeDisplayId initialRequestedRecipeId;
+	private final Recipe<?> initialRequestedRecipe;
+	private final ResourceLocation initialRequestedRecipeId;
 	private final String initialRequestedOutputLabel;
-	private RecipeDisplayId recipeId;
+	private Recipe<?> recipe;
+	private ResourceLocation recipeId;
 	private String outputLabel;
 	private RecipeIngredientSummary ingredientSummary;
 	private final AvailableItemSnapshot localItems;
@@ -106,7 +106,9 @@ final class SearchSession extends BaseCraftSession {
 		super(coordinator, client, player, level, gameMode, cameraEntity);
 		this.recipeCollection = request.recipeCollection();
 		this.explicitVariantSelection = request.explicitVariantSelection();
+		this.initialRequestedRecipe = request.recipe();
 		this.initialRequestedRecipeId = request.recipeId();
+		this.recipe = request.recipe();
 		this.initialRequestedOutputLabel = request.outputLabel();
 		this.recipeId = request.recipeId();
 		this.recipeIndex = request.recipeIndex();
@@ -116,13 +118,13 @@ final class SearchSession extends BaseCraftSession {
 		this.craftAll = request.craftAll();
 		this.requestedSingleClicks = Math.max(request.requestedSingleClicks(), 1);
 		this.allowNearby = request.allowNearby() && ReachCraftingConfig.get().enableNearbyContainerUsage();
-		this.originalContext = ScreenContextSnapshot.capture(client, cameraEntity, player.blockInteractionRange(), this.localItems);
+		this.originalContext = ScreenContextSnapshot.capture(client, cameraEntity, gameMode != null ? gameMode.getPickRange() : 4.5D, this.localItems);
 		this.planningPolicy = ReachCraftingConfig.get().toPlanningPolicy();
 		Set<String> accepted = new HashSet<>(this.ingredientSummary.acceptedItemIds());
 		if (recipeCollection != null && (planningPolicy.redistributeToCraftWhenNeeded() || ReachCraftingConfig.get().revolvingCraftHandling() != ReachCraftingConfig.RevolvingCraftHandling.SPECIFIC_VARIANT_ONLY)) {
-			ContextMap context = SlotDisplayContext.fromLevel(client.level);
-			for (var entry : recipeCollection.getRecipes()) {
-				accepted.addAll(RecipeIngredientSummary.fromDisplay(entry.display(), context).acceptedItemIds());
+			int craftingGridSize = Math.max(this.originalContext.gridStacks().size(), 4);
+			for (Recipe<?> collectionRecipe : recipeCollection.getRecipes()) {
+				accepted.addAll(RecipeIngredientSummary.fromRecipe(collectionRecipe, craftingGridSize).acceptedItemIds());
 			}
 		}
 		this.scanAcceptedItemIds = Set.copyOf(accepted);
@@ -133,8 +135,8 @@ final class SearchSession extends BaseCraftSession {
 			this.craftAll
 		);
 		this.remainingItemIds = new ArrayList<>(initialDeficit.missingItemIds());
-		this.reachableView = NearbyContainerCache.getReachableView(level, cameraEntity, player.blockInteractionRange());
-		this.candidates = this.allowNearby ? findCandidates(level, cameraEntity, player.blockInteractionRange()) : List.of();
+		this.reachableView = NearbyContainerCache.getReachableView(level, cameraEntity, gameMode != null ? gameMode.getPickRange() : 4.5D);
+		this.candidates = this.allowNearby ? findCandidates(level, cameraEntity, gameMode != null ? gameMode.getPickRange() : 4.5D) : List.of();
 		this.useCachedSearch = this.allowNearby
 			&& ReachCraftingConfig.get().cacheContainersForFasterSearch()
 			&& !this.reachableView.isEmpty();
@@ -428,15 +430,16 @@ final class SearchSession extends BaseCraftSession {
 			if (!ContainerUtils.canAttemptOpen(level, pos, blockState)) {
 				continue;
 			}
-			if (ContainerUtils.squaredDistanceToBlock(eyePos, pos) > Mth.square(player.blockInteractionRange())) {
+			if (ContainerUtils.squaredDistanceToBlock(eyePos, pos) > Mth.square(gameMode != null ? gameMode.getPickRange() : 4.5D)) {
 				continue;
 			}
 
 			markVisited(pos);
 			Vec3 hitPos = ContainerUtils.closestPointOnUnitBlock(eyePos, pos);
-			Direction face = Direction.getApproximateNearest(hitPos.subtract(eyePos)).getOpposite();
+			Vec3 delta = hitPos.subtract(eyePos);
+			Direction face = Direction.getNearest(delta.x, delta.y, delta.z).getOpposite();
 			BlockHitResult hitResult = new BlockHitResult(hitPos, face, pos, false);
-			boolean wasSneaking = player.isShiftKeyDown() || (player.input != null && player.input.keyPresses != null && player.input.keyPresses.shift());
+			boolean wasSneaking = player.isShiftKeyDown() || (player.input != null && player.input.shiftKeyDown);
 			withSuppressedSecondaryUse(() -> {
 				if (wasSneaking) {
 					sendShiftOverride(client, player, false);
@@ -553,7 +556,7 @@ final class SearchSession extends BaseCraftSession {
 			resolvedSelection = RecipeVariantResolver.resolve(
 				client,
 				player,
-				initialRequestedRecipeId,
+				initialRequestedRecipe,
 				recipeCollection,
 				ItemStack.EMPTY,
 				explicitVariantSelection,
@@ -573,10 +576,11 @@ final class SearchSession extends BaseCraftSession {
 				ReachCraftingMod.LOGGER.debug(
 					"[recipe_variant] clicked_idx={} selected_idx={} mode={} output={}",
 					recipeIndex,
-					resolvedSelection.recipeId().index(),
+					resolvedSelection.recipeId(),
 					redistributeReservedGrid ? ReachCraftingConfig.get().revolvingCraftHandling().name().toLowerCase() : "locked_expansion",
 					resolvedSelection.outputLabel()
 				);
+				recipe = resolvedSelection.recipe();
 				recipeId = resolvedSelection.recipeId();
 				outputLabel = resolvedSelection.outputLabel();
 				ingredientSummary = resolvedSelection.ingredientSummary();
@@ -584,6 +588,7 @@ final class SearchSession extends BaseCraftSession {
 			if (BulkAutoCraftController.isActive() && requestedSingleClicks > 1) {
 				BulkAutoCraftController.startOrUpdate(
 					new RecipeBookClickCapture.HeldRecipeAction(
+						resolveRecipeById(bulkContinuationRecipeId()),
 						bulkContinuationRecipeId(),
 						recipeCollection,
 						ItemStack.EMPTY,
@@ -690,6 +695,7 @@ final class SearchSession extends BaseCraftSession {
 					blockedSummary
 				);
 				return new SearchPlanDecision(
+					recipe,
 					recipeId,
 					outputLabel,
 					ingredientSummary,
@@ -741,6 +747,7 @@ final class SearchSession extends BaseCraftSession {
 		}
 
 		return new SearchPlanDecision(
+			recipe,
 			recipeId,
 			outputLabel,
 			ingredientSummary,
@@ -1132,7 +1139,10 @@ final class SearchSession extends BaseCraftSession {
 
 	private List<ItemStack> snapshotPlayerInventorySlots() {
 		List<ItemStack> slots = new ArrayList<>();
-		for (ItemStack stack : player.getInventory().getNonEquipmentItems()) {
+		for (ItemStack stack : player.getInventory().items) {
+			slots.add(stack.copy());
+		}
+		for (ItemStack stack : player.getInventory().offhand) {
 			slots.add(stack.copy());
 		}
 		return slots;
@@ -1159,7 +1169,7 @@ final class SearchSession extends BaseCraftSession {
 		}
 
 		try {
-			var item = BuiltInRegistries.ITEM.getValue(Identifier.parse(itemId));
+			var item = BuiltInRegistries.ITEM.get(new ResourceLocation(itemId));
 			return item == null ? ItemStack.EMPTY : item.getDefaultInstance();
 		} catch (Exception ignored) {
 			return ItemStack.EMPTY;
@@ -1188,7 +1198,7 @@ final class SearchSession extends BaseCraftSession {
 			if (remaining <= 0) {
 				break;
 			}
-			if (slot.isEmpty() || !ItemStack.isSameItemSameComponents(slot, prototype)) {
+			if (slot.isEmpty() || !ItemStack.isSameItemSameTags(slot, prototype)) {
 				continue;
 			}
 
@@ -1274,7 +1284,7 @@ final class SearchSession extends BaseCraftSession {
 	}
 
 	private void refreshReachableView() {
-		reachableView = NearbyContainerCache.getReachableView(level, cameraEntity, player.blockInteractionRange());
+		reachableView = NearbyContainerCache.getReachableView(level, cameraEntity, gameMode != null ? gameMode.getPickRange() : 4.5D);
 	}
 
 	private boolean shouldStartFallbackDiscovery() {
@@ -1559,8 +1569,28 @@ final class SearchSession extends BaseCraftSession {
 		return BulkAutoCraftController.VariantContinuationMode.UNDECIDED;
 	}
 
-	private RecipeDisplayId bulkContinuationRecipeId() {
+	private ResourceLocation bulkContinuationRecipeId() {
 		return ReachCraftingConfig.get().bulkVariantSwitching() ? initialRequestedRecipeId : recipeId;
+	}
+
+	private Recipe<?> resolveRecipeById(ResourceLocation targetRecipeId) {
+		if (targetRecipeId == null) {
+			return recipe;
+		}
+		if (recipeCollection != null) {
+			for (Recipe<?> candidate : recipeCollection.getRecipes()) {
+				if (targetRecipeId.equals(candidate.getId())) {
+					return candidate;
+				}
+			}
+		}
+		if (recipe != null && targetRecipeId.equals(recipe.getId())) {
+			return recipe;
+		}
+		if (initialRequestedRecipe != null && targetRecipeId.equals(initialRequestedRecipe.getId())) {
+			return initialRequestedRecipe;
+		}
+		return recipe != null ? recipe : initialRequestedRecipe;
 	}
 
 
@@ -1734,7 +1764,7 @@ final class SearchSession extends BaseCraftSession {
 				summarizeRemainingItems(remainingItemIds),
 				updatedDeficit.compactMissingSummary()
 			);
-			gameMode.handlePlaceRecipe(player.containerMenu.containerId, recipeId, craftAll);
+			gameMode.handlePlaceRecipe(player.containerMenu.containerId, recipe, craftAll);
 			autoMoveReady = true;
 			sendDebugChat("Placed recipe: " + outputLabel);
 		} else if (!remainingItemIds.isEmpty() || inventorySpaceBlocked || updatedDeficit.hasMissingIngredients()) {
@@ -1753,12 +1783,7 @@ final class SearchSession extends BaseCraftSession {
 			RecipeBookClickCapture.tryCloseOverlayAfterRelease();
 		}
 		if (AutoCraftController.isEnabled() && autoMoveReady) {
-			ItemStack expectedStack = ItemStack.EMPTY;
-			var knownRecipes = ((com.reachcrafting.client.mixin.ClientRecipeBookAccessor) player.getRecipeBook()).getKnown();
-			var entry = knownRecipes.get(recipeId);
-			if (entry != null) {
-				expectedStack = RecipeVariantResolver.resolveDisplayStack(entry.display(), net.minecraft.world.item.crafting.display.SlotDisplayContext.fromLevel(level));
-			}
+			ItemStack expectedStack = RecipeVariantResolver.resolveDisplayStack(resolveRecipeById(recipeId), client);
 			com.reachcrafting.ReachCraftingMod.LOGGER.info(
 				"[bulk_place] bulk_mode={} craftAll={} requestedSingleClicks={} autoMoveReady={} expected={} chosen_recipe={}",
 				AutoCraftController.isBulkModeEnabled(),
@@ -1779,6 +1804,7 @@ final class SearchSession extends BaseCraftSession {
 				);
 				BulkAutoCraftController.startOrUpdate(
 					new RecipeBookClickCapture.HeldRecipeAction(
+						resolveRecipeById(bulkContinuationRecipeId()),
 						bulkContinuationRecipeId(),
 						recipeCollection,
 						ItemStack.EMPTY,
@@ -1821,7 +1847,7 @@ final class SearchSession extends BaseCraftSession {
 	}
 
 	private void restoreRecipeBookSnapshot() {
-		if (!(client.screen instanceof AbstractRecipeBookScreen<?> recipeBookScreen)) {
+		if (!(client.screen instanceof RecipeUpdateListener recipeBookScreen)) {
 			return;
 		}
 		originalContext.recipeBookState().restore(recipeBookScreen);
@@ -1835,7 +1861,7 @@ final class SearchSession extends BaseCraftSession {
 		double clampedX = Mth.clamp(originalContext.mouseX(), 0.0D, Math.max(0.0D, client.getWindow().getScreenWidth() - 1.0D));
 		double clampedY = Mth.clamp(originalContext.mouseY(), 0.0D, Math.max(0.0D, client.getWindow().getScreenHeight() - 1.0D));
 		client.mouseHandler.setIgnoreFirstMove();
-		GLFW.glfwSetCursorPos(client.getWindow().handle(), clampedX, clampedY);
+		GLFW.glfwSetCursorPos(client.getWindow().getWindow(), clampedX, clampedY);
 	}
 
 	private boolean restoreReservedGrid() {
@@ -1887,7 +1913,7 @@ final class SearchSession extends BaseCraftSession {
 
 			Slot targetSlot = menu.getSlot(slotIndex);
 			ItemStack currentStack = targetSlot.getItem();
-			if (currentStack.isEmpty() || !ItemStack.isSameItemSameComponents(currentStack, originalStack)) {
+			if (currentStack.isEmpty() || !ItemStack.isSameItemSameTags(currentStack, originalStack)) {
 				return false;
 			}
 
@@ -1921,14 +1947,14 @@ final class SearchSession extends BaseCraftSession {
 			return PlacementAttempt.SUCCESS;
 		}
 
-		int queueLimit = RecipeClickExecutor.resolveRecipeQueueLimit(client, recipeId, recipeCollection);
+		int queueLimit = RecipeClickExecutor.resolveRecipeQueueLimit(client, recipe, recipeCollection);
 		if (targetCopiesPerSlot >= queueLimit) {
 			ReachCraftingMod.LOGGER.info("[recipe_place] handlePlaceRecipe(shift=true) from SearchSession.placePlannedGrid target={}", targetCopiesPerSlot);
-			gameMode.handlePlaceRecipe(player.containerMenu.containerId, recipeId, true);
+			gameMode.handlePlaceRecipe(player.containerMenu.containerId, recipe, true);
 		} else {
 			ReachCraftingMod.LOGGER.info("[recipe_place] handlePlaceRecipe(shift=false) x{} from SearchSession.placePlannedGrid", targetCopiesPerSlot);
 			for (int i = 0; i < targetCopiesPerSlot; i++) {
-				gameMode.handlePlaceRecipe(player.containerMenu.containerId, recipeId, false);
+				gameMode.handlePlaceRecipe(player.containerMenu.containerId, recipe, false);
 			}
 		}
 		AvailableItemSnapshot postPlaceSnapshot = AvailableItemSnapshot.capture(player, client.screen);
@@ -2037,7 +2063,7 @@ final class SearchSession extends BaseCraftSession {
 
 		Slot targetSlot = menu.getSlot(targetSlotIndex);
 		ItemStack currentStack = targetSlot.getItem();
-		if (!currentStack.isEmpty() && !ItemStack.isSameItemSameComponents(currentStack, desiredStack)) {
+		if (!currentStack.isEmpty() && !ItemStack.isSameItemSameTags(currentStack, desiredStack)) {
 			if (!moveGridSlotBackToInventory(menu, targetSlot)) {
 				lastRestoreFailure = "wrong_item_in_grid actual=" + ContainerUtils.formatStack(currentStack) + " desired=" + ContainerUtils.formatStack(desiredStack);
 				return false;
@@ -2063,7 +2089,7 @@ final class SearchSession extends BaseCraftSession {
 		}
 
 		ItemStack restoredStack = targetSlot.getItem();
-		boolean restored = ItemStack.isSameItemSameComponents(restoredStack, desiredStack) && restoredStack.getCount() >= desiredStack.getCount();
+		boolean restored = ItemStack.isSameItemSameTags(restoredStack, desiredStack) && restoredStack.getCount() >= desiredStack.getCount();
 		if (!restored) {
 			lastRestoreFailure = "post_check actual=" + ContainerUtils.formatStack(restoredStack) + " desired=" + ContainerUtils.formatStack(desiredStack);
 		}
@@ -2412,3 +2438,5 @@ final class SearchSession extends BaseCraftSession {
 
 
 }
+
+

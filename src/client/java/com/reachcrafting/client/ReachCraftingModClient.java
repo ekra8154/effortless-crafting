@@ -4,9 +4,9 @@ import com.mojang.blaze3d.platform.InputConstants;
 import com.reachcrafting.ReachCraftingMod;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
+import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.minecraft.client.KeyMapping;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 // import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import org.lwjgl.glfw.GLFW;
 
@@ -54,28 +54,23 @@ public class ReachCraftingModClient implements ClientModInitializer {
 		RecipeBookClickCapture.init();
 		NearbyContainerDryRun.init();
 		ContainerFilterRenderer.init();
-		
+		String reachCraftingCategory = "key.categories." + ReachCraftingMod.MOD_ID;
 
-
-		KeyMapping.Category reachCraftingCategory = KeyMapping.Category.register(
-			Identifier.fromNamespaceAndPath(ReachCraftingMod.MOD_ID, "debug")
-		);
-
-		showFilterOutlinesKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
+		showFilterOutlinesKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
 			"key.reachcrafting.show_filter_outlines",
 			InputConstants.Type.KEYSYM,
 			InputConstants.UNKNOWN.getValue(),
 			reachCraftingCategory
 		));
 
-		quickCraftKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
+		quickCraftKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
 			"key.reachcrafting.quick_craft",
 			InputConstants.Type.KEYSYM,
 			GLFW.GLFW_KEY_B,
 			reachCraftingCategory
 		));
 
-		toggleCraftableFilterKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
+		toggleCraftableFilterKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
 			"key.reachcrafting.toggle_craftable_filter",
 			InputConstants.Type.KEYSYM,
 			GLFW.GLFW_KEY_SPACE,
@@ -114,12 +109,13 @@ public class ReachCraftingModClient implements ClientModInitializer {
 		if (client.player == null || client.level == null) return;
 
 		net.minecraft.world.phys.Vec3 eyePos = client.player.getEyePosition(0);
-		double reach = client.player.blockInteractionRange();
+		double reach = client.gameMode != null ? client.gameMode.getPickRange() : 4.5D;
 		net.minecraft.core.BlockPos tablePos = ContainerUtils.findNearestCraftingTable(client.level, eyePos, reach);
 
 		if (tablePos != null) {
 			net.minecraft.world.phys.Vec3 hitPos = ContainerUtils.closestPointOnUnitBlock(eyePos, tablePos);
-			net.minecraft.core.Direction face = net.minecraft.core.Direction.getApproximateNearest(hitPos.subtract(eyePos)).getOpposite();
+			net.minecraft.world.phys.Vec3 delta = hitPos.subtract(eyePos);
+			net.minecraft.core.Direction face = net.minecraft.core.Direction.getNearest(delta.x, delta.y, delta.z).getOpposite();
 			net.minecraft.world.phys.BlockHitResult hitResult = new net.minecraft.world.phys.BlockHitResult(hitPos, face, tablePos, false);
 			client.gameMode.useItemOn(client.player, net.minecraft.world.InteractionHand.MAIN_HAND, hitResult);
 		} else {

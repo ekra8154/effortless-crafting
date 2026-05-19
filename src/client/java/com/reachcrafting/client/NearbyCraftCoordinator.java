@@ -7,11 +7,11 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.MultiPlayerGameMode;
+import net.minecraft.client.player.Input;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.chat.contents.TranslatableContents;
 import net.minecraft.network.protocol.game.ServerboundPlayerInputPacket;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.player.Input;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.level.Level;
 
@@ -107,7 +107,8 @@ final class NearbyCraftCoordinator {
 
 		cancelCurrent();
 		AvailableItemSnapshot localItems = AvailableItemSnapshot.capture(player, client.screen);
-		ScreenContextSnapshot context = ScreenContextSnapshot.capture(client, cameraEntity, player.blockInteractionRange(), localItems);
+		double reachDistance = gameMode.getPickRange();
+		ScreenContextSnapshot context = ScreenContextSnapshot.capture(client, cameraEntity, reachDistance, localItems);
 		if (reopenScreen) {
 			context = context.withClearedGrid();
 		}
@@ -173,19 +174,13 @@ final class NearbyCraftCoordinator {
 		if (client.getConnection() == null || player.input == null) {
 			return;
 		}
-		Input keyPresses = player.input.keyPresses;
-		if (keyPresses == null) {
-			return;
-		}
-		client.getConnection().send(new ServerboundPlayerInputPacket(new Input(
-			keyPresses.forward(),
-			keyPresses.backward(),
-			keyPresses.left(),
-			keyPresses.right(),
-			keyPresses.jump(),
-			shiftDown,
-			keyPresses.sprint()
-		)));
+		Input input = player.input;
+		client.getConnection().send(new ServerboundPlayerInputPacket(
+			input.leftImpulse,
+			input.forwardImpulse,
+			input.jumping,
+			shiftDown
+		));
 	}
 
 	void onContainerContentsInitialized(AbstractContainerMenu menu) {

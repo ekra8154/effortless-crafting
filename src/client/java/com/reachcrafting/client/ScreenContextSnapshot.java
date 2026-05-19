@@ -10,10 +10,8 @@ import net.minecraft.client.gui.screens.inventory.CraftingScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.util.context.ContextMap;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.crafting.display.SlotDisplayContext;
 import net.minecraft.world.level.Level;
 
 record ScreenContextSnapshot(
@@ -118,9 +116,8 @@ record ScreenContextSnapshot(
 			return false;
 		}
 
-		ContextMap context = SlotDisplayContext.fromLevel(level);
-		for (var entry : recipeCollection.getRecipes()) {
-			if (reservedGridMatches(RecipeIngredientSummary.fromDisplay(entry.display(), context))) {
+		for (var recipe : recipeCollection.getRecipes()) {
+			if (reservedGridMatches(RecipeIngredientSummary.fromRecipe(recipe, gridStacks.size()))) {
 				return true;
 			}
 		}
