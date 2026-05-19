@@ -1,7 +1,6 @@
 package com.reachcrafting.client;
 
 import com.mojang.blaze3d.platform.InputConstants;
-import com.reachcrafting.client.mixin.AbstractRecipeBookScreenAccessor;
 import com.reachcrafting.client.mixin.OverlayRecipeButtonAccessor;
 import com.reachcrafting.client.mixin.OverlayRecipeComponentAccessor;
 import com.reachcrafting.client.mixin.RecipeBookComponentAccessor;
@@ -47,7 +46,7 @@ public final class RecipeBookFocusManager {
 		if (!(minecraft.screen instanceof RecipeUpdateListener recipeBookScreen)) {
 			return;
 		}
-		RecipeBookComponentAccessor componentAccessor = (RecipeBookComponentAccessor) ((AbstractRecipeBookScreenAccessor) recipeBookScreen).getRecipeBookComponent();
+		RecipeBookComponentAccessor componentAccessor = (RecipeBookComponentAccessor) recipeBookScreen.getRecipeBookComponent();
 		if (componentAccessor != null) {
 			EditBox searchBox = componentAccessor.getSearchBox();
 			if (searchBox != null && searchBox.isFocused()) {
@@ -61,7 +60,7 @@ public final class RecipeBookFocusManager {
 		if (!(minecraft.screen instanceof RecipeUpdateListener recipeBookScreen)) {
 			return;
 		}
-		RecipeBookComponentAccessor componentAccessor = (RecipeBookComponentAccessor) ((AbstractRecipeBookScreenAccessor) recipeBookScreen).getRecipeBookComponent();
+		RecipeBookComponentAccessor componentAccessor = (RecipeBookComponentAccessor) recipeBookScreen.getRecipeBookComponent();
 		if (componentAccessor != null) {
 			EditBox searchBox = componentAccessor.getSearchBox();
 			if (searchBox != null && searchBox.isFocused()) {
@@ -74,7 +73,7 @@ public final class RecipeBookFocusManager {
 		if (!(minecraft.screen instanceof RecipeUpdateListener recipeBookScreen)) {
 			return;
 		}
-		RecipeBookComponentAccessor componentAccessor = (RecipeBookComponentAccessor) ((AbstractRecipeBookScreenAccessor) recipeBookScreen).getRecipeBookComponent();
+		RecipeBookComponentAccessor componentAccessor = (RecipeBookComponentAccessor) recipeBookScreen.getRecipeBookComponent();
 		if (componentAccessor != null) {
 			EditBox searchBox = componentAccessor.getSearchBox();
 			if (searchBox != null) {
@@ -92,7 +91,7 @@ public final class RecipeBookFocusManager {
 			return null;
 		}
 
-		RecipeBookComponentAccessor componentAccessor = (RecipeBookComponentAccessor) ((AbstractRecipeBookScreenAccessor) recipeBookScreen).getRecipeBookComponent();
+		RecipeBookComponentAccessor componentAccessor = (RecipeBookComponentAccessor) recipeBookScreen.getRecipeBookComponent();
 		RecipeBookPageAccessor pageAccessor = (RecipeBookPageAccessor) componentAccessor.getRecipeBookPage();
 		OverlayRecipeComponent overlay = pageAccessor.getOverlay();
 		if (overlay != null && overlay.isVisible() && overlay.getRecipeCollection() != null) {
