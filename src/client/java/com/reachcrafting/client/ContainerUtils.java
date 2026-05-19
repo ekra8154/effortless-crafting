@@ -23,6 +23,9 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.ChestType;
 import net.minecraft.world.phys.Vec3;
+import org.lwjgl.glfw.GLFW;
+import com.mojang.blaze3d.platform.InputConstants;
+import net.minecraft.client.Minecraft;
 
 /**
  * Shared utility methods for container interaction, block distance,
@@ -321,5 +324,37 @@ public final class ContainerUtils {
 			return itemId;
 		}
 	}
-}
 
+	public static void tickContainerScreen() {
+		if (!ReachCraftingConfig.get().enabled()) {
+			return;
+		}
+		long window = Minecraft.getInstance().getWindow().getWindow();
+		boolean altDown = InputConstants.isKeyDown(window, GLFW.GLFW_KEY_LEFT_ALT)
+			|| InputConstants.isKeyDown(window, GLFW.GLFW_KEY_RIGHT_ALT);
+		tickAutoCraftController();
+
+		if (!Minecraft.getInstance().isWindowActive()) {
+			if (isAutoCraftTogglePending()) {
+				cancelAutoCraftToggle();
+			}
+			if (isInputQueueActive()) {
+				clearInputQueue();
+			}
+		}
+
+		if (!altDown && isAutoCraftTogglePending()) {
+			handleAutoCraftKeyReleased();
+		}
+
+		if (isAutoMovePending()) {
+			autoMoveResult(Minecraft.getInstance());
+		}
+
+		if (BulkAutoCraftController.isActive()) {
+			BulkAutoCraftController.tick(Minecraft.getInstance());
+		}
+
+		OffhandConsolidationController.tick(Minecraft.getInstance());
+	}
+}

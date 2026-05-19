@@ -194,36 +194,7 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 
 	@Inject(method = "containerTick", at = @At("TAIL"))
 	private void reachcrafting$onContainerTick(CallbackInfo ci) {
-		if (!ReachCraftingConfig.get().enabled()) {
-			return;
-		}
-		long window = Minecraft.getInstance().getWindow().getWindow();
-		boolean altDown = InputConstants.isKeyDown(window, GLFW.GLFW_KEY_LEFT_ALT)
-			|| InputConstants.isKeyDown(window, GLFW.GLFW_KEY_RIGHT_ALT);
-		com.reachcrafting.client.ContainerUtils.tickAutoCraftController();
-
-		if (!Minecraft.getInstance().isWindowActive()) {
-			if (com.reachcrafting.client.ContainerUtils.isAutoCraftTogglePending()) {
-				com.reachcrafting.client.ContainerUtils.cancelAutoCraftToggle();
-			}
-			if (com.reachcrafting.client.ContainerUtils.isInputQueueActive()) {
-				com.reachcrafting.client.ContainerUtils.clearInputQueue();
-			}
-		}
-
-		if (!altDown && com.reachcrafting.client.ContainerUtils.isAutoCraftTogglePending()) {
-			com.reachcrafting.client.ContainerUtils.handleAutoCraftKeyReleased();
-		}
-
-		if (com.reachcrafting.client.ContainerUtils.isAutoMovePending()) {
-			com.reachcrafting.client.ContainerUtils.autoMoveResult(Minecraft.getInstance());
-		}
-
-		if (com.reachcrafting.client.BulkAutoCraftController.isActive()) {
-			com.reachcrafting.client.BulkAutoCraftController.tick(Minecraft.getInstance());
-		}
-
-		com.reachcrafting.client.OffhandConsolidationController.tick(Minecraft.getInstance());
+		com.reachcrafting.client.ContainerUtils.tickContainerScreen();
 	}
 
 	@Inject(method = "renderSlot", at = @At("TAIL"))

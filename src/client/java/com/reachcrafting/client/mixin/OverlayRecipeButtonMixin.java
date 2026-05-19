@@ -20,7 +20,7 @@ public abstract class OverlayRecipeButtonMixin {
 	@Final
 	private Recipe<?> recipe;
 
-	@Shadow
+	@Shadow(aliases = {"field_3113"})
 	@Final
 	OverlayRecipeComponent this$0;
 

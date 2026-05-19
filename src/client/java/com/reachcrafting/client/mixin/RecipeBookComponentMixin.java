@@ -233,6 +233,10 @@ public abstract class RecipeBookComponentMixin {
 				com.reachcrafting.client.RecipeBookFocusManager.focusRecipeBookComponent(recipeBookScreen);
 			}
 			com.reachcrafting.client.ReachCraftingModClient.forceNextInventorySearchFocus = false;
+		} else {
+			if (this.minecraft.screen instanceof net.minecraft.client.gui.screens.recipebook.RecipeUpdateListener recipeBookScreen) {
+				com.reachcrafting.client.RecipeBookFocusManager.focusRecipeBookComponent(recipeBookScreen);
+			}
 		}
 	}
 
