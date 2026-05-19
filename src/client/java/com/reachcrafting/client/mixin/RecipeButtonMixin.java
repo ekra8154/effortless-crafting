@@ -16,10 +16,10 @@ public abstract class RecipeButtonMixin {
 	private void reachcrafting$renderNearbyIndicator(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick, CallbackInfo ci) {
 		if (!ReachCraftingConfig.get().enabled()) return;
 		RecipeButton button = (RecipeButton) (Object) this;
+		com.reachcrafting.client.RecipeButtonQueuedCountIndicator.render(guiGraphics, button);
 		if (RecipeButtonNearbyIndicator.shouldShow(button)) {
 			AbstractWidget widget = (AbstractWidget) (Object) this;
 			RecipeButtonNearbyIndicator.renderDot(guiGraphics, widget.getX() + 3, widget.getY() + 3);
 		}
-
 	}
 }

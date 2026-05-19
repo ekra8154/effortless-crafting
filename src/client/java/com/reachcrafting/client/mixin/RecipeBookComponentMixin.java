@@ -143,6 +143,9 @@ public abstract class RecipeBookComponentMixin {
 			this.searchBox.setFocused(true);
 			this.searchBox.setCursorPosition(this.searchBox.getValue().length());
 			this.searchBox.setHighlightPos(0);
+			if (this.minecraft != null && this.minecraft.screen instanceof net.minecraft.client.gui.screens.recipebook.RecipeUpdateListener recipeBookScreen) {
+				com.reachcrafting.client.RecipeBookFocusManager.focusRecipeBookComponent(recipeBookScreen);
+			}
 		}
 	}
 
@@ -200,24 +203,6 @@ public abstract class RecipeBookComponentMixin {
 		}
 	}
 
-	@Inject(method = "render", at = @At("TAIL"))
-	private void reachcrafting$onRender(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick, CallbackInfo ci) {
-		if (!ReachCraftingConfig.get().enabled() || !this.isVisible()) {
-			return;
-		}
-
-		RecipeBookPage page = ((RecipeBookComponentAccessor) this).getRecipeBookPage();
-		if (page == null) {
-			return;
-		}
-
-		for (RecipeButton button : ((RecipeBookPageAccessor) page).getButtons()) {
-			if (button.visible) {
-				com.reachcrafting.client.RecipeButtonQueuedCountIndicator.render(guiGraphics, button);
-			}
-		}
-	}
-
 	private void reachcrafting$applyAutoFocus() {
 		if (this.minecraft == null || this.minecraft.player == null) {
 			return;
@@ -225,7 +210,10 @@ public abstract class RecipeBookComponentMixin {
 		if (this.searchBox == null || !this.isVisible() || this.menu == null) {
 			return;
 		}
-		if (ReachCraftingConfig.get().rememberPreviousSearch() && reachcrafting$isSupportedScreen()) {
+		if (!reachcrafting$isSupportedScreen()) {
+			return;
+		}
+		if (ReachCraftingConfig.get().rememberPreviousSearch()) {
 			String lastSearchText = ReachCraftingConfig.getLastSearchText();
 			if (!lastSearchText.isEmpty()) {
 				ReachCraftingConfig.pushSearchHistory(lastSearchText);
@@ -235,13 +223,16 @@ public abstract class RecipeBookComponentMixin {
 				this.searchBox.setHighlightPos(0);
 				this.searchBox.setCursorPosition(lastSearchText.length());
 			}
+		}
 
-			if (this.minecraft.screen instanceof CraftingScreen || com.reachcrafting.client.ReachCraftingModClient.forceNextInventorySearchFocus) {
-				this.searchBox.setFocused(true);
-				this.searchBox.setCursorPosition(this.searchBox.getValue().length());
-				this.searchBox.setHighlightPos(0);
-				com.reachcrafting.client.ReachCraftingModClient.forceNextInventorySearchFocus = false;
+		if (this.minecraft.screen instanceof CraftingScreen || com.reachcrafting.client.ReachCraftingModClient.forceNextInventorySearchFocus) {
+			this.searchBox.setFocused(true);
+			this.searchBox.setCursorPosition(this.searchBox.getValue().length());
+			this.searchBox.setHighlightPos(0);
+			if (this.minecraft.screen instanceof net.minecraft.client.gui.screens.recipebook.RecipeUpdateListener recipeBookScreen) {
+				com.reachcrafting.client.RecipeBookFocusManager.focusRecipeBookComponent(recipeBookScreen);
 			}
+			com.reachcrafting.client.ReachCraftingModClient.forceNextInventorySearchFocus = false;
 		}
 	}
 

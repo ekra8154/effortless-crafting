@@ -10,6 +10,7 @@ import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.recipebook.OverlayRecipeComponent;
+import net.minecraft.client.gui.screens.recipebook.RecipeBookComponent;
 import net.minecraft.client.gui.screens.recipebook.RecipeButton;
 import net.minecraft.client.gui.screens.recipebook.RecipeUpdateListener;
 import net.minecraft.world.item.ItemStack;
@@ -80,9 +81,20 @@ public final class RecipeBookFocusManager {
 				searchBox.setFocused(true);
 				searchBox.setCursorPosition(searchBox.getValue().length());
 				searchBox.setHighlightPos(0);
+				focusRecipeBookComponent(recipeBookScreen);
 			}
 		}
 		state.setWasSearchBoxFocusedByMod(false);
+	}
+
+	public static void focusRecipeBookComponent(RecipeUpdateListener recipeBookScreen) {
+		if (!(recipeBookScreen instanceof Screen screen)) {
+			return;
+		}
+		RecipeBookComponent component = recipeBookScreen.getRecipeBookComponent();
+		if (component != null) {
+			screen.setFocused(component);
+		}
 	}
 
 	static RecipeBookClickCapture.HeldRecipeAction findHoveredHeldRecipeAction(Screen screen, double mouseX, double mouseY) {

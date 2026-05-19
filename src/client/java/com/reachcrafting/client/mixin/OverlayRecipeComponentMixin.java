@@ -60,33 +60,4 @@ public abstract class OverlayRecipeComponentMixin {
 		RecipeBookClickCapture.onVanillaRecipeButtonClicked(recipe, collection, null, true, altDown);
 	}
 
-	@Inject(method = "render", at = @At("TAIL"))
-	private void reachcrafting$onRender(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick, CallbackInfo ci) {
-		if (!ReachCraftingConfig.get().enabled()) {
-			return;
-		}
-		OverlayRecipeComponent overlay = (OverlayRecipeComponent) (Object) this;
-		if (!overlay.isVisible()) {
-			return;
-		}
-
-		RecipeCollection collection = overlay.getRecipeCollection();
-		if (collection == null) {
-			return;
-		}
-
-		for (Object buttonObj : ((OverlayRecipeComponentAccessor) overlay).getRecipeButtons()) {
-			if (buttonObj instanceof AbstractWidget widget && widget.visible) {
-				Recipe<?> recipe = ((OverlayRecipeButtonAccessor) widget).getRecipe();
-				com.reachcrafting.client.RecipeButtonQueuedCountIndicator.renderOverlayButton(
-					guiGraphics,
-					widget.getX(),
-					widget.getY(),
-					widget.getWidth(),
-					recipe,
-					collection
-				);
-			}
-		}
-	}
 }

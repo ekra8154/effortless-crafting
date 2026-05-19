@@ -41,5 +41,13 @@ public abstract class OverlayRecipeButtonMixin {
 			recipe,
 			collection
 		);
+		com.reachcrafting.client.RecipeButtonQueuedCountIndicator.renderOverlayButton(
+			guiGraphics,
+			widget.getX(),
+			widget.getY(),
+			widget.getWidth(),
+			recipe,
+			collection
+		);
 	}
 }
