@@ -381,6 +381,41 @@ final class AutoMoveController {
 		int movesThisTick = 0;
 		int maxMovesPerTick = 20;
 
+		if (BulkAutoCraftController.shouldUseReservedOutputSweep(client, autoMoveTargetStack)) {
+			if (!client.player.containerMenu.getCarried().isEmpty() && !tryResolveCarriedStack(client, menu)) {
+				return;
+			}
+
+			int gridByproductMoves = ejectUnexpectedGridByproducts(client, menu, "[auto_move] RESERVED_SWEEP eject grid byproduct {} from grid slot {}");
+			if (gridByproductMoves > 0) {
+				com.reachcrafting.ReachCraftingMod.LOGGER.info(
+					"[auto_move] reserved sweep cleared {} grid byproducts; continuing with inventory sweep in same tick",
+					gridByproductMoves
+				);
+			}
+
+			sweepAndEjectByProducts(client, menu);
+
+			if (resultSlot.hasItem() && ItemStack.isSameItemSameTags(resultSlot.getItem(), autoMoveTargetStack)) {
+				com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] reserved sweep observed result slot refill. Restarting loop.");
+				autoMoveOrganizing = false;
+				autoMoveWaitingTicks = 0;
+				return;
+			}
+
+			if (!client.player.containerMenu.getCarried().isEmpty()) {
+				return;
+			}
+
+			pendingAutoMove = false;
+			autoMoveOrganizing = false;
+			autoMoveTargetArrivalObserved = false;
+			autoMoveTargetStack = ItemStack.EMPTY;
+			com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] reserved sweep complete: finishing batch");
+			BulkAutoCraftController.onAutoMoveFinished(client, true);
+			return;
+		}
+
 		for (int i = 0; i < 36 && movesThisTick < maxMovesPerTick; i++) {
 			Slot sourceSlot = findInventorySlot(menu, i);
 			if (sourceSlot != null && sourceSlot.hasItem() && ItemStack.isSameItemSameTags(sourceSlot.getItem(), autoMoveTargetStack)) {
@@ -542,24 +577,10 @@ final class AutoMoveController {
 			}
 
 			if (ReachCraftingConfig.get().ejectItemsWhenFull() && AutoCraftController.isBulkModeEnabled()) {
-				java.util.Set<String> acceptedIds = BulkAutoCraftController.getAcceptedItemIds();
-				if (acceptedIds != null) {
-					int gridSlotCount = (menu instanceof net.minecraft.world.inventory.CraftingMenu) ? 9 : 4;
-					for (int i = 1; i <= gridSlotCount; i++) {
-						Slot gridSlot = menu.getSlot(i);
-						if (gridSlot.hasItem()) {
-							String itemId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(gridSlot.getItem().getItem()).toString();
-							if (!acceptedIds.contains(itemId)) {
-								com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] ORGANIZE eject grid byproduct {} from grid slot {}", itemId, i);
-								client.gameMode.handleInventoryMouseClick(menu.containerId, gridSlot.index, 1, ClickType.THROW, client.player);
-								movesThisTick++;
-							}
-						}
-					}
-					if (movesThisTick > 0) {
-						autoMoveWaitingTicks = 0;
-						return;
-					}
+				movesThisTick += ejectUnexpectedGridByproducts(client, menu, "[auto_move] ORGANIZE eject grid byproduct {} from grid slot {}");
+				if (movesThisTick > 0) {
+					autoMoveWaitingTicks = 0;
+					return;
 				}
 			}
 
@@ -663,6 +684,32 @@ final class AutoMoveController {
 				}
 			}
 		}
+	}
+
+	private static int ejectUnexpectedGridByproducts(Minecraft client, AbstractContainerMenu menu, String logPattern) {
+		java.util.Set<String> acceptedIds = BulkAutoCraftController.getAcceptedItemIds();
+		if (acceptedIds == null) {
+			return 0;
+		}
+
+		int moves = 0;
+		int gridSlotCount = (menu instanceof net.minecraft.world.inventory.CraftingMenu) ? 9 : 4;
+		for (int i = 1; i <= gridSlotCount; i++) {
+			Slot gridSlot = menu.getSlot(i);
+			if (!gridSlot.hasItem()) {
+				continue;
+			}
+
+			String itemId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(gridSlot.getItem().getItem()).toString();
+			if (acceptedIds.contains(itemId)) {
+				continue;
+			}
+
+			com.reachcrafting.ReachCraftingMod.LOGGER.info(logPattern, itemId, i);
+			client.gameMode.handleInventoryMouseClick(menu.containerId, gridSlot.index, 1, ClickType.THROW, client.player);
+			moves++;
+		}
+		return moves;
 	}
 
 	private static boolean tryResolveCarriedStack(Minecraft client, AbstractContainerMenu menu) {

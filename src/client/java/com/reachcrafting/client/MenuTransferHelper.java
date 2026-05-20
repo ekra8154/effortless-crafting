@@ -187,6 +187,9 @@ final class MenuTransferHelper {
 
 	private static WithdrawalExecutionMode selectWithdrawalExecutionMode(int splitClickCost, int remainderBackCost, int repeatedTargetCost) {
 		int best = Math.min(splitClickCost, Math.min(remainderBackCost, repeatedTargetCost));
+		if (best == repeatedTargetCost && repeatedTargetCost <= splitClickCost) {
+			return WithdrawalExecutionMode.REPEATED_TARGET_PLACEMENT;
+		}
 		if (best == splitClickCost) {
 			return WithdrawalExecutionMode.SPLIT_PICKUP;
 		}

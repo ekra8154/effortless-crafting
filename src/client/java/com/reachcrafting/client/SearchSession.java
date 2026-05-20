@@ -742,8 +742,20 @@ final class SearchSession extends BaseCraftSession {
 			&& withdrawCandidates.isEmpty()
 			&& !remainingItemIds.isEmpty()
 			&& !alreadyScannedInBulk) {
-			startFallbackDiscovery = shouldStartFallbackDiscovery();
-			resumeOriginalContext = !startFallbackDiscovery;
+			List<BlockPos> uncachedFallbackWithdraw = remainingUnvisitedCandidates(candidates);
+			if (!uncachedFallbackWithdraw.isEmpty() && !discoveredNearby.isEmpty()) {
+				withdrawCandidates = uncachedFallbackWithdraw;
+				ReachCraftingMod.LOGGER.info(
+					"[nearby_cache] idx={} empty_prioritized_candidates_using_full_withdraw_list remaining={} candidates={} discovered={}",
+					recipeIndex,
+					summarizeRemainingItems(remainingItemIds),
+					withdrawCandidates.size(),
+					AvailableItemSnapshot.formatCounts(discoveredNearby)
+				);
+			} else {
+				startFallbackDiscovery = shouldStartFallbackDiscovery();
+				resumeOriginalContext = !startFallbackDiscovery;
+			}
 		}
 
 		return new SearchPlanDecision(
@@ -1009,6 +1021,7 @@ final class SearchSession extends BaseCraftSession {
 		int maxExtraFutureCopies
 	) {
 		List<ItemStack> currentPlanInventory = snapshotPlayerInventorySlots();
+		applyReservedOutputSlotHoldback(currentPlanInventory, reservedOutputEmptySlotsForCurrentPlan());
 		Map<String, ItemStack> prototypes = buildItemPrototypes(currentDesiredCounts, perCraftCounts);
 		for (Map.Entry<String, Integer> entry : currentDesiredCounts.entrySet()) {
 			int toStageNow = Math.max(0, entry.getValue() - alreadyCovered.getOrDefault(entry.getKey(), 0));
@@ -1244,6 +1257,7 @@ final class SearchSession extends BaseCraftSession {
 		}
 
 		List<ItemStack> simulatedInventory = snapshotPlayerInventorySlots();
+		applyReservedOutputSlotHoldback(simulatedInventory, reservedOutputEmptySlotsForCurrentPlan());
 		Map<String, ItemStack> prototypes = buildItemPrototypes(desiredCounts, Map.of());
 		for (Map.Entry<String, Integer> entry : desiredCounts.entrySet()) {
 			int toStageNow = Math.max(0, entry.getValue() - alreadyCovered.getOrDefault(entry.getKey(), 0));
@@ -1263,6 +1277,25 @@ final class SearchSession extends BaseCraftSession {
 			slots.add(stack.copy());
 		}
 		return slots;
+	}
+
+	private int reservedOutputEmptySlotsForCurrentPlan() {
+		if (!allowNearby || targetCopiesPerSlot <= 0) {
+			return 0;
+		}
+		return BulkAutoCraftController.reservedOutputEmptySlotsForBatch(targetCopiesPerSlot);
+	}
+
+	private static void applyReservedOutputSlotHoldback(List<ItemStack> inventorySlots, int reservedEmptySlots) {
+		if (reservedEmptySlots <= 0) {
+			return;
+		}
+		for (int i = inventorySlots.size() - 1; i >= 0 && reservedEmptySlots > 0; i--) {
+			if (inventorySlots.get(i).isEmpty()) {
+				inventorySlots.remove(i);
+				reservedEmptySlots--;
+			}
+		}
 	}
 
 	private Map<String, ItemStack> buildItemPrototypes(Map<String, Integer> desiredCounts, Map<String, Integer> perCraftCounts) {
@@ -1765,13 +1798,27 @@ final class SearchSession extends BaseCraftSession {
 		boolean reservedGridMatchesRecipe = redistributeThisRun
 			? originalContext.hasReservedGrid() && originalContext.reservedGridMatchesCollection(client.level, recipeCollection)
 			: originalContext.reservedGridMatches(ingredientSummary);
+		boolean shouldAttemptReservedPlacement = gridRestored
+			&& targetCopiesPerSlot > 0
+			&& (redistributeThisRun ? originalContext.hasReservedGrid() : reservedGridMatchesRecipe);
+		ReachCraftingMod.LOGGER.info(
+			"[recipe_place] reserved gate idx={} redistribute={} has_reserved={} grid_restored={} matches_recipe={} target_copies={} should_attempt={}",
+			recipeIndex,
+			redistributeThisRun,
+			originalContext.hasReservedGrid(),
+			gridRestored,
+			reservedGridMatchesRecipe,
+			targetCopiesPerSlot,
+			shouldAttemptReservedPlacement
+		);
 
 		boolean reservedGridExpanded = false;
-		if (gridRestored && reservedGridMatchesRecipe && targetCopiesPerSlot > 0) {
+		if (shouldAttemptReservedPlacement) {
 			reservedGridExpanded = redistributeThisRun
 				? applyPlannedTargetsToGrid(originalOccupiedGridSlotIndices())
 				: expandReservedGrid();
 		}
+		boolean reservedPlacementSatisfied = shouldAttemptReservedPlacement && reservedGridExpanded;
 
 		boolean placedPlannedGrid = false;
 		if (!originalContext.hasReservedGrid()
@@ -1807,9 +1854,7 @@ final class SearchSession extends BaseCraftSession {
 			reportCopies
 		);
 		if (originalContext.hasReservedGrid()
-			&& gridRestored
-			&& reservedGridMatchesRecipe
-			&& reservedGridExpanded
+			&& reservedPlacementSatisfied
 			&& remainingItemIds.isEmpty()
 			&& !inventorySpaceBlocked) {
 			autoMoveReady = true;
@@ -1857,7 +1902,7 @@ final class SearchSession extends BaseCraftSession {
 					lastRestoreFailure
 				);
 				sendDebugChat("Fetched items, but couldn't fully restore the crafting grid.");
-			} else if (targetCopiesPerSlot > 0 && !updatedDeficit.hasMissingIngredients() && reservedGridMatchesRecipe && reservedGridExpanded) {
+			} else if (targetCopiesPerSlot > 0 && !updatedDeficit.hasMissingIngredients() && reservedPlacementSatisfied) {
 				sendDebugChat("Updated grid: " + outputLabel);
 			} else if (updatedDeficit.hasMissingIngredients()) {
 				if (!BulkAutoCraftController.isActive() || BulkAutoCraftController.getCompletedRecipeCopies() == 0) {
@@ -2097,28 +2142,81 @@ final class SearchSession extends BaseCraftSession {
 		}
 
 		AbstractContainerMenu menu = containerScreen.getMenu();
+		PlacementAttempt directPlacement = placePlannedGridWithVanillaShape();
+		if (directPlacement == PlacementAttempt.SUCCESS) {
+			ReachCraftingMod.LOGGER.info(
+				"[recipe_place] direct vanilla replay placement succeeded idx={} target={} recipe={}",
+				recipeIndex,
+				targetCopiesPerSlot,
+				recipeId
+			);
+			return true;
+		}
+
 		// Clear the entire grid to ensure a clean slate for vanilla placement
 		if (!clearGridForRedistribute(menu, Map.of())) {
+			ReachCraftingMod.LOGGER.info(
+				"[recipe_place] redistribute clear failed before replay placement idx={} target={} recipe={} reason={}",
+				recipeIndex,
+				targetCopiesPerSlot,
+				recipeId,
+				lastRestoreFailure
+			);
 			return false;
 		}
 
 		// Ensure cursor is empty before starting vanilla placement
 		if (!player.containerMenu.getCarried().isEmpty()) {
-			// Try to drop the item into the inventory
-			for (Slot slot : menu.slots) {
-				if (slot.container instanceof Inventory && !slot.hasItem()) {
-					pickup(menu, slot, GLFW.GLFW_MOUSE_BUTTON_LEFT);
-					break;
-				}
+			if (!stashCarriedStackIntoInventory(menu)) {
+				lastRestoreFailure = "cursor_not_empty_after_clear item=" + BuiltInRegistries.ITEM.getKey(player.containerMenu.getCarried().getItem());
+				ReachCraftingMod.LOGGER.info(
+					"[recipe_place] redistribute cursor cleanup failed idx={} target={} recipe={} reason={}",
+					recipeIndex,
+					targetCopiesPerSlot,
+					recipeId,
+					lastRestoreFailure
+				);
+				return false;
 			}
-			// If still not empty, we might need to wait or fail
+		}
+
+		PlacementAttempt clearedPlacement = placePlannedGridWithVanillaShape();
+		if (clearedPlacement != PlacementAttempt.SUCCESS) {
+			ReachCraftingMod.LOGGER.info(
+				"[recipe_place] redistribute vanilla replay placement failed idx={} target={} recipe={} attempt={}",
+				recipeIndex,
+				targetCopiesPerSlot,
+				recipeId,
+				clearedPlacement.name().toLowerCase()
+			);
+		}
+		return clearedPlacement == PlacementAttempt.SUCCESS;
+	}
+
+	private boolean stashCarriedStackIntoInventory(AbstractContainerMenu menu) {
+		while (!player.containerMenu.getCarried().isEmpty()) {
+			ItemStack carried = player.containerMenu.getCarried();
+			String itemId = BuiltInRegistries.ITEM.getKey(carried.getItem()).toString();
+			Slot destination = MenuTransferHelper.findPlayerDestinationSlot(player, menu, itemId);
+			if (destination == null) {
+				break;
+			}
+
+			int carriedBefore = carried.getCount();
+			pickup(menu, destination, GLFW.GLFW_MOUSE_BUTTON_LEFT);
+			ItemStack carriedAfter = player.containerMenu.getCarried();
+			if (!carriedAfter.isEmpty() && carriedAfter.getCount() >= carriedBefore) {
+				break;
+			}
+		}
+
+		if (!player.containerMenu.getCarried().isEmpty()) {
 			if (!player.containerMenu.getCarried().isEmpty()) {
 				lastRestoreFailure = "cursor_not_empty_after_clear item=" + BuiltInRegistries.ITEM.getKey(player.containerMenu.getCarried().getItem());
 				return false;
 			}
 		}
-
-		return placePlannedGridWithVanillaShape() == PlacementAttempt.SUCCESS;
+		return true;
 	}
 
 	private List<Integer> originalOccupiedGridSlotIndices() {
@@ -2295,14 +2393,16 @@ final class SearchSession extends BaseCraftSession {
 		List<WithdrawalPlan.PlannedMove> moves = new ArrayList<>();
 		Map<Integer, Integer> virtualPlayerCounts = capturePlayerOccupancy(menu);
 		Map<Integer, String> virtualPlayerItemIds = capturePlayerItemIds(menu);
+		int reservedOutputEmptySlots = reservedOutputEmptySlotsForCurrentPlan();
 		boolean blockedByInventory = false;
 
 		List<Map.Entry<String, Integer>> orderedNeeds = orderRemainingNeedsForPacking(menu, remainingNeeds, virtualPlayerCounts, virtualPlayerItemIds);
 		ReachCraftingMod.LOGGER.info(
-			"[nearby_withdraw_order] idx={} pos={} ordered_needs={}",
+			"[nearby_withdraw_order] idx={} pos={} ordered_needs={} reserved_output_slots={}",
 			recipeIndex,
 			ContainerUtils.formatPos(pendingContainerPos),
-			AvailableItemSnapshot.formatCounts(toCountMap(orderedNeeds))
+			AvailableItemSnapshot.formatCounts(toCountMap(orderedNeeds)),
+			reservedOutputEmptySlots
 		);
 
 		for (Map.Entry<String, Integer> needEntry : orderedNeeds) {
@@ -2320,7 +2420,7 @@ final class SearchSession extends BaseCraftSession {
 
 				int sourceRemaining = sourceSlot.getItem().getCount();
 				while (sourceRemaining > 0 && stillNeeded > 0) {
-					Slot targetSlot = findPlannedDestinationSlot(menu, itemId, virtualPlayerCounts, virtualPlayerItemIds);
+					Slot targetSlot = findPlannedDestinationSlot(menu, itemId, virtualPlayerCounts, virtualPlayerItemIds, reservedOutputEmptySlots);
 					if (targetSlot == null) {
 						blockedByInventory = true;
 						break;
@@ -2590,7 +2690,8 @@ final class SearchSession extends BaseCraftSession {
 		AbstractContainerMenu menu,
 		String itemId,
 		Map<Integer, Integer> virtualPlayerCounts,
-		Map<Integer, String> virtualPlayerItemIds
+		Map<Integer, String> virtualPlayerItemIds,
+		int reservedOutputEmptySlots
 	) {
 		Slot bestPartial = null;
 		int bestPartialCount = -1;
@@ -2631,13 +2732,27 @@ final class SearchSession extends BaseCraftSession {
 						bestPartial = slot;
 						bestPartialCount = virtualCount;
 					}
-				} else if (bestEmpty == null) {
+				} else if (bestEmpty == null && countVirtualEmptyInventorySlots(menu, virtualPlayerCounts) > reservedOutputEmptySlots) {
 					bestEmpty = slot;
 				}
 			}
 		}
 
 		return bestPartial != null ? bestPartial : bestEmpty;
+	}
+
+	private static int countVirtualEmptyInventorySlots(AbstractContainerMenu menu, Map<Integer, Integer> virtualPlayerCounts) {
+		int emptySlots = 0;
+		for (Slot slot : menu.slots) {
+			if (!(slot.container instanceof Inventory)) {
+				continue;
+			}
+			int virtualCount = virtualPlayerCounts.getOrDefault(slot.index, slot.hasItem() ? slot.getItem().getCount() : 0);
+			if (virtualCount <= 0) {
+				emptySlots++;
+			}
+		}
+		return emptySlots;
 	}
 
 	private void removeRemainingItems(String itemId, int count) {
