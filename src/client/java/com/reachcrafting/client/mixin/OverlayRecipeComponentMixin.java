@@ -48,7 +48,9 @@ public abstract class OverlayRecipeComponentMixin {
 		boolean ctrlDown = (click.modifiers() & GLFW.GLFW_MOD_CONTROL) != 0;
 		boolean shiftDown = (click.modifiers() & GLFW.GLFW_MOD_SHIFT) != 0;
 		boolean altDown = (click.modifiers() & GLFW.GLFW_MOD_ALT) != 0;
-		if (ctrlDown || (altDown && !shiftDown && ReachCraftingConfig.get().altAsRequestKey())) {
+		if (ctrlDown
+			|| (shiftDown && RecipeBookClickCapture.isBulkModeEnabled())
+			|| (altDown && !shiftDown && ReachCraftingConfig.get().altAsRequestKey())) {
 			RecipeBookClickCapture.onRecipeButtonClicked(
 				recipeId,
 				collection,

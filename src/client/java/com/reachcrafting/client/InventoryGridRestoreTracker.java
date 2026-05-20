@@ -454,6 +454,9 @@ public final class InventoryGridRestoreTracker {
 		}
 
 		for (int gridIdx = 0; gridIdx < menu.slots.size(); gridIdx++) {
+			if (!resolveCarriedAfterGridFlush(menu, gameMode, -1)) {
+				return;
+			}
 			if (!isGridSlot(menu, gridIdx)) {
 				continue;
 			}
@@ -529,7 +532,90 @@ public final class InventoryGridRestoreTracker {
 					gameMode.handleContainerInput(menu.containerId, gridIdx, 0, ContainerInput.QUICK_MOVE, client.player);
 				}
 			}
+
+			if (!resolveCarriedAfterGridFlush(menu, gameMode, gridIdx)) {
+				return;
+			}
 		}
+	}
+
+	private static boolean resolveCarriedAfterGridFlush(AbstractContainerMenu menu, MultiPlayerGameMode gameMode, int preferredGridIdx) {
+		Minecraft client = Minecraft.getInstance();
+		if (client.player == null) {
+			return false;
+		}
+
+		ItemStack carried = client.player.containerMenu.getCarried();
+		if (carried.isEmpty()) {
+			return true;
+		}
+
+		String itemName = BuiltInRegistries.ITEM.getKey(carried.getItem()).getPath();
+
+		for (int invIdx = 0; invIdx < 36 && !client.player.containerMenu.getCarried().isEmpty(); invIdx++) {
+			int menuIdx = inventoryIndexToMenuIndex(menu, invIdx);
+			if (menuIdx == -1) {
+				continue;
+			}
+
+			Slot target = menu.getSlot(menuIdx);
+			if (!target.hasItem()) {
+				continue;
+			}
+
+			ItemStack currentCarried = client.player.containerMenu.getCarried();
+			if (!ItemStack.isSameItemSameComponents(target.getItem(), currentCarried)) {
+				continue;
+			}
+
+			int maxStack = Math.min(target.getMaxStackSize(), currentCarried.getMaxStackSize());
+			if (target.getItem().getCount() >= maxStack) {
+				continue;
+			}
+
+			ReachCraftingMod.LOGGER.info("[grid_flush] resolve carried merge: inv {} (menu {}), item {} count {}",
+				invIdx, menuIdx, itemName, currentCarried.getCount());
+			gameMode.handleContainerInput(menu.containerId, menuIdx, 0, ContainerInput.PICKUP, client.player);
+		}
+
+		for (int invIdx = 0; invIdx < 36 && !client.player.containerMenu.getCarried().isEmpty(); invIdx++) {
+			int menuIdx = inventoryIndexToMenuIndex(menu, invIdx);
+			if (menuIdx == -1) {
+				continue;
+			}
+
+			Slot target = menu.getSlot(menuIdx);
+			if (target.hasItem()) {
+				continue;
+			}
+
+			ReachCraftingMod.LOGGER.info("[grid_flush] resolve carried empty slot: inv {} (menu {}), item {} count {}",
+				invIdx, menuIdx, itemName, client.player.containerMenu.getCarried().getCount());
+			gameMode.handleContainerInput(menu.containerId, menuIdx, 0, ContainerInput.PICKUP, client.player);
+		}
+
+		if (!client.player.containerMenu.getCarried().isEmpty()
+			&& preferredGridIdx >= 0
+			&& preferredGridIdx < menu.slots.size()
+			&& isGridSlot(menu, preferredGridIdx)) {
+			Slot gridSlot = menu.getSlot(preferredGridIdx);
+			ItemStack currentCarried = client.player.containerMenu.getCarried();
+			boolean canReturnToGrid = !gridSlot.hasItem()
+				|| (ItemStack.isSameItemSameComponents(gridSlot.getItem(), currentCarried)
+					&& gridSlot.getItem().getCount() < Math.min(gridSlot.getMaxStackSize(), currentCarried.getMaxStackSize()));
+			if (canReturnToGrid) {
+				ReachCraftingMod.LOGGER.info("[grid_flush] resolve carried return-to-grid: grid {} item {} count {}",
+					preferredGridIdx, itemName, currentCarried.getCount());
+				gameMode.handleContainerInput(menu.containerId, preferredGridIdx, 0, ContainerInput.PICKUP, client.player);
+			}
+		}
+
+		if (!client.player.containerMenu.getCarried().isEmpty()) {
+			ReachCraftingMod.LOGGER.warn("[grid_flush] unresolved carried stack after flush: {}", ContainerUtils.formatStack(client.player.containerMenu.getCarried()));
+			return false;
+		}
+
+		return true;
 	}
 
 	private static int inventoryIndexToMenuIndex(AbstractContainerMenu menu, int invIdx) {

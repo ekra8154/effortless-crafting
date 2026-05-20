@@ -44,7 +44,9 @@ final class RecipeClickExecutor {
 		HeldRecipeQueueState state
 	) {
 		AvailableItemSnapshot availableItems = AvailableItemSnapshot.capture(player, screen);
-		boolean vanillaShiftClick = craftAll && !forceDryRun && !allowNearbyChests;
+		boolean nearbyBulkMaxMode = allowNearbyChests && refillableBulkMaxMode;
+		boolean effectiveCraftAll = craftAll && !nearbyBulkMaxMode;
+		boolean vanillaShiftClick = effectiveCraftAll && !forceDryRun && !allowNearbyChests;
 		ReachCraftingMod.LOGGER.debug(
 			"[recipe_capture] screen={} inventory={} grid={} slots={} pending={} replay={}",
 			screen.getClass().getSimpleName(),
@@ -55,7 +57,7 @@ final class RecipeClickExecutor {
 			state.replayBatch() != null ? state.replayBatch().action().recipeId().index() + "x" + state.replayBatch().remainingClicks() : "<none>"
 		);
 		boolean allowReservedGridVariantSwitch = false;
-		int desiredVariantCopies = availableItems.hasReservedGrid() && !craftAll
+		int desiredVariantCopies = availableItems.hasReservedGrid() && !effectiveCraftAll
 			? ContainerUtils.currentReservedCraftCopies(availableItems.gridStacks()) + requestedClicks
 			: Math.max(requestedClicks, 1);
 
@@ -72,7 +74,7 @@ final class RecipeClickExecutor {
 			availableItems,
 			availableItems.inventoryCounts(),
 			availableItems.inventoryCounts(),
-			craftAll,
+			effectiveCraftAll,
 			allowReservedGridVariantSwitch,
 			desiredVariantCopies
 		);
@@ -100,7 +102,7 @@ final class RecipeClickExecutor {
 			NearbyContainerCache.ReachableView reachableView = NearbyContainerCache.getReachableView(minecraft.level, minecraft.getCameraEntity(), player.blockInteractionRange());
 			availableCounts = AvailableItemSnapshot.mergeCounts(availableCounts, reachableView.countsFor(ingredientSummary.acceptedItemIds()));
 		}
-		RecipeDeficitReport deficitReport = craftAll
+		RecipeDeficitReport deficitReport = effectiveCraftAll
 			? RecipeDeficitReport.from(ingredientSummary, availableCounts, availableItems.gridStacks(), true)
 			: RecipeDeficitReport.from(ingredientSummary, availableCounts, availableItems.gridStacks(), desiredVariantCopies);
 		RecipeDeficitReport immediateCraftDeficit = RecipeDeficitReport.from(
@@ -115,6 +117,9 @@ final class RecipeClickExecutor {
 			availableItems.gridStacks(),
 			1
 		);
+		RecipeDeficitReport localDeficitReport = effectiveCraftAll
+			? RecipeDeficitReport.from(ingredientSummary, localAvailableCounts, availableItems.gridStacks(), true)
+			: RecipeDeficitReport.from(ingredientSummary, localAvailableCounts, availableItems.gridStacks(), desiredVariantCopies);
 		String resolvedItemId = BuiltInRegistries.ITEM.getKey(resolvedDisplayStack.getItem()).toString();
 		String outputLabel = resolvedItemId + " x" + resolvedDisplayStack.getCount();
 
@@ -124,7 +129,7 @@ final class RecipeClickExecutor {
 			mouseButton,
 			recipeIndex,
 			craftable,
-			craftAll,
+			effectiveCraftAll,
 			allowNearbyChests,
 			outputLabel
 		);
@@ -154,9 +159,11 @@ final class RecipeClickExecutor {
 
 		int effectiveRequestedClicks = refillableBulkMaxMode
 			? Math.max(requestedClicks, 1)
-			: craftAll
+			: effectiveCraftAll
 				? deficitReport.possibleCopies()
 				: requestedClicks;
+		boolean nearbyResourcesRequired = allowNearbyChests
+			&& areNearbyResourcesRequired(craftAll, effectiveRequestedClicks, localDeficitReport.possibleCopies());
 		if (useDryRun) {
 			armBulkAutoCraft(
 				recipeId,
@@ -166,15 +173,16 @@ final class RecipeClickExecutor {
 				mouseButton,
 				explicitVariantSelection,
 				allowNearbyChests,
-				craftAll,
+				effectiveCraftAll,
 				effectiveRequestedClicks,
+				nearbyResourcesRequired,
 				refillableBulkMaxMode,
 				selectedRecipe.displayStack(),
 				ingredientSummary
 			);
 			if (allowNearbyChests
 				&& AutoCraftController.isBulkModeEnabled()
-				&& !craftAll
+				&& !effectiveCraftAll
 				&& !immediateLocalCraftDeficit.hasMissingIngredients()
 				&& minecraft.gameMode != null) {
 				// Always use a single handlePlaceRecipe(shift=true) to fill the grid.
@@ -201,7 +209,7 @@ final class RecipeClickExecutor {
 			}
 			if (allowNearbyChests
 				&& AutoCraftController.isBulkModeEnabled()
-				&& !craftAll
+				&& !effectiveCraftAll
 				&& !immediateCraftDeficit.hasMissingIngredients()
 				&& immediateLocalCraftDeficit.hasMissingIngredients()) {
 				ReachCraftingMod.LOGGER.info(
@@ -220,7 +228,7 @@ final class RecipeClickExecutor {
 					outputLabel,
 					ingredientSummary,
 					availableItems,
-					craftAll,
+					effectiveCraftAll,
 					effectiveRequestedClicks,
 					allowNearbyChests
 				)) {
@@ -238,7 +246,7 @@ final class RecipeClickExecutor {
 				outputLabel,
 				ingredientSummary,
 				availableItems,
-				craftAll,
+				effectiveCraftAll,
 				effectiveRequestedClicks,
 				allowNearbyChests
 			);
@@ -248,7 +256,7 @@ final class RecipeClickExecutor {
 		MultiPlayerGameMode gameMode = minecraft.gameMode;
 		if (gameMode != null) {
 			int queueLimit = resolveRecipeQueueLimit(minecraft, selectedRecipe.recipeId(), collection);
-			boolean useBulkPlace = craftAll || (AutoCraftController.isBulkModeEnabled() && requestedClicks >= queueLimit);
+			boolean useBulkPlace = effectiveCraftAll || (AutoCraftController.isBulkModeEnabled() && requestedClicks >= queueLimit);
 
 			if (useBulkPlace) {
 				gameMode.handlePlaceRecipe(player.containerMenu.containerId, selectedRecipe.recipeId(), true);
@@ -278,8 +286,9 @@ final class RecipeClickExecutor {
 					mouseButton,
 					explicitVariantSelection,
 					allowNearbyChests,
-					craftAll,
+					effectiveCraftAll,
 					requestedClicks,
+					nearbyResourcesRequired,
 					refillableBulkMaxMode,
 					selectedRecipe.displayStack(),
 					ingredientSummary
@@ -415,6 +424,7 @@ final class RecipeClickExecutor {
 		boolean allowNearbyChests,
 		boolean craftAll,
 		int requestedClicks,
+		boolean nearbyResourcesRequired,
 		boolean refillableBulkMaxMode,
 		ItemStack expectedOutput,
 		RecipeIngredientSummary ingredientSummary
@@ -426,6 +436,7 @@ final class RecipeClickExecutor {
 			requestedClicks,
 			craftAll,
 			allowNearbyChests,
+			nearbyResourcesRequired,
 			AutoCraftController.isBulkModeEnabled(),
 			explicitVariantSelection,
 			refillableBulkMaxMode,
@@ -472,11 +483,28 @@ final class RecipeClickExecutor {
 			),
 			requestedClicks,
 			allowNearbyChests,
+			nearbyResourcesRequired,
 			refillableBulkMaxMode,
 			continuationMode,
 			expectedOutput,
 			ingredientSummary
 		);
+	}
+
+	private static boolean areNearbyResourcesRequired(
+		boolean craftAll,
+		int requestedClicks,
+		int localPossibleCopies
+	) {
+		// Ctrl+Shift bulk should always stay on the nearby/staging path so it can
+		// immediately opt into direct eject and continue pulling more resources.
+		if (craftAll) {
+			return true;
+		}
+
+		// For finite Ctrl requests, only use the conservative local-output path
+		// when the current inventory can already satisfy the whole request.
+		return localPossibleCopies < Math.max(requestedClicks, 1);
 	}
 
 	private static RecipeDisplayEntry findRecipeEntry(

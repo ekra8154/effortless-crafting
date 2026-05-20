@@ -153,7 +153,7 @@ final class RecipeBookInputController {
 		boolean craftAll = maxCraftRequested;
 		boolean allowNearbyChests = ctrlModifierDown
 			&& ReachCraftingConfig.get().enableNearbyContainerUsage();
-		boolean refillableBulkMaxMode = maxCraftRequested && allowNearbyChests && AutoCraftController.isBulkModeEnabled();
+		boolean refillableBulkMaxMode = maxCraftRequested && AutoCraftController.isBulkModeEnabled();
 		int requestedClicks = maxCraftRequested
 			? resolveMaxCraftRequestCount(minecraft, player, recipeId, collection, displayStack, explicitVariantSelection, allowNearbyChests)
 			: 1;
@@ -441,7 +441,7 @@ final class RecipeBookInputController {
 		boolean explicitVariantSelection,
 		boolean allowNearbyChests
 	) {
-		if (allowNearbyChests && AutoCraftController.isBulkModeEnabled()) {
+		if (AutoCraftController.isBulkModeEnabled()) {
 			return RecipeClickExecutor.bulkRecipeQueueLimit();
 		}
 
