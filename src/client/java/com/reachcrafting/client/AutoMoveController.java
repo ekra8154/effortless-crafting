@@ -557,7 +557,7 @@ final class AutoMoveController {
 						ContainerUtils.formatStack(resultSlot.getItem()),
 						ejectedCount
 					);
-					client.gameMode.handleContainerInput(menu.containerId, resultSlot.index, 1, ContainerInput.THROW, client.player);
+					client.gameMode.handleInventoryMouseClick(menu.containerId, resultSlot.index, 1, ClickType.THROW, client.player);
 					if (ejectedCount > 0) {
 						BulkAutoCraftController.addEjectedOutput(ejectedCount);
 					}

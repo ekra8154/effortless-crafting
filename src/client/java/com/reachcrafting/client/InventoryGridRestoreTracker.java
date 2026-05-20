@@ -575,7 +575,7 @@ public final class InventoryGridRestoreTracker {
 
 			ReachCraftingMod.LOGGER.info("[grid_flush] resolve carried merge: inv {} (menu {}), item {} count {}",
 				invIdx, menuIdx, itemName, currentCarried.getCount());
-			gameMode.handleContainerInput(menu.containerId, menuIdx, 0, ContainerInput.PICKUP, client.player);
+			gameMode.handleInventoryMouseClick(menu.containerId, menuIdx, 0, ClickType.PICKUP, client.player);
 		}
 
 		for (int invIdx = 0; invIdx < 36 && !client.player.containerMenu.getCarried().isEmpty(); invIdx++) {
@@ -591,7 +591,7 @@ public final class InventoryGridRestoreTracker {
 
 			ReachCraftingMod.LOGGER.info("[grid_flush] resolve carried empty slot: inv {} (menu {}), item {} count {}",
 				invIdx, menuIdx, itemName, client.player.containerMenu.getCarried().getCount());
-			gameMode.handleContainerInput(menu.containerId, menuIdx, 0, ContainerInput.PICKUP, client.player);
+			gameMode.handleInventoryMouseClick(menu.containerId, menuIdx, 0, ClickType.PICKUP, client.player);
 		}
 
 		if (!client.player.containerMenu.getCarried().isEmpty()
@@ -606,7 +606,7 @@ public final class InventoryGridRestoreTracker {
 			if (canReturnToGrid) {
 				ReachCraftingMod.LOGGER.info("[grid_flush] resolve carried return-to-grid: grid {} item {} count {}",
 					preferredGridIdx, itemName, currentCarried.getCount());
-				gameMode.handleContainerInput(menu.containerId, preferredGridIdx, 0, ContainerInput.PICKUP, client.player);
+				gameMode.handleInventoryMouseClick(menu.containerId, preferredGridIdx, 0, ClickType.PICKUP, client.player);
 			}
 		}
 
