@@ -3,7 +3,7 @@
 	"id": "reachcrafting",
 	"version": "${version}",
 	"name": "Effortless Crafting",
-	"description": "A client-side Fabric mod for Minecraft 1.20-1.20.4 that crafts from your inventory and nearby containers through vanilla interactions.",
+	"description": "A client-side Fabric mod for Minecraft 1.20-1.20.1 that crafts from your inventory and nearby containers through vanilla interactions.",
 	"license": "LGPL-3.0-or-later",
 	"icon": "assets/reachcrafting/icon.png",
 	"environment": "client",
@@ -26,7 +26,7 @@
 	],
 	"depends": {
 		"fabricloader": ">=0.15.11",
-		"minecraft": ">=1.20 <=1.20.4",
+		"minecraft": ">=1.20 <=1.20.1",
 		"java": ">=17",
 		"fabric-api": "*"
 	},
