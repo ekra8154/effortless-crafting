@@ -89,6 +89,10 @@ public final class RecipeBookClickCapture {
 		CONTROLLER.scheduleReplay(action, remainingClicks, allowNearby, craftAll, refillableBulkMaxMode);
 	}
 
+	public static boolean isBulkModeEnabled() {
+		return AutoCraftController.isBulkModeEnabled();
+	}
+
 	public static QueuedRecipeCountState getQueuedCountState(
 		RecipeDisplayId recipeId,
 		RecipeCollection collection,

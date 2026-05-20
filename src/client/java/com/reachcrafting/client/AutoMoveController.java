@@ -170,15 +170,27 @@ final class AutoMoveController {
 					bulkDisposition == BulkAutoCraftController.BulkOutputDisposition.FINAL_BATCH_KEEP
 					|| bulkDisposition == BulkAutoCraftController.BulkOutputDisposition.PARTIAL_STACK_KEEP;
 				boolean shouldEject = bulkDirectEject;
+				boolean delayInventoryFullFallbackEject = BulkAutoCraftController.shouldDelayInventoryFullFallbackEject();
 				int totalEjected = bulkDirectEject
 					? BulkAutoCraftController.predictedDirectEjectOutputCount(client, currentResult)
 					: currentResult.getCount();
 				if (!shouldEject
+					&& !delayInventoryFullFallbackEject
 					&& !bulkProtectedKeep
 					&& ReachCraftingConfig.get().ejectItemsWhenFull()
 					&& !canFitInInventory(menu, currentResult)) {
 					shouldEject = true;
 					com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] shouldEject=true (inv full, cannot fit result)");
+				} else if (!shouldEject
+					&& delayInventoryFullFallbackEject
+					&& !bulkProtectedKeep
+					&& ReachCraftingConfig.get().ejectItemsWhenFull()
+					&& !canFitInInventory(menu, currentResult)) {
+					com.reachcrafting.ReachCraftingMod.LOGGER.info(
+						"[auto_move] delaying inventory-full eject until after organize pass result={} nearby_required={}",
+						ContainerUtils.formatStack(currentResult),
+						BulkAutoCraftController.nearbyResourcesRequired()
+					);
 				}
 
 				if (shouldEject) {
@@ -536,6 +548,26 @@ final class AutoMoveController {
 			}
 
 			if (resultSlot.hasItem() && ItemStack.isSameItemSameComponents(resultSlot.getItem(), autoMoveTargetStack)) {
+				if (ReachCraftingConfig.get().ejectItemsWhenFull()
+					&& AutoCraftController.isBulkModeEnabled()
+					&& !canFitInInventory(menu, resultSlot.getItem())) {
+					int ejectedCount = resultSlot.getItem().getCount();
+					com.reachcrafting.ReachCraftingMod.LOGGER.info(
+						"[auto_move] organize fallback eject: result still blocked after quick-move target={} count={}",
+						ContainerUtils.formatStack(resultSlot.getItem()),
+						ejectedCount
+					);
+					client.gameMode.handleContainerInput(menu.containerId, resultSlot.index, 1, ContainerInput.THROW, client.player);
+					if (ejectedCount > 0) {
+						BulkAutoCraftController.addEjectedOutput(ejectedCount);
+					}
+					pendingAutoMove = false;
+					autoMoveOrganizing = false;
+					autoMoveTargetArrivalObserved = false;
+					autoMoveTargetStack = ItemStack.EMPTY;
+					BulkAutoCraftController.onAutoMoveFinished(client, true);
+					return;
+				}
 				com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] Result slot still has items after organizing. Restarting loop.");
 				autoMoveOrganizing = false;
 				autoMoveWaitingTicks = 0;
@@ -553,6 +585,9 @@ final class AutoMoveController {
 
 	private static void sweepAndEjectByProducts(Minecraft client, AbstractContainerMenu menu) {
 		if (!ReachCraftingConfig.get().ejectItemsWhenFull()) {
+			return;
+		}
+		if (!BulkAutoCraftController.needsNearbyStagingRoom()) {
 			return;
 		}
 
@@ -737,9 +772,7 @@ final class AutoMoveController {
 		// Also check the offhand slot if it's visible (2x2)
 		Slot offhandSlot = findVisibleOffhandSlot(menu);
 		if (offhandSlot != null) {
-			if (!offhandSlot.hasItem()) {
-				remaining -= maxStack;
-			} else if (ItemStack.isSameItemSameComponents(offhandSlot.getItem(), stack)) {
+			if (ItemStack.isSameItemSameComponents(offhandSlot.getItem(), stack)) {
 				remaining -= (maxStack - offhandSlot.getItem().getCount());
 			}
 		}

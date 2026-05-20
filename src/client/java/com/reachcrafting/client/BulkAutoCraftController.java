@@ -23,6 +23,7 @@ public final class BulkAutoCraftController {
 		RecipeBookClickCapture.HeldRecipeAction action,
 		int requestedRecipeCopies,
 		boolean allowNearby,
+		boolean nearbyResourcesRequired,
 		boolean refillableBulkMaxMode,
 		VariantContinuationMode variantContinuationMode,
 		ItemStack expectedOutput,
@@ -40,13 +41,14 @@ public final class BulkAutoCraftController {
 		ItemStack expectedCopy = expectedOutput.copy();
 		boolean sameRecipe = activeSession != null && activeSession.action().sameRecipe(action);
 		com.reachcrafting.ReachCraftingMod.LOGGER.info(
-			"[bulk_session] start_or_update active={} same_recipe={} requested={} completed={} refillable={} allow_nearby={} action_recipe={} expected_output={}",
+			"[bulk_session] start_or_update active={} same_recipe={} requested={} completed={} refillable={} allow_nearby={} nearby_required={} action_recipe={} expected_output={}",
 			activeSession != null,
 			sameRecipe,
 			requestedRecipeCopies,
 			activeSession == null ? 0 : activeSession.completedRecipeCopies(),
 			refillableBulkMaxMode,
 			allowNearby,
+			nearbyResourcesRequired,
 			action.recipeId(),
 			expectedCopy.getHoverName().getString()
 		);
@@ -66,6 +68,7 @@ public final class BulkAutoCraftController {
 				0,
 				expectedOutput.copy(),
 				allowNearby,
+				nearbyResourcesRequired,
 				variantContinuationMode,
 				baselineOutputCount,
 				0,
@@ -120,7 +123,7 @@ public final class BulkAutoCraftController {
 			return;
 		}
 
-		activeSession = activeSession.withUpdatedCycle(action, allowNearby, requestedRecipeCopies, refillableBulkMaxMode, variantContinuationMode);
+		activeSession = activeSession.withUpdatedCycle(action, allowNearby, nearbyResourcesRequired, requestedRecipeCopies, refillableBulkMaxMode, variantContinuationMode);
 		com.reachcrafting.ReachCraftingMod.LOGGER.info(
 			"[bulk_session] updated requested={} completed={} remaining={} refillable={}",
 			activeSession.requestedRecipeCopies(),
@@ -232,13 +235,30 @@ public final class BulkAutoCraftController {
 		return activeSession != null && activeSession.allowNearby();
 	}
 
+	static boolean needsNearbyStagingRoom() {
+		return activeSession != null
+			&& activeSession.nearbyResourcesRequired();
+	}
+
+	static boolean nearbyResourcesRequired() {
+		return activeSession != null && activeSession.nearbyResourcesRequired();
+	}
+
+	static boolean shouldDelayInventoryFullFallbackEject() {
+		return activeSession != null
+			&& activeSession.allowNearby()
+			&& !activeSession.nearbyResourcesRequired()
+			&& !activeSession.refillableBulkMaxMode();
+	}
+
 	static BulkOutputDisposition determineCurrentBatchOutputDisposition(Minecraft client, ItemStack currentResult) {
 		if (activeSession == null
 			|| client.player == null
 			|| currentResult == null
 			|| currentResult.isEmpty()
 			|| !AutoCraftController.isBulkModeEnabled()
-			|| !ReachCraftingConfig.get().ejectItemsWhenFull()) {
+			|| !ReachCraftingConfig.get().ejectItemsWhenFull()
+			|| !needsNearbyStagingRoom()) {
 			currentBatchOutputDisposition = BulkOutputDisposition.NORMAL_KEEP;
 			return currentBatchOutputDisposition;
 		}
@@ -496,7 +516,7 @@ public final class BulkAutoCraftController {
 					activeSession.action(),
 					activeSession.requestedRecipeCopies() - activeSession.completedRecipeCopies(),
 					activeSession.allowNearby(),
-					false,
+					activeSession.refillableBulkMaxMode() && !activeSession.allowNearby(),
 					activeSession.refillableBulkMaxMode()
 				);
 			}
@@ -715,6 +735,7 @@ public final class BulkAutoCraftController {
 		int completedRecipeCopies,
 		ItemStack expectedOutput,
 		boolean allowNearby,
+		boolean nearbyResourcesRequired,
 		VariantContinuationMode variantContinuationMode,
 		int lastObservedOutputCount,
 		int ejectedOutputCount,
@@ -730,11 +751,11 @@ public final class BulkAutoCraftController {
 		}
 		*/
 
-		private BulkCraftSession withUpdatedCycle(RecipeBookClickCapture.HeldRecipeAction updatedAction, boolean updatedAllowNearby, int requestedCopiesForCycle, boolean updatedRefillableBulkMaxMode, VariantContinuationMode updatedVariantContinuationMode) {
+		private BulkCraftSession withUpdatedCycle(RecipeBookClickCapture.HeldRecipeAction updatedAction, boolean updatedAllowNearby, boolean updatedNearbyResourcesRequired, int requestedCopiesForCycle, boolean updatedRefillableBulkMaxMode, VariantContinuationMode updatedVariantContinuationMode) {
 			VariantContinuationMode mode = updatedVariantContinuationMode == VariantContinuationMode.UNDECIDED
 				? variantContinuationMode
 				: updatedVariantContinuationMode;
-			return new BulkCraftSession(updatedAction, Math.max(requestedRecipeCopies, requestedCopiesForCycle), completedRecipeCopies, expectedOutput.copy(), updatedAllowNearby, mode, lastObservedOutputCount, ejectedOutputCount, refillableBulkMaxMode || updatedRefillableBulkMaxMode, ingredientSummary, initialInventoryCounts, protectedOutputInventorySlots, summary);
+			return new BulkCraftSession(updatedAction, Math.max(requestedRecipeCopies, requestedCopiesForCycle), completedRecipeCopies, expectedOutput.copy(), updatedAllowNearby, nearbyResourcesRequired || updatedNearbyResourcesRequired, mode, lastObservedOutputCount, ejectedOutputCount, refillableBulkMaxMode || updatedRefillableBulkMaxMode, ingredientSummary, initialInventoryCounts, protectedOutputInventorySlots, summary);
 		}
 
 		private BulkCraftSession withProgress(int additionalCopies, int updatedLastObservedOutputCount) {
@@ -745,15 +766,15 @@ public final class BulkAutoCraftController {
 			if (itemAmount > 0) {
 				newSummary.put(itemName, newSummary.getOrDefault(itemName, 0) + itemAmount);
 			}
-			return new BulkCraftSession(action, requestedRecipeCopies, updatedCompletedRecipeCopies, expectedOutput.copy(), allowNearby, variantContinuationMode, updatedLastObservedOutputCount, 0, refillableBulkMaxMode, ingredientSummary, initialInventoryCounts, protectedOutputInventorySlots, newSummary);
+			return new BulkCraftSession(action, requestedRecipeCopies, updatedCompletedRecipeCopies, expectedOutput.copy(), allowNearby, nearbyResourcesRequired, variantContinuationMode, updatedLastObservedOutputCount, 0, refillableBulkMaxMode, ingredientSummary, initialInventoryCounts, protectedOutputInventorySlots, newSummary);
 		}
 
 		private BulkCraftSession withEjected(int newEjectedCount) {
-			return new BulkCraftSession(action, requestedRecipeCopies, completedRecipeCopies, expectedOutput.copy(), allowNearby, variantContinuationMode, lastObservedOutputCount, newEjectedCount, refillableBulkMaxMode, ingredientSummary, initialInventoryCounts, protectedOutputInventorySlots, summary);
+			return new BulkCraftSession(action, requestedRecipeCopies, completedRecipeCopies, expectedOutput.copy(), allowNearby, nearbyResourcesRequired, variantContinuationMode, lastObservedOutputCount, newEjectedCount, refillableBulkMaxMode, ingredientSummary, initialInventoryCounts, protectedOutputInventorySlots, summary);
 		}
 
 		private BulkCraftSession withRequestedRecipeCopies(int updatedRequestedRecipeCopies) {
-			return new BulkCraftSession(action, updatedRequestedRecipeCopies, completedRecipeCopies, expectedOutput.copy(), allowNearby, variantContinuationMode, lastObservedOutputCount, ejectedOutputCount, refillableBulkMaxMode, ingredientSummary, initialInventoryCounts, protectedOutputInventorySlots, summary);
+			return new BulkCraftSession(action, updatedRequestedRecipeCopies, completedRecipeCopies, expectedOutput.copy(), allowNearby, nearbyResourcesRequired, variantContinuationMode, lastObservedOutputCount, ejectedOutputCount, refillableBulkMaxMode, ingredientSummary, initialInventoryCounts, protectedOutputInventorySlots, summary);
 		}
 
 		private BulkCraftSession withResolvedOutputTransition(
@@ -774,6 +795,7 @@ public final class BulkAutoCraftController {
 				completedRecipeCopies,
 				updatedExpectedOutput.copy(),
 				allowNearby,
+				nearbyResourcesRequired,
 				mode,
 				updatedLastObservedOutputCount,
 				0,
