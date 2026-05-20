@@ -166,6 +166,17 @@ final class MenuTransferHelper {
 		int repeatedTargetCost = 1 + moveCount + (sourceRemainderAfterFullPickup > 0 ? 1 : 0);
 
 		WithdrawalExecutionMode mode = selectWithdrawalExecutionMode(splitClickCost, remainderBackCost, repeatedTargetCost);
+		com.reachcrafting.ReachCraftingMod.LOGGER.info(
+			"[withdraw_exact] source={} target={} item={} requested={} source_count={} target_count={} room={} mode={}",
+			sourceSlot.index,
+			targetSlot.index,
+			BuiltInRegistries.ITEM.getKey(sourceStack.getItem()),
+			moveCount,
+			sourceCount,
+			currentTargetCount,
+			roomInTarget,
+			mode.name().toLowerCase()
+		);
 		return switch (mode) {
 			case SPLIT_PICKUP -> executeSplitPickup(menu, sourceSlot, targetSlot, moveCount, splitCarryCount, player, gameMode);
 			case REMAINDER_BACK_TO_SOURCE -> executeRemainderBack(menu, sourceSlot, targetSlot, moveCount, sourceRemainderAfterFullPickup, player, gameMode);

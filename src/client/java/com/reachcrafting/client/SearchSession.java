@@ -1031,7 +1031,19 @@ final class SearchSession extends BaseCraftSession {
 		int stageableCopies = 0;
 		List<ItemStack> simulatedInventory = copyStacks(currentPlanInventory);
 		Map<String, Integer> simulatedReserve = new LinkedHashMap<>(futureLocalReserve);
-		for (int copyIndex = 0; copyIndex < maxExtraFutureCopies; copyIndex++) {
+		int slotBudgetCap = capFutureCopiesByAccessibleSlots(currentPlanInventory, perCraftCounts, maxExtraFutureCopies);
+		ReachCraftingMod.LOGGER.info(
+			"[bulk_stage_cap] idx={} current_desired={} covered={} future_reserve={} inventory_slots={} inventory_counts={} max_extra={} slot_budget_cap={}",
+			recipeIndex,
+			AvailableItemSnapshot.formatCounts(currentDesiredCounts),
+			AvailableItemSnapshot.formatCounts(alreadyCovered),
+			AvailableItemSnapshot.formatCounts(futureLocalReserve),
+			currentPlanInventory.size(),
+			formatVirtualInventoryCounts(currentPlanInventory, perCraftCounts.keySet()),
+			maxExtraFutureCopies,
+			slotBudgetCap
+		);
+		for (int copyIndex = 0; copyIndex < slotBudgetCap; copyIndex++) {
 			List<ItemStack> nextInventory = copyStacks(simulatedInventory);
 			Map<String, Integer> nextReserve = new LinkedHashMap<>(simulatedReserve);
 			boolean fits = true;
@@ -1057,6 +1069,13 @@ final class SearchSession extends BaseCraftSession {
 			}
 
 			if (!fits) {
+				ReachCraftingMod.LOGGER.info(
+					"[bulk_stage_cap] idx={} stopped_copy={} simulated_inventory={} simulated_reserve={}",
+					recipeIndex,
+					copyIndex,
+					formatVirtualInventoryCounts(simulatedInventory, perCraftCounts.keySet()),
+					AvailableItemSnapshot.formatCounts(simulatedReserve)
+				);
 				break;
 			}
 
@@ -1065,7 +1084,108 @@ final class SearchSession extends BaseCraftSession {
 			stageableCopies++;
 		}
 
+		ReachCraftingMod.LOGGER.info(
+			"[bulk_stage_cap] idx={} final_stageable={} final_inventory={} final_reserve={}",
+			recipeIndex,
+			stageableCopies,
+			formatVirtualInventoryCounts(simulatedInventory, perCraftCounts.keySet()),
+			AvailableItemSnapshot.formatCounts(simulatedReserve)
+		);
 		return stageableCopies;
+	}
+
+	private int capFutureCopiesByAccessibleSlots(
+		List<ItemStack> currentPlanInventory,
+		Map<String, Integer> perCraftCounts,
+		int maxExtraFutureCopies
+	) {
+		if (maxExtraFutureCopies <= 0 || perCraftCounts.isEmpty()) {
+			return 0;
+		}
+
+		int emptySlots = 0;
+		Map<String, Integer> compatibleRoom = new LinkedHashMap<>();
+		Map<String, Integer> stackSizes = new LinkedHashMap<>();
+		for (ItemStack slot : currentPlanInventory) {
+			if (slot.isEmpty()) {
+				emptySlots++;
+				continue;
+			}
+
+			String itemId = BuiltInRegistries.ITEM.getKey(slot.getItem()).toString();
+			int maxStackSize = Math.max(slot.getMaxStackSize(), 1);
+			if (perCraftCounts.containsKey(itemId)) {
+				compatibleRoom.merge(itemId, Math.max(maxStackSize - slot.getCount(), 0), Integer::sum);
+				stackSizes.put(itemId, maxStackSize);
+			}
+		}
+
+		for (String itemId : perCraftCounts.keySet()) {
+			stackSizes.putIfAbsent(itemId, estimateItemStackSize(itemId));
+			compatibleRoom.putIfAbsent(itemId, 0);
+		}
+
+		ReachCraftingMod.LOGGER.info(
+			"[bulk_stage_slots] idx={} empty_slots={} compatible_room={} stack_sizes={} max_extra={}",
+			recipeIndex,
+			emptySlots,
+			AvailableItemSnapshot.formatCounts(compatibleRoom),
+			AvailableItemSnapshot.formatCounts(stackSizes),
+			maxExtraFutureCopies
+		);
+
+		int low = 0;
+		int high = maxExtraFutureCopies;
+		while (low < high) {
+			int mid = (low + high + 1) / 2;
+			int additionalSlotsNeeded = additionalSlotsNeededForFutureCopies(mid, perCraftCounts, compatibleRoom, stackSizes);
+			ReachCraftingMod.LOGGER.info(
+				"[bulk_stage_slots] idx={} probe_future={} additional_slots_needed={} empty_slots={}",
+				recipeIndex,
+				mid,
+				additionalSlotsNeeded,
+				emptySlots
+			);
+			if (additionalSlotsNeeded <= emptySlots) {
+				low = mid;
+			} else {
+				high = mid - 1;
+			}
+		}
+		ReachCraftingMod.LOGGER.info("[bulk_stage_slots] idx={} capped_future={}", recipeIndex, low);
+		return low;
+	}
+
+	private static int additionalSlotsNeededForFutureCopies(
+		int futureCopies,
+		Map<String, Integer> perCraftCounts,
+		Map<String, Integer> compatibleRoom,
+		Map<String, Integer> stackSizes
+	) {
+		int additionalSlots = 0;
+		for (Map.Entry<String, Integer> entry : perCraftCounts.entrySet()) {
+			String itemId = entry.getKey();
+			int neededCount = entry.getValue() * futureCopies;
+			int room = compatibleRoom.getOrDefault(itemId, 0);
+			int stackSize = Math.max(stackSizes.getOrDefault(itemId, 64), 1);
+			additionalSlots += estimateAdditionalSlotsNeeded(neededCount, room, stackSize);
+		}
+		return additionalSlots;
+	}
+
+	private static String formatVirtualInventoryCounts(List<ItemStack> stacks, java.util.Set<String> itemFilter) {
+		Map<String, Integer> counts = new LinkedHashMap<>();
+		for (ItemStack stack : stacks) {
+			if (stack.isEmpty()) {
+				continue;
+			}
+			String itemId = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+			if (itemFilter != null && !itemFilter.isEmpty() && !itemFilter.contains(itemId)) {
+				continue;
+			}
+			counts.merge(itemId, stack.getCount(), Integer::sum);
+		}
+		return AvailableItemSnapshot.formatCounts(counts);
 	}
 
 	private int computeReachableFutureCopies(Map<String, Integer> currentDesiredCounts, Map<String, Integer> perCraftCounts) {
@@ -1140,9 +1260,6 @@ final class SearchSession extends BaseCraftSession {
 	private List<ItemStack> snapshotPlayerInventorySlots() {
 		List<ItemStack> slots = new ArrayList<>();
 		for (ItemStack stack : player.getInventory().items) {
-			slots.add(stack.copy());
-		}
-		for (ItemStack stack : player.getInventory().offhand) {
 			slots.add(stack.copy());
 		}
 		return slots;
@@ -2180,7 +2297,15 @@ final class SearchSession extends BaseCraftSession {
 		Map<Integer, String> virtualPlayerItemIds = capturePlayerItemIds(menu);
 		boolean blockedByInventory = false;
 
-		for (Map.Entry<String, Integer> needEntry : remainingNeeds.entrySet()) {
+		List<Map.Entry<String, Integer>> orderedNeeds = orderRemainingNeedsForPacking(menu, remainingNeeds, virtualPlayerCounts, virtualPlayerItemIds);
+		ReachCraftingMod.LOGGER.info(
+			"[nearby_withdraw_order] idx={} pos={} ordered_needs={}",
+			recipeIndex,
+			ContainerUtils.formatPos(pendingContainerPos),
+			AvailableItemSnapshot.formatCounts(toCountMap(orderedNeeds))
+		);
+
+		for (Map.Entry<String, Integer> needEntry : orderedNeeds) {
 			String itemId = needEntry.getKey();
 			int stillNeeded = needEntry.getValue();
 			List<Slot> matchingSources = sortedMatchingContainerSources(menu, itemId);
@@ -2247,8 +2372,99 @@ final class SearchSession extends BaseCraftSession {
 				AvailableItemSnapshot.formatCounts(unresolvedNeeds)
 			);
 		}
+		ReachCraftingMod.LOGGER.info(
+			"[nearby_withdraw_plan] idx={} pos={} moves={} planned={} unresolved={} blocked={}",
+			recipeIndex,
+			ContainerUtils.formatPos(pendingContainerPos),
+			moves.size(),
+			AvailableItemSnapshot.formatCounts(plannedWithdrawals),
+			AvailableItemSnapshot.formatCounts(unresolvedNeeds),
+			blockedByInventory
+		);
 
 		return new WithdrawalPlan(moves, plannedWithdrawals, unresolvedNeeds, blockedByInventory);
+	}
+
+	private List<Map.Entry<String, Integer>> orderRemainingNeedsForPacking(
+		AbstractContainerMenu menu,
+		Map<String, Integer> remainingNeeds,
+		Map<Integer, Integer> virtualPlayerCounts,
+		Map<Integer, String> virtualPlayerItemIds
+	) {
+		List<Map.Entry<String, Integer>> orderedNeeds = new ArrayList<>(remainingNeeds.entrySet());
+		Map<String, Integer> estimatedAdditionalSlots = new HashMap<>();
+		Map<String, Integer> compatibleRoom = new HashMap<>();
+		Map<String, Integer> stackSizes = new HashMap<>();
+		for (Map.Entry<String, Integer> entry : orderedNeeds) {
+			String itemId = entry.getKey();
+			int room = estimateCompatibleRoom(menu, itemId, virtualPlayerCounts, virtualPlayerItemIds);
+			int stackSize = estimateItemStackSize(itemId);
+			compatibleRoom.put(itemId, room);
+			stackSizes.put(itemId, stackSize);
+			estimatedAdditionalSlots.put(itemId, estimateAdditionalSlotsNeeded(entry.getValue(), room, stackSize));
+		}
+
+		orderedNeeds.sort(
+			Comparator.comparingInt((Map.Entry<String, Integer> entry) -> estimatedAdditionalSlots.getOrDefault(entry.getKey(), Integer.MAX_VALUE))
+				.thenComparing(Comparator.comparingInt((Map.Entry<String, Integer> entry) -> compatibleRoom.getOrDefault(entry.getKey(), 0)).reversed())
+				.thenComparing(Comparator.comparingInt((Map.Entry<String, Integer> entry) -> stackSizes.getOrDefault(entry.getKey(), 1)).reversed())
+				.thenComparing(Map.Entry::getKey)
+		);
+		return orderedNeeds;
+	}
+
+	private int estimateCompatibleRoom(
+		AbstractContainerMenu menu,
+		String itemId,
+		Map<Integer, Integer> virtualPlayerCounts,
+		Map<Integer, String> virtualPlayerItemIds
+	) {
+		int room = 0;
+		int prototypeStackSize = estimateItemStackSize(itemId);
+		for (Slot slot : menu.slots) {
+			if (!(slot.container instanceof Inventory)) {
+				continue;
+			}
+
+			int virtualCount = virtualPlayerCounts.getOrDefault(slot.index, slot.hasItem() ? slot.getItem().getCount() : 0);
+			if (slot.hasItem()) {
+				String slotItemId = BuiltInRegistries.ITEM.getKey(slot.getItem().getItem()).toString();
+				if (!itemId.equals(slotItemId)) {
+					continue;
+				}
+				int max = Math.min(slot.getMaxStackSize(), slot.getItem().getMaxStackSize());
+				room += Math.max(0, max - Math.min(virtualCount, max));
+				continue;
+			}
+
+			if (virtualCount <= 0 || !itemId.equals(virtualPlayerItemIds.get(slot.index))) {
+				continue;
+			}
+			int max = Math.min(slot.getMaxStackSize(), prototypeStackSize);
+			room += Math.max(0, max - Math.min(virtualCount, max));
+		}
+		return room;
+	}
+
+	private int estimateItemStackSize(String itemId) {
+		ItemStack prototype = itemPrototype(itemId);
+		return Math.max(prototype.isEmpty() ? 64 : prototype.getMaxStackSize(), 1);
+	}
+
+	private static int estimateAdditionalSlotsNeeded(int neededCount, int compatibleRoom, int stackSize) {
+		int remainingAfterMerge = Math.max(0, neededCount - compatibleRoom);
+		if (remainingAfterMerge <= 0) {
+			return 0;
+		}
+		return (remainingAfterMerge + stackSize - 1) / stackSize;
+	}
+
+	private static Map<String, Integer> toCountMap(List<Map.Entry<String, Integer>> entries) {
+		Map<String, Integer> orderedCounts = new LinkedHashMap<>();
+		for (Map.Entry<String, Integer> entry : entries) {
+			orderedCounts.put(entry.getKey(), entry.getValue());
+		}
+		return orderedCounts;
 	}
 
 	private Map<String, Integer> executeWithdrawalPlan(AbstractContainerMenu menu, WithdrawalPlan plan) {

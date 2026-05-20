@@ -25,6 +25,7 @@ final class AutoMoveController {
 	private static boolean directEjectAwaitingSettlement = false;
 	private static int directEjectSettlementTicks = 0;
 	private static int directEjectPendingCount = 0;
+	private static int directEjectCreditedCount = 0;
 	private static int directEjectAwaitingStagedCopiesTicks = 0;
 
 	private AutoMoveController() {
@@ -68,6 +69,7 @@ final class AutoMoveController {
 		directEjectAwaitingSettlement = false;
 		directEjectSettlementTicks = 0;
 		directEjectPendingCount = 0;
+		directEjectCreditedCount = 0;
 		directEjectAwaitingStagedCopiesTicks = 0;
 		autoMoveTargetStack = ItemStack.EMPTY;
 		autoMoveExpectedStack = ItemStack.EMPTY;
@@ -110,19 +112,38 @@ final class AutoMoveController {
 
 		if (directEjectAwaitingSettlement) {
 			directEjectSettlementTicks++;
+			if (resultSlot.hasItem()
+				&& menu.getCarried().isEmpty()
+				&& directEjectPendingCount > 0
+				&& !autoMoveExpectedStack.isEmpty()
+				&& ItemStack.isSameItemSameTags(resultSlot.getItem(), autoMoveExpectedStack)) {
+				com.reachcrafting.ReachCraftingMod.LOGGER.info(
+					"[auto_move] direct eject continuing: ticks={} remaining={} credited={} result_now={}",
+					directEjectSettlementTicks,
+					directEjectPendingCount,
+					directEjectCreditedCount,
+					ContainerUtils.formatStack(resultSlot.getItem())
+				);
+				client.gameMode.handleInventoryMouseClick(menu.containerId, resultSlot.index, 1, ClickType.THROW, client.player);
+				directEjectPendingCount--;
+				directEjectCreditedCount++;
+				return;
+			}
 			if (resultSlot.hasItem() || !menu.getCarried().isEmpty()) {
 				com.reachcrafting.ReachCraftingMod.LOGGER.info(
-					"[auto_move] direct eject awaiting settlement: ticks={} result_now={} carried={}",
+					"[auto_move] direct eject awaiting settlement: ticks={} remaining={} credited={} result_now={} carried={}",
 					directEjectSettlementTicks,
+					directEjectPendingCount,
+					directEjectCreditedCount,
 					resultSlot.hasItem() ? ContainerUtils.formatStack(resultSlot.getItem()) : "<empty>",
 					ContainerUtils.formatStack(menu.getCarried())
 				);
 				return;
 			}
 			com.reachcrafting.ReachCraftingMod.LOGGER.info(
-				"[auto_move] direct eject settled: ticks={} crediting predicted count={}",
+				"[auto_move] direct eject settled: ticks={} crediting_count={}",
 				directEjectSettlementTicks,
-				directEjectPendingCount
+				directEjectCreditedCount
 			);
 			directEjectAwaitingSettlement = false;
 			directEjectSettlementTicks = 0;
@@ -131,10 +152,11 @@ final class AutoMoveController {
 			autoMoveOrganizing = false;
 			autoMoveTargetArrivalObserved = false;
 			autoMoveTargetStack = ItemStack.EMPTY;
-			if (AutoCraftController.isBulkModeEnabled() && directEjectPendingCount > 0) {
-				BulkAutoCraftController.addEjectedOutput(directEjectPendingCount);
+			if (AutoCraftController.isBulkModeEnabled() && directEjectCreditedCount > 0) {
+				BulkAutoCraftController.addEjectedOutput(directEjectCreditedCount);
 			}
 			directEjectPendingCount = 0;
+			directEjectCreditedCount = 0;
 			BulkAutoCraftController.onAutoMoveFinished(client, true);
 			return;
 		}
@@ -216,11 +238,17 @@ final class AutoMoveController {
 					);
 					client.gameMode.handleInventoryMouseClick(menu.containerId, resultSlot.index, 1, ClickType.THROW, client.player);
 					if (bulkDirectEject) {
-						directEjectPendingCount = totalEjected;
+						directEjectPendingCount = Math.max(totalEjected - 1, 0);
+						directEjectCreditedCount = totalEjected > 0 ? 1 : 0;
 						directEjectAwaitingSettlement = true;
 						directEjectSettlementTicks = 0;
 						autoMoveWaitingTicks = 0;
-						com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] direct eject queued awaiting settlement: predicted_ejected={}", totalEjected);
+						com.reachcrafting.ReachCraftingMod.LOGGER.info(
+							"[auto_move] direct eject queued awaiting settlement: predicted_ejected={} remaining={} credited={}",
+							totalEjected,
+							directEjectPendingCount,
+							directEjectCreditedCount
+						);
 						return;
 					}
 					if (AutoCraftController.isBulkModeEnabled() && totalEjected > 0) {
