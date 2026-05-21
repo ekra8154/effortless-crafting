@@ -275,6 +275,7 @@ public final class ContainerUtils {
 	}
 
 	public static void abortAllSessions() {
+		AutoMoveController.settleCompletedWork(net.minecraft.client.Minecraft.getInstance());
 		boolean wasAnyActive = isAnySessionActive();
 
 		AutoCraftController.clearHoldSession();

@@ -157,6 +157,17 @@ final class RecipeBookInputController {
 		int requestedClicks = maxCraftRequested
 			? resolveMaxCraftRequestCount(minecraft, player, recipeId, collection, displayStack, explicitVariantSelection, allowNearbyChests)
 			: 1;
+		com.reachcrafting.ReachCraftingMod.LOGGER.info(
+			"[recipe_input] mod_click recipe={} explicit_variant={} auto_requested={} instant_setting={} max_requested={} allow_nearby={} requested_clicks={} grid_empty={}",
+			recipeId,
+			explicitVariantSelection,
+			autoCraftRequested,
+			ReachCraftingConfig.get().altClickInstantCraft(),
+			maxCraftRequested,
+			allowNearbyChests,
+			requestedClicks,
+			ContainerUtils.isGridEmpty(player.containerMenu)
+		);
 
 		if (shouldQueueHeldRecipe(minecraft, maxCraftRequested, autoCraftRequested) && state.replayBatch() == null) {
 			if (autoCraftRequested) {
@@ -170,6 +181,13 @@ final class RecipeBookInputController {
 			AutoCraftController.consumeQuickCraft();
 		}
 		AutoCraftController.armHoldSessionForCurrentRequest(autoCraftRequested);
+		com.reachcrafting.ReachCraftingMod.LOGGER.info(
+			"[recipe_input] execute_mod_click recipe={} explicit_variant={} auto_enabled={} bulk_enabled={}",
+			recipeId,
+			explicitVariantSelection,
+			AutoCraftController.isEnabled(),
+			AutoCraftController.isBulkModeEnabled()
+		);
 
 		if (!ContainerUtils.isGridEmpty(player.containerMenu)) {
 			ContainerUtils.flushCraftingGrid(minecraft, allowNearbyChests, true);
@@ -213,11 +231,27 @@ final class RecipeBookInputController {
 		if (!ReachCraftingConfig.get().enabled()) {
 			return;
 		}
+		if (RecipeBookClickCapture.consumeSuppressedVanillaRecipeClick()) {
+			com.reachcrafting.ReachCraftingMod.LOGGER.info(
+				"[recipe_input] suppressed vanilla_click recipe={} explicit_variant={}",
+				recipeId,
+				explicitVariantSelection
+			);
+			return;
+		}
 		boolean autoCraftRequested = altModifierDown && ReachCraftingConfig.get().altAsRequestKey();
 		if (autoCraftRequested) {
 			AutoCraftController.consumeQuickCraft();
 		}
 		AutoCraftController.armHoldSessionForCurrentRequest(autoCraftRequested);
+		com.reachcrafting.ReachCraftingMod.LOGGER.info(
+			"[recipe_input] vanilla_click recipe={} explicit_variant={} auto_requested={} auto_enabled={} bulk_enabled={}",
+			recipeId,
+			explicitVariantSelection,
+			autoCraftRequested,
+			AutoCraftController.isEnabled(),
+			AutoCraftController.isBulkModeEnabled()
+		);
 		if (!AutoCraftController.isEnabled()) {
 			if (explicitVariantSelection) {
 				RecipeClickExecutor.tryCloseOverlayAfterRelease();

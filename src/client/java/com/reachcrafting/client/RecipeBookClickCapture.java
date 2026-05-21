@@ -8,6 +8,7 @@ import net.minecraft.world.item.crafting.display.RecipeDisplayId;
 
 public final class RecipeBookClickCapture {
 	private static final RecipeBookInputController CONTROLLER = RecipeBookInputController.getInstance();
+	private static boolean suppressNextVanillaRecipeClick = false;
 
 	private RecipeBookClickCapture() {
 	}
@@ -46,6 +47,18 @@ public final class RecipeBookClickCapture {
 		boolean altModifierDown
 	) {
 		CONTROLLER.onVanillaRecipeButtonClicked(recipeId, collection, displayStack, explicitVariantSelection, altModifierDown);
+	}
+
+	public static void suppressNextVanillaRecipeClick() {
+		suppressNextVanillaRecipeClick = true;
+	}
+
+	public static boolean consumeSuppressedVanillaRecipeClick() {
+		if (!suppressNextVanillaRecipeClick) {
+			return false;
+		}
+		suppressNextVanillaRecipeClick = false;
+		return true;
 	}
 
 	public static boolean onRecipeButtonRightClicked(

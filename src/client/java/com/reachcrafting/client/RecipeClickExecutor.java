@@ -82,6 +82,16 @@ final class RecipeClickExecutor {
 			ReachCraftingMod.LOGGER.warn("[recipe_click] missing RecipeDisplayEntry for recipe_index={}", recipeId.index());
 			return;
 		}
+		ReachCraftingMod.LOGGER.info(
+			"[recipe_click] resolved clicked_recipe={} selected_recipe={} explicit_variant={} requested_clicks={} allow_nearby={} craft_all={} display_stack={}",
+			recipeId,
+			selectedRecipe.recipeId(),
+			explicitVariantSelection,
+			requestedClicks,
+			allowNearbyChests,
+			craftAll,
+			ContainerUtils.formatStack(selectedRecipe.displayStack())
+		);
 		boolean craftable = collection.isCraftable(recipeId);
 		int recipeIndex = selectedRecipe.recipeId().index();
 		if (!selectedRecipe.recipeId().equals(recipeId)) {

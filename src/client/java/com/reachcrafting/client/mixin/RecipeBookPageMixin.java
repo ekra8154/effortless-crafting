@@ -137,6 +137,12 @@ public abstract class RecipeBookPageMixin {
 			return;
 		}
 
+		OverlayRecipeComponent overlay = ((RecipeBookPageAccessor) (Object) this).getOverlay();
+		if (overlay != null && overlay.isVisible()) {
+			com.reachcrafting.ReachCraftingMod.LOGGER.info("[recipe_page] skipping after-vanilla handler because overlay is visible");
+			return;
+		}
+
 		boolean ctrlDown = (click.modifiers() & GLFW.GLFW_MOD_CONTROL) != 0;
 		if (ctrlDown) {
 			return;
