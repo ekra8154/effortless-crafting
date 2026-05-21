@@ -22,6 +22,7 @@ final class NearbyCraftCoordinator {
 	private boolean suppressSecondaryUse;
 	private Set<String> pendingPostReturnCompactionItemIds = Set.of();
 	private CraftSession activeSession;
+	private boolean pauseScreenOpenLastTick;
 
 	private NearbyCraftCoordinator() {
 	}
@@ -36,14 +37,17 @@ final class NearbyCraftCoordinator {
 				if (activeSession != null) {
 					abortActiveSession();
 				}
+				pauseScreenOpenLastTick = false;
 				return;
 			}
 			if (interactionBlockTicks > 0) {
 				interactionBlockTicks--;
 			}
-			if (client.screen instanceof net.minecraft.client.gui.screens.PauseScreen) {
+			boolean pauseScreenOpen = client.screen instanceof net.minecraft.client.gui.screens.PauseScreen;
+			if (pauseScreenOpen && !pauseScreenOpenLastTick) {
 				ContainerUtils.abortAllSessions();
 			}
+			pauseScreenOpenLastTick = pauseScreenOpen;
 			if (activeSession != null) {
 				activeSession.tick();
 			}
