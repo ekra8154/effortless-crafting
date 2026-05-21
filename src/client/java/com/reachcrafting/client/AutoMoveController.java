@@ -52,6 +52,53 @@ final class AutoMoveController {
 		return pendingAutoMove || autoMoveOrganizing || NearbyContainerDryRun.isActiveSessionRunning() || InventoryGridRestoreTracker.isRestoring() || BulkAutoCraftController.isActive();
 	}
 
+	static void settleCompletedWork(Minecraft client) {
+		if (client == null || client.player == null || client.player.containerMenu == null) {
+			return;
+		}
+		if (!pendingAutoMove && !autoMoveOrganizing && !directEjectAwaitingSettlement) {
+			return;
+		}
+		if (client.player.containerMenu.slots.isEmpty()) {
+			return;
+		}
+
+		AbstractContainerMenu menu = client.player.containerMenu;
+		Slot resultSlot = menu.getSlot(0);
+		boolean resultStillPresent = resultSlot.hasItem();
+		boolean carriedStillPresent = !menu.getCarried().isEmpty();
+		if (resultStillPresent || carriedStillPresent) {
+			return;
+		}
+
+		com.reachcrafting.ReachCraftingMod.LOGGER.info(
+			"[auto_move] settling completed work before abort pending={} organizing={} directEjectAwaitingSettlement={} target={} expected={}",
+			pendingAutoMove,
+			autoMoveOrganizing,
+			directEjectAwaitingSettlement,
+			ContainerUtils.formatStack(autoMoveTargetStack),
+			ContainerUtils.formatStack(autoMoveExpectedStack)
+		);
+
+		if (directEjectAwaitingSettlement && AutoCraftController.isBulkModeEnabled() && directEjectPendingCount > 0) {
+			BulkAutoCraftController.addEjectedOutput(directEjectPendingCount);
+		}
+
+		pendingAutoMove = false;
+		autoMoveOrganizing = false;
+		autoMoveTargetArrivalObserved = false;
+		directEjectAwaitingSettlement = false;
+		directEjectSettlementTicks = 0;
+		directEjectPendingCount = 0;
+		directEjectAwaitingStagedCopiesTicks = 0;
+		autoMoveWaitingTicks = 0;
+		autoMoveTargetStack = ItemStack.EMPTY;
+		autoMoveExpectedStack = ItemStack.EMPTY;
+		autoMoveSnapshotCounts.clear();
+
+		BulkAutoCraftController.onAutoMoveFinished(client, true);
+	}
+
 	static void abort() {
 		com.reachcrafting.ReachCraftingMod.LOGGER.info(
 			"[auto_move] abort pending={} organizing={} directEjectNextTick={} pendingEjected={} target={} expected={}",
