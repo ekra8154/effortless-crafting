@@ -48,13 +48,15 @@ public final class ReachCraftingConfigScreen {
 			.setSaveConsumer(config::setTypeToFocusSearch)
 			.build());
 
-		tweaksGroup.add(entries.startBooleanToggle(
-				Component.translatable("option.reachcrafting.remember_previous_search"),
-				config.rememberPreviousSearch()
+		tweaksGroup.add(entries.startEnumSelector(
+				Component.translatable("option.reachcrafting.search_history_mode"),
+				ReachCraftingConfig.SearchHistoryMode.class,
+				config.searchHistoryMode()
 			)
-			.setDefaultValue(true)
-			.setTooltip(Component.translatable("tooltip.reachcrafting.remember_previous_search"))
-			.setSaveConsumer(config::setRememberPreviousSearch)
+			.setDefaultValue(ReachCraftingConfig.SearchHistoryMode.ON)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.search_history_mode"))
+			.setSaveConsumer(config::setSearchHistoryMode)
+			.setEnumNameProvider(value -> Component.translatable("enum.reachcrafting.search_history_mode." + value.name().toLowerCase()))
 			.build());
 
 		tweaksGroup.add(entries.startBooleanToggle(

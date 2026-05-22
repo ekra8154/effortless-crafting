@@ -429,19 +429,19 @@ public final class BulkAutoCraftController {
 
 	public static void stop(boolean aborted, String reason) {
 		if (activeSession != null) {
-			com.reachcrafting.ReachCraftingMod.LOGGER.info(
-				"[bulk_craft] STOP aborted={} reason={} completed={}/{} expected_output={} disposition={} refillable={} allow_nearby={}",
-				aborted,
-				reason,
-				activeSession.completedRecipeCopies(),
-				activeSession.requestedRecipeCopies(),
-				ContainerUtils.formatStack(activeSession.expectedOutput()),
-				currentBatchOutputDisposition,
-				activeSession.refillableBulkMaxMode(),
-				activeSession.allowNearby()
-			);
+			// com.reachcrafting.ReachCraftingMod.LOGGER.info(
+			// 	"[bulk_craft] STOP aborted={} reason={} completed={}/{} expected_output={} disposition={} refillable={} allow_nearby={}",
+			// 	aborted,
+			// 	reason,
+			// 	activeSession.completedRecipeCopies(),
+			// 	activeSession.requestedRecipeCopies(),
+			// 	ContainerUtils.formatStack(activeSession.expectedOutput()),
+			// 	currentBatchOutputDisposition,
+			// 	activeSession.refillableBulkMaxMode(),
+			// 	activeSession.allowNearby()
+			// );
 		} else {
-			com.reachcrafting.ReachCraftingMod.LOGGER.info("[bulk_craft] STOP aborted={} reason={} activeSession=false", aborted, reason);
+			// com.reachcrafting.ReachCraftingMod.LOGGER.info("[bulk_craft] STOP aborted={} reason={} activeSession=false", aborted, reason);
 		}
 		if (activeSession != null) {
 			String status = aborted ? "terminated" : "complete";

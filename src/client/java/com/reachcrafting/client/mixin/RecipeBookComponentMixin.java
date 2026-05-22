@@ -1,6 +1,7 @@
 package com.reachcrafting.client.mixin;
 
 import com.reachcrafting.client.ReachCraftingConfig;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.inventory.CraftingScreen;
@@ -81,6 +82,14 @@ public abstract class RecipeBookComponentMixin {
 	private void reachcrafting$onKeyPressedHead(KeyEvent event, CallbackInfoReturnable<Boolean> cir) {
 		if (!ReachCraftingConfig.get().enabled()) return;
 		reachcrafting$lastKeyPressedWasToggle = false;
+		if (event.key() == GLFW.GLFW_KEY_SPACE
+			&& reachcrafting$isToggleBoundToSpace()
+			&& reachcrafting$isSearchReadyToReplace()
+			&& reachcrafting$toggleCraftabilityAndClearSearch()) {
+			reachcrafting$lastKeyPressedWasToggle = true;
+			cir.setReturnValue(true);
+			return;
+		}
 		if (this.searchBox != null && this.searchBox.isFocused()) {
 			int key = event.key();
 			if (key == GLFW.GLFW_KEY_UP || key == GLFW.GLFW_KEY_DOWN) {
@@ -106,22 +115,12 @@ public abstract class RecipeBookComponentMixin {
 			boolean requestModifierHeld = com.reachcrafting.client.RecipeBookFocusManager.isControlKeyDown(this.minecraft)
 				|| com.reachcrafting.client.RecipeBookFocusManager.isShiftKeyDown(this.minecraft)
 				|| (ReachCraftingConfig.get().altAsRequestKey() && com.reachcrafting.client.RecipeBookFocusManager.isAltKeyDown(this.minecraft));
-			// Option 2: Special logic specifically for Spacebar.
-			// Spacebar can toggle while focused if the box is empty.
-			// For any other key (like 'G'), typing into the search bar takes priority if focused.
 			boolean isSearchBoxFocused = this.searchBox != null && this.searchBox.isFocused();
-			boolean canToggle = !isSearchBoxFocused || (isSpace && this.searchBox.getValue().isEmpty());
+			boolean canToggle = !isSearchBoxFocused
+				|| (isSpace && (this.searchBox.getValue().isEmpty() || reachcrafting$isSearchReadyToReplace()));
 
 			if (this.isVisible() && canToggle && !(isSpace && requestModifierHeld)) {
-				net.minecraft.client.gui.components.CycleButton<Boolean> filterButton = ((RecipeBookComponentAccessor) this).getFilterButton();
-				if (filterButton != null) {
-					boolean newValue = !filterButton.getValue();
-					filterButton.setValue(newValue);
-					if (this.minecraft.player != null) {
-						this.minecraft.player.getRecipeBook().setFiltering(this.menu.getRecipeBookType(), newValue);
-						((RecipeBookComponentAccessor) this).invokeSendUpdateSettings();
-					}
-					this.updateCollections(true, newValue);
+				if (reachcrafting$toggleCraftabilityAndClearSearch()) {
 					reachcrafting$lastKeyPressedWasToggle = true;
 					cir.setReturnValue(true);
 					return;
@@ -172,6 +171,13 @@ public abstract class RecipeBookComponentMixin {
 			cir.setReturnValue(true);
 			return;
 		}
+		if (event.codepoint() == ' ' && reachcrafting$isToggleBoundToSpace() && reachcrafting$isSearchReadyToReplace()) {
+			if (reachcrafting$toggleCraftabilityAndClearSearch()) {
+				reachcrafting$lastKeyPressedWasToggle = true;
+				cir.setReturnValue(true);
+				return;
+			}
+		}
 		if (this.searchBox != null && this.searchBox.isFocused()) {
 			if (Character.isDigit(event.codepoint())) {
 				cir.setReturnValue(false);
@@ -219,7 +225,11 @@ public abstract class RecipeBookComponentMixin {
 			return;
 		}
 
-		if (ReachCraftingConfig.get().rememberPreviousSearch() && reachcrafting$isSupportedScreen()) {
+		if (!reachcrafting$isSupportedScreen()) {
+			return;
+		}
+
+		if (ReachCraftingConfig.get().shouldRestoreLastSearch()) {
 			String lastSearch = ReachCraftingConfig.getLastSearchText();
 			if (!lastSearch.isEmpty()) {
 				ReachCraftingConfig.pushSearchHistory(lastSearch);
@@ -230,15 +240,15 @@ public abstract class RecipeBookComponentMixin {
 				this.searchBox.setHighlightPos(0);
 				this.searchBox.setCursorPosition(lastSearch.length());
 			}
-			
-			// Only focus automatically in the 3x3 crafting grid or if forced by a Quick Craft fallback.
-			// This allows 'Q' and number keys to work normally in the player inventory usually.
-			if (this.minecraft.screen instanceof CraftingScreen || com.reachcrafting.client.ReachCraftingModClient.forceNextInventorySearchFocus) {
-				this.searchBox.setFocused(true);
-				this.searchBox.setCursorPosition(this.searchBox.getValue().length());
-				this.searchBox.setHighlightPos(0);
-				com.reachcrafting.client.ReachCraftingModClient.forceNextInventorySearchFocus = false;
-			}
+		}
+		
+		// Only focus automatically in the 3x3 crafting grid or if forced by a Quick Craft fallback.
+		// This allows 'Q' and number keys to work normally in the player inventory usually.
+		if (this.minecraft.screen instanceof CraftingScreen || com.reachcrafting.client.ReachCraftingModClient.forceNextInventorySearchFocus) {
+			this.searchBox.setFocused(true);
+			this.searchBox.setCursorPosition(this.searchBox.getValue().length());
+			this.searchBox.setHighlightPos(0);
+			com.reachcrafting.client.ReachCraftingModClient.forceNextInventorySearchFocus = false;
 		}
 	}
 
@@ -301,6 +311,9 @@ public abstract class RecipeBookComponentMixin {
 	}
 
 	private boolean reachcrafting$navigateSearchHistory(boolean moveUp) {
+		if (!ReachCraftingConfig.get().isSearchHistoryEnabled()) {
+			return false;
+		}
 		int historySize = ReachCraftingConfig.getSearchHistorySize();
 		if (moveUp) {
 			if (historySize <= 0) {
@@ -352,6 +365,54 @@ public abstract class RecipeBookComponentMixin {
 			return;
 		}
 		ReachCraftingConfig.pushSearchHistory(this.searchBox.getValue());
+	}
+
+	private boolean reachcrafting$isSearchReadyToReplace() {
+		if (this.searchBox == null || !this.searchBox.isFocused()) {
+			return false;
+		}
+		String value = this.searchBox.getValue();
+		if (value.isEmpty()) {
+			return true;
+		}
+		int cursor = this.searchBox.getCursorPosition();
+		int highlight = ((EditBoxAccessor) this.searchBox).getHighlightPos();
+		int selectionStart = Math.min(cursor, highlight);
+		int selectionEnd = Math.max(cursor, highlight);
+		return selectionStart == 0 && selectionEnd == value.length();
+	}
+
+	private void reachcrafting$clearSearchForCraftabilityToggle() {
+		if (this.searchBox == null || !reachcrafting$isSupportedScreen()) {
+			return;
+		}
+		reachcrafting$commitCurrentSearchToHistory();
+		reachcrafting$resetSearchHistoryNavigation();
+		reachcrafting$applySearchText("");
+	}
+
+	private boolean reachcrafting$toggleCraftabilityAndClearSearch() {
+		if (!this.isVisible()) {
+			return false;
+		}
+		net.minecraft.client.gui.components.CycleButton<Boolean> filterButton = ((RecipeBookComponentAccessor) this).getFilterButton();
+		if (filterButton == null) {
+			return false;
+		}
+		boolean newValue = !filterButton.getValue();
+		reachcrafting$clearSearchForCraftabilityToggle();
+		filterButton.setValue(newValue);
+		if (this.minecraft.player != null) {
+			this.minecraft.player.getRecipeBook().setFiltering(this.menu.getRecipeBookType(), newValue);
+			((RecipeBookComponentAccessor) this).invokeSendUpdateSettings();
+		}
+		this.updateCollections(true, newValue);
+		return true;
+	}
+
+	private boolean reachcrafting$isToggleBoundToSpace() {
+		InputConstants.Key key = ((KeyMappingAccessor) com.reachcrafting.client.ReachCraftingModClient.toggleCraftableFilterKey).getKey();
+		return key.getType() == InputConstants.Type.KEYSYM && key.getValue() == GLFW.GLFW_KEY_SPACE;
 	}
 
 	private void reachcrafting$resetSearchHistoryNavigation() {
