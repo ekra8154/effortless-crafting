@@ -100,15 +100,15 @@ final class AutoMoveController {
 	}
 
 	static void abort() {
-		com.reachcrafting.ReachCraftingMod.LOGGER.info(
-			"[auto_move] abort pending={} organizing={} directEjectNextTick={} pendingEjected={} target={} expected={}",
-			pendingAutoMove,
-			autoMoveOrganizing,
-			directEjectAwaitingSettlement,
-			directEjectPendingCount,
-			ContainerUtils.formatStack(autoMoveTargetStack),
-			ContainerUtils.formatStack(autoMoveExpectedStack)
-		);
+		// com.reachcrafting.ReachCraftingMod.LOGGER.info(
+		// 	"[auto_move] abort pending={} organizing={} directEjectNextTick={} pendingEjected={} target={} expected={}",
+		// 	pendingAutoMove,
+		// 	autoMoveOrganizing,
+		// 	directEjectAwaitingSettlement,
+		// 	directEjectPendingCount,
+		// 	ContainerUtils.formatStack(autoMoveTargetStack),
+		// 	ContainerUtils.formatStack(autoMoveExpectedStack)
+		// );
 		pendingAutoMove = false;
 		autoMoveOrganizing = false;
 		autoMoveTargetArrivalObserved = false;

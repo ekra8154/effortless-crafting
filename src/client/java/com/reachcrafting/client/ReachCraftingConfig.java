@@ -32,7 +32,7 @@ public final class ReachCraftingConfig {
 	private static final boolean DEFAULT_REACH_CRAFT_PREFER_INVENTORY = true;
 	private static final boolean DEFAULT_PUT_PULLED_RESOURCES_BACK = true;
 	private static final boolean DEFAULT_RESTORE_INVENTORY_ITEM_POSITIONS = true;
-	private static final boolean DEFAULT_REMEMBER_PREVIOUS_SEARCH = true;
+	private static final SearchHistoryMode DEFAULT_SEARCH_HISTORY_MODE = SearchHistoryMode.ON;
 	private static final OutlineDisplayMode DEFAULT_SHOW_FILTER_OUTLINES = OutlineDisplayMode.KEYBIND;
 	private static final boolean DEFAULT_AUTO_CRAFT_ENABLED = false;
 	private static final AutoCraftMode DEFAULT_AUTO_CRAFT_ENABLED_MODE = AutoCraftMode.NORMAL;
@@ -80,7 +80,7 @@ public final class ReachCraftingConfig {
 	private boolean reachCraftPreferInventory;
 	private boolean putPulledResourcesBack;
 	private boolean restoreInventoryItemPositions;
-	private boolean rememberPreviousSearch;
+	private SearchHistoryMode searchHistoryMode;
 	private OutlineDisplayMode showFilterOutlines;
 	private boolean autoCraftEnabled;
 	private AutoCraftMode autoCraftEnabledMode;
@@ -140,7 +140,11 @@ public final class ReachCraftingConfig {
 			instance.reachCraftPreferInventory = stored.reachCraftPreferInventory != null ? stored.reachCraftPreferInventory : DEFAULT_REACH_CRAFT_PREFER_INVENTORY;
 			instance.putPulledResourcesBack = stored.putPulledResourcesBack != null ? stored.putPulledResourcesBack : DEFAULT_PUT_PULLED_RESOURCES_BACK;
 			instance.restoreInventoryItemPositions = stored.restoreInventoryItemPositions != null ? stored.restoreInventoryItemPositions : DEFAULT_RESTORE_INVENTORY_ITEM_POSITIONS;
-			instance.rememberPreviousSearch = stored.rememberPreviousSearch != null ? stored.rememberPreviousSearch : DEFAULT_REMEMBER_PREVIOUS_SEARCH;
+			instance.searchHistoryMode = stored.searchHistoryMode != null
+				? stored.searchHistoryMode
+				: (stored.rememberPreviousSearch != null
+					? (stored.rememberPreviousSearch ? SearchHistoryMode.ON_AND_RESTORE_LAST_SEARCH : SearchHistoryMode.OFF)
+					: DEFAULT_SEARCH_HISTORY_MODE);
 			instance.showFilterOutlines = stored.showFilterOutlines != null ? stored.showFilterOutlines : DEFAULT_SHOW_FILTER_OUTLINES;
 			instance.showTotalOutputCounts = stored.showTotalOutputCounts != null ? stored.showTotalOutputCounts : DEFAULT_SHOW_TOTAL_OUTPUT_COUNTS;
 			instance.inputCounterVisibility = stored.inputCounterVisibility != null ? stored.inputCounterVisibility : DEFAULT_INPUT_COUNTER_VISIBILITY;
@@ -172,6 +176,9 @@ public final class ReachCraftingConfig {
 			instance.blacklistedContainerIds = stored.blacklistedContainerIds != null 
 				? new LinkedHashSet<>(stored.blacklistedContainerIds) 
 				: new LinkedHashSet<>(DEFAULT_BLACKLIST);
+			if (instance.searchHistoryMode == SearchHistoryMode.OFF) {
+				clearSearchHistory();
+			}
 		} catch (Exception exception) {
 			ReachCraftingMod.LOGGER.warn("Failed to load reachcrafting config from {}", CONFIG_PATH, exception);
 			instance = defaults();
@@ -292,12 +299,15 @@ public final class ReachCraftingConfig {
 		this.reachCraftPreferInventory = reachCraftPreferInventory;
 	}
 
-	public boolean rememberPreviousSearch() {
-		return rememberPreviousSearch;
+	public SearchHistoryMode searchHistoryMode() {
+		return searchHistoryMode;
 	}
 
-	public void setRememberPreviousSearch(boolean rememberPreviousSearch) {
-		this.rememberPreviousSearch = rememberPreviousSearch;
+	public void setSearchHistoryMode(SearchHistoryMode searchHistoryMode) {
+		this.searchHistoryMode = searchHistoryMode != null ? searchHistoryMode : DEFAULT_SEARCH_HISTORY_MODE;
+		if (this.searchHistoryMode == SearchHistoryMode.OFF) {
+			clearSearchHistory();
+		}
 	}
 
 	public boolean putPulledResourcesBack() {
@@ -498,10 +508,17 @@ public final class ReachCraftingConfig {
 	}
 
 	public static void setLastSearchText(String text) {
+		if (get().searchHistoryMode() == SearchHistoryMode.OFF) {
+			lastSearchText = "";
+			return;
+		}
 		lastSearchText = text != null ? text : "";
 	}
 
 	public static void pushSearchHistory(String text) {
+		if (!get().isSearchHistoryEnabled()) {
+			return;
+		}
 		String normalized = text != null ? text.trim() : "";
 		if (normalized.isEmpty()) {
 			return;
@@ -522,6 +539,19 @@ public final class ReachCraftingConfig {
 			return "";
 		}
 		return searchHistory.get(index);
+	}
+
+	public static void clearSearchHistory() {
+		lastSearchText = "";
+		searchHistory.clear();
+	}
+
+	public boolean isSearchHistoryEnabled() {
+		return searchHistoryMode != SearchHistoryMode.OFF;
+	}
+
+	public boolean shouldRestoreLastSearch() {
+		return searchHistoryMode == SearchHistoryMode.ON_AND_RESTORE_LAST_SEARCH;
 	}
 	
 	public Set<String> blacklistedContainerIds() {
@@ -548,7 +578,7 @@ public final class ReachCraftingConfig {
 		defaults.reachCraftPreferInventory = DEFAULT_REACH_CRAFT_PREFER_INVENTORY;
 		defaults.putPulledResourcesBack = DEFAULT_PUT_PULLED_RESOURCES_BACK;
 		defaults.restoreInventoryItemPositions = DEFAULT_RESTORE_INVENTORY_ITEM_POSITIONS;
-		defaults.rememberPreviousSearch = DEFAULT_REMEMBER_PREVIOUS_SEARCH;
+		defaults.searchHistoryMode = DEFAULT_SEARCH_HISTORY_MODE;
 		defaults.showFilterOutlines = DEFAULT_SHOW_FILTER_OUTLINES;
 		defaults.autoCraftEnabled = DEFAULT_AUTO_CRAFT_ENABLED;
 		defaults.autoCraftEnabledMode = DEFAULT_AUTO_CRAFT_ENABLED_MODE;
@@ -619,6 +649,12 @@ public final class ReachCraftingConfig {
 		WHILE_RESULT_OR_INVENTORY_SLOT_HOVERED
 	}
 
+	public enum SearchHistoryMode {
+		OFF,
+		ON,
+		ON_AND_RESTORE_LAST_SEARCH
+	}
+
 	public enum AutoCraftHandling {
 		TOGGLE,
 		HOLD
@@ -650,6 +686,7 @@ public final class ReachCraftingConfig {
 		private Boolean putPulledResourcesBack;
 		private Boolean restoreInventoryItemPositions;
 		private Boolean rememberPreviousSearch;
+		private SearchHistoryMode searchHistoryMode;
 		private OutlineDisplayMode showFilterOutlines;
 		private Boolean showTotalOutputCounts;
 		private InputCounterVisibility inputCounterVisibility;
@@ -687,7 +724,7 @@ public final class ReachCraftingConfig {
 			this.reachCraftPreferInventory = config.reachCraftPreferInventory;
 			this.putPulledResourcesBack = config.putPulledResourcesBack;
 			this.restoreInventoryItemPositions = config.restoreInventoryItemPositions;
-			this.rememberPreviousSearch = config.rememberPreviousSearch;
+			this.searchHistoryMode = config.searchHistoryMode;
 			this.showFilterOutlines = config.showFilterOutlines;
 			this.showTotalOutputCounts = config.showTotalOutputCounts;
 			this.inputCounterVisibility = config.inputCounterVisibility;

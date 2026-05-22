@@ -7,6 +7,8 @@
 		"AbstractContainerScreenMixin",
 		"AbstractRecipeBookScreenAccessor",
 		"ClientRecipeBookAccessor",
+		"EditBoxAccessor",
+		"KeyMappingAccessor",
 		"MinecraftInteractionBlockMixin",
 		"MultiPlayerGameModeMixin",
 		"OverlayRecipeButtonMixin",

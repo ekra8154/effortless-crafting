@@ -3,11 +3,21 @@ plugins {
 	id 'maven-publish'
 }
 
+def formatMinecraftSupportLabel = { String supportRange ->
+	def normalizedRange = supportRange.trim()
+	if (normalizedRange.contains('-')) {
+		return normalizedRange.split('-', 2).collect { it.trim().replaceAll(/(?i)\.x\b/, '.X') }.join('-')
+	}
+	return normalizedRange.replaceAll(/(?i)\.x\b/, '.X')
+}
+
+def buildArchiveName = "${project.archives_base_name}-fabric-${formatMinecraftSupportLabel(project.minecraft_support_range)}"
+
 version = project.mod_version
 group = project.maven_group
 
 base {
-	archivesName = project.archives_base_name
+	archivesName = buildArchiveName
 }
 
 repositories {
@@ -43,9 +53,13 @@ dependencies {
 
 processResources {
 	inputs.property "version", project.version
+	inputs.property "minecraft_support_range", project.minecraft_support_range
 
 	filesMatching("fabric.mod.json") {
-		expand "version": inputs.properties.version
+		expand(
+			"version": inputs.properties.version,
+			"minecraft_support_range": inputs.properties.minecraft_support_range
+		)
 	}
 }
 
@@ -62,16 +76,25 @@ java {
 
 jar {
 	inputs.property "archivesName", project.base.archivesName
+	archiveVersion = "v${project.version}"
 
 	from("LICENSE") {
 		rename { "${it}_${inputs.properties.archivesName}"}
 	}
 }
 
+tasks.named("sourcesJar") {
+	archiveVersion = "v${project.version}"
+}
+
+tasks.matching { it.name == "remapJar" }.configureEach {
+	archiveVersion = "v${project.version}"
+}
+
 publishing {
 	publications {
 		create("mavenJava", MavenPublication) {
-			artifactId = project.archives_base_name
+			artifactId = buildArchiveName
 			from components.java
 		}
 	}
