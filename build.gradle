@@ -91,6 +91,10 @@ tasks.matching { it.name == "remapJar" }.configureEach {
 	archiveVersion = "v${project.version}"
 }
 
+tasks.matching { it.name == "remapSourcesJar" }.configureEach {
+	archiveVersion = "v${project.version}"
+}
+
 publishing {
 	publications {
 		create("mavenJava", MavenPublication) {
