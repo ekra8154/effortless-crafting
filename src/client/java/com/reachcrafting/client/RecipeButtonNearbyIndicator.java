@@ -12,6 +12,11 @@ import net.minecraft.world.item.crafting.display.RecipeDisplayId;
 import net.minecraft.client.gui.screens.recipebook.RecipeCollection;
 
 public final class RecipeButtonNearbyIndicator {
+	private static long lastInventoryHash = 0;
+	private static long lastNearbyRevision = -1;
+	private static final Map<RecipeDisplayId, Boolean> mainCache = new java.util.HashMap<>();
+	private static final Map<RecipeDisplayId, Boolean> overlayCache = new java.util.HashMap<>();
+
 	private RecipeButtonNearbyIndicator() {
 	}
 
@@ -46,7 +51,23 @@ public final class RecipeButtonNearbyIndicator {
 			minecraft.getCameraEntity(),
 			player.blockInteractionRange()
 		);
+		long nearbyRevision = reachableView.revision();
+		long inventoryHash = computeInventoryHash(player, screen);
+
+		if (nearbyRevision != lastNearbyRevision || inventoryHash != lastInventoryHash) {
+			lastNearbyRevision = nearbyRevision;
+			lastInventoryHash = inventoryHash;
+			mainCache.clear();
+			overlayCache.clear();
+		}
+
+		Map<RecipeDisplayId, Boolean> cacheMap = explicitVariantSelection ? overlayCache : mainCache;
+		if (cacheMap.containsKey(recipe)) {
+			return cacheMap.get(recipe);
+		}
+
 		if (reachableView.isEmpty()) {
+			cacheMap.put(recipe, false);
 			return false;
 		}
 
@@ -86,6 +107,7 @@ public final class RecipeButtonNearbyIndicator {
 			desiredVariantCopies
 		);
 		if (selection == null) {
+			cacheMap.put(recipe, false);
 			return false;
 		}
 
@@ -100,6 +122,7 @@ public final class RecipeButtonNearbyIndicator {
 			policy
 		);
 		if (!localPlan.hasMissingIngredients()) {
+			cacheMap.put(recipe, false);
 			return false;
 		}
 
@@ -112,7 +135,34 @@ public final class RecipeButtonNearbyIndicator {
 			desiredVariantCopies,
 			policy
 		);
-		return !cachedPlan.hasMissingIngredients();
+		boolean result = !cachedPlan.hasMissingIngredients();
+		cacheMap.put(recipe, result);
+		return result;
+	}
+
+	private static long computeInventoryHash(LocalPlayer player, Screen screen) {
+		long hash = 0;
+		for (ItemStack stack : player.getInventory().getNonEquipmentItems()) {
+			if (!stack.isEmpty()) {
+				hash = hash * 31 + net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).hashCode();
+				hash = hash * 31 + stack.getCount();
+			} else {
+				hash = hash * 31;
+			}
+		}
+		if (screen instanceof net.minecraft.client.gui.screens.inventory.AbstractContainerScreen<?> containerScreen) {
+			int gridSlotCount = screen instanceof InventoryScreen ? 4 : screen instanceof CraftingScreen ? 9 : 0;
+			for (int slotIndex = 1; slotIndex <= gridSlotCount; slotIndex++) {
+				ItemStack stack = containerScreen.getMenu().getSlot(slotIndex).getItem();
+				if (!stack.isEmpty()) {
+					hash = hash * 31 + net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).hashCode();
+					hash = hash * 31 + stack.getCount();
+				} else {
+					hash = hash * 31;
+				}
+			}
+		}
+		return hash;
 	}
 
 	private static int currentReservedCraftCopies(AvailableItemSnapshot availableItems) {
