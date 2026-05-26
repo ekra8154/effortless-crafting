@@ -102,6 +102,10 @@ public final class RecipeBookClickCapture {
 		CONTROLLER.scheduleReplay(action, remainingClicks, allowNearby, craftAll, refillableBulkMaxMode);
 	}
 
+	public static void scheduleReplay(HeldRecipeAction action, int remainingClicks, boolean allowNearby, boolean craftAll, boolean refillableBulkMaxMode, boolean autoCraftRequested) {
+		CONTROLLER.scheduleReplay(action, remainingClicks, allowNearby, craftAll, refillableBulkMaxMode, autoCraftRequested);
+	}
+
 	public static boolean isBulkModeEnabled() {
 		return AutoCraftController.isBulkModeEnabled();
 	}
@@ -163,6 +167,6 @@ public final class RecipeBookClickCapture {
 	public record PendingHeldRecipe(HeldRecipeAction action, int clickCount, boolean locked) {
 	}
 
-	public record ReplayBatch(HeldRecipeAction action, int remainingClicks, boolean allowNearby, boolean craftAll, boolean refillableBulkMaxMode) {
+	public record ReplayBatch(HeldRecipeAction action, int remainingClicks, boolean allowNearby, boolean craftAll, boolean refillableBulkMaxMode, boolean autoCraftRequested) {
 	}
 }

@@ -6,6 +6,7 @@ import com.reachcrafting.client.mixin.AbstractRecipeBookScreenAccessor;
 import com.reachcrafting.client.mixin.RecipeBookComponentAccessor;
 import com.reachcrafting.client.mixin.RecipeBookPageAccessor;
 import java.util.Map;
+import java.util.Optional;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractRecipeBookScreen;
@@ -41,6 +42,7 @@ final class RecipeClickExecutor {
 		boolean explicitVariantSelection,
 		int requestedClicks,
 		boolean refillableBulkMaxMode,
+		boolean autoCraftRequested,
 		HeldRecipeQueueState state
 	) {
 		AvailableItemSnapshot availableItems = AvailableItemSnapshot.capture(player, screen);
@@ -157,6 +159,12 @@ final class RecipeClickExecutor {
 			deficitReport.compactMissingSummary()
 		);
 
+		int effectiveRequestedClicks = refillableBulkMaxMode
+			? Math.max(requestedClicks, 1)
+			: effectiveCraftAll
+				? deficitReport.possibleCopies()
+				: requestedClicks;
+
 		boolean useDryRun = forceDryRun || allowNearbyChests;
 		if (deficitReport.hasMissingIngredients()) {
 			ReachCraftingModClient.sendDebugChat("Missing from inventory: " + deficitReport.compactMissingSummary());
@@ -167,11 +175,65 @@ final class RecipeClickExecutor {
 			ReachCraftingModClient.sendDebugChat("Ready: " + outputLabel);
 		}
 
-		int effectiveRequestedClicks = refillableBulkMaxMode
-			? Math.max(requestedClicks, 1)
-			: effectiveCraftAll
-				? deficitReport.possibleCopies()
-				: requestedClicks;
+		ReachCraftingConfig.ChainCraftingMode chainMode = ReachCraftingConfig.get().chainCraftingMode();
+		if (deficitReport.hasMissingIngredients()) {
+			ReachCraftingMod.LOGGER.info(
+				"[chain_gate] recipe={} missing={} auto_requested={} mode={} use_dry_run={} force_dry_run={} allow_nearby={} bulk_mode={} craft_all={} effective_craft_all={} requested_clicks={} desired_copies={} available={} local_available={}",
+				selectedRecipe.recipeId(),
+				deficitReport.compactMissingSummary(),
+				autoCraftRequested,
+				chainMode,
+				useDryRun,
+				forceDryRun,
+				allowNearbyChests,
+				AutoCraftController.isBulkModeEnabled(),
+				craftAll,
+				effectiveCraftAll,
+				requestedClicks,
+				desiredVariantCopies,
+				AvailableItemSnapshot.formatCounts(availableCounts),
+				AvailableItemSnapshot.formatCounts(localAvailableCounts)
+			);
+		}
+
+		if (deficitReport.hasMissingIngredients()
+			&& autoCraftRequested
+			&& chainMode != ReachCraftingConfig.ChainCraftingMode.DISABLED) {
+			Optional<ChainCraftPlan> chainPlan = planChainCraft(
+				minecraft,
+				player,
+				selectedRecipe,
+				availableCounts,
+				allowNearbyChests,
+				effectiveCraftAll,
+				requestedClicks,
+				desiredVariantCopies
+			);
+			if (chainPlan.isPresent()) {
+				ReachCraftingMod.LOGGER.info(
+					"[chain_plan] available recipe={} requested={} steps={} allow_nearby={} bulk_mode={}",
+					selectedRecipe.recipeId(),
+					chainPlan.get().finalRecipeCopies(),
+					chainPlan.get().steps().size(),
+					allowNearbyChests,
+					AutoCraftController.isBulkModeEnabled()
+				);
+				if (AutoCraftController.isBulkModeEnabled()) {
+					ReachCraftingModClient.sendChat(net.minecraft.network.chat.Component.translatable("message.reachcrafting.chain_crafting.bulk_unsupported").getString());
+					return;
+				}
+				ChainCraftPopupController.handlePlan(chainPlan.get());
+				return;
+			}
+			ReachCraftingMod.LOGGER.info(
+				"[chain_plan] unavailable recipe={} requested={} allow_nearby={} missing={}",
+				selectedRecipe.recipeId(),
+				effectiveCraftAll ? requestedClicks : desiredVariantCopies,
+				allowNearbyChests,
+				deficitReport.compactMissingSummary()
+			);
+		}
+
 		boolean nearbyResourcesRequired = allowNearbyChests
 			&& areNearbyResourcesRequired(craftAll, effectiveRequestedClicks, localDeficitReport.possibleCopies());
 		if (useDryRun) {
@@ -440,7 +502,7 @@ final class RecipeClickExecutor {
 		RecipeIngredientSummary ingredientSummary
 	) {
 		com.reachcrafting.ReachCraftingMod.LOGGER.info(
-			"[bulk_arm] clicked_recipe={} resolved_recipe={} requestedClicks={} craftAll={} allowNearby={} bulk_mode={} explicit_variant={} refillable={} expected_output={}",
+			"[bulk_arm] clicked_recipe={} resolved_recipe={} requestedClicks={} craftAll={} allowNearby={} nearby_required={} bulk_mode={} explicit_variant={} refillable={} expected_output={}",
 			clickedRecipeId,
 			recipeId,
 			requestedClicks,
@@ -498,6 +560,33 @@ final class RecipeClickExecutor {
 			continuationMode,
 			expectedOutput,
 			ingredientSummary
+		);
+	}
+
+	private static Optional<ChainCraftPlan> planChainCraft(
+		Minecraft minecraft,
+		LocalPlayer player,
+		RecipeVariantResolver.Selection selectedRecipe,
+		Map<String, Integer> availableCounts,
+		boolean allowNearbyChests,
+		boolean effectiveCraftAll,
+		int requestedClicks,
+		int desiredVariantCopies
+	) {
+		if (effectiveCraftAll) {
+			int upperBound = Math.max(requestedClicks, 1);
+			if (AutoCraftController.isBulkModeEnabled()) {
+				return ChainCraftPlanner.plan(minecraft, player, selectedRecipe, availableCounts, allowNearbyChests, 1);
+			}
+			return ChainCraftPlanner.planMax(minecraft, player, selectedRecipe, availableCounts, allowNearbyChests, upperBound);
+		}
+		return ChainCraftPlanner.plan(
+			minecraft,
+			player,
+			selectedRecipe,
+			availableCounts,
+			allowNearbyChests,
+			Math.max(desiredVariantCopies, 1)
 		);
 	}
 

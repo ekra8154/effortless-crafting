@@ -163,6 +163,17 @@ public final class ReachCraftingConfigScreen {
 			.setEnumNameProvider(value -> Component.translatable("enum.reachcrafting.auto_craft_handling." + value.name().toLowerCase()))
 			.build());
 
+		autoGroup.add(entries.startEnumSelector(
+				Component.translatable("option.reachcrafting.chain_crafting_mode"),
+				ReachCraftingConfig.ChainCraftingMode.class,
+				config.chainCraftingMode()
+			)
+			.setDefaultValue(ReachCraftingConfig.ChainCraftingMode.CONFIRM)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.chain_crafting_mode"))
+			.setSaveConsumer(config::setChainCraftingMode)
+			.setEnumNameProvider(value -> Component.translatable("enum.reachcrafting.chain_crafting_mode." + value.name().toLowerCase()))
+			.build());
+
 		autoGroup.add(entries.startBooleanToggle(
 				Component.translatable("option.reachcrafting.alt_as_request_key"),
 				config.altAsRequestKey()

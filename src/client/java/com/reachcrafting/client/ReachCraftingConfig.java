@@ -46,6 +46,7 @@ public final class ReachCraftingConfig {
 	private static final boolean DEFAULT_AUTO_CRAFT_OFF_AFTER_BULK = false;
 	private static final boolean DEFAULT_BULK_VARIANT_SWITCHING = false;
 	private static final AutoCraftHandling DEFAULT_AUTO_CRAFT_HANDLING = AutoCraftHandling.HOLD;
+	private static final ChainCraftingMode DEFAULT_CHAIN_CRAFTING_MODE = ChainCraftingMode.CONFIRM;
 	private static final boolean DEFAULT_SHOW_CRAFT_ABORTED_MESSAGE = true;
 	private static final boolean DEFAULT_SHOW_BULK_CRAFT_SUMMARY_MESSAGE = true;
 	private static final boolean DEFAULT_SHOW_MISSING_INGREDIENTS_MESSAGE = true;
@@ -94,6 +95,7 @@ public final class ReachCraftingConfig {
 	private boolean autoCraftOffAfterBulk;
 	private boolean bulkVariantSwitching;
 	private AutoCraftHandling autoCraftHandling;
+	private ChainCraftingMode chainCraftingMode;
 	private boolean showCraftAbortedMessage;
 	private boolean showBulkCraftSummaryMessage;
 	private boolean showMissingIngredientsMessage;
@@ -158,6 +160,7 @@ public final class ReachCraftingConfig {
 			instance.autoCraftOffAfterBulk = stored.autoCraftOffAfterBulk != null ? stored.autoCraftOffAfterBulk : DEFAULT_AUTO_CRAFT_OFF_AFTER_BULK;
 			instance.bulkVariantSwitching = stored.bulkVariantSwitching != null ? stored.bulkVariantSwitching : DEFAULT_BULK_VARIANT_SWITCHING;
 			instance.autoCraftHandling = stored.autoCraftHandling != null ? stored.autoCraftHandling : DEFAULT_AUTO_CRAFT_HANDLING;
+			instance.chainCraftingMode = stored.chainCraftingMode != null ? stored.chainCraftingMode : DEFAULT_CHAIN_CRAFTING_MODE;
 			instance.showCraftAbortedMessage = stored.showCraftAbortedMessage != null ? stored.showCraftAbortedMessage : DEFAULT_SHOW_CRAFT_ABORTED_MESSAGE;
 			instance.showBulkCraftSummaryMessage = stored.showBulkCraftSummaryMessage != null ? stored.showBulkCraftSummaryMessage : DEFAULT_SHOW_BULK_CRAFT_SUMMARY_MESSAGE;
 			instance.showMissingIngredientsMessage = stored.showMissingIngredientsMessage != null ? stored.showMissingIngredientsMessage : DEFAULT_SHOW_MISSING_INGREDIENTS_MESSAGE;
@@ -455,6 +458,14 @@ public final class ReachCraftingConfig {
 		this.autoCraftHandling = autoCraftHandling != null ? autoCraftHandling : DEFAULT_AUTO_CRAFT_HANDLING;
 	}
 
+	public ChainCraftingMode chainCraftingMode() {
+		return chainCraftingMode;
+	}
+
+	public void setChainCraftingMode(ChainCraftingMode chainCraftingMode) {
+		this.chainCraftingMode = chainCraftingMode != null ? chainCraftingMode : DEFAULT_CHAIN_CRAFTING_MODE;
+	}
+
 	public boolean showCraftAbortedMessage() {
 		return showCraftAbortedMessage;
 	}
@@ -592,6 +603,7 @@ public final class ReachCraftingConfig {
 		defaults.autoCraftOffAfterBulk = DEFAULT_AUTO_CRAFT_OFF_AFTER_BULK;
 		defaults.bulkVariantSwitching = DEFAULT_BULK_VARIANT_SWITCHING;
 		defaults.autoCraftHandling = DEFAULT_AUTO_CRAFT_HANDLING;
+		defaults.chainCraftingMode = DEFAULT_CHAIN_CRAFTING_MODE;
 		defaults.showCraftAbortedMessage = DEFAULT_SHOW_CRAFT_ABORTED_MESSAGE;
 		defaults.showBulkCraftSummaryMessage = DEFAULT_SHOW_BULK_CRAFT_SUMMARY_MESSAGE;
 		defaults.showMissingIngredientsMessage = DEFAULT_SHOW_MISSING_INGREDIENTS_MESSAGE;
@@ -660,6 +672,12 @@ public final class ReachCraftingConfig {
 		HOLD
 	}
 
+	public enum ChainCraftingMode {
+		DISABLED,
+		CONFIRM,
+		ALWAYS
+	}
+
 	public enum AutoCraftMode {
 		NORMAL,
 		BULK
@@ -701,6 +719,7 @@ public final class ReachCraftingConfig {
 		private Boolean autoCraftOffAfterBulk;
 		private Boolean bulkVariantSwitching;
 		private AutoCraftHandling autoCraftHandling;
+		private ChainCraftingMode chainCraftingMode;
 		private Boolean showCraftAbortedMessage;
 		private Boolean showBulkCraftSummaryMessage;
 		private Boolean showMissingIngredientsMessage;
@@ -738,6 +757,7 @@ public final class ReachCraftingConfig {
 			this.autoCraftOffAfterBulk = config.autoCraftOffAfterBulk;
 			this.bulkVariantSwitching = config.bulkVariantSwitching;
 			this.autoCraftHandling = config.autoCraftHandling;
+			this.chainCraftingMode = config.chainCraftingMode;
 			this.showCraftAbortedMessage = config.showCraftAbortedMessage;
 			this.showBulkCraftSummaryMessage = config.showBulkCraftSummaryMessage;
 			this.showMissingIngredientsMessage = config.showMissingIngredientsMessage;
