@@ -171,8 +171,9 @@ final class RecipeClickExecutor {
 
 		// Chain already resolved local-only intermediate dependencies up front, so
 		// these replayed steps can use the faster direct placement path.
-		boolean localOnlyChainReplay = ChainCraftController.isActive() && !allowNearbyChests;
-		boolean useDryRun = allowNearbyChests || (forceDryRun && !localOnlyChainReplay);
+		boolean directChainReplay = ChainCraftController.isActive()
+			&& (!allowNearbyChests || ChainCraftController.isUsingPreStagedNearbyResources());
+		boolean useDryRun = (allowNearbyChests && !directChainReplay) || (forceDryRun && !directChainReplay);
 		if (deficitReport.hasMissingIngredients()) {
 			ReachCraftingModClient.sendDebugChat("Missing from inventory: " + deficitReport.compactMissingSummary());
 			if (!useDryRun) {
@@ -354,12 +355,15 @@ final class RecipeClickExecutor {
 		MultiPlayerGameMode gameMode = minecraft.gameMode;
 		if (gameMode != null) {
 			int queueLimit = resolveRecipeQueueLimit(minecraft, selectedRecipe.recipeId(), collection);
-			boolean useBulkPlace = effectiveCraftAll || (AutoCraftController.isBulkModeEnabled() && requestedClicks >= queueLimit);
+			boolean useBulkPlace = effectiveCraftAll
+				|| (AutoCraftController.isBulkModeEnabled() && requestedClicks >= queueLimit)
+				|| (directChainReplay && requestedClicks >= queueLimit);
+			boolean repeatDirectPlacement = AutoCraftController.isBulkModeEnabled() || directChainReplay;
 
 			if (useBulkPlace) {
 				gameMode.handlePlaceRecipe(player.containerMenu.containerId, selectedRecipe.recipeId(), true);
 			} else {
-				int iterations = AutoCraftController.isBulkModeEnabled() ? Math.max(effectiveRequestedClicks, 1) : 1;
+				int iterations = repeatDirectPlacement ? Math.max(effectiveRequestedClicks, 1) : 1;
 				for (int i = 0; i < iterations; i++) {
 					gameMode.handlePlaceRecipe(player.containerMenu.containerId, selectedRecipe.recipeId(), false);
 				}

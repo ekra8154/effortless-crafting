@@ -36,7 +36,6 @@ public final class ChainCraftController {
 		}
 		abort(false);
 		activeRun = ChainCraftRun.start(plan);
-		scheduleCurrentStep();
 	}
 
 	static boolean isActive() {
@@ -45,6 +44,10 @@ public final class ChainCraftController {
 
 	static boolean isRunningIntermediateStep() {
 		return activeRun != null && activeRun.currentStepIndex() < activeRun.plan().steps().size() - 1;
+	}
+
+	static boolean isUsingPreStagedNearbyResources() {
+		return activeRun != null && activeRun.preStagedNearbyResources();
 	}
 
 	static void abort(boolean report) {
@@ -124,6 +127,34 @@ public final class ChainCraftController {
 			return;
 		}
 		if (!activeRun.waitingForStep()) {
+			if (activeRun.waitingForStaging()) {
+				if (NearbyContainerDryRun.isActiveSessionRunning()) {
+					return;
+				}
+				boolean fullyAvailable = ChainCraftStagingPlanner.isFullyAvailableLocally(client, activeRun.plan());
+				ReachCraftingMod.LOGGER.info(
+					"[chain_stage] completed available={} missing={}",
+					fullyAvailable,
+					AvailableItemSnapshot.formatCounts(ChainCraftStagingPlanner.missingStagingCounts(client, activeRun.plan()))
+				);
+				activeRun = activeRun.withStagingComplete(fullyAvailable);
+				return;
+			}
+			if (!activeRun.stagingAttempted() && shouldAttemptPreStage(client, activeRun.plan())) {
+				Map<String, Integer> missingCounts = ChainCraftStagingPlanner.missingStagingCounts(client, activeRun.plan());
+				if (missingCounts.isEmpty()) {
+					activeRun = activeRun.withStagingComplete(true);
+					return;
+				}
+				ReachCraftingMod.LOGGER.info("[chain_stage] request missing={}", AvailableItemSnapshot.formatCounts(missingCounts));
+				NearbyContainerDryRun.startCountStaging(missingCounts, "chain_crafting");
+				if (NearbyContainerDryRun.isActiveSessionRunning()) {
+					activeRun = activeRun.withWaitingForStaging();
+					return;
+				}
+				activeRun = activeRun.withStagingComplete(false);
+				return;
+			}
 			if (!ContainerUtils.isInputQueueActive()
 				&& !ContainerUtils.isAutoMovePending()
 				&& !NearbyContainerDryRun.isActiveSessionRunning()) {
@@ -183,6 +214,14 @@ public final class ChainCraftController {
 			retry.refillableBulkMaxMode(),
 			true
 		);
+	}
+
+	private static boolean shouldAttemptPreStage(Minecraft client, ChainCraftPlan plan) {
+		if (client == null || client.player == null || plan == null) {
+			return false;
+		}
+		return plan.steps().stream().anyMatch(ChainCraftPlan.Step::allowNearby)
+			&& ReachCraftingConfig.get().enableNearbyContainerUsage();
 	}
 
 	private static void scheduleCurrentStep() {
@@ -327,13 +366,16 @@ public final class ChainCraftController {
 		ChainCraftPlan plan,
 		int currentStepIndex,
 		boolean waitingForStep,
+		boolean waitingForStaging,
+		boolean stagingAttempted,
+		boolean preStagedNearbyResources,
 		int waitTicks,
 		int remainingStepCopies,
 		int scheduledBatchCopies,
 		int baselineOutputCount
 	) {
 		private static ChainCraftRun start(ChainCraftPlan plan) {
-			return new ChainCraftRun(plan, 0, false, 0, plan.steps().getFirst().recipeCopies(), 0, 0);
+			return new ChainCraftRun(plan, 0, false, false, false, false, 0, plan.steps().getFirst().recipeCopies(), 0, 0);
 		}
 
 		ChainCraftPlan.Step currentStep() {
@@ -345,7 +387,15 @@ public final class ChainCraftController {
 		}
 
 		ChainCraftRun withScheduledBatch(int batchCopies, int outputCountBeforeBatch) {
-			return new ChainCraftRun(plan, currentStepIndex, true, 0, remainingStepCopies, Math.max(batchCopies, 1), outputCountBeforeBatch);
+			return new ChainCraftRun(plan, currentStepIndex, true, false, stagingAttempted, preStagedNearbyResources, 0, remainingStepCopies, Math.max(batchCopies, 1), outputCountBeforeBatch);
+		}
+
+		ChainCraftRun withWaitingForStaging() {
+			return new ChainCraftRun(plan, currentStepIndex, false, true, true, false, 0, remainingStepCopies, scheduledBatchCopies, baselineOutputCount);
+		}
+
+		ChainCraftRun withStagingComplete(boolean preStaged) {
+			return new ChainCraftRun(plan, currentStepIndex, false, false, true, preStaged, 0, remainingStepCopies, scheduledBatchCopies, baselineOutputCount);
 		}
 
 		ChainCraftRun withCompletedBatch() {
@@ -366,7 +416,7 @@ public final class ChainCraftController {
 					currentStepIndex,
 					remaining
 				);
-				return new ChainCraftRun(plan, currentStepIndex, false, 0, remaining, 0, 0);
+				return new ChainCraftRun(plan, currentStepIndex, false, false, stagingAttempted, preStagedNearbyResources, 0, remaining, 0, 0);
 			}
 			int nextIndex = currentStepIndex + 1;
 			if (nextIndex >= plan.steps().size()) {
@@ -378,11 +428,11 @@ public final class ChainCraftController {
 				currentStepIndex,
 				nextIndex
 			);
-			return new ChainCraftRun(plan, nextIndex, false, 0, plan.steps().get(nextIndex).recipeCopies(), 0, 0);
+			return new ChainCraftRun(plan, nextIndex, false, false, stagingAttempted, preStagedNearbyResources, 0, plan.steps().get(nextIndex).recipeCopies(), 0, 0);
 		}
 
 		ChainCraftRun withWaiting(boolean updatedWaitingForStep, int updatedWaitTicks) {
-			return new ChainCraftRun(plan, currentStepIndex, updatedWaitingForStep, updatedWaitTicks, remainingStepCopies, scheduledBatchCopies, baselineOutputCount);
+			return new ChainCraftRun(plan, currentStepIndex, updatedWaitingForStep, waitingForStaging, stagingAttempted, preStagedNearbyResources, updatedWaitTicks, remainingStepCopies, scheduledBatchCopies, baselineOutputCount);
 		}
 
 		private static int maxBatchCopies(ChainCraftPlan.Step step) {

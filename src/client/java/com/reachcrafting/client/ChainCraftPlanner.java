@@ -225,7 +225,7 @@ final class ChainCraftPlanner {
 		}
 		String outputId = itemId(candidate.displayStack());
 		state.counts.merge(outputId, Math.max(candidate.displayStack().getCount(), 1) * recipeCopies, Integer::sum);
-		state.schedule(candidate, recipeCopies, finalStep);
+		state.schedule(candidate, recipeCopies, finalStep, required);
 		ReachCraftingMod.LOGGER.info(
 			"[chain_debug] recipe_planned recipe={} output={} copies={} counts={}",
 			candidate.recipeId(),
@@ -686,14 +686,14 @@ final class ChainCraftPlanner {
 			scheduledCrafts.putAll(copyScheduledCrafts(other.scheduledCrafts));
 		}
 
-		private void schedule(Candidate candidate, int recipeCopies, boolean finalStep) {
+		private void schedule(Candidate candidate, int recipeCopies, boolean finalStep, Map<String, Integer> requiredInputs) {
 			StepKey key = StepKey.from(candidate, finalStep);
 			ScheduledCraft existing = scheduledCrafts.get(key);
 			if (existing == null) {
-				scheduledCrafts.put(key, new ScheduledCraft(candidate, recipeCopies, finalStep));
+				scheduledCrafts.put(key, new ScheduledCraft(candidate, recipeCopies, finalStep, requiredInputs));
 				return;
 			}
-			existing.addCopies(recipeCopies);
+			existing.addCopies(recipeCopies, requiredInputs);
 		}
 
 		private List<ChainCraftPlan.Step> toSteps(boolean allowNearby) {
@@ -789,20 +789,25 @@ final class ChainCraftPlanner {
 	private static final class ScheduledCraft {
 		private final Candidate candidate;
 		private final boolean finalStep;
+		private final Map<String, Integer> requiredInputs;
 		private int recipeCopies;
 
-		private ScheduledCraft(Candidate candidate, int recipeCopies, boolean finalStep) {
+		private ScheduledCraft(Candidate candidate, int recipeCopies, boolean finalStep, Map<String, Integer> requiredInputs) {
 			this.candidate = candidate;
 			this.recipeCopies = Math.max(recipeCopies, 1);
 			this.finalStep = finalStep;
+			this.requiredInputs = new LinkedHashMap<>(requiredInputs);
 		}
 
-		private void addCopies(int copies) {
+		private void addCopies(int copies, Map<String, Integer> additionalRequiredInputs) {
 			recipeCopies += Math.max(copies, 1);
+			for (Map.Entry<String, Integer> entry : additionalRequiredInputs.entrySet()) {
+				requiredInputs.merge(entry.getKey(), entry.getValue(), Integer::sum);
+			}
 		}
 
 		private ScheduledCraft copy() {
-			return new ScheduledCraft(candidate, recipeCopies, finalStep);
+			return new ScheduledCraft(candidate, recipeCopies, finalStep, requiredInputs);
 		}
 
 		private ChainCraftPlan.Step toStep(boolean allowNearby) {
@@ -811,6 +816,7 @@ final class ChainCraftPlanner {
 				candidate.collection(),
 				candidate.displayStack(),
 				candidate.ingredientSummary(),
+				requiredInputs,
 				recipeCopies,
 				allowNearby,
 				finalStep
