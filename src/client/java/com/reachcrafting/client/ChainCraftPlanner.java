@@ -124,8 +124,7 @@ final class ChainCraftPlanner {
 		Map<String, Integer> availableCounts,
 		int requestedRecipeCopies
 	) {
-		Map<String, Integer> virtualCounts = new LinkedHashMap<>(availableCounts);
-		List<ChainCraftPlan.Step> steps = new ArrayList<>();
+		PlanningState state = new PlanningState(new LinkedHashMap<>(availableCounts), new LinkedHashMap<>());
 		Candidate finalCandidate = new Candidate(
 			finalSelection.recipeId(),
 			resolveCollection(finalSelection.recipeId()),
@@ -139,16 +138,17 @@ final class ChainCraftPlanner {
 			finalCandidate.recipeId(),
 			ContainerUtils.formatStack(finalCandidate.displayStack()),
 			requestedRecipeCopies,
-			AvailableItemSnapshot.formatCounts(virtualCounts)
+			AvailableItemSnapshot.formatCounts(state.counts)
 		);
-		boolean planned = planRecipe(finalCandidate, requestedRecipeCopies, virtualCounts, steps, new HashSet<>(), true);
+		boolean planned = planRecipe(finalCandidate, requestedRecipeCopies, state, new HashSet<>(), true);
+		List<ChainCraftPlan.Step> steps = state.toSteps(allowNearby);
 		if (!planned || steps.size() <= 1) {
 			ReachCraftingMod.LOGGER.info(
 				"[chain_debug] unavailable final_recipe={} planned={} steps={} final_counts={}",
 				finalCandidate.recipeId(),
 				planned,
 				steps.size(),
-				AvailableItemSnapshot.formatCounts(virtualCounts)
+				AvailableItemSnapshot.formatCounts(state.counts)
 			);
 			return Optional.empty();
 		}
@@ -156,7 +156,7 @@ final class ChainCraftPlanner {
 			"[chain_debug] planned final_recipe={} steps={} final_counts={}",
 			finalCandidate.recipeId(),
 			formatSteps(steps),
-			AvailableItemSnapshot.formatCounts(virtualCounts)
+			AvailableItemSnapshot.formatCounts(state.counts)
 		);
 		return Optional.of(new ChainCraftPlan(steps, finalSelection.displayStack(), requestedRecipeCopies));
 	}
@@ -164,8 +164,7 @@ final class ChainCraftPlanner {
 	private boolean planRecipe(
 		Candidate candidate,
 		int recipeCopies,
-		Map<String, Integer> virtualCounts,
-		List<ChainCraftPlan.Step> steps,
+		PlanningState state,
 		Set<String> resolvingItemIds,
 		boolean finalStep
 	) {
@@ -191,25 +190,25 @@ final class ChainCraftPlanner {
 		}
 
 		for (Map.Entry<String, Integer> entry : required.entrySet()) {
-			if (!ensureItem(entry.getKey(), entry.getValue(), virtualCounts, steps, resolvingItemIds)) {
+			if (!ensureItem(entry.getKey(), entry.getValue(), state, resolvingItemIds)) {
 				ReachCraftingMod.LOGGER.info(
 					"[chain_debug] recipe_fail reason=ensure_exact_failed recipe={} output={} ingredient={} required={} counts={}",
 					candidate.recipeId(),
 					ContainerUtils.formatStack(candidate.displayStack()),
 					entry.getKey(),
 					entry.getValue(),
-					AvailableItemSnapshot.formatCounts(virtualCounts)
+					AvailableItemSnapshot.formatCounts(state.counts)
 				);
 				return false;
 			}
 		}
 
-		if (!planIngredientSlots(candidate, recipeCopies, flexibleSlots, 0, virtualCounts, steps, resolvingItemIds, required)) {
+		if (!planIngredientSlots(candidate, recipeCopies, flexibleSlots, 0, state, resolvingItemIds, required)) {
 			ReachCraftingMod.LOGGER.info(
 				"[chain_debug] recipe_fail reason=ingredient_slots_failed recipe={} output={} counts={} resolving={}",
 				candidate.recipeId(),
 				ContainerUtils.formatStack(candidate.displayStack()),
-				AvailableItemSnapshot.formatCounts(virtualCounts),
+				AvailableItemSnapshot.formatCounts(state.counts),
 				resolvingItemIds
 			);
 			return false;
@@ -222,25 +221,17 @@ final class ChainCraftPlanner {
 		);
 
 		for (Map.Entry<String, Integer> entry : required.entrySet()) {
-			subtract(virtualCounts, entry.getKey(), entry.getValue());
+			subtract(state.counts, entry.getKey(), entry.getValue());
 		}
 		String outputId = itemId(candidate.displayStack());
-		virtualCounts.merge(outputId, Math.max(candidate.displayStack().getCount(), 1) * recipeCopies, Integer::sum);
-		steps.add(new ChainCraftPlan.Step(
-			candidate.recipeId(),
-			candidate.collection(),
-			candidate.displayStack(),
-			candidate.ingredientSummary(),
-			recipeCopies,
-			allowNearby,
-			finalStep
-		));
+		state.counts.merge(outputId, Math.max(candidate.displayStack().getCount(), 1) * recipeCopies, Integer::sum);
+		state.schedule(candidate, recipeCopies, finalStep);
 		ReachCraftingMod.LOGGER.info(
 			"[chain_debug] recipe_planned recipe={} output={} copies={} counts={}",
 			candidate.recipeId(),
 			ContainerUtils.formatStack(candidate.displayStack()),
 			recipeCopies,
-			AvailableItemSnapshot.formatCounts(virtualCounts)
+			AvailableItemSnapshot.formatCounts(state.counts)
 		);
 		return true;
 	}
@@ -250,8 +241,7 @@ final class ChainCraftPlanner {
 		int recipeCopies,
 		List<RecipeIngredientSummary.IngredientSlot> slots,
 		int slotIndex,
-		Map<String, Integer> virtualCounts,
-		List<ChainCraftPlan.Step> steps,
+		PlanningState state,
 		Set<String> resolvingItemIds,
 		Map<String, Integer> required
 	) {
@@ -260,13 +250,12 @@ final class ChainCraftPlanner {
 		}
 
 		RecipeIngredientSummary.IngredientSlot slot = slots.get(slotIndex);
-		for (String itemId : orderedIngredientItems(slot, virtualCounts, resolvingItemIds)) {
-			Map<String, Integer> trialCounts = new LinkedHashMap<>(virtualCounts);
-			List<ChainCraftPlan.Step> trialSteps = new ArrayList<>(steps);
+		for (String itemId : orderedIngredientItems(slot, state.counts, resolvingItemIds)) {
+			PlanningState trialState = state.copy();
 			Map<String, Integer> trialRequired = new LinkedHashMap<>(required);
 			int totalRequired = trialRequired.getOrDefault(itemId, 0) + recipeCopies;
 			trialRequired.put(itemId, totalRequired);
-			if (!ensureItem(itemId, totalRequired, trialCounts, trialSteps, resolvingItemIds)) {
+			if (!ensureItem(itemId, totalRequired, trialState, resolvingItemIds)) {
 				ReachCraftingMod.LOGGER.info(
 					"[chain_debug] ingredient_choice_failed recipe={} output={} slot={} item={} required={} counts={}",
 					candidate.recipeId(),
@@ -274,15 +263,12 @@ final class ChainCraftPlanner {
 					slotIndex,
 					itemId,
 					totalRequired,
-					AvailableItemSnapshot.formatCounts(trialCounts)
+					AvailableItemSnapshot.formatCounts(trialState.counts)
 				);
 				continue;
 			}
-			if (planIngredientSlots(candidate, recipeCopies, slots, slotIndex + 1, trialCounts, trialSteps, resolvingItemIds, trialRequired)) {
-				virtualCounts.clear();
-				virtualCounts.putAll(trialCounts);
-				steps.clear();
-				steps.addAll(trialSteps);
+			if (planIngredientSlots(candidate, recipeCopies, slots, slotIndex + 1, trialState, resolvingItemIds, trialRequired)) {
+				state.replaceWith(trialState);
 				required.clear();
 				required.putAll(trialRequired);
 				return true;
@@ -295,7 +281,7 @@ final class ChainCraftPlanner {
 			ContainerUtils.formatStack(candidate.displayStack()),
 			slotIndex,
 			slot.itemIds(),
-			AvailableItemSnapshot.formatCounts(virtualCounts),
+			AvailableItemSnapshot.formatCounts(state.counts),
 			resolvingItemIds
 		);
 		return false;
@@ -304,11 +290,10 @@ final class ChainCraftPlanner {
 	private boolean ensureItem(
 		String itemId,
 		int requiredCount,
-		Map<String, Integer> virtualCounts,
-		List<ChainCraftPlan.Step> steps,
+		PlanningState state,
 		Set<String> resolvingItemIds
 	) {
-		int available = virtualCounts.getOrDefault(itemId, 0);
+		int available = state.counts.getOrDefault(itemId, 0);
 		List<Candidate> candidates = recipesByOutput.getOrDefault(itemId, List.of());
 		ReachCraftingMod.LOGGER.info(
 			"[chain_debug] ensure item={} required={} available={} candidates={} resolving={}",
@@ -326,15 +311,14 @@ final class ChainCraftPlanner {
 			return false;
 		}
 		try {
-			for (Candidate candidate : orderedCandidates(candidates, virtualCounts)) {
+			for (Candidate candidate : orderedCandidates(candidates, state.counts)) {
 				int outputPerCraft = Math.max(candidate.displayStack().getCount(), 1);
-				int missing = requiredCount - virtualCounts.getOrDefault(itemId, 0);
+				int missing = requiredCount - state.counts.getOrDefault(itemId, 0);
 				int copies = (missing + outputPerCraft - 1) / outputPerCraft;
 				if (copies <= 0) {
 					return true;
 				}
-				Map<String, Integer> trialCounts = new LinkedHashMap<>(virtualCounts);
-				List<ChainCraftPlan.Step> trialSteps = new ArrayList<>(steps);
+				PlanningState trialState = state.copy();
 				ReachCraftingMod.LOGGER.info(
 					"[chain_debug] ensure_try item={} recipe={} output={} missing={} copies={}",
 					itemId,
@@ -343,17 +327,14 @@ final class ChainCraftPlanner {
 					missing,
 					copies
 				);
-				if (planRecipe(candidate, copies, trialCounts, trialSteps, resolvingItemIds, false)
-					&& trialCounts.getOrDefault(itemId, 0) >= requiredCount) {
-					virtualCounts.clear();
-					virtualCounts.putAll(trialCounts);
-					steps.clear();
-					steps.addAll(trialSteps);
+				if (planRecipe(candidate, copies, trialState, resolvingItemIds, false)
+					&& trialState.counts.getOrDefault(itemId, 0) >= requiredCount) {
+					state.replaceWith(trialState);
 					ReachCraftingMod.LOGGER.info(
 						"[chain_debug] ensure_success item={} recipe={} available_after={}",
 						itemId,
 						candidate.recipeId(),
-						virtualCounts.getOrDefault(itemId, 0)
+						state.counts.getOrDefault(itemId, 0)
 					);
 					return true;
 				}
@@ -361,7 +342,7 @@ final class ChainCraftPlanner {
 					"[chain_debug] ensure_try_failed item={} recipe={} available_after_trial={}",
 					itemId,
 					candidate.recipeId(),
-					trialCounts.getOrDefault(itemId, 0)
+					trialState.counts.getOrDefault(itemId, 0)
 				);
 			}
 			ReachCraftingMod.LOGGER.info("[chain_debug] ensure_fail reason=no_candidate_succeeded item={} candidates={}", itemId, formatCandidates(candidates));
@@ -683,6 +664,176 @@ final class ChainCraftPlanner {
 			joiner.add(step.recipeId() + "x" + step.recipeCopies() + "->" + ContainerUtils.formatStack(step.displayStack()));
 		}
 		return joiner.toString();
+	}
+
+	private static final class PlanningState {
+		private final Map<String, Integer> counts;
+		private final LinkedHashMap<StepKey, ScheduledCraft> scheduledCrafts;
+
+		private PlanningState(Map<String, Integer> counts, LinkedHashMap<StepKey, ScheduledCraft> scheduledCrafts) {
+			this.counts = counts;
+			this.scheduledCrafts = scheduledCrafts;
+		}
+
+		private PlanningState copy() {
+			return new PlanningState(new LinkedHashMap<>(counts), copyScheduledCrafts(scheduledCrafts));
+		}
+
+		private void replaceWith(PlanningState other) {
+			counts.clear();
+			counts.putAll(other.counts);
+			scheduledCrafts.clear();
+			scheduledCrafts.putAll(copyScheduledCrafts(other.scheduledCrafts));
+		}
+
+		private void schedule(Candidate candidate, int recipeCopies, boolean finalStep) {
+			StepKey key = StepKey.from(candidate, finalStep);
+			ScheduledCraft existing = scheduledCrafts.get(key);
+			if (existing == null) {
+				scheduledCrafts.put(key, new ScheduledCraft(candidate, recipeCopies, finalStep));
+				return;
+			}
+			existing.addCopies(recipeCopies);
+		}
+
+		private List<ChainCraftPlan.Step> toSteps(boolean allowNearby) {
+			List<ChainCraftPlan.Step> steps = new ArrayList<>();
+			for (ScheduledCraft scheduledCraft : orderedScheduledCrafts()) {
+				steps.add(scheduledCraft.toStep(allowNearby));
+			}
+			return List.copyOf(steps);
+		}
+
+		private List<ScheduledCraft> orderedScheduledCrafts() {
+			List<ScheduledCraft> crafts = new ArrayList<>(scheduledCrafts.values());
+			Map<String, Integer> outputOrder = new LinkedHashMap<>();
+			for (int i = 0; i < crafts.size(); i++) {
+				outputOrder.putIfAbsent(itemId(crafts.get(i).candidate.displayStack()), i);
+			}
+
+			List<ScheduledCraft> ordered = new ArrayList<>();
+			Set<ScheduledCraft> emitted = new HashSet<>();
+			while (ordered.size() < crafts.size()) {
+				ScheduledCraft next = crafts.stream()
+					.filter(craft -> !emitted.contains(craft))
+					.filter(craft -> dependenciesSatisfied(craft, outputOrder, emitted, crafts))
+					.min(Comparator
+						.comparingInt((ScheduledCraft craft) -> craft.finalStep ? 1 : 0)
+						.thenComparingInt(craft -> flexibleIngredientSlotCount(craft.candidate.ingredientSummary()))
+						.thenComparingInt(crafts::indexOf))
+					.orElse(null);
+				if (next == null) {
+					crafts.stream()
+						.filter(craft -> !emitted.contains(craft))
+						.forEach(ordered::add);
+					break;
+				}
+				emitted.add(next);
+				ordered.add(next);
+			}
+			return List.copyOf(ordered);
+		}
+
+		private static boolean dependenciesSatisfied(
+			ScheduledCraft craft,
+			Map<String, Integer> outputOrder,
+			Set<ScheduledCraft> emitted,
+			List<ScheduledCraft> crafts
+		) {
+			Set<String> dependencyOutputs = dependencyOutputIds(craft.candidate.ingredientSummary(), outputOrder);
+			for (ScheduledCraft other : crafts) {
+				if (other == craft || emitted.contains(other)) {
+					continue;
+				}
+				if (dependencyOutputs.contains(itemId(other.candidate.displayStack()))) {
+					return false;
+				}
+			}
+			return true;
+		}
+
+		private static Set<String> dependencyOutputIds(RecipeIngredientSummary summary, Map<String, Integer> outputOrder) {
+			Set<String> dependencies = new HashSet<>();
+			for (RecipeIngredientSummary.IngredientSlot slot : summary.slots()) {
+				if (slot.isEmpty()) {
+					continue;
+				}
+				for (String itemId : slot.itemIds()) {
+					if (outputOrder.containsKey(itemId)) {
+						dependencies.add(itemId);
+					}
+				}
+			}
+			return dependencies;
+		}
+
+		private static int flexibleIngredientSlotCount(RecipeIngredientSummary summary) {
+			int count = 0;
+			for (RecipeIngredientSummary.IngredientSlot slot : summary.slots()) {
+				if (!slot.isEmpty() && !slot.isExact()) {
+					count++;
+				}
+			}
+			return count;
+		}
+
+		private static LinkedHashMap<StepKey, ScheduledCraft> copyScheduledCrafts(LinkedHashMap<StepKey, ScheduledCraft> source) {
+			LinkedHashMap<StepKey, ScheduledCraft> copy = new LinkedHashMap<>();
+			for (Map.Entry<StepKey, ScheduledCraft> entry : source.entrySet()) {
+				copy.put(entry.getKey(), entry.getValue().copy());
+			}
+			return copy;
+		}
+	}
+
+	private static final class ScheduledCraft {
+		private final Candidate candidate;
+		private final boolean finalStep;
+		private int recipeCopies;
+
+		private ScheduledCraft(Candidate candidate, int recipeCopies, boolean finalStep) {
+			this.candidate = candidate;
+			this.recipeCopies = Math.max(recipeCopies, 1);
+			this.finalStep = finalStep;
+		}
+
+		private void addCopies(int copies) {
+			recipeCopies += Math.max(copies, 1);
+		}
+
+		private ScheduledCraft copy() {
+			return new ScheduledCraft(candidate, recipeCopies, finalStep);
+		}
+
+		private ChainCraftPlan.Step toStep(boolean allowNearby) {
+			return new ChainCraftPlan.Step(
+				candidate.recipeId(),
+				candidate.collection(),
+				candidate.displayStack(),
+				candidate.ingredientSummary(),
+				recipeCopies,
+				allowNearby,
+				finalStep
+			);
+		}
+	}
+
+	private record StepKey(
+		RecipeDisplayId recipeId,
+		String outputItemId,
+		int outputCount,
+		String ingredientSummary,
+		boolean finalStep
+	) {
+		private static StepKey from(Candidate candidate, boolean finalStep) {
+			return new StepKey(
+				candidate.recipeId(),
+				itemId(candidate.displayStack()),
+				Math.max(candidate.displayStack().getCount(), 1),
+				candidate.ingredientSummary().compactSummary(),
+				finalStep
+			);
+		}
 	}
 
 	private record Candidate(

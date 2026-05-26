@@ -21,6 +21,7 @@ import net.minecraft.world.item.crafting.display.SlotDisplayContext;
 public final class ChainCraftController {
 	private static final int STEP_TIMEOUT_TICKS = 200;
 	private static ChainCraftRun activeRun;
+	private static PendingWarmupRetry pendingWarmupRetry;
 
 	private ChainCraftController() {
 	}
@@ -34,12 +35,12 @@ public final class ChainCraftController {
 			return;
 		}
 		abort(false);
-		activeRun = new ChainCraftRun(plan, 0, false, 0);
+		activeRun = ChainCraftRun.start(plan);
 		scheduleCurrentStep();
 	}
 
 	static boolean isActive() {
-		return activeRun != null;
+		return activeRun != null || pendingWarmupRetry != null;
 	}
 
 	static boolean isRunningIntermediateStep() {
@@ -47,13 +48,42 @@ public final class ChainCraftController {
 	}
 
 	static void abort(boolean report) {
-		if (activeRun == null) {
+		if (activeRun == null && pendingWarmupRetry == null) {
 			return;
 		}
 		activeRun = null;
+		pendingWarmupRetry = null;
 		if (report) {
 			ReachCraftingModClient.sendAbortedChat("Crafting session aborted.");
 		}
+	}
+
+	static void armRetryAfterNearbyWarmup(
+		RecipeBookClickCapture.HeldRecipeAction action,
+		int remainingClicks,
+		boolean allowNearby,
+		boolean craftAll,
+		boolean refillableBulkMaxMode,
+		ItemStack expectedOutput
+	) {
+		Minecraft client = Minecraft.getInstance();
+		int baselineOutputCount = countAccessibleOutput(client, expectedOutput);
+		pendingWarmupRetry = new PendingWarmupRetry(
+			action,
+			Math.max(remainingClicks, 1),
+			allowNearby,
+			craftAll,
+			refillableBulkMaxMode,
+			expectedOutput.copy(),
+			baselineOutputCount
+		);
+		ReachCraftingMod.LOGGER.info(
+			"[chain_retry] armed_after_nearby_warmup recipe={} clicks={} output={} baseline_count={}",
+			action.recipeId(),
+			remainingClicks,
+			ContainerUtils.formatStack(expectedOutput),
+			baselineOutputCount
+		);
 	}
 
 	static void onAutoMoveFinished(Minecraft client, boolean success) {
@@ -64,8 +94,8 @@ public final class ChainCraftController {
 			failCurrentStep();
 			return;
 		}
-		activeRun = activeRun.withAdvancedStep();
-		if (activeRun.currentStepIndex() >= activeRun.plan().steps().size()) {
+		activeRun = activeRun.withCompletedBatch();
+		if (activeRun == null || activeRun.currentStepIndex() >= activeRun.plan().steps().size()) {
 			activeRun = null;
 			return;
 		}
@@ -74,10 +104,17 @@ public final class ChainCraftController {
 
 	private static void tick(Minecraft client) {
 		ChainCraftPopupController.tick(client);
+		tickPendingWarmupRetry(client);
 		if (activeRun == null) {
 			return;
 		}
-		if (client.player == null || (!(client.screen instanceof CraftingScreen) && !(client.screen instanceof InventoryScreen))) {
+		if (client.player == null) {
+			activeRun = null;
+			return;
+		}
+		if (!(client.screen instanceof CraftingScreen)
+			&& !(client.screen instanceof InventoryScreen)
+			&& !NearbyContainerDryRun.isActiveSessionRunning()) {
 			ReachCraftingModClient.sendChat(Component.translatable("message.reachcrafting.chain_crafting.context_lost").getString());
 			activeRun = null;
 			return;
@@ -105,6 +142,49 @@ public final class ChainCraftController {
 		}
 	}
 
+	private static void tickPendingWarmupRetry(Minecraft client) {
+		if (pendingWarmupRetry == null
+			|| activeRun != null
+			|| client.player == null
+			|| NearbyContainerDryRun.isActiveSessionRunning()
+			|| ContainerUtils.isInputQueueActive()
+			|| ContainerUtils.isAutoMovePending()) {
+			return;
+		}
+		if (!(client.screen instanceof CraftingScreen) && !(client.screen instanceof InventoryScreen)) {
+			return;
+		}
+
+		PendingWarmupRetry retry = pendingWarmupRetry;
+		pendingWarmupRetry = null;
+		int currentOutputCount = countAccessibleOutput(client, retry.expectedOutput());
+		if (currentOutputCount > retry.baselineOutputCount()) {
+			ReachCraftingMod.LOGGER.info(
+				"[chain_retry] skip_after_warmup reason=output_already_created recipe={} output={} baseline_count={} current_count={}",
+				retry.action().recipeId(),
+				ContainerUtils.formatStack(retry.expectedOutput()),
+				retry.baselineOutputCount(),
+				currentOutputCount
+			);
+			return;
+		}
+		ReachCraftingMod.LOGGER.info(
+			"[chain_retry] replay_after_nearby_warmup recipe={} clicks={} output={}",
+			retry.action().recipeId(),
+			retry.remainingClicks(),
+			ContainerUtils.formatStack(retry.expectedOutput())
+		);
+		AutoCraftController.armHoldSessionForCurrentRequest(true);
+		RecipeBookClickCapture.scheduleReplay(
+			retry.action(),
+			retry.remainingClicks(),
+			retry.allowNearby(),
+			retry.craftAll(),
+			retry.refillableBulkMaxMode(),
+			true
+		);
+	}
+
 	private static void scheduleCurrentStep() {
 		Minecraft client = Minecraft.getInstance();
 		if (activeRun == null || client.player == null || client.screen == null) {
@@ -112,6 +192,8 @@ public final class ChainCraftController {
 			return;
 		}
 		ChainCraftPlan.Step step = activeRun.currentStep();
+		int batchCopies = activeRun.nextBatchCopies();
+		int baselineOutputCount = countAccessibleOutput(client, step.displayStack());
 		RecipeBookClickCapture.HeldRecipeAction action = resolveExecutableAction(client, step);
 		if (action == null) {
 			ReachCraftingMod.LOGGER.info(
@@ -124,15 +206,24 @@ public final class ChainCraftController {
 			failCurrentStep();
 			return;
 		}
+		ReachCraftingMod.LOGGER.info(
+			"[chain_execute] schedule_step index={} recipe={} output={} batch_copies={} remaining_copies={} final_step={}",
+			activeRun.currentStepIndex(),
+			step.recipeId(),
+			ContainerUtils.formatStack(step.displayStack()),
+			batchCopies,
+			activeRun.remainingStepCopies(),
+			step.finalStep()
+		);
 		AutoCraftController.armHoldSessionForCurrentRequest(true);
 		RecipeBookClickCapture.scheduleReplay(
 			action,
-			step.recipeCopies(),
+			batchCopies,
 			step.allowNearby(),
 			false,
 			false
 		);
-		activeRun = activeRun.withWaiting(true, 0);
+		activeRun = activeRun.withScheduledBatch(batchCopies, baselineOutputCount);
 	}
 
 	private static RecipeBookClickCapture.HeldRecipeAction resolveExecutableAction(Minecraft client, ChainCraftPlan.Step step) {
@@ -236,18 +327,84 @@ public final class ChainCraftController {
 		ChainCraftPlan plan,
 		int currentStepIndex,
 		boolean waitingForStep,
-		int waitTicks
+		int waitTicks,
+		int remainingStepCopies,
+		int scheduledBatchCopies,
+		int baselineOutputCount
 	) {
+		private static ChainCraftRun start(ChainCraftPlan plan) {
+			return new ChainCraftRun(plan, 0, false, 0, plan.steps().getFirst().recipeCopies(), 0, 0);
+		}
+
 		ChainCraftPlan.Step currentStep() {
 			return plan.steps().get(currentStepIndex);
 		}
 
-		ChainCraftRun withAdvancedStep() {
-			return new ChainCraftRun(plan, currentStepIndex + 1, false, 0);
+		int nextBatchCopies() {
+			return Math.min(Math.max(remainingStepCopies, 1), maxBatchCopies(currentStep()));
+		}
+
+		ChainCraftRun withScheduledBatch(int batchCopies, int outputCountBeforeBatch) {
+			return new ChainCraftRun(plan, currentStepIndex, true, 0, remainingStepCopies, Math.max(batchCopies, 1), outputCountBeforeBatch);
+		}
+
+		ChainCraftRun withCompletedBatch() {
+			int producedCopies = observedProducedRecipeCopies();
+			int completedCopies = Math.max(1, Math.min(Math.max(scheduledBatchCopies, 1), producedCopies));
+			int remaining = remainingStepCopies - completedCopies;
+			ReachCraftingMod.LOGGER.info(
+				"[chain_execute] batch_finished index={} scheduled_copies={} observed_copies={} completed_copies={} remaining_before={}",
+				currentStepIndex,
+				scheduledBatchCopies,
+				producedCopies,
+				completedCopies,
+				remainingStepCopies
+			);
+			if (remaining > 0) {
+				ReachCraftingMod.LOGGER.info(
+					"[chain_execute] step_batch_complete index={} remaining_copies={}",
+					currentStepIndex,
+					remaining
+				);
+				return new ChainCraftRun(plan, currentStepIndex, false, 0, remaining, 0, 0);
+			}
+			int nextIndex = currentStepIndex + 1;
+			if (nextIndex >= plan.steps().size()) {
+				ReachCraftingMod.LOGGER.info("[chain_execute] complete steps={}", plan.steps().size());
+				return null;
+			}
+			ReachCraftingMod.LOGGER.info(
+				"[chain_execute] step_complete index={} next_index={}",
+				currentStepIndex,
+				nextIndex
+			);
+			return new ChainCraftRun(plan, nextIndex, false, 0, plan.steps().get(nextIndex).recipeCopies(), 0, 0);
 		}
 
 		ChainCraftRun withWaiting(boolean updatedWaitingForStep, int updatedWaitTicks) {
-			return new ChainCraftRun(plan, currentStepIndex, updatedWaitingForStep, updatedWaitTicks);
+			return new ChainCraftRun(plan, currentStepIndex, updatedWaitingForStep, updatedWaitTicks, remainingStepCopies, scheduledBatchCopies, baselineOutputCount);
 		}
+
+		private static int maxBatchCopies(ChainCraftPlan.Step step) {
+			return 64;
+		}
+
+		private int observedProducedRecipeCopies() {
+			int currentCount = countAccessibleOutput(Minecraft.getInstance(), currentStep().displayStack());
+			int producedItems = Math.max(0, currentCount - baselineOutputCount);
+			int outputPerCraft = Math.max(currentStep().displayStack().getCount(), 1);
+			return producedItems / outputPerCraft;
+		}
+	}
+
+	private record PendingWarmupRetry(
+		RecipeBookClickCapture.HeldRecipeAction action,
+		int remainingClicks,
+		boolean allowNearby,
+		boolean craftAll,
+		boolean refillableBulkMaxMode,
+		ItemStack expectedOutput,
+		int baselineOutputCount
+	) {
 	}
 }

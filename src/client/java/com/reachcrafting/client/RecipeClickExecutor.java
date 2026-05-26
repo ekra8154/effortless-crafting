@@ -110,9 +110,13 @@ final class RecipeClickExecutor {
 		RecipeIngredientSummary ingredientSummary = selectedRecipe.ingredientSummary();
 		Map<String, Integer> localAvailableCounts = availableItems.totalCounts();
 		Map<String, Integer> availableCounts = availableItems.totalCounts();
+		Map<String, Integer> chainAvailableCounts = availableCounts;
+		boolean nearbyCacheIncomplete = false;
 		if (allowNearbyChests && ReachCraftingConfig.get().cacheContainersForFasterSearch()) {
 			NearbyContainerCache.ReachableView reachableView = NearbyContainerCache.getReachableView(minecraft.level, minecraft.getCameraEntity(), player.blockInteractionRange());
 			availableCounts = AvailableItemSnapshot.mergeCounts(availableCounts, reachableView.countsFor(ingredientSummary.acceptedItemIds()));
+			chainAvailableCounts = AvailableItemSnapshot.mergeCounts(localAvailableCounts, reachableView.aggregateCounts());
+			nearbyCacheIncomplete = reachableView.snapshotsByKey().size() < reachableView.nearestAccessByKey().size();
 		}
 		RecipeDeficitReport deficitReport = effectiveCraftAll
 			? RecipeDeficitReport.from(ingredientSummary, availableCounts, availableItems.gridStacks(), true)
@@ -178,7 +182,7 @@ final class RecipeClickExecutor {
 		ReachCraftingConfig.ChainCraftingMode chainMode = ReachCraftingConfig.get().chainCraftingMode();
 		if (deficitReport.hasMissingIngredients()) {
 			ReachCraftingMod.LOGGER.info(
-				"[chain_gate] recipe={} missing={} auto_requested={} mode={} use_dry_run={} force_dry_run={} allow_nearby={} bulk_mode={} craft_all={} effective_craft_all={} requested_clicks={} desired_copies={} available={} local_available={}",
+				"[chain_gate] recipe={} missing={} auto_requested={} mode={} use_dry_run={} force_dry_run={} allow_nearby={} bulk_mode={} craft_all={} effective_craft_all={} requested_clicks={} desired_copies={} available={} chain_available={} local_available={}",
 				selectedRecipe.recipeId(),
 				deficitReport.compactMissingSummary(),
 				autoCraftRequested,
@@ -192,18 +196,20 @@ final class RecipeClickExecutor {
 				requestedClicks,
 				desiredVariantCopies,
 				AvailableItemSnapshot.formatCounts(availableCounts),
+				AvailableItemSnapshot.formatCounts(chainAvailableCounts),
 				AvailableItemSnapshot.formatCounts(localAvailableCounts)
 			);
 		}
 
 		if (deficitReport.hasMissingIngredients()
 			&& autoCraftRequested
-			&& chainMode != ReachCraftingConfig.ChainCraftingMode.DISABLED) {
+			&& chainMode != ReachCraftingConfig.ChainCraftingMode.DISABLED
+			&& !ChainCraftController.isActive()) {
 			Optional<ChainCraftPlan> chainPlan = planChainCraft(
 				minecraft,
 				player,
 				selectedRecipe,
-				availableCounts,
+				chainAvailableCounts,
 				allowNearbyChests,
 				effectiveCraftAll,
 				requestedClicks,
@@ -226,12 +232,29 @@ final class RecipeClickExecutor {
 				return;
 			}
 			ReachCraftingMod.LOGGER.info(
-				"[chain_plan] unavailable recipe={} requested={} allow_nearby={} missing={}",
+				"[chain_plan] unavailable recipe={} requested={} allow_nearby={} missing={} nearby_cache_incomplete={}",
 				selectedRecipe.recipeId(),
 				effectiveCraftAll ? requestedClicks : desiredVariantCopies,
 				allowNearbyChests,
-				deficitReport.compactMissingSummary()
+				deficitReport.compactMissingSummary(),
+				nearbyCacheIncomplete
 			);
+			if (allowNearbyChests && nearbyCacheIncomplete && useDryRun) {
+				ChainCraftController.armRetryAfterNearbyWarmup(
+					new RecipeBookClickCapture.HeldRecipeAction(
+						selectedRecipe.recipeId(),
+						collection,
+						selectedRecipe.displayStack().copy(),
+						mouseButton,
+						explicitVariantSelection
+					),
+					effectiveRequestedClicks,
+					allowNearbyChests,
+					effectiveCraftAll,
+					refillableBulkMaxMode,
+					selectedRecipe.displayStack()
+				);
+			}
 		}
 
 		boolean nearbyResourcesRequired = allowNearbyChests
