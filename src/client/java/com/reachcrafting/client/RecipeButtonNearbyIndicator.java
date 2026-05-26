@@ -14,36 +14,62 @@ import net.minecraft.client.gui.screens.recipebook.RecipeCollection;
 public final class RecipeButtonNearbyIndicator {
 	private static long lastInventoryHash = 0;
 	private static long lastNearbyRevision = -1;
-	private static final Map<RecipeDisplayId, Boolean> mainCache = new java.util.HashMap<>();
-	private static final Map<RecipeDisplayId, Boolean> overlayCache = new java.util.HashMap<>();
+	public enum Craftability {
+		NOT_CRAFTABLE,
+		LOCALLY_CRAFTABLE,
+		NEARBY_CRAFTABLE
+	}
+
+	private static final Map<RecipeDisplayId, Craftability> mainCache = new java.util.HashMap<>();
+	private static final Map<RecipeDisplayId, Craftability> overlayCache = new java.util.HashMap<>();
 
 	private RecipeButtonNearbyIndicator() {
 	}
 
 	public static boolean shouldShow(RecipeButton button) {
-		return shouldShow(button.getCurrentRecipe(), button.getCollection(), button.getDisplayStack().copy(), false);
+		if (button.getCollection() != null && button.getCollection().getRecipes().size() > 1) {
+			for (net.minecraft.world.item.crafting.display.RecipeDisplayEntry entry : button.getCollection().getRecipes()) {
+				if (getCraftability(entry.id(), button.getCollection(), ItemStack.EMPTY, true) == Craftability.NEARBY_CRAFTABLE) {
+					return true;
+				}
+			}
+			return false;
+		}
+		return getCraftability(button.getCurrentRecipe(), button.getCollection(), button.getDisplayStack().copy(), false) == Craftability.NEARBY_CRAFTABLE;
 	}
 
-	public static boolean shouldShow(RecipeDisplayId recipe, RecipeCollection collection, ItemStack displayStack, boolean explicitVariantSelection) {
+	public static boolean isChainCraftable(RecipeButton button) {
+		if (button.getCollection() != null && button.getCollection().getRecipes().size() > 1) {
+			for (net.minecraft.world.item.crafting.display.RecipeDisplayEntry entry : button.getCollection().getRecipes()) {
+				if (ChainCraftabilityCache.isChainCraftable(entry.id())) {
+					return true;
+				}
+			}
+			return false;
+		}
+		return ChainCraftabilityCache.isChainCraftable(button.getCurrentRecipe());
+	}
+
+	public static Craftability getCraftability(RecipeDisplayId recipe, RecipeCollection collection, ItemStack displayStack, boolean explicitVariantSelection) {
 		if (!ReachCraftingConfig.get().enabled()
 			|| !ReachCraftingConfig.get().enableNearbyContainerUsage()
 			|| !ReachCraftingConfig.get().showNearbyCraftableIndicator()
 			|| !ReachCraftingConfig.get().cacheContainersForFasterSearch()) {
-			return false;
+			return Craftability.NOT_CRAFTABLE;
 		}
 
 		Minecraft minecraft = Minecraft.getInstance();
 		Screen screen = minecraft.screen;
 		if (!(screen instanceof InventoryScreen) && !(screen instanceof CraftingScreen)) {
-			return false;
+			return Craftability.NOT_CRAFTABLE;
 		}
 
 		LocalPlayer player = minecraft.player;
 		if (player == null || minecraft.level == null || minecraft.getCameraEntity() == null) {
-			return false;
+			return Craftability.NOT_CRAFTABLE;
 		}
 		if (recipe == null || collection == null) {
-			return false;
+			return Craftability.NOT_CRAFTABLE;
 		}
 
 		NearbyContainerCache.ReachableView reachableView = NearbyContainerCache.getReachableView(
@@ -61,14 +87,9 @@ public final class RecipeButtonNearbyIndicator {
 			overlayCache.clear();
 		}
 
-		Map<RecipeDisplayId, Boolean> cacheMap = explicitVariantSelection ? overlayCache : mainCache;
+		Map<RecipeDisplayId, Craftability> cacheMap = explicitVariantSelection ? overlayCache : mainCache;
 		if (cacheMap.containsKey(recipe)) {
 			return cacheMap.get(recipe);
-		}
-
-		if (reachableView.isEmpty()) {
-			cacheMap.put(recipe, false);
-			return false;
 		}
 
 		AvailableItemSnapshot availableItems = AvailableItemSnapshot.capture(player, screen);
@@ -107,8 +128,8 @@ public final class RecipeButtonNearbyIndicator {
 			desiredVariantCopies
 		);
 		if (selection == null) {
-			cacheMap.put(recipe, false);
-			return false;
+			cacheMap.put(recipe, Craftability.NOT_CRAFTABLE);
+			return Craftability.NOT_CRAFTABLE;
 		}
 
 		IngredientPlanning.Policy policy = ReachCraftingConfig.get().toPlanningPolicy();
@@ -122,8 +143,13 @@ public final class RecipeButtonNearbyIndicator {
 			policy
 		);
 		if (!localPlan.hasMissingIngredients()) {
-			cacheMap.put(recipe, false);
-			return false;
+			cacheMap.put(recipe, Craftability.LOCALLY_CRAFTABLE);
+			return Craftability.LOCALLY_CRAFTABLE;
+		}
+
+		if (reachableView.isEmpty()) {
+			cacheMap.put(recipe, Craftability.NOT_CRAFTABLE);
+			return Craftability.NOT_CRAFTABLE;
 		}
 
 		IngredientPlanning.PlanResult cachedPlan = IngredientPlanning.plan(
@@ -135,7 +161,7 @@ public final class RecipeButtonNearbyIndicator {
 			desiredVariantCopies,
 			policy
 		);
-		boolean result = !cachedPlan.hasMissingIngredients();
+		Craftability result = !cachedPlan.hasMissingIngredients() ? Craftability.NEARBY_CRAFTABLE : Craftability.NOT_CRAFTABLE;
 		cacheMap.put(recipe, result);
 		return result;
 	}
@@ -170,7 +196,8 @@ public final class RecipeButtonNearbyIndicator {
 	}
 
 	public static void renderOverlayButton(net.minecraft.client.gui.GuiGraphicsExtractor guiGraphics, int x, int y, int width, RecipeDisplayId recipe, RecipeCollection collection) {
-		if (shouldShow(recipe, collection, ItemStack.EMPTY, true)) {
+		Craftability craftability = getCraftability(recipe, collection, ItemStack.EMPTY, true);
+		if (craftability == Craftability.NEARBY_CRAFTABLE || craftability == Craftability.LOCALLY_CRAFTABLE) {
 			renderDot(guiGraphics, x, y);
 		} else if (ChainCraftabilityCache.isChainCraftable(recipe)) {
 			renderChainDot(guiGraphics, x, y);

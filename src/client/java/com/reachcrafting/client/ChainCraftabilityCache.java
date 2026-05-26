@@ -11,6 +11,7 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.inventory.CraftingScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
+import net.minecraft.client.gui.screens.recipebook.RecipeCollection;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.util.context.ContextMap;
@@ -86,8 +87,11 @@ public final class ChainCraftabilityCache {
 
 		LocalPlayer player = client.player;
 		int gridSlotCount = client.screen instanceof InventoryScreen ? 4 : 9;
-		Map<RecipeDisplayId, RecipeDisplayEntry> knownRecipes = ((ClientRecipeBookAccessor) player.getRecipeBook()).getKnown();
-		int knownCount = knownRecipes.size();
+		List<RecipeDisplayEntry> allRecipes = new java.util.ArrayList<>();
+		for (RecipeCollection collection : player.getRecipeBook().getCollections()) {
+			allRecipes.addAll(collection.getRecipes());
+		}
+		int knownCount = allRecipes.size();
 		long inventoryHash = computeInventoryHash(player);
 
 		long nearbyRevision = 0;
@@ -115,7 +119,7 @@ public final class ChainCraftabilityCache {
 		ContextMap context = SlotDisplayContext.fromLevel(client.level);
 
 		if (indexStale) {
-			recipeIndex = buildRecipeIndex(knownRecipes, gridSlotCount, context);
+			recipeIndex = buildRecipeIndex(allRecipes, gridSlotCount, context);
 			Map<String, List<LightRecipe>> byOutput = new java.util.HashMap<>();
 			for (LightRecipe recipe : recipeIndex) {
 				byOutput.computeIfAbsent(recipe.outputItemId, k -> new ArrayList<>()).add(recipe);
@@ -181,10 +185,7 @@ public final class ChainCraftabilityCache {
 			if (!allSlotsSatisfied(recipe.ingredientSlots, reachable)) {
 				continue;
 			}
-			if (allSlotsSatisfied(recipe.ingredientSlots, directlyAvailable)) {
-				continue;
-			}
-			if (verifyExact(recipe, availableCounts)) {
+			if (verifyExact(recipe, availableCounts) == VerifyResult.CHAIN_CRAFTABLE) {
 				result.add(recipe.recipeId);
 			}
 		}
@@ -215,20 +216,26 @@ public final class ChainCraftabilityCache {
 		return true;
 	}
 
+	private enum VerifyResult {
+		NOT_CRAFTABLE,
+		DIRECTLY_CRAFTABLE,
+		CHAIN_CRAFTABLE
+	}
+
 	private static int dfsOperations = 0;
 
-	private static boolean verifyExact(LightRecipe recipe, Map<String, Integer> directlyAvailableCounts) {
+	private static VerifyResult verifyExact(LightRecipe recipe, Map<String, Integer> directlyAvailableCounts) {
 		dfsOperations = 0;
 		Map<String, Integer> state = new java.util.HashMap<>(directlyAvailableCounts);
 		return verifyRecipe(recipe, 1, state, new HashSet<>(), 0);
 	}
 
-	private static boolean verifyRecipe(LightRecipe recipe, int craftsNeeded, Map<String, Integer> state, Set<RecipeDisplayId> resolving, int depth) {
-		if (depth > 6) return false;
-		if (dfsOperations++ > 2000) return false;
+	private static VerifyResult verifyRecipe(LightRecipe recipe, int craftsNeeded, Map<String, Integer> state, Set<RecipeDisplayId> resolving, int depth) {
+		if (depth > 6) return VerifyResult.NOT_CRAFTABLE;
+		if (dfsOperations++ > 2000) return VerifyResult.NOT_CRAFTABLE;
 
 		if (!resolving.add(recipe.recipeId)) {
-			return false; // Cycle detected
+			return VerifyResult.NOT_CRAFTABLE; // Cycle detected
 		}
 		
 		Map<List<String>, Integer> aggregatedSlots = new java.util.HashMap<>();
@@ -236,18 +243,23 @@ public final class ChainCraftabilityCache {
 			aggregatedSlots.merge(slot, craftsNeeded, Integer::sum);
 		}
 		
+		boolean anyBacktracked = false;
 		for (Map.Entry<List<String>, Integer> entry : aggregatedSlots.entrySet()) {
-			if (!fulfillRequirement(entry.getKey(), entry.getValue(), state, resolving, depth + 1)) {
+			VerifyResult reqResult = fulfillRequirement(entry.getKey(), entry.getValue(), state, resolving, depth + 1);
+			if (reqResult == VerifyResult.NOT_CRAFTABLE) {
 				resolving.remove(recipe.recipeId);
-				return false;
+				return VerifyResult.NOT_CRAFTABLE;
+			}
+			if (reqResult == VerifyResult.CHAIN_CRAFTABLE) {
+				anyBacktracked = true;
 			}
 		}
 		resolving.remove(recipe.recipeId);
-		return true;
+		return anyBacktracked ? VerifyResult.CHAIN_CRAFTABLE : VerifyResult.DIRECTLY_CRAFTABLE;
 	}
 
-	private static boolean fulfillRequirement(List<String> options, int needed, Map<String, Integer> state, Set<RecipeDisplayId> resolving, int depth) {
-		if (dfsOperations++ > 2000) return false;
+	private static VerifyResult fulfillRequirement(List<String> options, int needed, Map<String, Integer> state, Set<RecipeDisplayId> resolving, int depth) {
+		if (dfsOperations++ > 2000) return VerifyResult.NOT_CRAFTABLE;
 
 		// 1. Greedily consume what we already have
 		for (String option : options) {
@@ -256,7 +268,7 @@ public final class ChainCraftabilityCache {
 				int consume = Math.min(available, needed);
 				state.put(option, available - consume);
 				needed -= consume;
-				if (needed <= 0) return true;
+				if (needed <= 0) return VerifyResult.DIRECTLY_CRAFTABLE;
 			}
 		}
 		
@@ -269,27 +281,28 @@ public final class ChainCraftabilityCache {
 				int craftsNeeded = (needed + producer.outputCount - 1) / producer.outputCount;
 				Map<String, Integer> stateBackup = new java.util.HashMap<>(state);
 				
-				if (verifyRecipe(producer, craftsNeeded, state, resolving, depth)) {
+				VerifyResult prodResult = verifyRecipe(producer, craftsNeeded, state, resolving, depth);
+				if (prodResult != VerifyResult.NOT_CRAFTABLE) {
 					int produced = craftsNeeded * producer.outputCount;
 					int remainder = produced - needed;
 					state.put(option, state.getOrDefault(option, 0) + remainder);
-					return true;
+					return VerifyResult.CHAIN_CRAFTABLE;
 				}
 				
 				state.clear();
 				state.putAll(stateBackup);
 			}
 		}
-		return false;
+		return VerifyResult.NOT_CRAFTABLE;
 	}
 
 	private static List<LightRecipe> buildRecipeIndex(
-		Map<RecipeDisplayId, RecipeDisplayEntry> knownRecipes,
+		List<RecipeDisplayEntry> allRecipes,
 		int gridSlotCount,
 		ContextMap context
 	) {
 		List<LightRecipe> index = new ArrayList<>();
-		for (RecipeDisplayEntry entry : knownRecipes.values()) {
+		for (RecipeDisplayEntry entry : allRecipes) {
 			if (!fitsGrid(entry, gridSlotCount)) {
 				continue;
 			}
