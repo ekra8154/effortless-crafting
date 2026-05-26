@@ -169,7 +169,10 @@ final class RecipeClickExecutor {
 				? deficitReport.possibleCopies()
 				: requestedClicks;
 
-		boolean useDryRun = forceDryRun || allowNearbyChests;
+		// Chain already resolved local-only intermediate dependencies up front, so
+		// these replayed steps can use the faster direct placement path.
+		boolean localOnlyChainReplay = ChainCraftController.isActive() && !allowNearbyChests;
+		boolean useDryRun = allowNearbyChests || (forceDryRun && !localOnlyChainReplay);
 		if (deficitReport.hasMissingIngredients()) {
 			ReachCraftingModClient.sendDebugChat("Missing from inventory: " + deficitReport.compactMissingSummary());
 			if (!useDryRun) {
