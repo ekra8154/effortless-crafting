@@ -122,12 +122,25 @@ public final class RecipeButtonNearbyIndicator {
 	public static void renderOverlayButton(net.minecraft.client.gui.GuiGraphicsExtractor guiGraphics, int x, int y, int width, RecipeDisplayId recipe, RecipeCollection collection) {
 		if (shouldShow(recipe, collection, ItemStack.EMPTY, true)) {
 			renderDot(guiGraphics, x, y);
+		} else if (ChainCraftabilityCache.isChainCraftable(recipe)) {
+			renderChainDot(guiGraphics, x, y);
 		}
 	}
 
 	public static void renderDot(net.minecraft.client.gui.GuiGraphicsExtractor guiGraphics, int x, int y) {
-		int outer = 0xCC8B3A10;
-		int inner = 0xFFFFB24A;
+		int outer = 0xCC8B7B00;
+		int inner = 0xFFFFDD00;
+
+		guiGraphics.fill(x + 1, y, x + 4, y + 1, outer);
+		guiGraphics.fill(x, y + 1, x + 5, y + 4, outer);
+		guiGraphics.fill(x + 1, y + 4, x + 4, y + 5, outer);
+
+		guiGraphics.fill(x + 1, y + 1, x + 4, y + 4, inner);
+	}
+
+	public static void renderChainDot(net.minecraft.client.gui.GuiGraphicsExtractor guiGraphics, int x, int y) {
+		int outer = 0xCC8B4400;
+		int inner = 0xFFFF8800;
 
 		guiGraphics.fill(x + 1, y, x + 4, y + 1, outer);
 		guiGraphics.fill(x, y + 1, x + 5, y + 4, outer);
