@@ -50,6 +50,7 @@ public final class ReachCraftingConfig {
 	private static final boolean DEFAULT_SHOW_CRAFT_ABORTED_MESSAGE = true;
 	private static final boolean DEFAULT_SHOW_BULK_CRAFT_SUMMARY_MESSAGE = true;
 	private static final boolean DEFAULT_SHOW_MISSING_INGREDIENTS_MESSAGE = true;
+	private static final boolean DEFAULT_SHOW_CHAIN_CRAFT_MESSAGES = true;
 	private static final boolean DEFAULT_ALT_AS_REQUEST_KEY = true;
 	private static final boolean DEFAULT_ALT_CLICK_INSTANT_CRAFT = true;
 	private static final boolean DEFAULT_DEBUG_MESSAGES_ENABLED = false;
@@ -99,6 +100,7 @@ public final class ReachCraftingConfig {
 	private boolean showCraftAbortedMessage;
 	private boolean showBulkCraftSummaryMessage;
 	private boolean showMissingIngredientsMessage;
+	private boolean showChainCraftMessages;
 	private boolean altAsRequestKey;
 	private boolean altClickInstantCraft;
 	private boolean debugMessagesEnabled;
@@ -164,6 +166,7 @@ public final class ReachCraftingConfig {
 			instance.showCraftAbortedMessage = stored.showCraftAbortedMessage != null ? stored.showCraftAbortedMessage : DEFAULT_SHOW_CRAFT_ABORTED_MESSAGE;
 			instance.showBulkCraftSummaryMessage = stored.showBulkCraftSummaryMessage != null ? stored.showBulkCraftSummaryMessage : DEFAULT_SHOW_BULK_CRAFT_SUMMARY_MESSAGE;
 			instance.showMissingIngredientsMessage = stored.showMissingIngredientsMessage != null ? stored.showMissingIngredientsMessage : DEFAULT_SHOW_MISSING_INGREDIENTS_MESSAGE;
+			instance.showChainCraftMessages = stored.showChainCraftMessages != null ? stored.showChainCraftMessages : DEFAULT_SHOW_CHAIN_CRAFT_MESSAGES;
 			instance.altAsRequestKey = stored.altAsRequestKey != null ? stored.altAsRequestKey : DEFAULT_ALT_AS_REQUEST_KEY;
 			instance.altClickInstantCraft = stored.altClickInstantCraft != null ? stored.altClickInstantCraft : DEFAULT_ALT_CLICK_INSTANT_CRAFT;
 			instance.debugMessagesEnabled = stored.debugMessagesEnabled != null ? stored.debugMessagesEnabled : DEFAULT_DEBUG_MESSAGES_ENABLED;
@@ -490,6 +493,14 @@ public final class ReachCraftingConfig {
 		this.showMissingIngredientsMessage = showMissingIngredientsMessage;
 	}
 
+	public boolean showChainCraftMessages() {
+		return showChainCraftMessages;
+	}
+
+	public void setShowChainCraftMessages(boolean showChainCraftMessages) {
+		this.showChainCraftMessages = showChainCraftMessages;
+	}
+
 	public boolean altAsRequestKey() {
 		return altAsRequestKey;
 	}
@@ -607,6 +618,7 @@ public final class ReachCraftingConfig {
 		defaults.showCraftAbortedMessage = DEFAULT_SHOW_CRAFT_ABORTED_MESSAGE;
 		defaults.showBulkCraftSummaryMessage = DEFAULT_SHOW_BULK_CRAFT_SUMMARY_MESSAGE;
 		defaults.showMissingIngredientsMessage = DEFAULT_SHOW_MISSING_INGREDIENTS_MESSAGE;
+		defaults.showChainCraftMessages = DEFAULT_SHOW_CHAIN_CRAFT_MESSAGES;
 		defaults.altAsRequestKey = DEFAULT_ALT_AS_REQUEST_KEY;
 		defaults.altClickInstantCraft = DEFAULT_ALT_CLICK_INSTANT_CRAFT;
 		defaults.debugMessagesEnabled = DEFAULT_DEBUG_MESSAGES_ENABLED;
@@ -723,6 +735,7 @@ public final class ReachCraftingConfig {
 		private Boolean showCraftAbortedMessage;
 		private Boolean showBulkCraftSummaryMessage;
 		private Boolean showMissingIngredientsMessage;
+		private Boolean showChainCraftMessages;
 		private Boolean altAsRequestKey;
 		private Boolean altClickInstantCraft;
 		private Boolean debugMessagesEnabled;
@@ -761,6 +774,7 @@ public final class ReachCraftingConfig {
 			this.showCraftAbortedMessage = config.showCraftAbortedMessage;
 			this.showBulkCraftSummaryMessage = config.showBulkCraftSummaryMessage;
 			this.showMissingIngredientsMessage = config.showMissingIngredientsMessage;
+			this.showChainCraftMessages = config.showChainCraftMessages;
 			this.altAsRequestKey = config.altAsRequestKey;
 			this.altClickInstantCraft = config.altClickInstantCraft;
 			this.debugMessagesEnabled = config.debugMessagesEnabled;

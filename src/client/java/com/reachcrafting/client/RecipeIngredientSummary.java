@@ -99,11 +99,55 @@ public record RecipeIngredientSummary(List<IngredientSlot> slots, List<String> r
 			return new IngredientSlot(itemIds, itemIds.get(0), stackLimit);
 		}
 
+		return new IngredientSlot(itemIds, summarizeAlternatives(itemIds), stackLimit);
+	}
+
+	private static String summarizeAlternatives(List<String> itemIds) {
+		String family = commonVariantFamily(itemIds);
+		if (family != null) {
+			return family;
+		}
+
 		StringJoiner joiner = new StringJoiner(" | ", "[", "]");
 		itemIds.stream()
 			.filter(Objects::nonNull)
 			.forEach(joiner::add);
-		return new IngredientSlot(itemIds, joiner.toString(), stackLimit);
+		return joiner.toString();
+	}
+
+	private static String commonVariantFamily(List<String> itemIds) {
+		if (itemIds.size() < 4) {
+			return null;
+		}
+
+		String namespace = null;
+		String suffix = null;
+		for (String itemId : itemIds) {
+			if (itemId == null) {
+				return null;
+			}
+			int separator = itemId.indexOf(':');
+			if (separator <= 0 || separator >= itemId.length() - 1) {
+				return null;
+			}
+			String itemNamespace = itemId.substring(0, separator);
+			String path = itemId.substring(separator + 1);
+			int underscore = path.lastIndexOf('_');
+			if (underscore <= 0 || underscore >= path.length() - 1) {
+				return null;
+			}
+			String itemSuffix = path.substring(underscore + 1);
+			if (namespace == null) {
+				namespace = itemNamespace;
+				suffix = itemSuffix;
+				continue;
+			}
+			if (!namespace.equals(itemNamespace) || !suffix.equals(itemSuffix)) {
+				return null;
+			}
+		}
+
+		return namespace + ":" + suffix;
 	}
 
 	public record IngredientSlot(List<String> itemIds, String display, int maxStackSize) {

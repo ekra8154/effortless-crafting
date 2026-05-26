@@ -636,8 +636,9 @@ final class AutoMoveController {
 					ChainCraftController.onAutoMoveFinished(client, true);
 					return;
 				}
-				com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] Result slot still has items after organizing. Restarting loop.");
-				autoMoveOrganizing = false;
+				com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] Result slot still has items after organizing. Quick-moving next result.");
+				client.gameMode.handleContainerInput(menu.containerId, resultSlot.index, 0, ContainerInput.QUICK_MOVE, client.player);
+				autoMoveTargetArrivalObserved = true;
 				autoMoveWaitingTicks = 0;
 				return;
 			}

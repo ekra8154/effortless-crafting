@@ -20,6 +20,7 @@ import net.minecraft.world.item.crafting.display.SlotDisplayContext;
 
 public final class ChainCraftController {
 	private static final int STEP_TIMEOUT_TICKS = 200;
+	private static final int BATCH_SETTLE_QUIET_TICKS = 8;
 	private static ChainCraftRun activeRun;
 	private static PendingWarmupRetry pendingWarmupRetry;
 
@@ -97,6 +98,10 @@ public final class ChainCraftController {
 			failCurrentStep();
 			return;
 		}
+		if (activeRun.needsBatchSettlement()) {
+			activeRun = activeRun.withSettlingBatch();
+			return;
+		}
 		activeRun = activeRun.withCompletedBatch();
 		if (activeRun == null || activeRun.currentStepIndex() >= activeRun.plan().steps().size()) {
 			activeRun = null;
@@ -124,6 +129,10 @@ public final class ChainCraftController {
 		}
 		if (!client.isWindowActive()) {
 			abort(true);
+			return;
+		}
+		if (activeRun.settlingBatch()) {
+			tickBatchSettlement(client);
 			return;
 		}
 		if (!activeRun.waitingForStep()) {
@@ -171,6 +180,71 @@ public final class ChainCraftController {
 			&& !NearbyContainerDryRun.isActiveSessionRunning()) {
 			failCurrentStep();
 		}
+	}
+
+	private static void tickBatchSettlement(Minecraft client) {
+		if (activeRun == null || client.player == null || client.player.containerMenu == null) {
+			activeRun = null;
+			return;
+		}
+		int observedCopies = activeRun.observedProducedRecipeCopies();
+		if (observedCopies >= activeRun.scheduledBatchCopies()) {
+			ReachCraftingMod.LOGGER.info(
+				"[chain_execute] batch_settled reason=observed_target index={} observed_copies={} scheduled_copies={}",
+				activeRun.currentStepIndex(),
+				observedCopies,
+				activeRun.scheduledBatchCopies()
+			);
+			completeSettledBatch();
+			return;
+		}
+		if (ContainerUtils.isAutoMovePending()) {
+			activeRun = activeRun.withSettlingBatchProgress(observedCopies, 0);
+			return;
+		}
+
+		Slot resultSlot = client.player.containerMenu.getSlot(0);
+		if (!ContainerUtils.isAutoMovePending()
+			&& resultSlot.hasItem()
+			&& ItemStack.isSameItemSameComponents(resultSlot.getItem(), activeRun.currentStep().displayStack())) {
+			ReachCraftingMod.LOGGER.info(
+				"[chain_execute] batch_settle_auto_move index={} observed_copies={} scheduled_copies={} result={}",
+				activeRun.currentStepIndex(),
+				observedCopies,
+				activeRun.scheduledBatchCopies(),
+				ContainerUtils.formatStack(resultSlot.getItem())
+			);
+			ContainerUtils.scheduleAutoMove(activeRun.currentStep().displayStack());
+			activeRun = activeRun.withSettlingBatchProgress(observedCopies, 0);
+			return;
+		}
+
+		int quietTicks = observedCopies > activeRun.settleObservedCopies()
+			? 0
+			: activeRun.settleQuietTicks() + 1;
+		activeRun = activeRun.withSettlingBatchProgress(observedCopies, quietTicks);
+		if (quietTicks >= BATCH_SETTLE_QUIET_TICKS) {
+			ReachCraftingMod.LOGGER.info(
+				"[chain_execute] batch_settled reason=quiet index={} observed_copies={} scheduled_copies={} quiet_ticks={}",
+				activeRun.currentStepIndex(),
+				observedCopies,
+				activeRun.scheduledBatchCopies(),
+				quietTicks
+			);
+			completeSettledBatch();
+		}
+	}
+
+	private static void completeSettledBatch() {
+		if (activeRun == null) {
+			return;
+		}
+		activeRun = activeRun.withCompletedBatch();
+		if (activeRun == null || activeRun.currentStepIndex() >= activeRun.plan().steps().size()) {
+			activeRun = null;
+			return;
+		}
+		activeRun = activeRun.withWaiting(false, 0);
 	}
 
 	private static void tickPendingWarmupRetry(Minecraft client) {
@@ -372,10 +446,13 @@ public final class ChainCraftController {
 		int waitTicks,
 		int remainingStepCopies,
 		int scheduledBatchCopies,
-		int baselineOutputCount
+		int baselineOutputCount,
+		boolean settlingBatch,
+		int settleObservedCopies,
+		int settleQuietTicks
 	) {
 		private static ChainCraftRun start(ChainCraftPlan plan) {
-			return new ChainCraftRun(plan, 0, false, false, false, false, 0, plan.steps().getFirst().recipeCopies(), 0, 0);
+			return new ChainCraftRun(plan, 0, false, false, false, false, 0, plan.steps().getFirst().recipeCopies(), 0, 0, false, 0, 0);
 		}
 
 		ChainCraftPlan.Step currentStep() {
@@ -387,15 +464,35 @@ public final class ChainCraftController {
 		}
 
 		ChainCraftRun withScheduledBatch(int batchCopies, int outputCountBeforeBatch) {
-			return new ChainCraftRun(plan, currentStepIndex, true, false, stagingAttempted, preStagedNearbyResources, 0, remainingStepCopies, Math.max(batchCopies, 1), outputCountBeforeBatch);
+			return new ChainCraftRun(plan, currentStepIndex, true, false, stagingAttempted, preStagedNearbyResources, 0, remainingStepCopies, Math.max(batchCopies, 1), outputCountBeforeBatch, false, 0, 0);
 		}
 
 		ChainCraftRun withWaitingForStaging() {
-			return new ChainCraftRun(plan, currentStepIndex, false, true, true, false, 0, remainingStepCopies, scheduledBatchCopies, baselineOutputCount);
+			return new ChainCraftRun(plan, currentStepIndex, false, true, true, false, 0, remainingStepCopies, scheduledBatchCopies, baselineOutputCount, false, 0, 0);
 		}
 
 		ChainCraftRun withStagingComplete(boolean preStaged) {
-			return new ChainCraftRun(plan, currentStepIndex, false, false, true, preStaged, 0, remainingStepCopies, scheduledBatchCopies, baselineOutputCount);
+			return new ChainCraftRun(plan, currentStepIndex, false, false, true, preStaged, 0, remainingStepCopies, scheduledBatchCopies, baselineOutputCount, false, 0, 0);
+		}
+
+		boolean needsBatchSettlement() {
+			return scheduledBatchCopies > 1 && observedProducedRecipeCopies() < scheduledBatchCopies;
+		}
+
+		ChainCraftRun withSettlingBatch() {
+			int observedCopies = observedProducedRecipeCopies();
+			ReachCraftingMod.LOGGER.info(
+				"[chain_execute] batch_settling index={} scheduled_copies={} observed_copies={} remaining_before={}",
+				currentStepIndex,
+				scheduledBatchCopies,
+				observedCopies,
+				remainingStepCopies
+			);
+			return new ChainCraftRun(plan, currentStepIndex, true, false, stagingAttempted, preStagedNearbyResources, 0, remainingStepCopies, scheduledBatchCopies, baselineOutputCount, true, observedCopies, 0);
+		}
+
+		ChainCraftRun withSettlingBatchProgress(int observedCopies, int quietTicks) {
+			return new ChainCraftRun(plan, currentStepIndex, true, false, stagingAttempted, preStagedNearbyResources, waitTicks + 1, remainingStepCopies, scheduledBatchCopies, baselineOutputCount, true, observedCopies, quietTicks);
 		}
 
 		ChainCraftRun withCompletedBatch() {
@@ -416,7 +513,7 @@ public final class ChainCraftController {
 					currentStepIndex,
 					remaining
 				);
-				return new ChainCraftRun(plan, currentStepIndex, false, false, stagingAttempted, preStagedNearbyResources, 0, remaining, 0, 0);
+				return new ChainCraftRun(plan, currentStepIndex, false, false, stagingAttempted, preStagedNearbyResources, 0, remaining, 0, 0, false, 0, 0);
 			}
 			int nextIndex = currentStepIndex + 1;
 			if (nextIndex >= plan.steps().size()) {
@@ -428,11 +525,11 @@ public final class ChainCraftController {
 				currentStepIndex,
 				nextIndex
 			);
-			return new ChainCraftRun(plan, nextIndex, false, false, stagingAttempted, preStagedNearbyResources, 0, plan.steps().get(nextIndex).recipeCopies(), 0, 0);
+			return new ChainCraftRun(plan, nextIndex, false, false, stagingAttempted, preStagedNearbyResources, 0, plan.steps().get(nextIndex).recipeCopies(), 0, 0, false, 0, 0);
 		}
 
 		ChainCraftRun withWaiting(boolean updatedWaitingForStep, int updatedWaitTicks) {
-			return new ChainCraftRun(plan, currentStepIndex, updatedWaitingForStep, waitingForStaging, stagingAttempted, preStagedNearbyResources, updatedWaitTicks, remainingStepCopies, scheduledBatchCopies, baselineOutputCount);
+			return new ChainCraftRun(plan, currentStepIndex, updatedWaitingForStep, waitingForStaging, stagingAttempted, preStagedNearbyResources, updatedWaitTicks, remainingStepCopies, scheduledBatchCopies, baselineOutputCount, settlingBatch, settleObservedCopies, settleQuietTicks);
 		}
 
 		private static int maxBatchCopies(ChainCraftPlan.Step step) {

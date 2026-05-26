@@ -366,6 +366,15 @@ public final class ReachCraftingConfigScreen {
 			.build());
 
 		messagesGroup.add(entries.startBooleanToggle(
+				Component.translatable("option.reachcrafting.show_chain_craft_messages"),
+				config.showChainCraftMessages()
+			)
+			.setDefaultValue(true)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.show_chain_craft_messages"))
+			.setSaveConsumer(config::setShowChainCraftMessages)
+			.build());
+
+		messagesGroup.add(entries.startBooleanToggle(
 				Component.translatable("option.reachcrafting.debug_messages_enabled"),
 				config.debugMessagesEnabled()
 			)

@@ -47,6 +47,12 @@ public class ReachCraftingModClient implements ClientModInitializer {
 		}
 	}
 
+	public static void sendChainCraftChat(String message) {
+		if (ReachCraftingConfig.get().showChainCraftMessages()) {
+			sendChat(message);
+		}
+	}
+
 	@Override
 	public void onInitializeClient() {
 		ReachCraftingConfig.load();
