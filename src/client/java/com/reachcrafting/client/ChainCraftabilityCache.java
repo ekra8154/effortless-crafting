@@ -42,6 +42,7 @@ public final class ChainCraftabilityCache {
 	private static int lastKnownRecipeCount = -1;
 	private static int lastGridSlotCount = -1;
 	private static List<LightRecipe> recipeIndex = List.of();
+	private static Map<String, List<LightRecipe>> recipesByOutput = Map.of();
 
 	private ChainCraftabilityCache() {
 	}
@@ -115,6 +116,11 @@ public final class ChainCraftabilityCache {
 
 		if (indexStale) {
 			recipeIndex = buildRecipeIndex(knownRecipes, gridSlotCount, context);
+			Map<String, List<LightRecipe>> byOutput = new java.util.HashMap<>();
+			for (LightRecipe recipe : recipeIndex) {
+				byOutput.computeIfAbsent(recipe.outputItemId, k -> new ArrayList<>()).add(recipe);
+			}
+			recipesByOutput = Map.copyOf(byOutput);
 			ReachCraftingMod.LOGGER.debug(
 				"[chain_cache] rebuilt recipe index recipes={} grid_slots={}",
 				recipeIndex.size(),
@@ -126,11 +132,14 @@ public final class ChainCraftabilityCache {
 	}
 
 	private static void recompute(Minecraft client, LocalPlayer player) {
-		// Collect directly available item IDs (boolean — at least 1 exists)
+		// Collect directly available item counts and boolean set
 		Set<String> directlyAvailable = new HashSet<>();
+		Map<String, Integer> availableCounts = new java.util.HashMap<>();
 		for (ItemStack stack : player.getInventory().getNonEquipmentItems()) {
 			if (!stack.isEmpty()) {
-				directlyAvailable.add(BuiltInRegistries.ITEM.getKey(stack.getItem()).toString());
+				String id = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+				directlyAvailable.add(id);
+				availableCounts.merge(id, stack.getCount(), Integer::sum);
 			}
 		}
 
@@ -142,7 +151,10 @@ public final class ChainCraftabilityCache {
 			NearbyContainerCache.ReachableView view = NearbyContainerCache.getReachableView(
 				client.level, client.getCameraEntity(), player.blockInteractionRange()
 			);
-			directlyAvailable.addAll(view.aggregateCounts().keySet());
+			for (Map.Entry<String, Integer> entry : view.aggregateCounts().entrySet()) {
+				directlyAvailable.add(entry.getKey());
+				availableCounts.merge(entry.getKey(), entry.getValue(), Integer::sum);
+			}
 		}
 
 		// Forward-reachability flood-fill
@@ -163,7 +175,7 @@ public final class ChainCraftabilityCache {
 			}
 		}
 
-		// Classify each recipe in the index
+		// Classify each recipe in the index using exact verification
 		Set<RecipeDisplayId> result = new HashSet<>();
 		for (LightRecipe recipe : recipeIndex) {
 			if (!allSlotsSatisfied(recipe.ingredientSlots, reachable)) {
@@ -172,7 +184,9 @@ public final class ChainCraftabilityCache {
 			if (allSlotsSatisfied(recipe.ingredientSlots, directlyAvailable)) {
 				continue;
 			}
-			result.add(recipe.recipeId);
+			if (verifyExact(recipe, availableCounts)) {
+				result.add(recipe.recipeId);
+			}
 		}
 
 		chainCraftableRecipeIds = Set.copyOf(result);
@@ -201,6 +215,74 @@ public final class ChainCraftabilityCache {
 		return true;
 	}
 
+	private static int dfsOperations = 0;
+
+	private static boolean verifyExact(LightRecipe recipe, Map<String, Integer> directlyAvailableCounts) {
+		dfsOperations = 0;
+		Map<String, Integer> state = new java.util.HashMap<>(directlyAvailableCounts);
+		return verifyRecipe(recipe, 1, state, new HashSet<>(), 0);
+	}
+
+	private static boolean verifyRecipe(LightRecipe recipe, int craftsNeeded, Map<String, Integer> state, Set<RecipeDisplayId> resolving, int depth) {
+		if (depth > 6) return false;
+		if (dfsOperations++ > 2000) return false;
+
+		if (!resolving.add(recipe.recipeId)) {
+			return false; // Cycle detected
+		}
+		
+		Map<List<String>, Integer> aggregatedSlots = new java.util.HashMap<>();
+		for (List<String> slot : recipe.ingredientSlots) {
+			aggregatedSlots.merge(slot, craftsNeeded, Integer::sum);
+		}
+		
+		for (Map.Entry<List<String>, Integer> entry : aggregatedSlots.entrySet()) {
+			if (!fulfillRequirement(entry.getKey(), entry.getValue(), state, resolving, depth + 1)) {
+				resolving.remove(recipe.recipeId);
+				return false;
+			}
+		}
+		resolving.remove(recipe.recipeId);
+		return true;
+	}
+
+	private static boolean fulfillRequirement(List<String> options, int needed, Map<String, Integer> state, Set<RecipeDisplayId> resolving, int depth) {
+		if (dfsOperations++ > 2000) return false;
+
+		// 1. Greedily consume what we already have
+		for (String option : options) {
+			int available = state.getOrDefault(option, 0);
+			if (available > 0) {
+				int consume = Math.min(available, needed);
+				state.put(option, available - consume);
+				needed -= consume;
+				if (needed <= 0) return true;
+			}
+		}
+		
+		// 2. Backtrack to craft the remainder
+		for (String option : options) {
+			List<LightRecipe> producers = recipesByOutput.get(option);
+			if (producers == null) continue;
+			
+			for (LightRecipe producer : producers) {
+				int craftsNeeded = (needed + producer.outputCount - 1) / producer.outputCount;
+				Map<String, Integer> stateBackup = new java.util.HashMap<>(state);
+				
+				if (verifyRecipe(producer, craftsNeeded, state, resolving, depth)) {
+					int produced = craftsNeeded * producer.outputCount;
+					int remainder = produced - needed;
+					state.put(option, state.getOrDefault(option, 0) + remainder);
+					return true;
+				}
+				
+				state.clear();
+				state.putAll(stateBackup);
+			}
+		}
+		return false;
+	}
+
 	private static List<LightRecipe> buildRecipeIndex(
 		Map<RecipeDisplayId, RecipeDisplayEntry> knownRecipes,
 		int gridSlotCount,
@@ -226,7 +308,8 @@ public final class ChainCraftabilityCache {
 				continue;
 			}
 			String outputId = BuiltInRegistries.ITEM.getKey(output.getItem()).toString();
-			index.add(new LightRecipe(outputId, List.copyOf(slots), entry.id()));
+			int outputCount = Math.max(output.getCount(), 1);
+			index.add(new LightRecipe(outputId, outputCount, List.copyOf(slots), entry.id()));
 		}
 		return List.copyOf(index);
 	}
@@ -257,6 +340,6 @@ public final class ChainCraftabilityCache {
 		return hash;
 	}
 
-	private record LightRecipe(String outputItemId, List<List<String>> ingredientSlots, RecipeDisplayId recipeId) {
+	private record LightRecipe(String outputItemId, int outputCount, List<List<String>> ingredientSlots, RecipeDisplayId recipeId) {
 	}
 }
