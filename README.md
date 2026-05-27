@@ -1,6 +1,6 @@
 # Effortless Crafting
 
-**Effortless Crafting** is a client-side Fabric mod for Minecraft 1.21.11 that streamlines crafting by pulling items from your inventory and nearby containers along with some crafting quality of life tweaks, all while staying vanilla-compatible.
+**Effortless Crafting** is a client-side Fabric mod for Minecraft that streamlines crafting by pulling items from your inventory and nearby containers along with some crafting quality of life tweaks, all while staying vanilla-compatible.
 
 The mod works entirely through standard container interaction and recipe placement that a vanilla client can already perform, so it works cleanly on vanilla servers.
 
@@ -81,6 +81,19 @@ Combinations of these modifiers stack naturally.
 
 ---
 
+## Chain Crafting
+
+Chain crafting extends autocraft by working backward through craftable dependencies when the final recipe is missing intermediate ingredients.
+
+- **Dependency crafting**: If you request an autocraft for something like a comparator but only have logs, redstone, stone, and quartz, the mod can craft planks, sticks, redstone torches, and then the comparator.
+- **Ask first or always**: Chain crafting can be disabled, ask for confirmation, or run automatically from the mod settings.
+- **Nearby-aware requests**: Holding `Ctrl` allows the chain planner to use cached nearby containers along with your inventory.
+- **Partial fallback**: If the full requested amount cannot be crafted but at least one final output can, the mod can offer to craft the possible amount instead.
+- **Conservative execution**: Intermediate results go into your inventory, and each step still uses the normal autocraft placement and validation path.
+- **Current limitation**: Bulk chain crafting is not supported yet. Bulk requests that would require chain crafting are reported instead of starting a bulk chain session.
+
+---
+
 ## Bulk Crafting
 
 - **Enable bulk mode**: Hold `Alt` and click the crafting result arrow. Bulk mode is shown with an orange outline around the arrow. It remains on even after alt is released until a craft has been completed or aborted, or toggled back off. 
@@ -130,6 +143,7 @@ Scroll to pull is a specialized fast-output workflow that pairs well with the `S
 
 - **Type to search**: Typing can jump directly into the recipe book search bar while ignoring keys that should not become text input.
 - **Search history**: Use the up and down arrows to cycle through previous recipe book searches.
+- **Smart recipe sorting**: The recipe book can prioritize recent crafts, directly craftable recipes, chain-craftable recipes, and nearby-craftable recipes while keeping vanilla sorting available in settings.
 - **3x3 auto-focus**: The search bar is automatically focused when opening a crafting table.
 - **Yield and queue indicators**: The UI can show output totals and queued counts directly on recipes.
 - **Chat feedback**: Missing ingredient reports and bulk craft summaries are surfaced in chat.
