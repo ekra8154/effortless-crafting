@@ -1,6 +1,7 @@
 package com.reachcrafting.client;
 
 import java.util.List;
+import java.util.Map;
 import net.minecraft.client.gui.screens.recipebook.RecipeCollection;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.inventory.AbstractContainerMenu;
@@ -70,6 +71,10 @@ public final class NearbyContainerDryRun {
 
 	public static void startReturn(AbstractContainerMenu closingMenu, List<PulledResourcesTracker.WithdrawnItem> items, boolean reopenScreen) {
 		COORDINATOR.startReturn(closingMenu, items, reopenScreen);
+	}
+
+	public static void startCountStaging(Map<String, Integer> desiredCounts, String reason) {
+		COORDINATOR.startCountStaging(new CountStagingRequest(desiredCounts, reason));
 	}
 
 	public static void cancelCurrent() {

@@ -169,17 +169,28 @@ final class RecipeClickExecutor {
 				? deficitReport.possibleCopies()
 				: requestedClicks;
 
-		boolean useDryRun = forceDryRun || allowNearbyChests;
+		// Chain already resolved local-only intermediate dependencies up front, so
+		// these replayed steps can use the faster direct placement path.
+		boolean directChainReplay = ChainCraftController.isActive()
+			&& (!allowNearbyChests || ChainCraftController.isUsingPreStagedNearbyResources());
+		boolean useDryRun = (allowNearbyChests && !directChainReplay) || (forceDryRun && !directChainReplay);
+		ReachCraftingConfig.ChainCraftingMode chainMode = ReachCraftingConfig.get().chainCraftingMode();
+		boolean canOfferChainCraft = deficitReport.hasMissingIngredients()
+			&& autoCraftRequested
+			&& chainMode != ReachCraftingConfig.ChainCraftingMode.DISABLED
+			&& !ChainCraftController.isActive();
+		String missingMessage = deficitReport.hasMissingIngredients()
+			? "Missing: " + deficitReport.compactMissingSummary()
+			: "";
 		if (deficitReport.hasMissingIngredients()) {
 			ReachCraftingModClient.sendDebugChat("Missing from inventory: " + deficitReport.compactMissingSummary());
-			if (!useDryRun) {
-				ReachCraftingModClient.sendMissingIngredientsChat("Missing: " + deficitReport.compactMissingSummary());
+			if (!useDryRun && !canOfferChainCraft) {
+				ReachCraftingModClient.sendMissingIngredientsChat(missingMessage);
 			}
 		} else {
 			ReachCraftingModClient.sendDebugChat("Ready: " + outputLabel);
 		}
 
-		ReachCraftingConfig.ChainCraftingMode chainMode = ReachCraftingConfig.get().chainCraftingMode();
 		if (deficitReport.hasMissingIngredients()) {
 			ReachCraftingMod.LOGGER.info(
 				"[chain_gate] recipe={} missing={} auto_requested={} mode={} use_dry_run={} force_dry_run={} allow_nearby={} bulk_mode={} craft_all={} effective_craft_all={} requested_clicks={} desired_copies={} available={} chain_available={} local_available={}",
@@ -201,11 +212,8 @@ final class RecipeClickExecutor {
 			);
 		}
 
-		if (deficitReport.hasMissingIngredients()
-			&& autoCraftRequested
-			&& chainMode != ReachCraftingConfig.ChainCraftingMode.DISABLED
-			&& !ChainCraftController.isActive()) {
-			Optional<ChainCraftPlan> chainPlan = planChainCraft(
+		if (canOfferChainCraft) {
+			Optional<ChainCraftOffer> chainOffer = planChainCraftOffer(
 				minecraft,
 				player,
 				selectedRecipe,
@@ -215,12 +223,14 @@ final class RecipeClickExecutor {
 				requestedClicks,
 				desiredVariantCopies
 			);
-			if (chainPlan.isPresent()) {
+			if (chainOffer.isPresent()) {
+				ChainCraftPlan chainPlan = chainOffer.get().plan();
 				ReachCraftingMod.LOGGER.info(
-					"[chain_plan] available recipe={} requested={} steps={} allow_nearby={} bulk_mode={}",
+					"[chain_plan] available recipe={} requested={} planned={} steps={} allow_nearby={} bulk_mode={}",
 					selectedRecipe.recipeId(),
-					chainPlan.get().finalRecipeCopies(),
-					chainPlan.get().steps().size(),
+					chainOffer.get().requestedRecipeCopies(),
+					chainPlan.finalRecipeCopies(),
+					chainPlan.steps().size(),
 					allowNearbyChests,
 					AutoCraftController.isBulkModeEnabled()
 				);
@@ -228,7 +238,10 @@ final class RecipeClickExecutor {
 					ReachCraftingModClient.sendChat(net.minecraft.network.chat.Component.translatable("message.reachcrafting.chain_crafting.bulk_unsupported").getString());
 					return;
 				}
-				ChainCraftPopupController.handlePlan(chainPlan.get());
+				int popupRequestedCopies = chainOffer.get().maxRequest()
+					? chainPlan.finalRecipeCopies()
+					: chainOffer.get().requestedRecipeCopies();
+				ChainCraftPopupController.handlePlan(chainPlan, popupRequestedCopies, false, missingMessage);
 				return;
 			}
 			ReachCraftingMod.LOGGER.info(
@@ -254,6 +267,9 @@ final class RecipeClickExecutor {
 					refillableBulkMaxMode,
 					selectedRecipe.displayStack()
 				);
+			}
+			if (!useDryRun) {
+				ReachCraftingModClient.sendMissingIngredientsChat(missingMessage);
 			}
 		}
 
@@ -296,6 +312,9 @@ final class RecipeClickExecutor {
 					postPlaceSnapshot.hasReservedGrid()
 				);
 				ContainerUtils.scheduleAutoMove(selectedRecipe.displayStack());
+				if (!ChainCraftController.isActive()) {
+					ReachCraftingConfig.get().noteRecentRecipe(selectedRecipe.recipeId());
+				}
 				ReachCraftingModClient.sendDebugChat("Placed recipe: " + outputLabel);
 				if (explicitVariantSelection) {
 					tryCloseOverlayAfterRelease();
@@ -351,12 +370,14 @@ final class RecipeClickExecutor {
 		MultiPlayerGameMode gameMode = minecraft.gameMode;
 		if (gameMode != null) {
 			int queueLimit = resolveRecipeQueueLimit(minecraft, selectedRecipe.recipeId(), collection);
-			boolean useBulkPlace = effectiveCraftAll || (AutoCraftController.isBulkModeEnabled() && requestedClicks >= queueLimit);
+			boolean useBulkPlace = effectiveCraftAll
+				|| (AutoCraftController.isBulkModeEnabled() && requestedClicks >= queueLimit);
+			boolean repeatDirectPlacement = AutoCraftController.isBulkModeEnabled() || directChainReplay;
 
 			if (useBulkPlace) {
 				gameMode.handlePlaceRecipe(player.containerMenu.containerId, selectedRecipe.recipeId(), true);
 			} else {
-				int iterations = AutoCraftController.isBulkModeEnabled() ? Math.max(effectiveRequestedClicks, 1) : 1;
+				int iterations = repeatDirectPlacement ? Math.max(effectiveRequestedClicks, 1) : 1;
 				for (int i = 0; i < iterations; i++) {
 					gameMode.handlePlaceRecipe(player.containerMenu.containerId, selectedRecipe.recipeId(), false);
 				}
@@ -389,6 +410,9 @@ final class RecipeClickExecutor {
 					ingredientSummary
 				);
 				ContainerUtils.scheduleAutoMove(selectedRecipe.displayStack());
+			}
+			if (!ChainCraftController.isActive()) {
+				ReachCraftingConfig.get().noteRecentRecipe(selectedRecipe.recipeId());
 			}
 			ReachCraftingModClient.sendDebugChat("Placed recipe: " + outputLabel);
 			if (explicitVariantSelection) {
@@ -611,6 +635,48 @@ final class RecipeClickExecutor {
 			allowNearbyChests,
 			Math.max(desiredVariantCopies, 1)
 		);
+	}
+
+	private static Optional<ChainCraftOffer> planChainCraftOffer(
+		Minecraft minecraft,
+		LocalPlayer player,
+		RecipeVariantResolver.Selection selectedRecipe,
+		Map<String, Integer> availableCounts,
+		boolean allowNearbyChests,
+		boolean effectiveCraftAll,
+		int requestedClicks,
+		int desiredVariantCopies
+	) {
+		int requestedRecipeCopies = effectiveCraftAll
+			? Math.max(requestedClicks, 1)
+			: Math.max(desiredVariantCopies, 1);
+		Optional<ChainCraftPlan> exactOrMax = planChainCraft(
+			minecraft,
+			player,
+			selectedRecipe,
+			availableCounts,
+			allowNearbyChests,
+			effectiveCraftAll,
+			requestedClicks,
+			desiredVariantCopies
+		);
+		if (exactOrMax.isPresent()) {
+			return Optional.of(new ChainCraftOffer(exactOrMax.get(), requestedRecipeCopies, effectiveCraftAll));
+		}
+		if (requestedRecipeCopies <= 1 || AutoCraftController.isBulkModeEnabled()) {
+			return Optional.empty();
+		}
+		return ChainCraftPlanner.planMax(
+			minecraft,
+			player,
+			selectedRecipe,
+			availableCounts,
+			allowNearbyChests,
+			requestedRecipeCopies - 1
+		).map(plan -> new ChainCraftOffer(plan, requestedRecipeCopies, false));
+	}
+
+	private record ChainCraftOffer(ChainCraftPlan plan, int requestedRecipeCopies, boolean maxRequest) {
 	}
 
 	private static boolean areNearbyResourcesRequired(

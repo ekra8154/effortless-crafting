@@ -11,6 +11,7 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.inventory.CraftingScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
+import net.minecraft.client.gui.screens.recipebook.RecipeCollection;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.util.context.ContextMap;
@@ -42,6 +43,7 @@ public final class ChainCraftabilityCache {
 	private static int lastKnownRecipeCount = -1;
 	private static int lastGridSlotCount = -1;
 	private static List<LightRecipe> recipeIndex = List.of();
+	private static Map<String, List<LightRecipe>> recipesByOutput = Map.of();
 
 	private ChainCraftabilityCache() {
 	}
@@ -85,8 +87,11 @@ public final class ChainCraftabilityCache {
 
 		LocalPlayer player = client.player;
 		int gridSlotCount = client.screen instanceof InventoryScreen ? 4 : 9;
-		Map<RecipeDisplayId, RecipeDisplayEntry> knownRecipes = ((ClientRecipeBookAccessor) player.getRecipeBook()).getKnown();
-		int knownCount = knownRecipes.size();
+		List<RecipeDisplayEntry> allRecipes = new java.util.ArrayList<>();
+		for (RecipeCollection collection : player.getRecipeBook().getCollections()) {
+			allRecipes.addAll(collection.getRecipes());
+		}
+		int knownCount = allRecipes.size();
 		long inventoryHash = computeInventoryHash(player);
 
 		long nearbyRevision = 0;
@@ -114,7 +119,12 @@ public final class ChainCraftabilityCache {
 		ContextMap context = SlotDisplayContext.fromLevel(client.level);
 
 		if (indexStale) {
-			recipeIndex = buildRecipeIndex(knownRecipes, gridSlotCount, context);
+			recipeIndex = buildRecipeIndex(allRecipes, gridSlotCount, context);
+			Map<String, List<LightRecipe>> byOutput = new java.util.HashMap<>();
+			for (LightRecipe recipe : recipeIndex) {
+				byOutput.computeIfAbsent(recipe.outputItemId, k -> new ArrayList<>()).add(recipe);
+			}
+			recipesByOutput = Map.copyOf(byOutput);
 			ReachCraftingMod.LOGGER.debug(
 				"[chain_cache] rebuilt recipe index recipes={} grid_slots={}",
 				recipeIndex.size(),
@@ -126,11 +136,14 @@ public final class ChainCraftabilityCache {
 	}
 
 	private static void recompute(Minecraft client, LocalPlayer player) {
-		// Collect directly available item IDs (boolean — at least 1 exists)
+		// Collect directly available item counts and boolean set
 		Set<String> directlyAvailable = new HashSet<>();
+		Map<String, Integer> availableCounts = new java.util.HashMap<>();
 		for (ItemStack stack : player.getInventory().getNonEquipmentItems()) {
 			if (!stack.isEmpty()) {
-				directlyAvailable.add(BuiltInRegistries.ITEM.getKey(stack.getItem()).toString());
+				String id = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+				directlyAvailable.add(id);
+				availableCounts.merge(id, stack.getCount(), Integer::sum);
 			}
 		}
 
@@ -142,7 +155,10 @@ public final class ChainCraftabilityCache {
 			NearbyContainerCache.ReachableView view = NearbyContainerCache.getReachableView(
 				client.level, client.getCameraEntity(), player.blockInteractionRange()
 			);
-			directlyAvailable.addAll(view.aggregateCounts().keySet());
+			for (Map.Entry<String, Integer> entry : view.aggregateCounts().entrySet()) {
+				directlyAvailable.add(entry.getKey());
+				availableCounts.merge(entry.getKey(), entry.getValue(), Integer::sum);
+			}
 		}
 
 		// Forward-reachability flood-fill
@@ -163,16 +179,15 @@ public final class ChainCraftabilityCache {
 			}
 		}
 
-		// Classify each recipe in the index
+		// Classify each recipe in the index using exact verification
 		Set<RecipeDisplayId> result = new HashSet<>();
 		for (LightRecipe recipe : recipeIndex) {
 			if (!allSlotsSatisfied(recipe.ingredientSlots, reachable)) {
 				continue;
 			}
-			if (allSlotsSatisfied(recipe.ingredientSlots, directlyAvailable)) {
-				continue;
+			if (verifyExact(recipe, availableCounts) == VerifyResult.CHAIN_CRAFTABLE) {
+				result.add(recipe.recipeId);
 			}
-			result.add(recipe.recipeId);
 		}
 
 		chainCraftableRecipeIds = Set.copyOf(result);
@@ -201,13 +216,93 @@ public final class ChainCraftabilityCache {
 		return true;
 	}
 
+	private enum VerifyResult {
+		NOT_CRAFTABLE,
+		DIRECTLY_CRAFTABLE,
+		CHAIN_CRAFTABLE
+	}
+
+	private static int dfsOperations = 0;
+
+	private static VerifyResult verifyExact(LightRecipe recipe, Map<String, Integer> directlyAvailableCounts) {
+		dfsOperations = 0;
+		Map<String, Integer> state = new java.util.HashMap<>(directlyAvailableCounts);
+		return verifyRecipe(recipe, 1, state, new HashSet<>(), 0);
+	}
+
+	private static VerifyResult verifyRecipe(LightRecipe recipe, int craftsNeeded, Map<String, Integer> state, Set<RecipeDisplayId> resolving, int depth) {
+		if (depth > 6) return VerifyResult.NOT_CRAFTABLE;
+		if (dfsOperations++ > 2000) return VerifyResult.NOT_CRAFTABLE;
+
+		if (!resolving.add(recipe.recipeId)) {
+			return VerifyResult.NOT_CRAFTABLE; // Cycle detected
+		}
+		
+		Map<List<String>, Integer> aggregatedSlots = new java.util.HashMap<>();
+		for (List<String> slot : recipe.ingredientSlots) {
+			aggregatedSlots.merge(slot, craftsNeeded, Integer::sum);
+		}
+		
+		boolean anyBacktracked = false;
+		for (Map.Entry<List<String>, Integer> entry : aggregatedSlots.entrySet()) {
+			VerifyResult reqResult = fulfillRequirement(entry.getKey(), entry.getValue(), state, resolving, depth + 1);
+			if (reqResult == VerifyResult.NOT_CRAFTABLE) {
+				resolving.remove(recipe.recipeId);
+				return VerifyResult.NOT_CRAFTABLE;
+			}
+			if (reqResult == VerifyResult.CHAIN_CRAFTABLE) {
+				anyBacktracked = true;
+			}
+		}
+		resolving.remove(recipe.recipeId);
+		return anyBacktracked ? VerifyResult.CHAIN_CRAFTABLE : VerifyResult.DIRECTLY_CRAFTABLE;
+	}
+
+	private static VerifyResult fulfillRequirement(List<String> options, int needed, Map<String, Integer> state, Set<RecipeDisplayId> resolving, int depth) {
+		if (dfsOperations++ > 2000) return VerifyResult.NOT_CRAFTABLE;
+
+		// 1. Greedily consume what we already have
+		for (String option : options) {
+			int available = state.getOrDefault(option, 0);
+			if (available > 0) {
+				int consume = Math.min(available, needed);
+				state.put(option, available - consume);
+				needed -= consume;
+				if (needed <= 0) return VerifyResult.DIRECTLY_CRAFTABLE;
+			}
+		}
+		
+		// 2. Backtrack to craft the remainder
+		for (String option : options) {
+			List<LightRecipe> producers = recipesByOutput.get(option);
+			if (producers == null) continue;
+			
+			for (LightRecipe producer : producers) {
+				int craftsNeeded = (needed + producer.outputCount - 1) / producer.outputCount;
+				Map<String, Integer> stateBackup = new java.util.HashMap<>(state);
+				
+				VerifyResult prodResult = verifyRecipe(producer, craftsNeeded, state, resolving, depth);
+				if (prodResult != VerifyResult.NOT_CRAFTABLE) {
+					int produced = craftsNeeded * producer.outputCount;
+					int remainder = produced - needed;
+					state.put(option, state.getOrDefault(option, 0) + remainder);
+					return VerifyResult.CHAIN_CRAFTABLE;
+				}
+				
+				state.clear();
+				state.putAll(stateBackup);
+			}
+		}
+		return VerifyResult.NOT_CRAFTABLE;
+	}
+
 	private static List<LightRecipe> buildRecipeIndex(
-		Map<RecipeDisplayId, RecipeDisplayEntry> knownRecipes,
+		List<RecipeDisplayEntry> allRecipes,
 		int gridSlotCount,
 		ContextMap context
 	) {
 		List<LightRecipe> index = new ArrayList<>();
-		for (RecipeDisplayEntry entry : knownRecipes.values()) {
+		for (RecipeDisplayEntry entry : allRecipes) {
 			if (!fitsGrid(entry, gridSlotCount)) {
 				continue;
 			}
@@ -226,7 +321,8 @@ public final class ChainCraftabilityCache {
 				continue;
 			}
 			String outputId = BuiltInRegistries.ITEM.getKey(output.getItem()).toString();
-			index.add(new LightRecipe(outputId, List.copyOf(slots), entry.id()));
+			int outputCount = Math.max(output.getCount(), 1);
+			index.add(new LightRecipe(outputId, outputCount, List.copyOf(slots), entry.id()));
 		}
 		return List.copyOf(index);
 	}
@@ -257,6 +353,6 @@ public final class ChainCraftabilityCache {
 		return hash;
 	}
 
-	private record LightRecipe(String outputItemId, List<List<String>> ingredientSlots, RecipeDisplayId recipeId) {
+	private record LightRecipe(String outputItemId, int outputCount, List<List<String>> ingredientSlots, RecipeDisplayId recipeId) {
 	}
 }

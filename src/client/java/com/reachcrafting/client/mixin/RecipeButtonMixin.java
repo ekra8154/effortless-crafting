@@ -19,7 +19,7 @@ public abstract class RecipeButtonMixin {
 		if (RecipeButtonNearbyIndicator.shouldShow(button)) {
 			AbstractWidget widget = (AbstractWidget) (Object) this;
 			RecipeButtonNearbyIndicator.renderDot(guiGraphics, widget.getX() + 3, widget.getY() + 3);
-		} else if (com.reachcrafting.client.ChainCraftabilityCache.isChainCraftable(button.getCurrentRecipe())) {
+		} else if (RecipeButtonNearbyIndicator.isChainCraftable(button)) {
 			AbstractWidget widget = (AbstractWidget) (Object) this;
 			RecipeButtonNearbyIndicator.renderChainDot(guiGraphics, widget.getX() + 3, widget.getY() + 3);
 		}

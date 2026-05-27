@@ -83,6 +83,26 @@ final class NearbyCraftCoordinator {
 		session.start();
 	}
 
+	void startCountStaging(CountStagingRequest request) {
+		Minecraft client = Minecraft.getInstance();
+		LocalPlayer player = client.player;
+		Level level = client.level;
+		MultiPlayerGameMode gameMode = client.gameMode;
+		Entity cameraEntity = client.getCameraEntity();
+		if (player == null || level == null || gameMode == null || cameraEntity == null) {
+			return;
+		}
+
+		cancelCurrent();
+		CountStagingSession session = new CountStagingSession(this, client, player, level, gameMode, cameraEntity, request);
+		if (!session.canStart()) {
+			return;
+		}
+
+		activeSession = session;
+		session.start();
+	}
+
 	boolean tryExpandReservedGrid(SearchRequest request) {
 		Minecraft client = Minecraft.getInstance();
 		LocalPlayer player = client.player;

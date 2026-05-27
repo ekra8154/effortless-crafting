@@ -238,6 +238,9 @@ public final class NearbyContainerCache {
 		Map<String, Integer> normalizedCounts = normalizeCounts(itemCounts);
 		ContainerSnapshot previous = SNAPSHOTS.get(key);
 		if (previous != null && previous.itemCounts().equals(normalizedCounts)) {
+			if (lastView != null && !lastView.snapshotsByKey().containsKey(key)) {
+				bumpRevision();
+			}
 			return;
 		}
 

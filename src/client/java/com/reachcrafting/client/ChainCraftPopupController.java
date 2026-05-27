@@ -45,11 +45,27 @@ public final class ChainCraftPopupController {
 	}
 
 	static void handlePlan(ChainCraftPlan plan) {
+		handlePlan(plan, plan != null ? plan.finalRecipeCopies() : 0);
+	}
+
+	static void handlePlan(ChainCraftPlan plan, int requestedRecipeCopies) {
+		handlePlan(plan, requestedRecipeCopies, false, null);
+	}
+
+	static void handlePlan(ChainCraftPlan plan, int requestedRecipeCopies, boolean allowDowngradedAlwaysMode) {
+		handlePlan(plan, requestedRecipeCopies, allowDowngradedAlwaysMode, null);
+	}
+
+	static void handlePlan(ChainCraftPlan plan, int requestedRecipeCopies, boolean allowDowngradedAlwaysMode, String deferredMissingMessage) {
 		ReachCraftingConfig.ChainCraftingMode mode = ReachCraftingConfig.get().chainCraftingMode();
 		if (mode == ReachCraftingConfig.ChainCraftingMode.DISABLED || plan == null) {
 			return;
 		}
+		boolean downgraded = requestedRecipeCopies > plan.finalRecipeCopies();
 		if (mode == ReachCraftingConfig.ChainCraftingMode.ALWAYS) {
+			if (downgraded) {
+				ReachCraftingModClient.sendChainCraftChat(alwaysPartialMessage(plan, requestedRecipeCopies).getString());
+			}
 			ChainCraftController.start(plan);
 			return;
 		}
@@ -65,15 +81,40 @@ public final class ChainCraftPopupController {
 			Component.translatable("popup.reachcrafting.chain_crafting.title")
 		)
 			.setWidth(260)
-			.addMessage(Component.translatable("popup.reachcrafting.chain_crafting.message"))
+			.setMessage(messageFor(plan, requestedRecipeCopies))
 			.addButton(Component.translatable("popup.reachcrafting.chain_crafting.yes"), ChainCraftPopupController::confirm)
 			.addButton(Component.translatable("popup.reachcrafting.chain_crafting.no"), ChainCraftPopupController::cancel)
 			.onClose(() -> {
 			})
 			.build();
 
-		PENDING_POPUPS.put(popup, new PendingPopup(plan));
+		PENDING_POPUPS.put(popup, new PendingPopup(plan, deferredMissingMessage));
 		client.setScreen(popup);
+	}
+
+	private static Component messageFor(ChainCraftPlan plan, int requestedRecipeCopies) {
+		if (requestedRecipeCopies <= plan.finalRecipeCopies()) {
+			return Component.translatable("popup.reachcrafting.chain_crafting.message");
+		}
+		int outputPerCraft = Math.max(plan.finalOutput().getCount(), 1);
+		String itemName = plan.finalOutput().getHoverName().getString();
+		return Component.translatable(
+			"popup.reachcrafting.chain_crafting.partial_message",
+			requestedRecipeCopies * outputPerCraft,
+			itemName,
+			plan.finalRecipeCopies() * outputPerCraft
+		);
+	}
+
+	private static Component alwaysPartialMessage(ChainCraftPlan plan, int requestedRecipeCopies) {
+		int outputPerCraft = Math.max(plan.finalOutput().getCount(), 1);
+		String itemName = plan.finalOutput().getHoverName().getString();
+		return Component.translatable(
+			"message.reachcrafting.chain_crafting.partial_always",
+			requestedRecipeCopies * outputPerCraft,
+			itemName,
+			plan.finalRecipeCopies() * outputPerCraft
+		);
 	}
 
 	public static boolean confirm(PopupScreen popup) {
@@ -87,10 +128,11 @@ public final class ChainCraftPopupController {
 	}
 
 	public static boolean cancel(PopupScreen popup) {
-		if (!PENDING_POPUPS.containsKey(popup)) {
+		PendingPopup pending = PENDING_POPUPS.remove(popup);
+		if (pending == null) {
 			return false;
 		}
-		PENDING_POPUPS.remove(popup);
+		sendDeferredMissing(pending);
 		popup.onClose();
 		return true;
 	}
@@ -100,7 +142,10 @@ public final class ChainCraftPopupController {
 	}
 
 	public static void closed(PopupScreen popup) {
-		PENDING_POPUPS.remove(popup);
+		PendingPopup pending = PENDING_POPUPS.remove(popup);
+		if (pending != null) {
+			sendDeferredMissing(pending);
+		}
 	}
 
 	static void tick(Minecraft client) {
@@ -117,6 +162,12 @@ public final class ChainCraftPopupController {
 		ChainCraftController.start(plan);
 	}
 
-	private record PendingPopup(ChainCraftPlan plan) {
+	private static void sendDeferredMissing(PendingPopup pending) {
+		if (pending.deferredMissingMessage() != null && !pending.deferredMissingMessage().isBlank()) {
+			ReachCraftingModClient.sendMissingIngredientsChat(pending.deferredMissingMessage());
+		}
+	}
+
+	private record PendingPopup(ChainCraftPlan plan, String deferredMissingMessage) {
 	}
 }

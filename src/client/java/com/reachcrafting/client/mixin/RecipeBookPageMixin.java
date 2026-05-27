@@ -95,7 +95,7 @@ public abstract class RecipeBookPageMixin {
 
 		boolean interceptWithMod = ctrlDown
 			|| (shiftDown && RecipeBookClickCapture.isBulkModeEnabled())
-			|| (altDown && !shiftDown && ReachCraftingConfig.get().altAsRequestKey());
+			|| (altDown && ReachCraftingConfig.get().altAsRequestKey());
 		if (!interceptWithMod) {
 			return;
 		}

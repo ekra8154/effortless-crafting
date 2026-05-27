@@ -444,6 +444,9 @@ public final class BulkAutoCraftController {
 			// com.reachcrafting.ReachCraftingMod.LOGGER.info("[bulk_craft] STOP aborted={} reason={} activeSession=false", aborted, reason);
 		}
 		if (activeSession != null) {
+			if (activeSession.completedRecipeCopies() > 0) {
+				ReachCraftingConfig.get().noteRecentRecipe(activeSession.action().recipeId());
+			}
 			String status = aborted ? "terminated" : "complete";
 			if (activeSession.summary().isEmpty()) {
 				String itemName = activeSession.expectedOutput().getHoverName().getString();

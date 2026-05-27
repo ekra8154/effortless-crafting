@@ -450,6 +450,7 @@ final class AutoMoveController {
 				int oldCount = autoMoveSnapshotCounts.getOrDefault(i, 0);
 
 				if (currentCount > oldCount) {
+					autoMoveTargetArrivalObserved = true;
 					com.reachcrafting.ReachCraftingMod.LOGGER.info(
 						"[auto_move] source candidate inv={} slot={} oldCount={} currentCount={} hotbar={} snapshot={}",
 						i,
@@ -568,7 +569,8 @@ final class AutoMoveController {
 				resultSlot.hasItem() ? ContainerUtils.formatStack(resultSlot.getItem()) : "<empty>",
 				ContainerUtils.formatStack(client.player.containerMenu.getCarried())
 			);
-			if (!hasObservedAutoMoveTargetArrival(menu) && autoMoveWaitingTicks <= ORGANIZE_TARGET_ARRIVAL_WAIT_TICKS) {
+			boolean observedTargetArrival = autoMoveTargetArrivalObserved || hasObservedAutoMoveTargetArrival(menu);
+			if (!observedTargetArrival && autoMoveWaitingTicks <= ORGANIZE_TARGET_ARRIVAL_WAIT_TICKS) {
 				com.reachcrafting.ReachCraftingMod.LOGGER.info(
 					"[auto_move] organize waiting for target arrival: waitTicks={} target={} snapshot_known_slots={}",
 					autoMoveWaitingTicks,
@@ -577,7 +579,7 @@ final class AutoMoveController {
 				);
 				return;
 			}
-			if (!autoMoveTargetArrivalObserved && hasObservedAutoMoveTargetArrival(menu)) {
+			if (!autoMoveTargetArrivalObserved && observedTargetArrival) {
 				autoMoveTargetArrivalObserved = true;
 				com.reachcrafting.ReachCraftingMod.LOGGER.info(
 					"[auto_move] organize observed target arrival: waitTicks={} target={}",
@@ -634,8 +636,9 @@ final class AutoMoveController {
 					ChainCraftController.onAutoMoveFinished(client, true);
 					return;
 				}
-				com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] Result slot still has items after organizing. Restarting loop.");
-				autoMoveOrganizing = false;
+				com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] Result slot still has items after organizing. Quick-moving next result.");
+				client.gameMode.handleInventoryMouseClick(menu.containerId, resultSlot.index, 0, ClickType.QUICK_MOVE, client.player);
+				autoMoveTargetArrivalObserved = true;
 				autoMoveWaitingTicks = 0;
 				return;
 			}
