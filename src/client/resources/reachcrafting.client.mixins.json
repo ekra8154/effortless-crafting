@@ -16,6 +16,8 @@
 		"OverlayRecipeComponentAccessor",
 		"OverlayRecipeComponentMixin",
 		"PlayerSecondaryUseMixin",
+		"PopupScreenAccessor",
+		"PopupScreenMixin",
 		"RecipeButtonMixin",
 		"RecipeBookComponentAccessor",
 		"RecipeBookPageAccessor",

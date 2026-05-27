@@ -49,7 +49,7 @@ final class AutoMoveController {
 	}
 
 	static boolean isAutomatedInteractionRunning() {
-		return pendingAutoMove || autoMoveOrganizing || NearbyContainerDryRun.isActiveSessionRunning() || InventoryGridRestoreTracker.isRestoring() || BulkAutoCraftController.isActive();
+		return pendingAutoMove || autoMoveOrganizing || NearbyContainerDryRun.isActiveSessionRunning() || InventoryGridRestoreTracker.isRestoring() || BulkAutoCraftController.isActive() || ChainCraftController.isActive();
 	}
 
 	static void settleCompletedWork(Minecraft client) {
@@ -97,6 +97,7 @@ final class AutoMoveController {
 		autoMoveSnapshotCounts.clear();
 
 		BulkAutoCraftController.onAutoMoveFinished(client, true);
+		ChainCraftController.onAutoMoveFinished(client, true);
 	}
 
 	static void abort() {
@@ -183,6 +184,7 @@ final class AutoMoveController {
 			}
 			directEjectPendingCount = 0;
 			BulkAutoCraftController.onAutoMoveFinished(client, true);
+			ChainCraftController.onAutoMoveFinished(client, true);
 			return;
 		}
 		
@@ -207,6 +209,7 @@ final class AutoMoveController {
 					autoMoveTargetArrivalObserved = false;
 					autoMoveTargetStack = ItemStack.EMPTY;
 					BulkAutoCraftController.onAutoMoveFinished(client, false);
+					ChainCraftController.onAutoMoveFinished(client, false);
 					return;
 				}
 
@@ -225,6 +228,7 @@ final class AutoMoveController {
 					&& !delayInventoryFullFallbackEject
 					&& !bulkProtectedKeep
 					&& ReachCraftingConfig.get().ejectItemsWhenFull()
+					&& !ChainCraftController.isRunningIntermediateStep()
 					&& !canFitInInventory(menu, currentResult)) {
 					shouldEject = true;
 					com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] shouldEject=true (inv full, cannot fit result)");
@@ -232,6 +236,7 @@ final class AutoMoveController {
 					&& delayInventoryFullFallbackEject
 					&& !bulkProtectedKeep
 					&& ReachCraftingConfig.get().ejectItemsWhenFull()
+					&& !ChainCraftController.isRunningIntermediateStep()
 					&& !canFitInInventory(menu, currentResult)) {
 					com.reachcrafting.ReachCraftingMod.LOGGER.info(
 						"[auto_move] delaying inventory-full eject until after organize pass result={} nearby_required={}",
@@ -307,9 +312,20 @@ final class AutoMoveController {
 					// com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] EJECT path done. {}", logBottleDistribution(menu));
 					pendingAutoMove = false;
 					BulkAutoCraftController.onAutoMoveFinished(client, true);
+					ChainCraftController.onAutoMoveFinished(client, true);
 					return;
 				}
 				directEjectAwaitingStagedCopiesTicks = 0;
+
+				if (ChainCraftController.isRunningIntermediateStep() && !canFitInInventory(menu, currentResult)) {
+					com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] chain intermediate has no inventory room for {}", ContainerUtils.formatStack(currentResult));
+					pendingAutoMove = false;
+					autoMoveOrganizing = false;
+					autoMoveTargetArrivalObserved = false;
+					autoMoveTargetStack = ItemStack.EMPTY;
+					ChainCraftController.onAutoMoveFinished(client, false);
+					return;
+				}
 
 				int slotsNeeded = 0;
 				if (AutoCraftController.isBulkModeEnabled()) {
@@ -386,6 +402,7 @@ final class AutoMoveController {
 					autoMoveTargetStack = ItemStack.EMPTY;
 					com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] waiting_for_result timeout in non-bulk mode");
 					BulkAutoCraftController.onAutoMoveFinished(client, false);
+					ChainCraftController.onAutoMoveFinished(client, false);
 				} else if (autoMoveWaitingTicks > BULK_RESULT_WAIT_TIMEOUT_TICKS
 					&& BulkAutoCraftController.isActive()
 					&& stagedCraftCopies <= 0
@@ -403,6 +420,7 @@ final class AutoMoveController {
 						resultSlot.hasItem() ? ContainerUtils.formatStack(resultSlot.getItem()) : "<empty>"
 					);
 					BulkAutoCraftController.onAutoMoveFinished(client, false);
+					ChainCraftController.onAutoMoveFinished(client, false);
 				}
 				return;
 			}
@@ -613,6 +631,7 @@ final class AutoMoveController {
 					autoMoveTargetArrivalObserved = false;
 					autoMoveTargetStack = ItemStack.EMPTY;
 					BulkAutoCraftController.onAutoMoveFinished(client, true);
+					ChainCraftController.onAutoMoveFinished(client, true);
 					return;
 				}
 				com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] Result slot still has items after organizing. Restarting loop.");
@@ -627,6 +646,7 @@ final class AutoMoveController {
 			autoMoveTargetStack = ItemStack.EMPTY;
 			com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] organize complete: finishing batch");
 			BulkAutoCraftController.onAutoMoveFinished(client, true);
+			ChainCraftController.onAutoMoveFinished(client, true);
 		}
 	}
 

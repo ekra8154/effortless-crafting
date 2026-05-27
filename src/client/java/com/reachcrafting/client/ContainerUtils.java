@@ -85,6 +85,10 @@ public final class ContainerUtils {
 		return AutoMoveController.isAutoMovePending();
 	}
 
+	public static boolean isChainCraftActive() {
+		return ChainCraftController.isActive();
+	}
+
 	public static boolean isAutomatedInteractionRunning() {
 		return AutoMoveController.isAutomatedInteractionRunning();
 	}
@@ -271,7 +275,8 @@ public final class ContainerUtils {
 			|| AutoMoveController.isAutomatedInteractionRunning() 
 			|| NearbyContainerDryRun.isActiveSessionRunning()
 			|| InventoryGridRestoreTracker.isRestoring()
-			|| BulkAutoCraftController.isActive();
+			|| BulkAutoCraftController.isActive()
+			|| ChainCraftController.isActive();
 	}
 
 	public static void abortAllSessions() {
@@ -286,6 +291,7 @@ public final class ContainerUtils {
 		} else {
 			BulkAutoCraftController.clear();
 		}
+		ChainCraftController.abort(false);
 		NearbyContainerDryRun.abortActiveSession();
 		InventoryGridRestoreTracker.clear();
 		OffhandConsolidationController.swapBack(net.minecraft.client.Minecraft.getInstance());
