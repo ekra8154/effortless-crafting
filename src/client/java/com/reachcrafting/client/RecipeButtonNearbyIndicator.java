@@ -27,6 +27,9 @@ public final class RecipeButtonNearbyIndicator {
 	}
 
 	public static boolean shouldShow(RecipeButton button) {
+		if (!ReachCraftingConfig.get().showNearbyCraftableIndicator()) {
+			return false;
+		}
 		if (button.getCollection() != null && button.getCollection().getRecipes().size() > 1) {
 			for (net.minecraft.world.item.crafting.display.RecipeDisplayEntry entry : button.getCollection().getRecipes()) {
 				if (getCraftability(entry.id(), button.getCollection(), ItemStack.EMPTY, true) == Craftability.NEARBY_CRAFTABLE) {
@@ -39,6 +42,9 @@ public final class RecipeButtonNearbyIndicator {
 	}
 
 	public static boolean isChainCraftable(RecipeButton button) {
+		if (!ReachCraftingConfig.get().showNearbyCraftableIndicator()) {
+			return false;
+		}
 		if (button.getCollection() != null && button.getCollection().getRecipes().size() > 1) {
 			for (net.minecraft.world.item.crafting.display.RecipeDisplayEntry entry : button.getCollection().getRecipes()) {
 				if (ChainCraftabilityCache.isChainCraftable(entry.id())) {
@@ -53,7 +59,6 @@ public final class RecipeButtonNearbyIndicator {
 	public static Craftability getCraftability(RecipeDisplayId recipe, RecipeCollection collection, ItemStack displayStack, boolean explicitVariantSelection) {
 		if (!ReachCraftingConfig.get().enabled()
 			|| !ReachCraftingConfig.get().enableNearbyContainerUsage()
-			|| !ReachCraftingConfig.get().showNearbyCraftableIndicator()
 			|| !ReachCraftingConfig.get().cacheContainersForFasterSearch()) {
 			return Craftability.NOT_CRAFTABLE;
 		}
@@ -196,6 +201,9 @@ public final class RecipeButtonNearbyIndicator {
 	}
 
 	public static void renderOverlayButton(net.minecraft.client.gui.GuiGraphicsExtractor guiGraphics, int x, int y, int width, RecipeDisplayId recipe, RecipeCollection collection) {
+		if (!ReachCraftingConfig.get().showNearbyCraftableIndicator()) {
+			return;
+		}
 		Craftability craftability = getCraftability(recipe, collection, ItemStack.EMPTY, true);
 		if (craftability == Craftability.NEARBY_CRAFTABLE || craftability == Craftability.LOCALLY_CRAFTABLE) {
 			renderDot(guiGraphics, x, y);

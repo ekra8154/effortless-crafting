@@ -240,6 +240,7 @@ final class RecipeBookInputController {
 			);
 			return;
 		}
+		ReachCraftingConfig.get().noteRecentRecipe(recipeId);
 		boolean autoCraftRequested = altModifierDown && ReachCraftingConfig.get().altAsRequestKey();
 		if (autoCraftRequested) {
 			AutoCraftController.consumeQuickCraft();

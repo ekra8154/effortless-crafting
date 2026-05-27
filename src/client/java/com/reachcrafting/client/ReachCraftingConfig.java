@@ -11,8 +11,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import net.fabricmc.loader.api.FabricLoader;
 
@@ -33,6 +35,8 @@ public final class ReachCraftingConfig {
 	private static final boolean DEFAULT_PUT_PULLED_RESOURCES_BACK = true;
 	private static final boolean DEFAULT_RESTORE_INVENTORY_ITEM_POSITIONS = true;
 	private static final SearchHistoryMode DEFAULT_SEARCH_HISTORY_MODE = SearchHistoryMode.ON;
+	private static final RecipeBookSortingMode DEFAULT_RECIPE_BOOK_SORTING_MODE = RecipeBookSortingMode.SMART;
+	private static final AutoFocusSearchMode DEFAULT_AUTO_FOCUS_SEARCH_MODE = AutoFocusSearchMode.DISABLED;
 	private static final OutlineDisplayMode DEFAULT_SHOW_FILTER_OUTLINES = OutlineDisplayMode.KEYBIND;
 	private static final boolean DEFAULT_AUTO_CRAFT_ENABLED = false;
 	private static final AutoCraftMode DEFAULT_AUTO_CRAFT_ENABLED_MODE = AutoCraftMode.NORMAL;
@@ -83,6 +87,8 @@ public final class ReachCraftingConfig {
 	private boolean putPulledResourcesBack;
 	private boolean restoreInventoryItemPositions;
 	private SearchHistoryMode searchHistoryMode;
+	private RecipeBookSortingMode recipeBookSortingMode;
+	private AutoFocusSearchMode autoFocusSearchMode;
 	private OutlineDisplayMode showFilterOutlines;
 	private boolean autoCraftEnabled;
 	private AutoCraftMode autoCraftEnabledMode;
@@ -105,6 +111,8 @@ public final class ReachCraftingConfig {
 	private boolean altClickInstantCraft;
 	private boolean debugMessagesEnabled;
 	private Set<String> blacklistedContainerIds;
+	private List<Integer> recentRecipeDisplayIds;
+	private Map<String, List<Integer>> recentRecipeDisplayIdsByContext;
 
 	private static String lastSearchText = "";
 	private static final List<String> searchHistory = new ArrayList<>();
@@ -149,6 +157,8 @@ public final class ReachCraftingConfig {
 				: (stored.rememberPreviousSearch != null
 					? (stored.rememberPreviousSearch ? SearchHistoryMode.ON_AND_RESTORE_LAST_SEARCH : SearchHistoryMode.OFF)
 					: DEFAULT_SEARCH_HISTORY_MODE);
+			instance.recipeBookSortingMode = stored.recipeBookSortingMode != null ? stored.recipeBookSortingMode : DEFAULT_RECIPE_BOOK_SORTING_MODE;
+			instance.autoFocusSearchMode = stored.autoFocusSearchMode != null ? stored.autoFocusSearchMode : DEFAULT_AUTO_FOCUS_SEARCH_MODE;
 			instance.showFilterOutlines = stored.showFilterOutlines != null ? stored.showFilterOutlines : DEFAULT_SHOW_FILTER_OUTLINES;
 			instance.showTotalOutputCounts = stored.showTotalOutputCounts != null ? stored.showTotalOutputCounts : DEFAULT_SHOW_TOTAL_OUTPUT_COUNTS;
 			instance.inputCounterVisibility = stored.inputCounterVisibility != null ? stored.inputCounterVisibility : DEFAULT_INPUT_COUNTER_VISIBILITY;
@@ -182,6 +192,11 @@ public final class ReachCraftingConfig {
 			instance.blacklistedContainerIds = stored.blacklistedContainerIds != null 
 				? new LinkedHashSet<>(stored.blacklistedContainerIds) 
 				: new LinkedHashSet<>(DEFAULT_BLACKLIST);
+			instance.recentRecipeDisplayIds = stored.recentRecipeDisplayIds != null
+				? new ArrayList<>(stored.recentRecipeDisplayIds)
+				: new ArrayList<>();
+			trimRecentRecipeDisplayIds(instance.recentRecipeDisplayIds);
+			instance.recentRecipeDisplayIdsByContext = normalizeRecentRecipeContexts(stored.recentRecipeDisplayIdsByContext);
 			if (instance.searchHistoryMode == SearchHistoryMode.OFF) {
 				clearSearchHistory();
 			}
@@ -575,6 +590,46 @@ public final class ReachCraftingConfig {
 	public boolean shouldRestoreLastSearch() {
 		return searchHistoryMode == SearchHistoryMode.ON_AND_RESTORE_LAST_SEARCH;
 	}
+
+	public RecipeBookSortingMode recipeBookSortingMode() {
+		return recipeBookSortingMode;
+	}
+
+	public void setRecipeBookSortingMode(RecipeBookSortingMode recipeBookSortingMode) {
+		this.recipeBookSortingMode = recipeBookSortingMode != null ? recipeBookSortingMode : DEFAULT_RECIPE_BOOK_SORTING_MODE;
+	}
+
+	public AutoFocusSearchMode autoFocusSearchMode() {
+		return autoFocusSearchMode;
+	}
+
+	public void setAutoFocusSearchMode(AutoFocusSearchMode autoFocusSearchMode) {
+		this.autoFocusSearchMode = autoFocusSearchMode != null ? autoFocusSearchMode : DEFAULT_AUTO_FOCUS_SEARCH_MODE;
+	}
+
+	public List<Integer> recentRecipeDisplayIds() {
+		String contextId = recipeHistoryContextId();
+		if (contextId == null) {
+			return List.of();
+		}
+		return List.copyOf(recentRecipeDisplayIdsByContext.getOrDefault(contextId, List.of()));
+	}
+
+	public void noteRecentRecipe(net.minecraft.world.item.crafting.display.RecipeDisplayId recipeId) {
+		if (recipeId == null) {
+			return;
+		}
+		String contextId = recipeHistoryContextId();
+		if (contextId == null) {
+			return;
+		}
+		List<Integer> contextRecent = new ArrayList<>(recentRecipeDisplayIdsByContext.getOrDefault(contextId, List.of()));
+		contextRecent.remove(Integer.valueOf(recipeId.index()));
+		contextRecent.add(0, recipeId.index());
+		trimRecentRecipeDisplayIds(contextRecent);
+		recentRecipeDisplayIdsByContext.put(contextId, contextRecent);
+		save();
+	}
 	
 	public Set<String> blacklistedContainerIds() {
 		return Collections.unmodifiableSet(blacklistedContainerIds);
@@ -601,6 +656,8 @@ public final class ReachCraftingConfig {
 		defaults.putPulledResourcesBack = DEFAULT_PUT_PULLED_RESOURCES_BACK;
 		defaults.restoreInventoryItemPositions = DEFAULT_RESTORE_INVENTORY_ITEM_POSITIONS;
 		defaults.searchHistoryMode = DEFAULT_SEARCH_HISTORY_MODE;
+		defaults.recipeBookSortingMode = DEFAULT_RECIPE_BOOK_SORTING_MODE;
+		defaults.autoFocusSearchMode = DEFAULT_AUTO_FOCUS_SEARCH_MODE;
 		defaults.showFilterOutlines = DEFAULT_SHOW_FILTER_OUTLINES;
 		defaults.autoCraftEnabled = DEFAULT_AUTO_CRAFT_ENABLED;
 		defaults.autoCraftEnabledMode = DEFAULT_AUTO_CRAFT_ENABLED_MODE;
@@ -623,7 +680,52 @@ public final class ReachCraftingConfig {
 		defaults.altClickInstantCraft = DEFAULT_ALT_CLICK_INSTANT_CRAFT;
 		defaults.debugMessagesEnabled = DEFAULT_DEBUG_MESSAGES_ENABLED;
 		defaults.blacklistedContainerIds = new LinkedHashSet<>(DEFAULT_BLACKLIST);
+		defaults.recentRecipeDisplayIds = new ArrayList<>();
+		defaults.recentRecipeDisplayIdsByContext = new HashMap<>();
 		return defaults;
+	}
+
+	private static void trimRecentRecipeDisplayIds(List<Integer> ids) {
+		ids.removeIf(java.util.Objects::isNull);
+		while (ids.size() > 40) {
+			ids.remove(ids.size() - 1);
+		}
+	}
+
+	private static Map<String, List<Integer>> normalizeRecentRecipeContexts(Map<String, List<Integer>> stored) {
+		Map<String, List<Integer>> normalized = new HashMap<>();
+		if (stored == null) {
+			return normalized;
+		}
+		for (Map.Entry<String, List<Integer>> entry : stored.entrySet()) {
+			if (entry.getKey() == null || entry.getKey().isBlank() || entry.getValue() == null) {
+				continue;
+			}
+			List<Integer> ids = new ArrayList<>(entry.getValue());
+			trimRecentRecipeDisplayIds(ids);
+			if (!ids.isEmpty()) {
+				normalized.put(entry.getKey(), ids);
+			}
+		}
+		return normalized;
+	}
+
+	private static String recipeHistoryContextId() {
+		net.minecraft.client.Minecraft client = net.minecraft.client.Minecraft.getInstance();
+		if (client == null || client.player == null || client.level == null) {
+			return null;
+		}
+		if (client.isSingleplayer() && client.getSingleplayerServer() != null) {
+			return "local_" + sanitizeStorageId(client.getSingleplayerServer().getWorldData().getLevelName());
+		}
+		if (client.getConnection() != null && client.getConnection().getServerData() != null) {
+			return "server_" + sanitizeStorageId(client.getConnection().getServerData().ip);
+		}
+		return null;
+	}
+
+	private static String sanitizeStorageId(String raw) {
+		return raw == null ? "unknown" : raw.replaceAll("[^a-zA-Z0-9_-]", "_");
 	}
 
 	private static ScrollToPullMode parseScrollToPullMode(JsonElement rawValue) {
@@ -679,6 +781,17 @@ public final class ReachCraftingConfig {
 		ON_AND_RESTORE_LAST_SEARCH
 	}
 
+	public enum RecipeBookSortingMode {
+		VANILLA,
+		SMART
+	}
+
+	public enum AutoFocusSearchMode {
+		DISABLED,
+		CRAFTING_3X3,
+		INVENTORY_2X2_AND_3X3
+	}
+
 	public enum AutoCraftHandling {
 		TOGGLE,
 		HOLD
@@ -717,6 +830,8 @@ public final class ReachCraftingConfig {
 		private Boolean restoreInventoryItemPositions;
 		private Boolean rememberPreviousSearch;
 		private SearchHistoryMode searchHistoryMode;
+		private RecipeBookSortingMode recipeBookSortingMode;
+		private AutoFocusSearchMode autoFocusSearchMode;
 		private OutlineDisplayMode showFilterOutlines;
 		private Boolean showTotalOutputCounts;
 		private InputCounterVisibility inputCounterVisibility;
@@ -741,6 +856,8 @@ public final class ReachCraftingConfig {
 		private Boolean debugMessagesEnabled;
 		private Boolean enableEnablingBulkMode;
 		private Set<String> blacklistedContainerIds;
+		private List<Integer> recentRecipeDisplayIds;
+		private Map<String, List<Integer>> recentRecipeDisplayIdsByContext;
 
 		private StoredConfig(ReachCraftingConfig config) {
 			this.enabled = config.enabled;
@@ -757,6 +874,8 @@ public final class ReachCraftingConfig {
 			this.putPulledResourcesBack = config.putPulledResourcesBack;
 			this.restoreInventoryItemPositions = config.restoreInventoryItemPositions;
 			this.searchHistoryMode = config.searchHistoryMode;
+			this.recipeBookSortingMode = config.recipeBookSortingMode;
+			this.autoFocusSearchMode = config.autoFocusSearchMode;
 			this.showFilterOutlines = config.showFilterOutlines;
 			this.showTotalOutputCounts = config.showTotalOutputCounts;
 			this.inputCounterVisibility = config.inputCounterVisibility;
@@ -779,6 +898,8 @@ public final class ReachCraftingConfig {
 			this.altClickInstantCraft = config.altClickInstantCraft;
 			this.debugMessagesEnabled = config.debugMessagesEnabled;
 			this.blacklistedContainerIds = config.blacklistedContainerIds;
+			this.recentRecipeDisplayIds = config.recentRecipeDisplayIds;
+			this.recentRecipeDisplayIdsByContext = config.recentRecipeDisplayIdsByContext;
 		}
 	}
 

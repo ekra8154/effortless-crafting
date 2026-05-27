@@ -312,6 +312,9 @@ final class RecipeClickExecutor {
 					postPlaceSnapshot.hasReservedGrid()
 				);
 				ContainerUtils.scheduleAutoMove(selectedRecipe.displayStack());
+				if (!ChainCraftController.isActive()) {
+					ReachCraftingConfig.get().noteRecentRecipe(selectedRecipe.recipeId());
+				}
 				ReachCraftingModClient.sendDebugChat("Placed recipe: " + outputLabel);
 				if (explicitVariantSelection) {
 					tryCloseOverlayAfterRelease();
@@ -407,6 +410,9 @@ final class RecipeClickExecutor {
 					ingredientSummary
 				);
 				ContainerUtils.scheduleAutoMove(selectedRecipe.displayStack());
+			}
+			if (!ChainCraftController.isActive()) {
+				ReachCraftingConfig.get().noteRecentRecipe(selectedRecipe.recipeId());
 			}
 			ReachCraftingModClient.sendDebugChat("Placed recipe: " + outputLabel);
 			if (explicitVariantSelection) {

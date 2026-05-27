@@ -517,6 +517,7 @@ public final class ChainCraftController {
 			}
 			int nextIndex = currentStepIndex + 1;
 			if (nextIndex >= plan.steps().size()) {
+				ReachCraftingConfig.get().noteRecentRecipe(currentStep().recipeId());
 				ReachCraftingMod.LOGGER.info("[chain_execute] complete steps={}", plan.steps().size());
 				return null;
 			}

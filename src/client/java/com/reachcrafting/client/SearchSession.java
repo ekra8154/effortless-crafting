@@ -1753,6 +1753,9 @@ final class SearchSession extends BaseCraftSession {
 		if (explicitVariantSelection) {
 			RecipeBookClickCapture.tryCloseOverlayAfterRelease();
 		}
+		if (autoMoveReady && !ChainCraftController.isActive()) {
+			ReachCraftingConfig.get().noteRecentRecipe(recipeId);
+		}
 		if (AutoCraftController.isEnabled() && autoMoveReady) {
 			ItemStack expectedStack = ItemStack.EMPTY;
 			var knownRecipes = ((com.reachcrafting.client.mixin.ClientRecipeBookAccessor) player.getRecipeBook()).getKnown();

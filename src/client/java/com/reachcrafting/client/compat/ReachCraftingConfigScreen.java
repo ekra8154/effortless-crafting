@@ -49,6 +49,17 @@ public final class ReachCraftingConfigScreen {
 			.build());
 
 		tweaksGroup.add(entries.startEnumSelector(
+				Component.translatable("option.reachcrafting.auto_focus_search"),
+				ReachCraftingConfig.AutoFocusSearchMode.class,
+				config.autoFocusSearchMode()
+			)
+			.setDefaultValue(ReachCraftingConfig.AutoFocusSearchMode.DISABLED)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.auto_focus_search"))
+			.setSaveConsumer(config::setAutoFocusSearchMode)
+			.setEnumNameProvider(value -> Component.translatable("enum.reachcrafting.auto_focus_search." + value.name().toLowerCase()))
+			.build());
+
+		tweaksGroup.add(entries.startEnumSelector(
 				Component.translatable("option.reachcrafting.search_history_mode"),
 				ReachCraftingConfig.SearchHistoryMode.class,
 				config.searchHistoryMode()
@@ -57,6 +68,17 @@ public final class ReachCraftingConfigScreen {
 			.setTooltip(Component.translatable("tooltip.reachcrafting.search_history_mode"))
 			.setSaveConsumer(config::setSearchHistoryMode)
 			.setEnumNameProvider(value -> Component.translatable("enum.reachcrafting.search_history_mode." + value.name().toLowerCase()))
+			.build());
+
+		tweaksGroup.add(entries.startEnumSelector(
+				Component.translatable("option.reachcrafting.recipe_book_sorting_mode"),
+				ReachCraftingConfig.RecipeBookSortingMode.class,
+				config.recipeBookSortingMode()
+			)
+			.setDefaultValue(ReachCraftingConfig.RecipeBookSortingMode.SMART)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.recipe_book_sorting_mode"))
+			.setSaveConsumer(config::setRecipeBookSortingMode)
+			.setEnumNameProvider(value -> Component.translatable("enum.reachcrafting.recipe_book_sorting_mode." + value.name().toLowerCase()))
 			.build());
 
 		tweaksGroup.add(entries.startBooleanToggle(

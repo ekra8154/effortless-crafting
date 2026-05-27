@@ -1,20 +1,26 @@
 package com.reachcrafting.client.mixin;
 
 import com.reachcrafting.client.ReachCraftingConfig;
+import com.reachcrafting.client.RecipeBookSmartSorter;
 import com.mojang.blaze3d.platform.InputConstants;
+import java.util.List;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.gui.screens.inventory.CraftingScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.client.gui.screens.recipebook.RecipeBookComponent;
+import net.minecraft.client.gui.screens.recipebook.RecipeCollection;
 import net.minecraft.client.input.CharacterEvent;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.inventory.RecipeBookMenu;
 import org.lwjgl.glfw.GLFW;
 import com.reachcrafting.client.ContainerUtils;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -216,6 +222,21 @@ public abstract class RecipeBookComponentMixin {
 		}
 	}
 
+	@ModifyArg(
+		method = "updateCollections",
+		at = @At(
+			value = "INVOKE",
+			target = "Lnet/minecraft/client/gui/screens/recipebook/RecipeBookPage;updateCollections(Ljava/util/List;ZZ)V"
+		),
+		index = 0
+	)
+	private List<RecipeCollection> reachcrafting$sortRecipeBookCollections(List<RecipeCollection> collections) {
+		if (!ReachCraftingConfig.get().enabled()) {
+			return collections;
+		}
+		return RecipeBookSmartSorter.sorted(collections);
+	}
+
 	private void reachcrafting$applyAutoFocus() {
 		if (this.minecraft == null || this.minecraft.player == null) {
 			return;
@@ -242,9 +263,7 @@ public abstract class RecipeBookComponentMixin {
 			}
 		}
 		
-		// Only focus automatically in the 3x3 crafting grid or if forced by a Quick Craft fallback.
-		// This allows 'Q' and number keys to work normally in the player inventory usually.
-		if (this.minecraft.screen instanceof CraftingScreen || com.reachcrafting.client.ReachCraftingModClient.forceNextInventorySearchFocus) {
+		if (reachcrafting$shouldAutoFocusSearch()) {
 			this.searchBox.setFocused(true);
 			this.searchBox.setCursorPosition(this.searchBox.getValue().length());
 			this.searchBox.setHighlightPos(0);
@@ -292,8 +311,12 @@ public abstract class RecipeBookComponentMixin {
 			return false;
 		}
 
-		// Exclude drop and swap offhand keys
-		if (this.minecraft.options.keyDrop.matches(event) || this.minecraft.options.keySwapOffhand.matches(event)) {
+		if (this.minecraft.options.keyDrop.matches(event) && reachcrafting$hasHoveredStack()) {
+			return false;
+		}
+
+		if (this.minecraft.options.keySwapOffhand.matches(event)
+			&& (reachcrafting$hasHoveredStack() || reachcrafting$hasOffhandStack())) {
 			return false;
 		}
 
@@ -408,6 +431,30 @@ public abstract class RecipeBookComponentMixin {
 		}
 		this.updateCollections(true, newValue);
 		return true;
+	}
+
+	private boolean reachcrafting$shouldAutoFocusSearch() {
+		if (com.reachcrafting.client.ReachCraftingModClient.forceNextInventorySearchFocus) {
+			return true;
+		}
+		return switch (ReachCraftingConfig.get().autoFocusSearchMode()) {
+			case DISABLED -> false;
+			case CRAFTING_3X3 -> this.minecraft.screen instanceof CraftingScreen;
+			case INVENTORY_2X2_AND_3X3 -> this.minecraft.screen instanceof CraftingScreen
+				|| this.minecraft.screen instanceof InventoryScreen;
+		};
+	}
+
+	private boolean reachcrafting$hasHoveredStack() {
+		if (!(this.minecraft.screen instanceof AbstractContainerScreen<?> containerScreen)) {
+			return false;
+		}
+		Slot hoveredSlot = ((AbstractContainerScreenAccessor) containerScreen).getHoveredSlot();
+		return hoveredSlot != null && hoveredSlot.hasItem();
+	}
+
+	private boolean reachcrafting$hasOffhandStack() {
+		return this.minecraft.player != null && !this.minecraft.player.getOffhandItem().isEmpty();
 	}
 
 	private boolean reachcrafting$isToggleBoundToSpace() {
