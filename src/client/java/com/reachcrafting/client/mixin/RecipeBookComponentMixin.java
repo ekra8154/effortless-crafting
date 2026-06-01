@@ -214,6 +214,7 @@ public abstract class RecipeBookComponentMixin {
 		net.minecraft.client.gui.screens.recipebook.RecipeBookPage page = ((RecipeBookComponentAccessor) this).getRecipeBookPage();
 		if (page != null) {
 			java.util.List<net.minecraft.client.gui.screens.recipebook.RecipeButton> buttons = ((RecipeBookPageAccessor) page).getButtons();
+			com.reachcrafting.client.RecipeBookChunkedScheduler.noteVisibleButtons(buttons);
 			for (net.minecraft.client.gui.screens.recipebook.RecipeButton button : buttons) {
 				if (button.visible) {
 					com.reachcrafting.client.RecipeButtonQueuedCountIndicator.render(guiGraphics, button);
@@ -234,7 +235,8 @@ public abstract class RecipeBookComponentMixin {
 		if (!ReachCraftingConfig.get().enabled()) {
 			return collections;
 		}
-		return RecipeBookSmartSorter.sorted(collections);
+		boolean eager = this.searchBox != null && !this.searchBox.getValue().isBlank();
+		return RecipeBookSmartSorter.sorted(collections, eager);
 	}
 
 	private void reachcrafting$applyAutoFocus() {
