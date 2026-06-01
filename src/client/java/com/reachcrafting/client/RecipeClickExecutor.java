@@ -213,6 +213,7 @@ final class RecipeClickExecutor {
 		}
 
 		if (canOfferChainCraft) {
+			long chainOfferStartNanos = PerformanceProfiler.start();
 			Optional<ChainCraftOffer> chainOffer = planChainCraftOffer(
 				minecraft,
 				player,
@@ -222,6 +223,11 @@ final class RecipeClickExecutor {
 				effectiveCraftAll,
 				requestedClicks,
 				desiredVariantCopies
+			);
+			PerformanceProfiler.record(
+				"recipe_click.chain_offer",
+				chainOfferStartNanos,
+				"present=" + chainOffer.isPresent() + " allow_nearby=" + allowNearbyChests + " craft_all=" + effectiveCraftAll
 			);
 			if (chainOffer.isPresent()) {
 				ChainCraftPlan chainPlan = chainOffer.get().plan();

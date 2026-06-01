@@ -58,6 +58,7 @@ public final class ReachCraftingConfig {
 	private static final boolean DEFAULT_ALT_AS_REQUEST_KEY = true;
 	private static final boolean DEFAULT_ALT_CLICK_INSTANT_CRAFT = true;
 	private static final boolean DEFAULT_DEBUG_MESSAGES_ENABLED = false;
+	private static final boolean DEFAULT_PERFORMANCE_LOGGING_ENABLED = false;
 	public static final List<String> DEFAULT_BLACKLIST = List.of(
 		"minecraft:ender_chest",
 		"minecraft:hopper",
@@ -110,6 +111,7 @@ public final class ReachCraftingConfig {
 	private boolean altAsRequestKey;
 	private boolean altClickInstantCraft;
 	private boolean debugMessagesEnabled;
+	private boolean performanceLoggingEnabled;
 	private Set<String> blacklistedContainerIds;
 	private List<Integer> recentRecipeDisplayIds;
 	private Map<String, List<Integer>> recentRecipeDisplayIdsByContext;
@@ -180,6 +182,7 @@ public final class ReachCraftingConfig {
 			instance.altAsRequestKey = stored.altAsRequestKey != null ? stored.altAsRequestKey : DEFAULT_ALT_AS_REQUEST_KEY;
 			instance.altClickInstantCraft = stored.altClickInstantCraft != null ? stored.altClickInstantCraft : DEFAULT_ALT_CLICK_INSTANT_CRAFT;
 			instance.debugMessagesEnabled = stored.debugMessagesEnabled != null ? stored.debugMessagesEnabled : DEFAULT_DEBUG_MESSAGES_ENABLED;
+			instance.performanceLoggingEnabled = stored.performanceLoggingEnabled != null ? stored.performanceLoggingEnabled : DEFAULT_PERFORMANCE_LOGGING_ENABLED;
 			
 			// Enforce capability gate on load
 			if (instance.autoCraftCapability == AutoCraftCapability.NONE) {
@@ -540,6 +543,14 @@ public final class ReachCraftingConfig {
 		this.debugMessagesEnabled = debugMessagesEnabled;
 	}
 
+	public boolean performanceLoggingEnabled() {
+		return performanceLoggingEnabled;
+	}
+
+	public void setPerformanceLoggingEnabled(boolean performanceLoggingEnabled) {
+		this.performanceLoggingEnabled = performanceLoggingEnabled;
+	}
+
 	public static String getLastSearchText() {
 		return lastSearchText;
 	}
@@ -679,6 +690,7 @@ public final class ReachCraftingConfig {
 		defaults.altAsRequestKey = DEFAULT_ALT_AS_REQUEST_KEY;
 		defaults.altClickInstantCraft = DEFAULT_ALT_CLICK_INSTANT_CRAFT;
 		defaults.debugMessagesEnabled = DEFAULT_DEBUG_MESSAGES_ENABLED;
+		defaults.performanceLoggingEnabled = DEFAULT_PERFORMANCE_LOGGING_ENABLED;
 		defaults.blacklistedContainerIds = new LinkedHashSet<>(DEFAULT_BLACKLIST);
 		defaults.recentRecipeDisplayIds = new ArrayList<>();
 		defaults.recentRecipeDisplayIdsByContext = new HashMap<>();
@@ -854,6 +866,7 @@ public final class ReachCraftingConfig {
 		private Boolean altAsRequestKey;
 		private Boolean altClickInstantCraft;
 		private Boolean debugMessagesEnabled;
+		private Boolean performanceLoggingEnabled;
 		private Boolean enableEnablingBulkMode;
 		private Set<String> blacklistedContainerIds;
 		private List<Integer> recentRecipeDisplayIds;
@@ -897,6 +910,7 @@ public final class ReachCraftingConfig {
 			this.altAsRequestKey = config.altAsRequestKey;
 			this.altClickInstantCraft = config.altClickInstantCraft;
 			this.debugMessagesEnabled = config.debugMessagesEnabled;
+			this.performanceLoggingEnabled = config.performanceLoggingEnabled;
 			this.blacklistedContainerIds = config.blacklistedContainerIds;
 			this.recentRecipeDisplayIds = config.recentRecipeDisplayIds;
 			this.recentRecipeDisplayIdsByContext = config.recentRecipeDisplayIdsByContext;

@@ -405,6 +405,15 @@ public final class ReachCraftingConfigScreen {
 			.setSaveConsumer(config::setDebugMessagesEnabled)
 			.build());
 
+		messagesGroup.add(entries.startBooleanToggle(
+				Component.translatable("option.reachcrafting.performance_logging_enabled"),
+				config.performanceLoggingEnabled()
+			)
+			.setDefaultValue(false)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.performance_logging_enabled"))
+			.setSaveConsumer(config::setPerformanceLoggingEnabled)
+			.build());
+
 		containers.addEntry(messagesGroup.build());
 
 		builder.setSavingRunnable(ReachCraftingConfig::save);

@@ -142,6 +142,7 @@ public final class NearbyContainerCache {
 		if (cacheKey.equals(lastViewKey) && lastView != null) {
 			return lastView;
 		}
+		long startNanos = PerformanceProfiler.start();
 
 		Vec3 eyePos = cameraEntity.getEyePosition(0);
 		int radius = Mth.ceil(reachDistance);
@@ -196,6 +197,14 @@ public final class NearbyContainerCache {
 			Map.copyOf(includedSnapshots),
 			Map.copyOf(accessKeysByPos),
 			Map.copyOf(nearestAccessByKey)
+		);
+		PerformanceProfiler.record(
+			"nearby.reachable_view_rebuild",
+			startNanos,
+			"blocks=" + (((radius * 2) + 1) * ((radius * 2) + 1) * ((radius * 2) + 1))
+				+ " snapshots=" + includedSnapshots.size()
+				+ " access_points=" + accessKeysByPos.size()
+				+ " aggregate_items=" + aggregateCounts.size()
 		);
 		return lastView;
 	}

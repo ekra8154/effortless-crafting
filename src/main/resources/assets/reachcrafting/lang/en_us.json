@@ -118,6 +118,8 @@
 	"tooltip.reachcrafting.show_chain_craft_messages": "Whether to show chat updates for chain crafting decisions, such as automatically crafting a smaller possible amount.",
 	"option.reachcrafting.debug_messages_enabled": "Debug Messages Enabled",
 	"tooltip.reachcrafting.debug_messages_enabled": "Enable verbose debug logging in chat.",
+	"option.reachcrafting.performance_logging_enabled": "Performance Logging",
+	"tooltip.reachcrafting.performance_logging_enabled": "Log aggregated timing data for crafting indicators, nearby cache lookups, chain planning, and request search hotspots.",
 	"popup.reachcrafting.chain_crafting.title": "Chain Crafting",
 	"popup.reachcrafting.chain_crafting.message": "Base materials required for craft are available. Complete with chain crafting?",
 	"popup.reachcrafting.chain_crafting.partial_message": "Not enough resources for %s %s. Craft %s instead?",
