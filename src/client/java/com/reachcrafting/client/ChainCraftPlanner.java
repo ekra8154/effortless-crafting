@@ -39,6 +39,7 @@ final class ChainCraftPlanner {
 	private final Map<String, List<Candidate>> recipesByOutput;
 
 	private ChainCraftPlanner(Minecraft minecraft, LocalPlayer player, boolean allowNearby, int gridSlotCount) {
+		long startNanos = PerformanceProfiler.start();
 		this.minecraft = minecraft;
 		this.player = player;
 		this.allowNearby = allowNearby;
@@ -52,6 +53,11 @@ final class ChainCraftPlanner {
 			candidateCount,
 			gridSlotCount,
 			allowNearby
+		);
+		PerformanceProfiler.record(
+			"chain.planner_construct",
+			startNanos,
+			"outputs=" + this.recipesByOutput.size() + " candidates=" + candidateCount + " allow_nearby=" + allowNearby
 		);
 	}
 
@@ -124,6 +130,7 @@ final class ChainCraftPlanner {
 		Map<String, Integer> availableCounts,
 		int requestedRecipeCopies
 	) {
+		long startNanos = PerformanceProfiler.start();
 		PlanningState state = new PlanningState(new LinkedHashMap<>(availableCounts), new LinkedHashMap<>());
 		Candidate finalCandidate = new Candidate(
 			finalSelection.recipeId(),
@@ -150,6 +157,11 @@ final class ChainCraftPlanner {
 				steps.size(),
 				AvailableItemSnapshot.formatCounts(state.counts)
 			);
+			PerformanceProfiler.record(
+				"chain.plan",
+				startNanos,
+				"planned=false steps=" + steps.size() + " requested=" + requestedRecipeCopies
+			);
 			return Optional.empty();
 		}
 		ReachCraftingMod.LOGGER.info(
@@ -157,6 +169,11 @@ final class ChainCraftPlanner {
 			finalCandidate.recipeId(),
 			formatSteps(steps),
 			AvailableItemSnapshot.formatCounts(state.counts)
+		);
+		PerformanceProfiler.record(
+			"chain.plan",
+			startNanos,
+			"planned=true steps=" + steps.size() + " requested=" + requestedRecipeCopies
 		);
 		return Optional.of(new ChainCraftPlan(steps, finalSelection.displayStack(), requestedRecipeCopies));
 	}

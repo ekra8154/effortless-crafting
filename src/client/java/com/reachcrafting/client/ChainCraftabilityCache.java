@@ -40,6 +40,7 @@ public final class ChainCraftabilityCache {
 	private static int tickCooldown = 0;
 	private static long lastInventoryHash = 0;
 	private static long lastNearbyRevision = -1;
+	private static int lastReachableSignature = 0;
 	private static int lastKnownRecipeCount = -1;
 	private static int lastGridSlotCount = -1;
 	private static List<LightRecipe> recipeIndex = List.of();
@@ -57,10 +58,15 @@ public final class ChainCraftabilityCache {
 	 * directly craftable but could be completed through chain crafting.
 	 */
 	public static boolean isChainCraftable(RecipeDisplayId recipeId) {
+		refreshIfNeeded(Minecraft.getInstance(), false);
 		return recipeId != null && chainCraftableRecipeIds.contains(recipeId);
 	}
 
 	private static void tick(Minecraft client) {
+		refreshIfNeeded(client, true);
+	}
+
+	private static void refreshIfNeeded(Minecraft client, boolean fromTick) {
 		if (!ReachCraftingConfig.get().enabled()
 			|| client.player == null
 			|| client.level == null) {
@@ -80,7 +86,7 @@ public final class ChainCraftabilityCache {
 			return;
 		}
 
-		if (--tickCooldown > 0) {
+		if (fromTick && --tickCooldown > 0) {
 			return;
 		}
 		tickCooldown = RECOMPUTE_INTERVAL_TICKS;
@@ -95,6 +101,7 @@ public final class ChainCraftabilityCache {
 		long inventoryHash = computeInventoryHash(player);
 
 		long nearbyRevision = 0;
+		int reachableSignature = 0;
 		if (ReachCraftingConfig.get().enableNearbyContainerUsage()
 			&& ReachCraftingConfig.get().cacheContainersForFasterSearch()
 			&& client.getCameraEntity() != null) {
@@ -102,10 +109,13 @@ public final class ChainCraftabilityCache {
 				client.level, client.getCameraEntity(), player.blockInteractionRange()
 			);
 			nearbyRevision = view.revision();
+			reachableSignature = reachableSignature(view);
 		}
 
 		boolean indexStale = knownCount != lastKnownRecipeCount || gridSlotCount != lastGridSlotCount;
-		boolean countsStale = inventoryHash != lastInventoryHash || nearbyRevision != lastNearbyRevision;
+		boolean countsStale = inventoryHash != lastInventoryHash
+			|| nearbyRevision != lastNearbyRevision
+			|| reachableSignature != lastReachableSignature;
 
 		if (!indexStale && !countsStale) {
 			return;
@@ -115,6 +125,7 @@ public final class ChainCraftabilityCache {
 		lastGridSlotCount = gridSlotCount;
 		lastInventoryHash = inventoryHash;
 		lastNearbyRevision = nearbyRevision;
+		lastReachableSignature = reachableSignature;
 
 		ContextMap context = SlotDisplayContext.fromLevel(client.level);
 
@@ -132,10 +143,17 @@ public final class ChainCraftabilityCache {
 			);
 		}
 
+		long recomputeStartNanos = PerformanceProfiler.start();
 		recompute(client, player);
+		PerformanceProfiler.record(
+			"chain.cache_tick_recompute",
+			recomputeStartNanos,
+			"recipes=" + recipeIndex.size() + " screen_slots=" + gridSlotCount + " index_stale=" + indexStale
+		);
 	}
 
 	private static void recompute(Minecraft client, LocalPlayer player) {
+		long startNanos = PerformanceProfiler.start();
 		// Collect directly available item counts and boolean set
 		Set<String> directlyAvailable = new HashSet<>();
 		Map<String, Integer> availableCounts = new java.util.HashMap<>();
@@ -197,6 +215,11 @@ public final class ChainCraftabilityCache {
 			reachable.size(),
 			directlyAvailable.size(),
 			iterations
+		);
+		PerformanceProfiler.record(
+			"chain.cache_recompute_body",
+			startNanos,
+			"chain=" + result.size() + " reachable=" + reachable.size() + " direct=" + directlyAvailable.size() + " iterations=" + iterations
 		);
 	}
 
@@ -351,6 +374,13 @@ public final class ChainCraftabilityCache {
 			}
 		}
 		return hash;
+	}
+
+	private static int reachableSignature(NearbyContainerCache.ReachableView view) {
+		int signature = 1;
+		signature = (31 * signature) + view.aggregateCounts().hashCode();
+		signature = (31 * signature) + view.snapshotsByKey().keySet().hashCode();
+		return signature;
 	}
 
 	private record LightRecipe(String outputItemId, int outputCount, List<List<String>> ingredientSlots, RecipeDisplayId recipeId) {

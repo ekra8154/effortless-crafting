@@ -1334,6 +1334,7 @@ final class SearchSession extends BaseCraftSession {
 		if (!ReachCraftingConfig.get().cacheContainersForFasterSearch()) {
 			return candidates;
 		}
+		long startNanos = PerformanceProfiler.start();
 
 		refreshReachableView();
 		Map<String, Integer> neededCounts = countNeededItems(remainingItemIds);
@@ -1364,6 +1365,11 @@ final class SearchSession extends BaseCraftSession {
 		comparator = comparator.thenComparingInt(pos -> originalOrder.getOrDefault(pos, Integer.MAX_VALUE));
 
 		prioritized.sort(comparator);
+		PerformanceProfiler.record(
+			"nearby.build_withdraw_candidates",
+			startNanos,
+			"candidates=" + candidates.size() + " prioritized=" + prioritized.size() + " needed_items=" + neededCounts.size()
+		);
 		return List.copyOf(prioritized);
 	}
 
@@ -2105,6 +2111,7 @@ final class SearchSession extends BaseCraftSession {
 	}
 
 	private static List<BlockPos> findCandidates(Level level, Entity cameraEntity, double reachDistance) {
+		long startNanos = PerformanceProfiler.start();
 		Vec3 eyePos = cameraEntity.getEyePosition(0);
 		int radius = Mth.ceil(reachDistance);
 		BlockPos center = BlockPos.containing(eyePos);
@@ -2121,6 +2128,11 @@ final class SearchSession extends BaseCraftSession {
 		}
 
 		candidates.sort(Comparator.comparingDouble(pos -> ContainerUtils.squaredDistanceToBlock(eyePos, pos)));
+		PerformanceProfiler.record(
+			"nearby.find_candidates",
+			startNanos,
+			"found=" + candidates.size() + " radius=" + radius
+		);
 		return candidates;
 	}
 
