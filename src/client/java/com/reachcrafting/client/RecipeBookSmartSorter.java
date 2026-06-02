@@ -112,7 +112,10 @@ public final class RecipeBookSmartSorter {
 	static Map<Integer, Integer> originalOrder(List<RecipeCollection> collections) {
 		Map<Integer, Integer> originalOrder = new HashMap<>();
 		for (int i = 0; i < collections.size(); i++) {
-			originalOrder.put(System.identityHashCode(collections.get(i)), i);
+			RecipeCollection collection = collections.get(i);
+			int lastIndex = lastPresentedOrder.getOrDefault(collection, -1);
+			int index = (lastIndex != -1) ? lastIndex : (i + collections.size());
+			originalOrder.put(System.identityHashCode(collection), index);
 		}
 		return originalOrder;
 	}
@@ -138,10 +141,7 @@ public final class RecipeBookSmartSorter {
 		if (recentRank != Integer.MAX_VALUE) {
 			return new SortScore(0, recentRank, originalIndex);
 		}
-		if (collection.hasCraftable()) {
-			return new SortScore(1, 0, originalIndex);
-		}
-		return new SortScore(4, 0, originalIndex);
+		return new SortScore(3, 0, originalIndex);
 	}
 
 	public static SortScore fastScore(RecipeCollection collection, SortPassContext context, int originalIndex) {
@@ -182,12 +182,28 @@ public final class RecipeBookSmartSorter {
 		if (recentRank != Integer.MAX_VALUE) {
 			return new SortScore(0, recentRank, originalIndex);
 		}
-		if (collection.hasCraftable()) {
+		
+		boolean isReachable = false;
+		boolean isChainCraftable = false;
+		for (RecipeDisplayEntry entry : recipes) {
+			if (ChainCraftabilityCache.isReachable(entry.id())) {
+				isReachable = true;
+				break;
+			}
+			if (ChainCraftabilityCache.isChainCraftable(entry.id())) {
+				isChainCraftable = true;
+			}
+		}
+
+		if (isReachable) {
 			return new SortScore(1, 0, originalIndex);
 		}
-		
-		// Fallback for nearbyCraftable, chainCraftable, or uncraftable
-		return new SortScore(4, 0, originalIndex);
+		if (isChainCraftable) {
+			return new SortScore(2, 0, originalIndex);
+		}
+
+		// Fallback for uncraftable (or vanilla craftable which hasn't been checked yet)
+		return new SortScore(3, 0, originalIndex);
 	}
 
 	static SortScore fullScore(RecipeCollection collection, SortPassContext context, int originalIndex) {
@@ -257,12 +273,12 @@ public final class RecipeBookSmartSorter {
 		}
 
 		if (nearbyCraftable) {
-			return new SortScore(2, 0, originalIndex);
+			return new SortScore(1, 0, originalIndex);
 		}
 		if (chainCraftable) {
-			return new SortScore(3, 0, originalIndex);
+			return new SortScore(2, 0, originalIndex);
 		}
-		return new SortScore(4, 0, originalIndex);
+		return new SortScore(3, 0, originalIndex);
 	}
 
 	private static List<RecipeDisplayEntry> selectedRecipes(RecipeCollection collection) {
@@ -285,11 +301,7 @@ public final class RecipeBookSmartSorter {
 	public static List<RecipeCollection> preservePresentedOrder(List<RecipeCollection> collections) {
 		Map<Integer, Integer> originalOrder = originalOrder(collections);
 		List<RecipeCollection> preserved = new ArrayList<>(collections);
-		preserved.sort(
-			Comparator
-				.comparingInt((RecipeCollection collection) -> lastPresentedOrder.getOrDefault(collection, Integer.MAX_VALUE))
-				.thenComparingInt(collection -> originalOrder.getOrDefault(System.identityHashCode(collection), Integer.MAX_VALUE))
-		);
+		preserved.sort(Comparator.comparingInt(collection -> originalOrder.getOrDefault(System.identityHashCode(collection), Integer.MAX_VALUE)));
 		return preserved;
 	}
 

@@ -50,7 +50,7 @@ public final class RecipeBookChunkedScheduler {
 		if (currentPass == null || !currentPass.matches(stateKey, collectionSignature)) {
 			currentPass = new Pass(stateKey, collectionSignature, collections, originalOrder);
 		} else {
-			currentPass.refreshOriginalOrder(originalOrder);
+			currentPass.refreshOriginalOrder(collections, originalOrder);
 		}
 
 		return currentPass.snapshot();
@@ -363,19 +363,24 @@ public final class RecipeBookChunkedScheduler {
 		) {
 			this.stateKey = stateKey;
 			this.collectionSignature = collectionSignature;
-			this.collections = List.copyOf(collections);
 			this.originalOrder = new IdentityHashMap<>();
-			refreshOriginalOrder(originalOrder);
-			populateFastScores();
+			
+			refreshOriginalOrder(collections, originalOrder);
+			populateFastScores(collections);
+
+			// Now sort the internal processing list by fastScore to evaluate the most likely items first
+			List<RecipeCollection> sortedForChunking = new java.util.ArrayList<>(collections);
+			sortedForChunking.sort(java.util.Comparator.comparing(fastScores::get));
+			this.collections = List.copyOf(sortedForChunking);
 		}
 
 		private boolean matches(StateKey stateKey, int collectionSignature) {
 			return this.stateKey.equals(stateKey) && this.collectionSignature == collectionSignature;
 		}
 
-		private void refreshOriginalOrder(Map<Integer, Integer> originalOrder) {
+		private void refreshOriginalOrder(List<RecipeCollection> rawCollections, Map<Integer, Integer> originalOrder) {
 			this.originalOrder.clear();
-			for (RecipeCollection collection : collections) {
+			for (RecipeCollection collection : rawCollections) {
 				this.originalOrder.put(
 					collection,
 					originalOrder.getOrDefault(System.identityHashCode(collection), Integer.MAX_VALUE)
@@ -383,8 +388,8 @@ public final class RecipeBookChunkedScheduler {
 			}
 		}
 
-		private void populateFastScores() {
-			for (RecipeCollection collection : collections) {
+		private void populateFastScores(List<RecipeCollection> rawCollections) {
+			for (RecipeCollection collection : rawCollections) {
 				int originalIndex = originalOrder.getOrDefault(collection, Integer.MAX_VALUE);
 				fastScores.put(collection, RecipeBookSmartSorter.fastScore(collection, sortContext, originalIndex));
 			}

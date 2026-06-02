@@ -158,7 +158,6 @@ final class CacheWarmupSession extends BaseCraftSession {
 	private void finishAndRefresh(boolean closeContainer) {
 		ReachCraftingMod.LOGGER.info("[retrieval_virtual] warmup finish scanned={} candidates={}", scannedContainers, candidates.size());
 		finishSession(closeContainer);
-		RecipeBookChunkedScheduler.markForceEagerNextSort();
 		RecipeBookChunkedScheduler.forceVisibleRecipeBookRefresh();
 	}
 

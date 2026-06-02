@@ -29,7 +29,6 @@ public final class ExistingOutputRetrievalController {
 		ExistingOutputRetrievalController.enabled = next;
 		ReachCraftingMod.LOGGER.info("[retrieval_mode] setEnabled next={} screen={}", next, Minecraft.getInstance().screen != null ? Minecraft.getInstance().screen.getClass().getSimpleName() : "null");
 		RecipeButtonNearbyIndicator.clearCaches();
-		RecipeBookChunkedScheduler.markForceEagerNextSort();
 		RecipeBookChunkedScheduler.clear();
 		RecipeBookChunkedScheduler.resetFrozenPageState("retrieval_mode_toggled");
 		RecipeBookChunkedScheduler.forceVisibleRecipeBookRefresh();
