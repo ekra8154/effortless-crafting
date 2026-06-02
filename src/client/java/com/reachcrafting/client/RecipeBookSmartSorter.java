@@ -29,18 +29,18 @@ public final class RecipeBookSmartSorter {
 			return collections;
 		}
 		if (RecipeBookChunkedScheduler.shouldFreezeResort()) {
-			com.reachcrafting.ReachCraftingMod.LOGGER.info(
-				"[recipe_sort] preserve reason=frozen_page collections={} freeze=true",
-				collections.size()
-			);
+			// com.reachcrafting.ReachCraftingMod.LOGGER.info(
+			// 	"[recipe_sort] preserve reason=frozen_page collections={} freeze=true",
+			// 	collections.size()
+			// );
 			return preservePresentedOrder(collections);
 		}
 		if (ContainerUtils.isAnySessionActive()) {
-			com.reachcrafting.ReachCraftingMod.LOGGER.info(
-				"[recipe_sort] preserve reason=active_session collections={} freeze={}",
-				collections.size(),
-				RecipeBookChunkedScheduler.shouldFreezeResort()
-			);
+			// com.reachcrafting.ReachCraftingMod.LOGGER.info(
+			// 	"[recipe_sort] preserve reason=active_session collections={} freeze={}",
+			// 	collections.size(),
+			// 	RecipeBookChunkedScheduler.shouldFreezeResort()
+			// );
 			return preservePresentedOrder(collections);
 		}
 		long startNanos = PerformanceProfiler.start();
@@ -70,12 +70,12 @@ public final class RecipeBookSmartSorter {
 					+ " chain_memo=" + sortContext.chainCraftableByRecipe.size()
 					+ " nearby_memo=" + sortContext.nearbyCraftabilityByRecipe.size()
 			);
-			com.reachcrafting.ReachCraftingMod.LOGGER.info(
-				"[recipe_sort] sorted mode=eager collections={} chain_memo={} nearby_memo={}",
-				collections.size(),
-				sortContext.chainCraftableByRecipe.size(),
-				sortContext.nearbyCraftabilityByRecipe.size()
-			);
+			// com.reachcrafting.ReachCraftingMod.LOGGER.info(
+			// 	"[recipe_sort] sorted mode=eager collections={} chain_memo={} nearby_memo={}",
+			// 	collections.size(),
+			// 	sortContext.chainCraftableByRecipe.size(),
+			// 	sortContext.nearbyCraftabilityByRecipe.size()
+			// );
 			return sorted;
 		}
 
@@ -99,12 +99,12 @@ public final class RecipeBookSmartSorter {
 				+ " settled=" + passSnapshot.settledCount()
 				+ " pending=" + passSnapshot.pendingCount()
 		);
-		com.reachcrafting.ReachCraftingMod.LOGGER.info(
-			"[recipe_sort] sorted mode=chunked collections={} settled={} pending={}",
-			collections.size(),
-			passSnapshot.settledCount(),
-			passSnapshot.pendingCount()
-		);
+		// com.reachcrafting.ReachCraftingMod.LOGGER.info(
+		// 	"[recipe_sort] sorted mode=chunked collections={} settled={} pending={}",
+		// 	collections.size(),
+		// 	passSnapshot.settledCount(),
+		// 	passSnapshot.pendingCount()
+		// );
 		return sorted;
 	}
 

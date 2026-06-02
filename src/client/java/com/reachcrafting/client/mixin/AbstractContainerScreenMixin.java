@@ -3,7 +3,10 @@ package com.reachcrafting.client.mixin;
 import com.reachcrafting.client.NearbyContainerCache;
 import com.reachcrafting.client.ReachCraftingConfig;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.client.gui.screens.inventory.AbstractRecipeBookScreen;
 import com.reachcrafting.client.InWorldFilterManager;
+import net.minecraft.client.gui.screens.recipebook.RecipeBookComponent;
+import net.minecraft.client.gui.screens.recipebook.RecipeBookPage;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import org.spongepowered.asm.mixin.Mixin;
@@ -151,6 +154,60 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 			NearbyContainerCache.toggleTrackedContainerInclusion();
 			cir.setReturnValue(true);
 		}
+	}
+
+	@Inject(method = "mouseScrolled", at = @At("HEAD"), cancellable = true)
+	private void reachcrafting$onMouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY, CallbackInfoReturnable<Boolean> cir) {
+		if (!ReachCraftingConfig.get().enabled()) return;
+		if (scrollY == 0.0D) return;
+		if (!((Object) this instanceof CraftingScreen || (Object) this instanceof InventoryScreen)) return;
+		if (!((Object) this instanceof AbstractRecipeBookScreen<?> recipeBookScreen)) return;
+		Minecraft client = Minecraft.getInstance();
+		if (client == null) return;
+		var window = client.getWindow();
+		if (InputConstants.isKeyDown(window, GLFW.GLFW_KEY_LEFT_CONTROL)
+			|| InputConstants.isKeyDown(window, GLFW.GLFW_KEY_RIGHT_CONTROL)
+			|| InputConstants.isKeyDown(window, GLFW.GLFW_KEY_LEFT_SHIFT)
+			|| InputConstants.isKeyDown(window, GLFW.GLFW_KEY_RIGHT_SHIFT)
+			|| InputConstants.isKeyDown(window, GLFW.GLFW_KEY_LEFT_ALT)
+			|| InputConstants.isKeyDown(window, GLFW.GLFW_KEY_RIGHT_ALT)) {
+			return;
+		}
+
+		RecipeBookComponent<?> recipeBookComponent = ((AbstractRecipeBookScreenAccessor) recipeBookScreen).getRecipeBookComponent();
+		if (recipeBookComponent == null || !recipeBookComponent.isVisible()) return;
+		RecipeBookComponentAccessor componentAccessor = (RecipeBookComponentAccessor) recipeBookComponent;
+
+		RecipeBookPage page = componentAccessor.getRecipeBookPage();
+		if (page == null) return;
+
+		RecipeBookPageAccessor pageAccessor = (RecipeBookPageAccessor) page;
+		int bookX = componentAccessor.invokeGetXOrigin();
+		int bookY = componentAccessor.invokeGetYOrigin();
+		int bookMinX = bookX - 30;
+		int bookMaxX = bookX + 147;
+		int bookMinY = bookY;
+		int bookMaxY = bookY + 166;
+		boolean hoveringRecipeBookUi = mouseX >= bookMinX && mouseX <= bookMaxX && mouseY >= bookMinY && mouseY <= bookMaxY;
+		if (!hoveringRecipeBookUi) return;
+
+		int currentPage = pageAccessor.getCurrentPage();
+		int totalPages = Math.max(1, pageAccessor.getTotalPages());
+		int targetPage = currentPage;
+		if (scrollY < 0.0D) {
+			targetPage = Math.min(currentPage + 1, totalPages - 1);
+		} else if (scrollY > 0.0D) {
+			targetPage = Math.max(currentPage - 1, 0);
+		}
+
+		if (targetPage == currentPage) {
+			return;
+		}
+
+		pageAccessor.setCurrentPage(targetPage);
+		pageAccessor.invokeUpdateButtonsForPage();
+		com.reachcrafting.client.RecipeBookChunkedScheduler.noteVisiblePageIndex(targetPage);
+		cir.setReturnValue(true);
 	}
 
 	@Inject(method = "extractSlot", at = @At("HEAD"))
