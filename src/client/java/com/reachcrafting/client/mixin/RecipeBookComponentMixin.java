@@ -35,6 +35,7 @@ public abstract class RecipeBookComponentMixin {
 	private int reachcrafting$searchHistoryIndex = -1;
 	private String reachcrafting$searchHistoryDraft = "";
 	private boolean reachcrafting$lastKeyPressedWasToggle = false;
+	private int reachcrafting$preservedPageIndex = -1;
 
 	@Shadow
 	private String lastSearch;
@@ -65,6 +66,7 @@ public abstract class RecipeBookComponentMixin {
 	@Inject(method = "setVisible", at = @At("TAIL"))
 	private void reachcrafting$onSetVisible(boolean visible, CallbackInfo ci) {
 		if (!ReachCraftingConfig.get().enabled()) return;
+		com.reachcrafting.client.RecipeBookChunkedScheduler.onRecipeBookVisibilityChanged(visible);
 		if (visible) {
 			lastScreenOpenTime = System.currentTimeMillis();
 			reachcrafting$resetSearchHistoryNavigation();
@@ -213,6 +215,7 @@ public abstract class RecipeBookComponentMixin {
 		// Since we're at the TAIL of RecipeBookComponent.render, all buttons are already drawn.
 		net.minecraft.client.gui.screens.recipebook.RecipeBookPage page = ((RecipeBookComponentAccessor) this).getRecipeBookPage();
 		if (page != null) {
+			com.reachcrafting.client.RecipeBookChunkedScheduler.noteVisiblePageIndex(((RecipeBookPageAccessor) page).getCurrentPage());
 			java.util.List<net.minecraft.client.gui.screens.recipebook.RecipeButton> buttons = ((RecipeBookPageAccessor) page).getButtons();
 			com.reachcrafting.client.RecipeBookChunkedScheduler.noteVisibleButtons(buttons);
 			for (net.minecraft.client.gui.screens.recipebook.RecipeButton button : buttons) {
@@ -221,6 +224,67 @@ public abstract class RecipeBookComponentMixin {
 				}
 			}
 		}
+	}
+
+	@Inject(method = "updateCollections", at = @At("HEAD"))
+	private void reachcrafting$capturePageBeforeUpdate(boolean resetPage, boolean filtering, CallbackInfo ci) {
+		if (!ReachCraftingConfig.get().enabled()) {
+			reachcrafting$preservedPageIndex = -1;
+			return;
+		}
+		if (!(com.reachcrafting.client.RecipeBookChunkedScheduler.shouldFreezeResort() || ContainerUtils.isAnySessionActive())) {
+			reachcrafting$preservedPageIndex = -1;
+			return;
+		}
+		net.minecraft.client.gui.screens.recipebook.RecipeBookPage page = ((RecipeBookComponentAccessor) this).getRecipeBookPage();
+		if (page == null) {
+			reachcrafting$preservedPageIndex = -1;
+			return;
+		}
+		int currentPage = ((RecipeBookPageAccessor) page).getCurrentPage();
+		int frozenPage = com.reachcrafting.client.RecipeBookChunkedScheduler.frozenPageIndex();
+		reachcrafting$preservedPageIndex = currentPage > 0 ? currentPage : frozenPage;
+		com.reachcrafting.ReachCraftingMod.LOGGER.info(
+			"[recipe_sort] capture_page_before_update resetPage={} filtering={} current_page={} frozen_page={} preserved_page={} freeze={} active_session={}",
+			resetPage,
+			filtering,
+			currentPage,
+			frozenPage,
+			reachcrafting$preservedPageIndex,
+			com.reachcrafting.client.RecipeBookChunkedScheduler.shouldFreezeResort(),
+			ContainerUtils.isAnySessionActive()
+		);
+	}
+
+	@Inject(method = "updateCollections", at = @At("TAIL"))
+	private void reachcrafting$restorePageAfterUpdate(boolean resetPage, boolean filtering, CallbackInfo ci) {
+		if (reachcrafting$preservedPageIndex < 1) {
+			reachcrafting$preservedPageIndex = -1;
+			return;
+		}
+		net.minecraft.client.gui.screens.recipebook.RecipeBookPage page = ((RecipeBookComponentAccessor) this).getRecipeBookPage();
+		if (page == null) {
+			reachcrafting$preservedPageIndex = -1;
+			return;
+		}
+		RecipeBookPageAccessor pageAccessor = (RecipeBookPageAccessor) page;
+		int totalPages = Math.max(1, pageAccessor.getTotalPages());
+		int targetPage = Math.min(reachcrafting$preservedPageIndex, totalPages - 1);
+		int currentPage = pageAccessor.getCurrentPage();
+		if (targetPage != currentPage) {
+			pageAccessor.setCurrentPage(targetPage);
+			pageAccessor.invokeUpdateButtonsForPage();
+			com.reachcrafting.client.RecipeBookChunkedScheduler.noteVisiblePageIndex(targetPage);
+			com.reachcrafting.ReachCraftingMod.LOGGER.info(
+				"[recipe_sort] restore_page_after_update resetPage={} filtering={} restored_page={} previous_page={} total_pages={}",
+				resetPage,
+				filtering,
+				targetPage,
+				currentPage,
+				totalPages
+			);
+		}
+		reachcrafting$preservedPageIndex = -1;
 	}
 
 	@ModifyArg(

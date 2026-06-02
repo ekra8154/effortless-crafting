@@ -3,6 +3,7 @@ package com.reachcrafting.client;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import net.minecraft.client.gui.screens.recipebook.RecipeCollection;
@@ -11,6 +12,8 @@ import net.minecraft.world.item.crafting.display.RecipeDisplayEntry;
 import net.minecraft.world.item.crafting.display.RecipeDisplayId;
 
 public final class RecipeBookSmartSorter {
+	private static final Map<RecipeCollection, Integer> lastPresentedOrder = new IdentityHashMap<>();
+
 	private RecipeBookSmartSorter() {
 	}
 
@@ -24,6 +27,21 @@ public final class RecipeBookSmartSorter {
 			|| ReachCraftingConfig.get().recipeBookSortingMode() == ReachCraftingConfig.RecipeBookSortingMode.VANILLA) {
 			RecipeBookChunkedScheduler.clear();
 			return collections;
+		}
+		if (RecipeBookChunkedScheduler.shouldFreezeResort()) {
+			com.reachcrafting.ReachCraftingMod.LOGGER.info(
+				"[recipe_sort] preserve reason=frozen_page collections={} freeze=true",
+				collections.size()
+			);
+			return preservePresentedOrder(collections);
+		}
+		if (ContainerUtils.isAnySessionActive()) {
+			com.reachcrafting.ReachCraftingMod.LOGGER.info(
+				"[recipe_sort] preserve reason=active_session collections={} freeze={}",
+				collections.size(),
+				RecipeBookChunkedScheduler.shouldFreezeResort()
+			);
+			return preservePresentedOrder(collections);
 		}
 		long startNanos = PerformanceProfiler.start();
 
@@ -43,6 +61,7 @@ public final class RecipeBookSmartSorter {
 			for (ScoredCollection scoredCollection : scoredCollections) {
 				sorted.add(scoredCollection.collection());
 			}
+			rememberPresentedOrder(sorted);
 			PerformanceProfiler.record(
 				"recipe_book.smart_sort",
 				startNanos,
@@ -50,6 +69,12 @@ public final class RecipeBookSmartSorter {
 					+ " eager=true"
 					+ " chain_memo=" + sortContext.chainCraftableByRecipe.size()
 					+ " nearby_memo=" + sortContext.nearbyCraftabilityByRecipe.size()
+			);
+			com.reachcrafting.ReachCraftingMod.LOGGER.info(
+				"[recipe_sort] sorted mode=eager collections={} chain_memo={} nearby_memo={}",
+				collections.size(),
+				sortContext.chainCraftableByRecipe.size(),
+				sortContext.nearbyCraftabilityByRecipe.size()
 			);
 			return sorted;
 		}
@@ -66,12 +91,19 @@ public final class RecipeBookSmartSorter {
 		for (ScoredCollection scoredCollection : scoredCollections) {
 			sorted.add(scoredCollection.collection());
 		}
+		rememberPresentedOrder(sorted);
 		PerformanceProfiler.record(
 			"recipe_book.smart_sort",
 			startNanos,
 			"collections=" + collections.size()
 				+ " settled=" + passSnapshot.settledCount()
 				+ " pending=" + passSnapshot.pendingCount()
+		);
+		com.reachcrafting.ReachCraftingMod.LOGGER.info(
+			"[recipe_sort] sorted mode=chunked collections={} settled={} pending={}",
+			collections.size(),
+			passSnapshot.settledCount(),
+			passSnapshot.pendingCount()
 		);
 		return sorted;
 	}
@@ -163,6 +195,24 @@ public final class RecipeBookSmartSorter {
 	}
 
 	private record ScoredCollection(RecipeCollection collection, SortScore score) {
+	}
+
+	private static List<RecipeCollection> preservePresentedOrder(List<RecipeCollection> collections) {
+		Map<Integer, Integer> originalOrder = originalOrder(collections);
+		List<RecipeCollection> preserved = new ArrayList<>(collections);
+		preserved.sort(
+			Comparator
+				.comparingInt((RecipeCollection collection) -> lastPresentedOrder.getOrDefault(collection, Integer.MAX_VALUE))
+				.thenComparingInt(collection -> originalOrder.getOrDefault(System.identityHashCode(collection), Integer.MAX_VALUE))
+		);
+		return preserved;
+	}
+
+	private static void rememberPresentedOrder(List<RecipeCollection> sortedCollections) {
+		lastPresentedOrder.clear();
+		for (int i = 0; i < sortedCollections.size(); i++) {
+			lastPresentedOrder.put(sortedCollections.get(i), i);
+		}
 	}
 
 	static record NearbyMemoKey(RecipeDisplayId recipeId, boolean explicitVariantSelection) {
