@@ -71,6 +71,19 @@ public final class RecipeBookChunkedScheduler {
 		currentPass = null;
 	}
 
+	public static void resetFrozenPageState(String reason) {
+		// com.reachcrafting.ReachCraftingMod.LOGGER.info(
+		// 	"[recipe_sort] reset_frozen_state reason={} previous_page={} frozen_page={} freeze_before_clear={}",
+		// 	reason,
+		// 	lastObservedPageIndex,
+		// 	frozenPageIndex,
+		// 	freezeResortUntilManualReopen
+		// );
+		freezeResortUntilManualReopen = false;
+		lastObservedPageIndex = 0;
+		frozenPageIndex = 0;
+	}
+
 	public static void noteVisiblePageIndex(int pageIndex) {
 		int previousPageIndex = lastObservedPageIndex;
 		lastObservedPageIndex = Math.max(pageIndex, 0);
@@ -82,46 +95,44 @@ public final class RecipeBookChunkedScheduler {
 			frozenPageIndex = 0;
 		}
 		if (previousPageIndex != lastObservedPageIndex) {
-			com.reachcrafting.ReachCraftingMod.LOGGER.info(
-				"[recipe_sort] visible_page changed previous={} current={} frozen_page={} freeze={}",
-				previousPageIndex,
-				lastObservedPageIndex,
-				frozenPageIndex,
-				freezeResortUntilManualReopen
-			);
+			// com.reachcrafting.ReachCraftingMod.LOGGER.info(
+			// 	"[recipe_sort] visible_page changed previous={} current={} frozen_page={} freeze={}",
+			// 	previousPageIndex,
+			// 	lastObservedPageIndex,
+			// 	frozenPageIndex,
+			// 	freezeResortUntilManualReopen
+			// );
 		}
 	}
 
 	public static void onRecipeBookVisibilityChanged(boolean visible) {
-		com.reachcrafting.ReachCraftingMod.LOGGER.info(
-			"[recipe_sort] recipe_book visibility={} page={} frozen_page={} freeze_before_clear={}",
-			visible,
-			lastObservedPageIndex,
-			frozenPageIndex,
-			freezeResortUntilManualReopen
-		);
+		// com.reachcrafting.ReachCraftingMod.LOGGER.info(
+		// 	"[recipe_sort] recipe_book visibility={} page={} frozen_page={} freeze_before_clear={}",
+		// 	visible,
+		// 	lastObservedPageIndex,
+		// 	frozenPageIndex,
+		// 	freezeResortUntilManualReopen
+		// );
 		if (!visible) {
-			freezeResortUntilManualReopen = false;
-			lastObservedPageIndex = 0;
-			frozenPageIndex = 0;
+			resetFrozenPageState("recipe_book_hidden");
 		}
 	}
 
 	public static void onRecentRecipesChanged() {
 		Minecraft client = Minecraft.getInstance();
 		if (ContainerUtils.isAnySessionActive()) {
-			com.reachcrafting.ReachCraftingMod.LOGGER.info("[recipe_sort] recent_change skipped reason=active_session");
+			// com.reachcrafting.ReachCraftingMod.LOGGER.info("[recipe_sort] recent_change skipped reason=active_session");
 			return;
 		}
 		if (shouldFreezeResort()) {
-			com.reachcrafting.ReachCraftingMod.LOGGER.info(
-				"[recipe_sort] recent_change skipped reason=frozen page={} freeze={}",
-				frozenPageIndex,
-				freezeResortUntilManualReopen
-			);
+			// com.reachcrafting.ReachCraftingMod.LOGGER.info(
+			// 	"[recipe_sort] recent_change skipped reason=frozen page={} freeze={}",
+			// 	frozenPageIndex,
+			// 	freezeResortUntilManualReopen
+			// );
 			return;
 		}
-		com.reachcrafting.ReachCraftingMod.LOGGER.info("[recipe_sort] recent_change requesting refresh");
+		// com.reachcrafting.ReachCraftingMod.LOGGER.info("[recipe_sort] recent_change requesting refresh");
 		requestRefresh(client);
 	}
 
@@ -169,37 +180,37 @@ public final class RecipeBookChunkedScheduler {
 
 	private static void requestRefresh(Minecraft client) {
 		if (ContainerUtils.isAnySessionActive()) {
-			com.reachcrafting.ReachCraftingMod.LOGGER.info("[recipe_sort] refresh skipped reason=active_session");
+			// com.reachcrafting.ReachCraftingMod.LOGGER.info("[recipe_sort] refresh skipped reason=active_session");
 			return;
 		}
 		if (shouldFreezeResort()) {
-			com.reachcrafting.ReachCraftingMod.LOGGER.info(
-				"[recipe_sort] refresh skipped reason=frozen page={} freeze={}",
-				frozenPageIndex,
-				freezeResortUntilManualReopen
-			);
+			// com.reachcrafting.ReachCraftingMod.LOGGER.info(
+			// 	"[recipe_sort] refresh skipped reason=frozen page={} freeze={}",
+			// 	frozenPageIndex,
+			// 	freezeResortUntilManualReopen
+			// );
 			return;
 		}
 		if (!(client.screen instanceof AbstractRecipeBookScreen<?> recipeBookScreen) || client.player == null) {
-			com.reachcrafting.ReachCraftingMod.LOGGER.info("[recipe_sort] refresh skipped reason=unsupported_screen");
+			// com.reachcrafting.ReachCraftingMod.LOGGER.info("[recipe_sort] refresh skipped reason=unsupported_screen");
 			return;
 		}
 
 		RecipeBookComponent<?> component = ((AbstractRecipeBookScreenAccessor) recipeBookScreen).getRecipeBookComponent();
 		if (component == null || !component.isVisible()) {
-			com.reachcrafting.ReachCraftingMod.LOGGER.info("[recipe_sort] refresh skipped reason=recipe_book_hidden");
+			// com.reachcrafting.ReachCraftingMod.LOGGER.info("[recipe_sort] refresh skipped reason=recipe_book_hidden");
 			return;
 		}
 
 		RecipeBookComponentAccessor accessor = (RecipeBookComponentAccessor) component;
 		boolean filtering = client.player.getRecipeBook().isFiltering(accessor.getMenu().getRecipeBookType());
-		com.reachcrafting.ReachCraftingMod.LOGGER.info(
-			"[recipe_sort] refresh requested filtering={} page={} frozen_page={} freeze={}",
-			filtering,
-			lastObservedPageIndex,
-			frozenPageIndex,
-			freezeResortUntilManualReopen
-		);
+		// com.reachcrafting.ReachCraftingMod.LOGGER.info(
+		// 	"[recipe_sort] refresh requested filtering={} page={} frozen_page={} freeze={}",
+		// 	filtering,
+		// 	lastObservedPageIndex,
+		// 	frozenPageIndex,
+		// 	freezeResortUntilManualReopen
+		// );
 		accessor.invokeUpdateCollections(false, filtering);
 	}
 
