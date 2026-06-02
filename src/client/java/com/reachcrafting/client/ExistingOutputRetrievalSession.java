@@ -202,6 +202,9 @@ final class ExistingOutputRetrievalSession extends BaseCraftSession {
 		} else {
 			sendChat("Retrieved " + ContainerUtils.formatStackBreakdown(retrievedCount) + " " + ContainerUtils.getItemName(request.outputItemId()) + ".");
 		}
+		if (retrievedCount > 0 && request.requestedRecipeId() != null) {
+			ReachCraftingConfig.get().noteRecentRecipe(request.requestedRecipeId());
+		}
 		finishSession(false);
 	}
 

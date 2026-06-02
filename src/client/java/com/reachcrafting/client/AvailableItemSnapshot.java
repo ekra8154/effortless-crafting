@@ -21,6 +21,9 @@ public record AvailableItemSnapshot(
 	Map<String, Integer> totalCounts,
 	List<ItemStack> gridStacks
 ) {
+	public static AvailableItemSnapshot empty() {
+		return new AvailableItemSnapshot(Map.of(), Map.of(), Map.of(), List.of());
+	}
 	public static AvailableItemSnapshot capture(LocalPlayer player, Screen screen) {
 		Map<String, Integer> inventoryCounts = new LinkedHashMap<>();
 		for (ItemStack stack : player.getInventory().getNonEquipmentItems()) {

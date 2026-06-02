@@ -84,6 +84,8 @@ abstract class BaseCraftSession implements CraftSession {
 
 	protected final void finishSession(boolean closeContainer) {
 		stop(closeContainer);
+		RecipeBookChunkedScheduler.markForceEagerNextSort();
 		coordinator.onSessionFinished(this);
+		RecipeBookChunkedScheduler.forceVisibleRecipeBookRefresh();
 	}
 }
