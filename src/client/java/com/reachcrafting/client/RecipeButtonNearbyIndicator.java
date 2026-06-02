@@ -37,6 +37,14 @@ public final class RecipeButtonNearbyIndicator {
 	private RecipeButtonNearbyIndicator() {
 	}
 
+	public static void clearCaches() {
+		currentStateKey = null;
+		currentContext = null;
+		mainCache.clear();
+		overlayCache.clear();
+		collectionIndicatorCache.clear();
+	}
+
 	public static boolean shouldShow(RecipeButton button) {
 		return resolveIndicatorState(button) == IndicatorState.NEARBY;
 	}

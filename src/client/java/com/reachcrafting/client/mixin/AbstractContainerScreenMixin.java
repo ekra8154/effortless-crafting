@@ -159,6 +159,7 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 	@Inject(method = "mouseScrolled", at = @At("HEAD"), cancellable = true)
 	private void reachcrafting$onMouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY, CallbackInfoReturnable<Boolean> cir) {
 		if (!ReachCraftingConfig.get().enabled()) return;
+		if (!ReachCraftingConfig.get().recipeBookPageNavigation()) return;
 		if (scrollY == 0.0D) return;
 		if (!((Object) this instanceof CraftingScreen || (Object) this instanceof InventoryScreen)) return;
 		if (!((Object) this instanceof AbstractRecipeBookScreen<?> recipeBookScreen)) return;

@@ -45,6 +45,7 @@ public final class ReachCraftingConfig {
 	private static final boolean DEFAULT_INVENTORY_2X2_OFFHAND_CONSOLIDATION = true;
 	private static final ScrollToPullMode DEFAULT_SCROLL_TO_PULL_MODE = ScrollToPullMode.WHILE_RESULT_OR_INVENTORY_SLOT_HOVERED;
 	private static final boolean DEFAULT_TYPE_TO_FOCUS_SEARCH = true;
+	private static final boolean DEFAULT_RECIPE_BOOK_PAGE_NAVIGATION = true;
 	private static final boolean DEFAULT_EJECT_ITEMS_WHEN_FULL = true;
 	private static final AutoCraftCapability DEFAULT_AUTO_CRAFT_CAPABILITY = AutoCraftCapability.BULK;
 	private static final boolean DEFAULT_AUTO_CRAFT_OFF_AFTER_BULK = false;
@@ -98,6 +99,7 @@ public final class ReachCraftingConfig {
 	private boolean inventory2x2OffhandConsolidation;
 	private ScrollToPullMode scrollToPullMode;
 	private boolean typeToFocusSearch;
+	private boolean recipeBookPageNavigation;
 	private boolean ejectItemsWhenFull;
 	private AutoCraftCapability autoCraftCapability;
 	private boolean autoCraftOffAfterBulk;
@@ -167,6 +169,7 @@ public final class ReachCraftingConfig {
 			instance.inventory2x2OffhandConsolidation = stored.inventory2x2OffhandConsolidation != null ? stored.inventory2x2OffhandConsolidation : DEFAULT_INVENTORY_2X2_OFFHAND_CONSOLIDATION;
 			instance.scrollToPullMode = parseScrollToPullMode(stored.scrollToPullMode);
 			instance.typeToFocusSearch = stored.typeToFocusSearch != null ? stored.typeToFocusSearch : DEFAULT_TYPE_TO_FOCUS_SEARCH;
+			instance.recipeBookPageNavigation = stored.recipeBookPageNavigation != null ? stored.recipeBookPageNavigation : DEFAULT_RECIPE_BOOK_PAGE_NAVIGATION;
 			instance.ejectItemsWhenFull = stored.ejectItemsWhenFull != null ? stored.ejectItemsWhenFull : DEFAULT_EJECT_ITEMS_WHEN_FULL;
 			instance.autoCraftEnabled = stored.autoCraftEnabled != null ? stored.autoCraftEnabled : (stored.autoCraftMode != null ? stored.autoCraftMode : DEFAULT_AUTO_CRAFT_ENABLED);
 			instance.autoCraftEnabledMode = stored.autoCraftEnabledMode != null ? stored.autoCraftEnabledMode : DEFAULT_AUTO_CRAFT_ENABLED_MODE;
@@ -242,6 +245,8 @@ public final class ReachCraftingConfig {
 		if (!enableNearbyContainerUsage) {
 			NearbyContainerCache.clear();
 		}
+		RecipeButtonNearbyIndicator.clearCaches();
+		ChainCraftabilityCache.clearCache();
 	}
 
 	public IngredientPlanning.Policy toPlanningPolicy() {
@@ -286,6 +291,7 @@ public final class ReachCraftingConfig {
 
 	public void setShowNearbyCraftableIndicator(boolean showNearbyCraftableIndicator) {
 		this.showNearbyCraftableIndicator = showNearbyCraftableIndicator;
+		RecipeButtonNearbyIndicator.clearCaches();
 	}
 
 	public boolean cacheContainersForFasterSearch() {
@@ -297,6 +303,8 @@ public final class ReachCraftingConfig {
 		if (!cacheContainersForFasterSearch) {
 			NearbyContainerCache.clear();
 		}
+		RecipeButtonNearbyIndicator.clearCaches();
+		ChainCraftabilityCache.clearCache();
 	}
 
 	public boolean reachCraftHoldAndRelease() {
@@ -445,6 +453,14 @@ public final class ReachCraftingConfig {
 
 	public void setTypeToFocusSearch(boolean typeToFocusSearch) {
 		this.typeToFocusSearch = typeToFocusSearch;
+	}
+
+	public boolean recipeBookPageNavigation() {
+		return recipeBookPageNavigation;
+	}
+
+	public void setRecipeBookPageNavigation(boolean recipeBookPageNavigation) {
+		this.recipeBookPageNavigation = recipeBookPageNavigation;
 	}
 
 	public boolean ejectItemsWhenFull() {
@@ -677,6 +693,7 @@ public final class ReachCraftingConfig {
 		defaults.inventory2x2OffhandConsolidation = DEFAULT_INVENTORY_2X2_OFFHAND_CONSOLIDATION;
 		defaults.scrollToPullMode = DEFAULT_SCROLL_TO_PULL_MODE;
 		defaults.typeToFocusSearch = DEFAULT_TYPE_TO_FOCUS_SEARCH;
+		defaults.recipeBookPageNavigation = DEFAULT_RECIPE_BOOK_PAGE_NAVIGATION;
 		defaults.ejectItemsWhenFull = DEFAULT_EJECT_ITEMS_WHEN_FULL;
 		defaults.autoCraftCapability = DEFAULT_AUTO_CRAFT_CAPABILITY;
 		defaults.autoCraftOffAfterBulk = DEFAULT_AUTO_CRAFT_OFF_AFTER_BULK;
@@ -850,6 +867,7 @@ public final class ReachCraftingConfig {
 		private Boolean inventory2x2OffhandConsolidation;
 		private JsonElement scrollToPullMode;
 		private Boolean typeToFocusSearch;
+		private Boolean recipeBookPageNavigation;
 		private Boolean ejectItemsWhenFull;
 		private Boolean autoCraftMode;
 		private Boolean autoCraftEnabled;
@@ -895,6 +913,7 @@ public final class ReachCraftingConfig {
 			this.inventory2x2OffhandConsolidation = config.inventory2x2OffhandConsolidation;
 			this.scrollToPullMode = new JsonPrimitive(config.scrollToPullMode.name());
 			this.typeToFocusSearch = config.typeToFocusSearch;
+			this.recipeBookPageNavigation = config.recipeBookPageNavigation;
 			this.ejectItemsWhenFull = config.ejectItemsWhenFull;
 			this.autoCraftEnabled = config.autoCraftEnabled;
 			this.autoCraftEnabledMode = config.autoCraftEnabledMode;
