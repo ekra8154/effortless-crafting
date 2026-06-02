@@ -77,6 +77,10 @@ public final class NearbyContainerDryRun {
 		COORDINATOR.startCountStaging(new CountStagingRequest(desiredCounts, reason));
 	}
 
+	public static void startCacheWarmup(String reason) {
+		COORDINATOR.startCacheWarmup(new CacheWarmupRequest(reason));
+	}
+
 	public static void startExistingOutputRetrieval(
 		RecipeDisplayId requestedRecipeId,
 		RecipeDisplayId resolvedRecipeId,

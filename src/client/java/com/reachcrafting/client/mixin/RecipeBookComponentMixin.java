@@ -2,6 +2,7 @@ package com.reachcrafting.client.mixin;
 
 import com.reachcrafting.client.ReachCraftingConfig;
 import com.reachcrafting.client.RecipeBookSmartSorter;
+import com.reachcrafting.client.VirtualRetrievalRecipeBookEntries;
 import com.mojang.blaze3d.platform.InputConstants;
 import java.util.List;
 import net.minecraft.client.Minecraft;
@@ -324,7 +325,7 @@ public abstract class RecipeBookComponentMixin {
 			return collections;
 		}
 		boolean eager = this.searchBox != null && !this.searchBox.getValue().isBlank();
-		return RecipeBookSmartSorter.sorted(collections, eager);
+		return VirtualRetrievalRecipeBookEntries.injectCollections((RecipeBookComponent<?>) (Object) this, RecipeBookSmartSorter.sorted(collections, eager));
 	}
 
 	private void reachcrafting$applyAutoFocus() {

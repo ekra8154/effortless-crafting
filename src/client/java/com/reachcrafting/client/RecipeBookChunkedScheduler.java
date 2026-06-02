@@ -1,5 +1,6 @@
 package com.reachcrafting.client;
 
+import com.reachcrafting.ReachCraftingMod;
 import com.reachcrafting.client.mixin.AbstractRecipeBookScreenAccessor;
 import com.reachcrafting.client.mixin.RecipeBookComponentAccessor;
 import com.reachcrafting.client.mixin.RecipeBookPageAccessor;
@@ -147,6 +148,11 @@ public final class RecipeBookChunkedScheduler {
 		requestRefresh(client);
 	}
 
+	public static void forceVisibleRecipeBookRefresh() {
+		ReachCraftingMod.LOGGER.info("[retrieval_virtual] forceVisibleRecipeBookRefresh");
+		requestRefresh(Minecraft.getInstance(), true);
+	}
+
 	public static boolean isCurrentRecipeBookOnFirstPage() {
 		return !shouldFreezeResort() && isRecipeBookOnFirstPage(Minecraft.getInstance());
 	}
@@ -190,38 +196,32 @@ public final class RecipeBookChunkedScheduler {
 	}
 
 	private static void requestRefresh(Minecraft client) {
-		if (ContainerUtils.isAnySessionActive()) {
-			// com.reachcrafting.ReachCraftingMod.LOGGER.info("[recipe_sort] refresh skipped reason=active_session");
+		requestRefresh(client, false);
+	}
+
+	private static void requestRefresh(Minecraft client, boolean force) {
+		if (ContainerUtils.isAnySessionActiveExcludingRetrievalMode()) {
+			ReachCraftingMod.LOGGER.info("[retrieval_virtual] refresh skipped reason=active_session_excluding_retrieval force={}", force);
 			return;
 		}
-		if (shouldFreezeResort()) {
-			// com.reachcrafting.ReachCraftingMod.LOGGER.info(
-			// 	"[recipe_sort] refresh skipped reason=frozen page={} freeze={}",
-			// 	frozenPageIndex,
-			// 	freezeResortUntilManualReopen
-			// );
+		if (!force && shouldFreezeResort()) {
+			ReachCraftingMod.LOGGER.info("[retrieval_virtual] refresh skipped reason=frozen force={} page={} freeze={}", force, frozenPageIndex, freezeResortUntilManualReopen);
 			return;
 		}
 		if (!(client.screen instanceof AbstractRecipeBookScreen<?> recipeBookScreen) || client.player == null) {
-			// com.reachcrafting.ReachCraftingMod.LOGGER.info("[recipe_sort] refresh skipped reason=unsupported_screen");
+			ReachCraftingMod.LOGGER.info("[retrieval_virtual] refresh skipped reason=unsupported_screen force={} screen={} player={}", force, client.screen != null ? client.screen.getClass().getSimpleName() : "null", client.player != null);
 			return;
 		}
 
 		RecipeBookComponent<?> component = ((AbstractRecipeBookScreenAccessor) recipeBookScreen).getRecipeBookComponent();
 		if (component == null || !component.isVisible()) {
-			// com.reachcrafting.ReachCraftingMod.LOGGER.info("[recipe_sort] refresh skipped reason=recipe_book_hidden");
+			ReachCraftingMod.LOGGER.info("[retrieval_virtual] refresh skipped reason=recipe_book_hidden force={} component={} visible={}", force, component != null, component != null && component.isVisible());
 			return;
 		}
 
 		RecipeBookComponentAccessor accessor = (RecipeBookComponentAccessor) component;
 		boolean filtering = client.player.getRecipeBook().isFiltering(accessor.getMenu().getRecipeBookType());
-		// com.reachcrafting.ReachCraftingMod.LOGGER.info(
-		// 	"[recipe_sort] refresh requested filtering={} page={} frozen_page={} freeze={}",
-		// 	filtering,
-		// 	lastObservedPageIndex,
-		// 	frozenPageIndex,
-		// 	freezeResortUntilManualReopen
-		// );
+		ReachCraftingMod.LOGGER.info("[retrieval_virtual] refresh invokeUpdateCollections force={} filtering={} page={} frozen_page={} freeze={}", force, filtering, lastObservedPageIndex, frozenPageIndex, freezeResortUntilManualReopen);
 		accessor.invokeUpdateCollections(false, filtering);
 	}
 

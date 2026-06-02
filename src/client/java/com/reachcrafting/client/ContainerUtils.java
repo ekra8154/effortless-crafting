@@ -292,6 +292,15 @@ public final class ContainerUtils {
 			|| ExistingOutputRetrievalController.isEnabled();
 	}
 
+	public static boolean isAnySessionActiveExcludingRetrievalMode() {
+		return RecipeBookInputController.getInstance().isInputQueueActive()
+			|| AutoMoveController.isAutomatedInteractionRunning()
+			|| NearbyContainerDryRun.isActiveSessionRunning()
+			|| InventoryGridRestoreTracker.isRestoring()
+			|| BulkAutoCraftController.isActive()
+			|| ChainCraftController.isActive();
+	}
+
 	public static void abortAllSessions() {
 		AutoMoveController.settleCompletedWork(net.minecraft.client.Minecraft.getInstance());
 		boolean wasAnyActive = isAnySessionActive();

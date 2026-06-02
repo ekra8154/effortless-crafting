@@ -134,7 +134,7 @@ final class SearchSession extends BaseCraftSession {
 		);
 		this.remainingItemIds = new ArrayList<>(initialDeficit.missingItemIds());
 		this.reachableView = NearbyContainerCache.getReachableView(level, cameraEntity, player.blockInteractionRange());
-		this.candidates = this.allowNearby ? findCandidates(level, cameraEntity, player.blockInteractionRange()) : List.of();
+		this.candidates = this.allowNearby ? NearbyDiscoveryPlanner.findCandidates(level, cameraEntity, player.blockInteractionRange()) : List.of();
 		this.useCachedSearch = this.allowNearby
 			&& ReachCraftingConfig.get().cacheContainersForFasterSearch()
 			&& !this.reachableView.isEmpty();
@@ -1389,15 +1389,7 @@ final class SearchSession extends BaseCraftSession {
 			return unvisited;
 		}
 
-		List<BlockPos> uncached = new ArrayList<>();
-		for (BlockPos pos : unvisited) {
-			var key = reachableView.accessKeyByPos().get(pos);
-			if (key == null || !reachableView.snapshotsByKey().containsKey(key)) {
-				uncached.add(pos);
-			}
-		}
-
-		return List.copyOf(uncached);
+		return NearbyDiscoveryPlanner.uncachedCandidates(unvisited, reachableView);
 	}
 
 	private int cachedDistinctMatchesAt(BlockPos pos, Map<String, Integer> neededCounts) {
@@ -2108,32 +2100,6 @@ final class SearchSession extends BaseCraftSession {
 
 	private int moveExactCount(AbstractContainerMenu menu, Slot sourceSlot, Slot targetSlot, int remaining) {
 		return MenuTransferHelper.moveExactCount(menu, sourceSlot, targetSlot, remaining, player, gameMode);
-	}
-
-	private static List<BlockPos> findCandidates(Level level, Entity cameraEntity, double reachDistance) {
-		long startNanos = PerformanceProfiler.start();
-		Vec3 eyePos = cameraEntity.getEyePosition(0);
-		int radius = Mth.ceil(reachDistance);
-		BlockPos center = BlockPos.containing(eyePos);
-		List<BlockPos> candidates = new ArrayList<>();
-
-		for (BlockPos pos : BlockPos.betweenClosed(
-			center.offset(-radius, -radius, -radius),
-			center.offset(radius, radius, radius)
-		)) {
-			BlockState state = level.getBlockState(pos);
-			if (InWorldFilterManager.isContainerActive(level, pos, state)) {
-				candidates.add(pos.immutable());
-			}
-		}
-
-		candidates.sort(Comparator.comparingDouble(pos -> ContainerUtils.squaredDistanceToBlock(eyePos, pos)));
-		PerformanceProfiler.record(
-			"nearby.find_candidates",
-			startNanos,
-			"found=" + candidates.size() + " radius=" + radius
-		);
-		return candidates;
 	}
 
 	private static Map<String, Integer> collectUsefulItems(AbstractContainerMenu menu, Set<String> acceptedItemIds) {

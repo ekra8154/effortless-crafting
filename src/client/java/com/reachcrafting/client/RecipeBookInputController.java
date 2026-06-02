@@ -136,6 +136,11 @@ final class RecipeBookInputController {
 		if (!(screen instanceof InventoryScreen) && !(screen instanceof CraftingScreen)) {
 			return;
 		}
+		if (VirtualRetrievalRecipeBookEntries.isSyntheticRecipeId(recipeId)) {
+			int requestedCount = VirtualRetrievalRecipeBookEntries.requestCountForSynthetic(displayStack, shiftModifierDown);
+			VirtualRetrievalRecipeBookEntries.startRetrievalForSynthetic(recipeId, displayStack != null ? displayStack.copy() : ItemStack.EMPTY, requestedCount);
+			return;
+		}
 		LocalPlayer player = minecraft.player;
 		if (player == null || minecraft.level == null) {
 			return;

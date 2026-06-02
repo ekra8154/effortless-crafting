@@ -1,5 +1,6 @@
 package com.reachcrafting.client;
 
+import com.reachcrafting.ReachCraftingMod;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.CraftingScreen;
@@ -22,10 +23,16 @@ final class ExistingOutputRetrievalController {
 	static void setEnabled(boolean enabled) {
 		boolean next = enabled && ReachCraftingConfig.get().enableExistingOutputRetrieval();
 		if (ExistingOutputRetrievalController.enabled == next) {
+			ReachCraftingMod.LOGGER.info("[retrieval_mode] setEnabled no-op next={} config_enabled={}", next, ReachCraftingConfig.get().enableExistingOutputRetrieval());
 			return;
 		}
 		ExistingOutputRetrievalController.enabled = next;
+		ReachCraftingMod.LOGGER.info("[retrieval_mode] setEnabled next={} screen={}", next, Minecraft.getInstance().screen != null ? Minecraft.getInstance().screen.getClass().getSimpleName() : "null");
 		RecipeButtonNearbyIndicator.clearCaches();
+		RecipeBookChunkedScheduler.forceVisibleRecipeBookRefresh();
+		if (next) {
+			triggerCacheWarmupIfNeeded();
+		}
 	}
 
 	static void toggleViaResultSlot() {
@@ -77,5 +84,36 @@ final class ExistingOutputRetrievalController {
 
 		lastCtrlDown = ctrlDown;
 	}
-}
 
+	private static void triggerCacheWarmupIfNeeded() {
+		Minecraft client = Minecraft.getInstance();
+		if (client == null || client.player == null || client.level == null || client.getCameraEntity() == null) {
+			return;
+		}
+		NearbyContainerCache.ReachableView reachableView = NearbyContainerCache.getReachableView(
+			client.level,
+			client.getCameraEntity(),
+			client.player.blockInteractionRange()
+		);
+		if (reachableView.nearestAccessByKey().isEmpty()) {
+			ReachCraftingMod.LOGGER.info("[retrieval_virtual] warmup skipped reason=no_reachable_containers");
+			return;
+		}
+		if (reachableView.snapshotsByKey().size() >= reachableView.nearestAccessByKey().size()) {
+			ReachCraftingMod.LOGGER.info(
+				"[retrieval_virtual] warmup skipped reason=all_reachable_cached snapshots={} reachable={} cached_items={}",
+				reachableView.snapshotsByKey().size(),
+				reachableView.nearestAccessByKey().size(),
+				reachableView.aggregateCounts().size()
+			);
+			return;
+		}
+		ReachCraftingMod.LOGGER.info(
+			"[retrieval_virtual] warmup requested snapshots={} reachable={} uncached={}",
+			reachableView.snapshotsByKey().size(),
+			reachableView.nearestAccessByKey().size(),
+			reachableView.nearestAccessByKey().size() - reachableView.snapshotsByKey().size()
+		);
+		NearbyContainerDryRun.startCacheWarmup("retrieval_virtual_entries");
+	}
+}
