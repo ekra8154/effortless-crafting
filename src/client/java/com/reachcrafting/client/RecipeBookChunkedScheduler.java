@@ -28,6 +28,7 @@ public final class RecipeBookChunkedScheduler {
 	private static int lastObservedPageIndex = 0;
 	private static int frozenPageIndex = 0;
 	private static boolean freezeResortUntilManualReopen;
+	private static boolean pendingAutomatedRecipeBookReopen;
 
 	private RecipeBookChunkedScheduler() {
 	}
@@ -69,6 +70,16 @@ public final class RecipeBookChunkedScheduler {
 
 	public static void clear() {
 		currentPass = null;
+	}
+
+	public static void markPendingAutomatedRecipeBookReopen() {
+		pendingAutomatedRecipeBookReopen = true;
+	}
+
+	public static boolean consumePendingAutomatedRecipeBookReopen() {
+		boolean pending = pendingAutomatedRecipeBookReopen;
+		pendingAutomatedRecipeBookReopen = false;
+		return pending;
 	}
 
 	public static void resetFrozenPageState(String reason) {

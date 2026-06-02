@@ -49,6 +49,18 @@ public final class ChainCraftabilityCache {
 	private ChainCraftabilityCache() {
 	}
 
+	public static void clearCache() {
+		chainCraftableRecipeIds = Set.of();
+		tickCooldown = 0;
+		lastInventoryHash = 0;
+		lastNearbyRevision = -1;
+		lastReachableSignature = 0;
+		lastKnownRecipeCount = -1;
+		lastGridSlotCount = -1;
+		recipeIndex = List.of();
+		recipesByOutput = Map.of();
+	}
+
 	public static void init() {
 		ClientTickEvents.END_CLIENT_TICK.register(ChainCraftabilityCache::tick);
 	}

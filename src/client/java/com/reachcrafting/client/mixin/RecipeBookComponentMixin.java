@@ -58,7 +58,8 @@ public abstract class RecipeBookComponentMixin {
 	@Inject(method = "init", at = @At("TAIL"))
 	private void reachcrafting$onInit(int width, int height, Minecraft client, boolean isFiltering, CallbackInfo ci) {
 		if (!ReachCraftingConfig.get().enabled()) return;
-		boolean manualInit = !ContainerUtils.isAnySessionActive();
+		boolean automatedReopen = com.reachcrafting.client.RecipeBookChunkedScheduler.consumePendingAutomatedRecipeBookReopen();
+		boolean manualInit = !automatedReopen;
 		if (manualInit) {
 			com.reachcrafting.client.RecipeBookChunkedScheduler.resetFrozenPageState("manual_screen_init");
 		}
@@ -113,7 +114,8 @@ public abstract class RecipeBookComponentMixin {
 			cir.setReturnValue(true);
 			return;
 		}
-		if ((event.key() == GLFW.GLFW_KEY_LEFT || event.key() == GLFW.GLFW_KEY_RIGHT)
+		if (ReachCraftingConfig.get().recipeBookPageNavigation()
+			&& (event.key() == GLFW.GLFW_KEY_LEFT || event.key() == GLFW.GLFW_KEY_RIGHT)
 			&& reachcrafting$shouldPageWithArrowKey()) {
 			if (reachcrafting$turnRecipeBookPage(event.key() == GLFW.GLFW_KEY_RIGHT)) {
 				cir.setReturnValue(true);

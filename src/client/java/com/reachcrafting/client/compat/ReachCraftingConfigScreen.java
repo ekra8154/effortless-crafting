@@ -108,6 +108,15 @@ public final class ReachCraftingConfigScreen {
 			.setSaveConsumer(config::setShowTotalOutputCounts)
 			.build());
 
+		tweaksGroup.add(entries.startBooleanToggle(
+				Component.translatable("option.reachcrafting.recipe_book_page_navigation"),
+				config.recipeBookPageNavigation()
+			)
+			.setDefaultValue(true)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.recipe_book_page_navigation"))
+			.setSaveConsumer(config::setRecipeBookPageNavigation)
+			.build());
+
 		crafting.addEntry(tweaksGroup.build());
 
 		// Craft Queuing

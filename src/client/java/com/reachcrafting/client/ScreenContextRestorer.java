@@ -32,6 +32,7 @@ final class ScreenContextRestorer {
 		Entity cameraEntity,
 		NearbyCraftCoordinator coordinator
 	) {
+		RecipeBookChunkedScheduler.markPendingAutomatedRecipeBookReopen();
 		java.util.Map<String, Integer> reservedGridCounts = new java.util.LinkedHashMap<>();
 		for (net.minecraft.world.item.ItemStack stack : context.gridStacks()) {
 			if (stack.isEmpty()) {
