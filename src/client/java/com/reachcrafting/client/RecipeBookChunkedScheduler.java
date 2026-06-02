@@ -2,6 +2,7 @@ package com.reachcrafting.client;
 
 import com.reachcrafting.client.mixin.AbstractRecipeBookScreenAccessor;
 import com.reachcrafting.client.mixin.RecipeBookComponentAccessor;
+import com.reachcrafting.client.mixin.RecipeBookPageAccessor;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -24,6 +25,9 @@ public final class RecipeBookChunkedScheduler {
 	private static final int COLLECTIONS_PER_TICK = 12;
 
 	private static Pass currentPass;
+	private static int lastObservedPageIndex = 0;
+	private static int frozenPageIndex = 0;
+	private static boolean freezeResortUntilManualReopen;
 
 	private RecipeBookChunkedScheduler() {
 	}
@@ -67,6 +71,72 @@ public final class RecipeBookChunkedScheduler {
 		currentPass = null;
 	}
 
+	public static void noteVisiblePageIndex(int pageIndex) {
+		int previousPageIndex = lastObservedPageIndex;
+		lastObservedPageIndex = Math.max(pageIndex, 0);
+		if (lastObservedPageIndex > 0) {
+			freezeResortUntilManualReopen = true;
+			frozenPageIndex = lastObservedPageIndex;
+		} else if (!freezeResortUntilManualReopen) {
+			lastObservedPageIndex = 0;
+			frozenPageIndex = 0;
+		}
+		if (previousPageIndex != lastObservedPageIndex) {
+			com.reachcrafting.ReachCraftingMod.LOGGER.info(
+				"[recipe_sort] visible_page changed previous={} current={} frozen_page={} freeze={}",
+				previousPageIndex,
+				lastObservedPageIndex,
+				frozenPageIndex,
+				freezeResortUntilManualReopen
+			);
+		}
+	}
+
+	public static void onRecipeBookVisibilityChanged(boolean visible) {
+		com.reachcrafting.ReachCraftingMod.LOGGER.info(
+			"[recipe_sort] recipe_book visibility={} page={} frozen_page={} freeze_before_clear={}",
+			visible,
+			lastObservedPageIndex,
+			frozenPageIndex,
+			freezeResortUntilManualReopen
+		);
+		if (!visible) {
+			freezeResortUntilManualReopen = false;
+			lastObservedPageIndex = 0;
+			frozenPageIndex = 0;
+		}
+	}
+
+	public static void onRecentRecipesChanged() {
+		Minecraft client = Minecraft.getInstance();
+		if (ContainerUtils.isAnySessionActive()) {
+			com.reachcrafting.ReachCraftingMod.LOGGER.info("[recipe_sort] recent_change skipped reason=active_session");
+			return;
+		}
+		if (shouldFreezeResort()) {
+			com.reachcrafting.ReachCraftingMod.LOGGER.info(
+				"[recipe_sort] recent_change skipped reason=frozen page={} freeze={}",
+				frozenPageIndex,
+				freezeResortUntilManualReopen
+			);
+			return;
+		}
+		com.reachcrafting.ReachCraftingMod.LOGGER.info("[recipe_sort] recent_change requesting refresh");
+		requestRefresh(client);
+	}
+
+	public static boolean isCurrentRecipeBookOnFirstPage() {
+		return !shouldFreezeResort() && isRecipeBookOnFirstPage(Minecraft.getInstance());
+	}
+
+	public static boolean shouldFreezeResort() {
+		return freezeResortUntilManualReopen;
+	}
+
+	public static int frozenPageIndex() {
+		return frozenPageIndex;
+	}
+
 	private static void tick(Minecraft client) {
 		if (currentPass == null) {
 			return;
@@ -98,18 +168,53 @@ public final class RecipeBookChunkedScheduler {
 	}
 
 	private static void requestRefresh(Minecraft client) {
+		if (ContainerUtils.isAnySessionActive()) {
+			com.reachcrafting.ReachCraftingMod.LOGGER.info("[recipe_sort] refresh skipped reason=active_session");
+			return;
+		}
+		if (shouldFreezeResort()) {
+			com.reachcrafting.ReachCraftingMod.LOGGER.info(
+				"[recipe_sort] refresh skipped reason=frozen page={} freeze={}",
+				frozenPageIndex,
+				freezeResortUntilManualReopen
+			);
+			return;
+		}
 		if (!(client.screen instanceof AbstractRecipeBookScreen<?> recipeBookScreen) || client.player == null) {
+			com.reachcrafting.ReachCraftingMod.LOGGER.info("[recipe_sort] refresh skipped reason=unsupported_screen");
 			return;
 		}
 
 		RecipeBookComponent<?> component = ((AbstractRecipeBookScreenAccessor) recipeBookScreen).getRecipeBookComponent();
 		if (component == null || !component.isVisible()) {
+			com.reachcrafting.ReachCraftingMod.LOGGER.info("[recipe_sort] refresh skipped reason=recipe_book_hidden");
 			return;
 		}
 
 		RecipeBookComponentAccessor accessor = (RecipeBookComponentAccessor) component;
 		boolean filtering = client.player.getRecipeBook().isFiltering(accessor.getMenu().getRecipeBookType());
+		com.reachcrafting.ReachCraftingMod.LOGGER.info(
+			"[recipe_sort] refresh requested filtering={} page={} frozen_page={} freeze={}",
+			filtering,
+			lastObservedPageIndex,
+			frozenPageIndex,
+			freezeResortUntilManualReopen
+		);
 		accessor.invokeUpdateCollections(false, filtering);
+	}
+
+	private static boolean isRecipeBookOnFirstPage(Minecraft client) {
+		if (!(client.screen instanceof AbstractRecipeBookScreen<?> recipeBookScreen)) {
+			return false;
+		}
+
+		RecipeBookComponent<?> component = ((AbstractRecipeBookScreenAccessor) recipeBookScreen).getRecipeBookComponent();
+		if (component == null || !component.isVisible()) {
+			return false;
+		}
+
+		var page = ((RecipeBookComponentAccessor) component).getRecipeBookPage();
+		return page != null && ((RecipeBookPageAccessor) page).getCurrentPage() == 0;
 	}
 
 	private static StateKey currentStateKey() {

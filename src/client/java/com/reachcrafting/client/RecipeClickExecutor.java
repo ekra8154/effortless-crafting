@@ -320,6 +320,7 @@ final class RecipeClickExecutor {
 				ContainerUtils.scheduleAutoMove(selectedRecipe.displayStack());
 				if (!ChainCraftController.isActive()) {
 					ReachCraftingConfig.get().noteRecentRecipe(selectedRecipe.recipeId());
+					RecipeBookChunkedScheduler.onRecentRecipesChanged();
 				}
 				ReachCraftingModClient.sendDebugChat("Placed recipe: " + outputLabel);
 				if (explicitVariantSelection) {
@@ -419,6 +420,7 @@ final class RecipeClickExecutor {
 			}
 			if (!ChainCraftController.isActive()) {
 				ReachCraftingConfig.get().noteRecentRecipe(selectedRecipe.recipeId());
+				RecipeBookChunkedScheduler.onRecentRecipesChanged();
 			}
 			ReachCraftingModClient.sendDebugChat("Placed recipe: " + outputLabel);
 			if (explicitVariantSelection) {
