@@ -639,6 +639,19 @@ public final class ReachCraftingConfig {
 
 	public void setRecipeBookSortingMode(RecipeBookSortingMode recipeBookSortingMode) {
 		this.recipeBookSortingMode = recipeBookSortingMode != null ? recipeBookSortingMode : DEFAULT_RECIPE_BOOK_SORTING_MODE;
+		if (this.recipeBookSortingMode == RecipeBookSortingMode.VANILLA) {
+			if (this.recentRecipeDisplayIds != null) {
+				this.recentRecipeDisplayIds.clear();
+			}
+			if (this.recentRecipeDisplayIdsByContext != null) {
+				this.recentRecipeDisplayIdsByContext.clear();
+			}
+			RecipeBookChunkedScheduler.clear();
+			ExistingOutputRetrievalController.setEnabled(false);
+			ChainCraftabilityCache.clearCache();
+			NearbyContainerCache.clear();
+			RecipeButtonNearbyIndicator.clearCaches();
+		}
 	}
 
 	public AutoFocusSearchMode autoFocusSearchMode() {
@@ -732,7 +745,7 @@ public final class ReachCraftingConfig {
 
 	private static void trimRecentRecipeDisplayIds(List<Integer> ids) {
 		ids.removeIf(java.util.Objects::isNull);
-		while (ids.size() > 40) {
+		while (ids.size() > 20) {
 			ids.remove(ids.size() - 1);
 		}
 	}

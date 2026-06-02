@@ -37,6 +37,7 @@ public final class ChainCraftabilityCache {
 	private static final int RECOMPUTE_INTERVAL_TICKS = 10;
 
 	private static Set<RecipeDisplayId> chainCraftableRecipeIds = Set.of();
+	private static Set<RecipeDisplayId> reachableRecipeIds = Set.of();
 	private static int tickCooldown = 0;
 	private static long lastInventoryHash = 0;
 	private static long lastNearbyRevision = -1;
@@ -45,12 +46,14 @@ public final class ChainCraftabilityCache {
 	private static int lastGridSlotCount = -1;
 	private static List<LightRecipe> recipeIndex = List.of();
 	private static Map<String, List<LightRecipe>> recipesByOutput = Map.of();
+	private static java.util.concurrent.CompletableFuture<Void> backgroundTask = null;
 
 	private ChainCraftabilityCache() {
 	}
 
 	public static void clearCache() {
 		chainCraftableRecipeIds = Set.of();
+		reachableRecipeIds = Set.of();
 		tickCooldown = 0;
 		lastInventoryHash = 0;
 		lastNearbyRevision = -1;
@@ -59,6 +62,7 @@ public final class ChainCraftabilityCache {
 		lastGridSlotCount = -1;
 		recipeIndex = List.of();
 		recipesByOutput = Map.of();
+		backgroundTask = null;
 	}
 
 	public static void init() {
@@ -74,6 +78,11 @@ public final class ChainCraftabilityCache {
 		return recipeId != null && chainCraftableRecipeIds.contains(recipeId);
 	}
 
+	public static boolean isReachable(RecipeDisplayId recipeId) {
+		refreshIfNeeded(Minecraft.getInstance(), false);
+		return recipeId != null && reachableRecipeIds.contains(recipeId);
+	}
+
 	private static void tick(Minecraft client) {
 		refreshIfNeeded(client, true);
 	}
@@ -82,8 +91,9 @@ public final class ChainCraftabilityCache {
 		if (!ReachCraftingConfig.get().enabled()
 			|| client.player == null
 			|| client.level == null) {
-			if (!chainCraftableRecipeIds.isEmpty()) {
+			if (!chainCraftableRecipeIds.isEmpty() || !reachableRecipeIds.isEmpty()) {
 				chainCraftableRecipeIds = Set.of();
+				reachableRecipeIds = Set.of();
 				lastKnownRecipeCount = -1;
 			}
 			return;
@@ -92,10 +102,15 @@ public final class ChainCraftabilityCache {
 			return;
 		}
 		if (ReachCraftingConfig.get().chainCraftingMode() == ReachCraftingConfig.ChainCraftingMode.DISABLED) {
-			if (!chainCraftableRecipeIds.isEmpty()) {
+			if (!chainCraftableRecipeIds.isEmpty() || !reachableRecipeIds.isEmpty()) {
 				chainCraftableRecipeIds = Set.of();
+				reachableRecipeIds = Set.of();
 			}
 			return;
+		}
+
+		if (backgroundTask != null && !backgroundTask.isDone()) {
+			return; // Don't start a new recompute if one is currently in progress
 		}
 
 		if (fromTick && --tickCooldown > 0) {
@@ -139,45 +154,61 @@ public final class ChainCraftabilityCache {
 		lastNearbyRevision = nearbyRevision;
 		lastReachableSignature = reachableSignature;
 
+		final long finalNearbyRevision = nearbyRevision;
+		final int finalReachableSignature = reachableSignature;
+
 		ContextMap context = SlotDisplayContext.fromLevel(client.level);
 
-		if (indexStale) {
-			recipeIndex = buildRecipeIndex(allRecipes, gridSlotCount, context);
-			Map<String, List<LightRecipe>> byOutput = new java.util.HashMap<>();
-			for (LightRecipe recipe : recipeIndex) {
-				byOutput.computeIfAbsent(recipe.outputItemId, k -> new ArrayList<>()).add(recipe);
-			}
-			recipesByOutput = Map.copyOf(byOutput);
-			ReachCraftingMod.LOGGER.debug(
-				"[chain_cache] rebuilt recipe index recipes={} grid_slots={}",
-				recipeIndex.size(),
-				gridSlotCount
-			);
-		}
-
 		long recomputeStartNanos = PerformanceProfiler.start();
-		recompute(client, player);
-		PerformanceProfiler.record(
-			"chain.cache_tick_recompute",
-			recomputeStartNanos,
-			"recipes=" + recipeIndex.size() + " screen_slots=" + gridSlotCount + " index_stale=" + indexStale
-		);
+		
+		Map<String, Integer> availableCounts = captureAvailableCounts(player, client);
+
+		backgroundTask = java.util.concurrent.CompletableFuture.runAsync(() -> {
+			List<LightRecipe> localRecipeIndex = indexStale ? buildRecipeIndex(allRecipes, gridSlotCount, context) : recipeIndex;
+			Map<String, List<LightRecipe>> localRecipesByOutput;
+			if (indexStale) {
+				Map<String, List<LightRecipe>> byOutput = new java.util.HashMap<>();
+				for (LightRecipe recipe : localRecipeIndex) {
+					byOutput.computeIfAbsent(recipe.outputItemId, k -> new ArrayList<>()).add(recipe);
+				}
+				localRecipesByOutput = Map.copyOf(byOutput);
+				ReachCraftingMod.LOGGER.debug(
+					"[chain_cache] rebuilt recipe index recipes={} grid_slots={}",
+					localRecipeIndex.size(),
+					gridSlotCount
+				);
+			} else {
+				localRecipesByOutput = recipesByOutput;
+			}
+
+			recompute(localRecipeIndex, localRecipesByOutput, availableCounts, () -> {
+				client.execute(() -> {
+					recipeIndex = localRecipeIndex;
+					recipesByOutput = localRecipesByOutput;
+					lastKnownRecipeCount = knownCount;
+					lastGridSlotCount = gridSlotCount;
+					lastInventoryHash = inventoryHash;
+					lastNearbyRevision = finalNearbyRevision;
+					lastReachableSignature = finalReachableSignature;
+					PerformanceProfiler.record(
+						"chain.cache_tick_recompute",
+						recomputeStartNanos,
+						"recipes=" + localRecipeIndex.size() + " screen_slots=" + gridSlotCount + " index_stale=" + indexStale + " async=true"
+					);
+				});
+			});
+		});
 	}
 
-	private static void recompute(Minecraft client, LocalPlayer player) {
-		long startNanos = PerformanceProfiler.start();
-		// Collect directly available item counts and boolean set
-		Set<String> directlyAvailable = new HashSet<>();
+	private static Map<String, Integer> captureAvailableCounts(LocalPlayer player, Minecraft client) {
 		Map<String, Integer> availableCounts = new java.util.HashMap<>();
 		for (ItemStack stack : player.getInventory().getNonEquipmentItems()) {
 			if (!stack.isEmpty()) {
 				String id = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
-				directlyAvailable.add(id);
 				availableCounts.merge(id, stack.getCount(), Integer::sum);
 			}
 		}
 
-		// Include nearby cache items when enabled
 		if (ReachCraftingConfig.get().enableNearbyContainerUsage()
 			&& ReachCraftingConfig.get().cacheContainersForFasterSearch()
 			&& client.getCameraEntity() != null
@@ -186,10 +217,20 @@ public final class ChainCraftabilityCache {
 				client.level, client.getCameraEntity(), player.blockInteractionRange()
 			);
 			for (Map.Entry<String, Integer> entry : view.aggregateCounts().entrySet()) {
-				directlyAvailable.add(entry.getKey());
 				availableCounts.merge(entry.getKey(), entry.getValue(), Integer::sum);
 			}
 		}
+		return availableCounts;
+	}
+
+	private static void recompute(
+		List<LightRecipe> localRecipeIndex,
+		Map<String, List<LightRecipe>> localRecipesByOutput,
+		Map<String, Integer> availableCounts,
+		Runnable onComplete
+	) {
+		long startNanos = PerformanceProfiler.start();
+		Set<String> directlyAvailable = new HashSet<>(availableCounts.keySet());
 
 		// Forward-reachability flood-fill
 		Set<String> reachable = new HashSet<>(directlyAvailable);
@@ -198,7 +239,7 @@ public final class ChainCraftabilityCache {
 		while (changed) {
 			changed = false;
 			iterations++;
-			for (LightRecipe recipe : recipeIndex) {
+			for (LightRecipe recipe : localRecipeIndex) {
 				if (reachable.contains(recipe.outputItemId)) {
 					continue;
 				}
@@ -210,29 +251,38 @@ public final class ChainCraftabilityCache {
 		}
 
 		// Classify each recipe in the index using exact verification
-		Set<RecipeDisplayId> result = new HashSet<>();
-		for (LightRecipe recipe : recipeIndex) {
+		Set<RecipeDisplayId> chainResult = new HashSet<>();
+		Set<RecipeDisplayId> reachableResult = new HashSet<>();
+		for (LightRecipe recipe : localRecipeIndex) {
 			if (!allSlotsSatisfied(recipe.ingredientSlots, reachable)) {
 				continue;
 			}
-			if (verifyExact(recipe, availableCounts) == VerifyResult.CHAIN_CRAFTABLE) {
-				result.add(recipe.recipeId);
+			VerifyResult verifyResult = verifyExact(recipe, availableCounts, localRecipesByOutput);
+			if (verifyResult == VerifyResult.CHAIN_CRAFTABLE) {
+				chainResult.add(recipe.recipeId);
+			} else if (verifyResult == VerifyResult.DIRECTLY_CRAFTABLE) {
+				reachableResult.add(recipe.recipeId);
 			}
 		}
 
-		chainCraftableRecipeIds = Set.copyOf(result);
-		ReachCraftingMod.LOGGER.debug(
-			"[chain_cache] recomputed chain_craftable={} reachable={} directly_available={} flood_iterations={}",
-			result.size(),
-			reachable.size(),
-			directlyAvailable.size(),
-			iterations
-		);
-		PerformanceProfiler.record(
-			"chain.cache_recompute_body",
-			startNanos,
-			"chain=" + result.size() + " reachable=" + reachable.size() + " direct=" + directlyAvailable.size() + " iterations=" + iterations
-		);
+		final int finalIterations = iterations;
+		Minecraft.getInstance().execute(() -> {
+			chainCraftableRecipeIds = Set.copyOf(chainResult);
+			reachableRecipeIds = Set.copyOf(reachableResult);
+			ReachCraftingMod.LOGGER.debug(
+				"[chain_cache] recomputed chain_craftable={} reachable={} directly_available={} flood_iterations={}",
+				chainResult.size(),
+				reachableResult.size(),
+				directlyAvailable.size(),
+				finalIterations
+			);
+			PerformanceProfiler.record(
+				"chain.cache_recompute_body",
+				startNanos,
+				"chain=" + chainResult.size() + " reachable=" + reachableResult.size() + " direct=" + directlyAvailable.size() + " iterations=" + finalIterations
+			);
+			onComplete.run();
+		});
 	}
 
 	private static boolean allSlotsSatisfied(List<List<String>> ingredientSlots, Set<String> available) {
@@ -259,13 +309,13 @@ public final class ChainCraftabilityCache {
 
 	private static int dfsOperations = 0;
 
-	private static VerifyResult verifyExact(LightRecipe recipe, Map<String, Integer> directlyAvailableCounts) {
+	private static VerifyResult verifyExact(LightRecipe recipe, Map<String, Integer> directlyAvailableCounts, Map<String, List<LightRecipe>> localRecipesByOutput) {
 		dfsOperations = 0;
 		Map<String, Integer> state = new java.util.HashMap<>(directlyAvailableCounts);
-		return verifyRecipe(recipe, 1, state, new HashSet<>(), 0);
+		return verifyRecipe(recipe, 1, state, new HashSet<>(), 0, localRecipesByOutput);
 	}
 
-	private static VerifyResult verifyRecipe(LightRecipe recipe, int craftsNeeded, Map<String, Integer> state, Set<RecipeDisplayId> resolving, int depth) {
+	private static VerifyResult verifyRecipe(LightRecipe recipe, int craftsNeeded, Map<String, Integer> state, Set<RecipeDisplayId> resolving, int depth, Map<String, List<LightRecipe>> localRecipesByOutput) {
 		if (depth > 6) return VerifyResult.NOT_CRAFTABLE;
 		if (dfsOperations++ > 2000) return VerifyResult.NOT_CRAFTABLE;
 
@@ -280,7 +330,7 @@ public final class ChainCraftabilityCache {
 		
 		boolean anyBacktracked = false;
 		for (Map.Entry<List<String>, Integer> entry : aggregatedSlots.entrySet()) {
-			VerifyResult reqResult = fulfillRequirement(entry.getKey(), entry.getValue(), state, resolving, depth + 1);
+			VerifyResult reqResult = fulfillRequirement(entry.getKey(), entry.getValue(), state, resolving, depth + 1, localRecipesByOutput);
 			if (reqResult == VerifyResult.NOT_CRAFTABLE) {
 				resolving.remove(recipe.recipeId);
 				return VerifyResult.NOT_CRAFTABLE;
@@ -293,7 +343,7 @@ public final class ChainCraftabilityCache {
 		return anyBacktracked ? VerifyResult.CHAIN_CRAFTABLE : VerifyResult.DIRECTLY_CRAFTABLE;
 	}
 
-	private static VerifyResult fulfillRequirement(List<String> options, int needed, Map<String, Integer> state, Set<RecipeDisplayId> resolving, int depth) {
+	private static VerifyResult fulfillRequirement(List<String> options, int needed, Map<String, Integer> state, Set<RecipeDisplayId> resolving, int depth, Map<String, List<LightRecipe>> localRecipesByOutput) {
 		if (dfsOperations++ > 2000) return VerifyResult.NOT_CRAFTABLE;
 
 		// 1. Greedily consume what we already have
@@ -309,14 +359,14 @@ public final class ChainCraftabilityCache {
 		
 		// 2. Backtrack to craft the remainder
 		for (String option : options) {
-			List<LightRecipe> producers = recipesByOutput.get(option);
+			List<LightRecipe> producers = localRecipesByOutput.get(option);
 			if (producers == null) continue;
 			
 			for (LightRecipe producer : producers) {
 				int craftsNeeded = (needed + producer.outputCount - 1) / producer.outputCount;
 				Map<String, Integer> stateBackup = new java.util.HashMap<>(state);
 				
-				VerifyResult prodResult = verifyRecipe(producer, craftsNeeded, state, resolving, depth);
+				VerifyResult prodResult = verifyRecipe(producer, craftsNeeded, state, resolving, depth, localRecipesByOutput);
 				if (prodResult != VerifyResult.NOT_CRAFTABLE) {
 					int produced = craftsNeeded * producer.outputCount;
 					int remainder = produced - needed;
