@@ -66,7 +66,7 @@ final class CountStagingSession extends BaseCraftSession {
 		this.originalContext = ScreenContextSnapshot.capture(client, cameraEntity, player.blockInteractionRange(), localItems);
 		NearbyContainerCache.ReachableView reachableView = NearbyContainerCache.getReachableView(level, cameraEntity, player.blockInteractionRange());
 		this.candidates = NearbyContainerCache.prioritizeCandidates(
-			findCandidates(level, cameraEntity, player.blockInteractionRange()),
+			NearbyDiscoveryPlanner.findCandidates(level, cameraEntity, player.blockInteractionRange()),
 			reachableView,
 			acceptedItemIds
 		);
@@ -322,21 +322,6 @@ final class CountStagingSession extends BaseCraftSession {
 	private void markVisited(BlockPos pos) {
 		visited.add(pos);
 		ContainerUtils.getOtherHalfOfLargeChest(level, pos).ifPresent(visited::add);
-	}
-
-	private static List<BlockPos> findCandidates(Level level, Entity cameraEntity, double reachDistance) {
-		Vec3 eyePos = cameraEntity.getEyePosition(0);
-		BlockPos center = BlockPos.containing(eyePos);
-		int radius = Mth.ceil(reachDistance);
-		List<BlockPos> found = new ArrayList<>();
-		for (BlockPos pos : BlockPos.betweenClosed(center.offset(-radius, -radius, -radius), center.offset(radius, radius, radius))) {
-			BlockState state = level.getBlockState(pos);
-			if (InWorldFilterManager.isContainerActive(level, pos, state)) {
-				found.add(pos.immutable());
-			}
-		}
-		found.sort(Comparator.comparingDouble(pos -> ContainerUtils.squaredDistanceToBlock(eyePos, pos)));
-		return found;
 	}
 
 	private static List<Slot> sortedMatchingContainerSources(AbstractContainerMenu menu, String itemId) {

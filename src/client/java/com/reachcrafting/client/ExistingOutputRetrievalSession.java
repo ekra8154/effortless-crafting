@@ -60,7 +60,7 @@ final class ExistingOutputRetrievalSession extends BaseCraftSession {
 		this.request = request;
 		AvailableItemSnapshot localItems = AvailableItemSnapshot.capture(player, client.screen);
 		this.originalContext = ScreenContextSnapshot.capture(client, cameraEntity, player.blockInteractionRange(), localItems);
-		this.candidates = findCandidates(level, cameraEntity, player.blockInteractionRange());
+		this.candidates = NearbyDiscoveryPlanner.findCandidates(level, cameraEntity, player.blockInteractionRange());
 		this.reopenAttemptsRemaining = MAX_REOPEN_ATTEMPTS;
 		this.remainingCount = Math.max(request.requestedCount(), 1);
 	}
@@ -433,26 +433,6 @@ final class ExistingOutputRetrievalSession extends BaseCraftSession {
 		}
 		matchingSources.sort(Comparator.comparingInt((Slot slot) -> slot.getItem().getCount()).thenComparingInt(slot -> slot.index));
 		return matchingSources;
-	}
-
-	private static List<BlockPos> findCandidates(Level level, Entity cameraEntity, double reachDistance) {
-		Vec3 eyePos = cameraEntity.getEyePosition(0);
-		int radius = Mth.ceil(reachDistance);
-		BlockPos center = BlockPos.containing(eyePos);
-		List<BlockPos> candidates = new ArrayList<>();
-
-		for (BlockPos pos : BlockPos.betweenClosed(
-			center.offset(-radius, -radius, -radius),
-			center.offset(radius, radius, radius)
-		)) {
-			BlockState state = level.getBlockState(pos);
-			if (InWorldFilterManager.isContainerActive(level, pos, state)) {
-				candidates.add(pos.immutable());
-			}
-		}
-
-		candidates.sort(Comparator.comparingDouble(pos -> ContainerUtils.squaredDistanceToBlock(eyePos, pos)));
-		return candidates;
 	}
 
 	private enum RetrievalState {
