@@ -23,7 +23,7 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.world.item.ItemStack;
 
 public final class RecipeBookChunkedScheduler {
-	private static final int COLLECTIONS_PER_TICK = 12;
+	private static final long CHUNK_TIME_BUDGET_NANOS = 5_000_000L; // 5ms
 
 	private static Pass currentPass;
 	private static int lastObservedPageIndex = 0;
@@ -182,7 +182,10 @@ public final class RecipeBookChunkedScheduler {
 		}
 
 		StateKey stateKey = currentStateKey();
-		if (stateKey == null || !stateKey.equals(currentPass.stateKey)) {
+		if (stateKey == null) {
+			return;
+		}
+		if (!stateKey.equals(currentPass.stateKey)) {
 			clear();
 			return;
 		}
@@ -191,7 +194,7 @@ public final class RecipeBookChunkedScheduler {
 		}
 
 		long startNanos = PerformanceProfiler.start();
-		int processed = currentPass.processChunk(COLLECTIONS_PER_TICK);
+		int processed = currentPass.processChunk(CHUNK_TIME_BUDGET_NANOS);
 		if (processed <= 0) {
 			return;
 		}
@@ -314,20 +317,26 @@ public final class RecipeBookChunkedScheduler {
 	}
 
 	public record PassSnapshot(
+		Map<RecipeCollection, RecipeBookSmartSorter.SortScore> fastScores,
 		Map<RecipeCollection, RecipeBookSmartSorter.SortScore> settledScores,
 		Map<Integer, Integer> recentRanks,
 		int settledCount,
 		int pendingCount
 	) {
-		private static PassSnapshot empty() {
-			return new PassSnapshot(Map.of(), Map.of(), 0, 0);
+		public static PassSnapshot empty() {
+			return new PassSnapshot(Map.of(), Map.of(), Map.of(), 0, 0);
 		}
 
 		public RecipeBookSmartSorter.SortScore scoreFor(RecipeCollection collection, int originalIndex) {
 			RecipeBookSmartSorter.SortScore settled = settledScores.get(collection);
-			return settled != null
-				? settled
-				: RecipeBookSmartSorter.fallbackScore(collection, recentRanks, originalIndex);
+			if (settled != null) {
+				return settled;
+			}
+			RecipeBookSmartSorter.SortScore fast = fastScores.get(collection);
+			if (fast != null) {
+				return fast;
+			}
+			return new RecipeBookSmartSorter.SortScore(5, Integer.MAX_VALUE, originalIndex);
 		}
 	}
 
@@ -339,6 +348,7 @@ public final class RecipeBookChunkedScheduler {
 		private final int collectionSignature;
 		private final List<RecipeCollection> collections;
 		private final Map<RecipeCollection, Integer> originalOrder;
+		private final Map<RecipeCollection, RecipeBookSmartSorter.SortScore> fastScores = new IdentityHashMap<>();
 		private final Map<RecipeCollection, RecipeBookSmartSorter.SortScore> settledScores = new IdentityHashMap<>();
 		private final RecipeBookSmartSorter.SortPassContext sortContext = new RecipeBookSmartSorter.SortPassContext(RecipeBookSmartSorter.recentRanks());
 		private final LinkedHashSet<RecipeCollection> visiblePriority = new LinkedHashSet<>();
@@ -356,6 +366,7 @@ public final class RecipeBookChunkedScheduler {
 			this.collections = List.copyOf(collections);
 			this.originalOrder = new IdentityHashMap<>();
 			refreshOriginalOrder(originalOrder);
+			populateFastScores();
 		}
 
 		private boolean matches(StateKey stateKey, int collectionSignature) {
@@ -372,8 +383,16 @@ public final class RecipeBookChunkedScheduler {
 			}
 		}
 
+		private void populateFastScores() {
+			for (RecipeCollection collection : collections) {
+				int originalIndex = originalOrder.getOrDefault(collection, Integer.MAX_VALUE);
+				fastScores.put(collection, RecipeBookSmartSorter.fastScore(collection, sortContext, originalIndex));
+			}
+		}
+
 		private PassSnapshot snapshot() {
 			return new PassSnapshot(
+				Map.copyOf(fastScores),
 				Map.copyOf(settledScores),
 				Map.copyOf(sortContext.recentRanks),
 				settledCount(),
@@ -390,9 +409,10 @@ public final class RecipeBookChunkedScheduler {
 			}
 		}
 
-		private int processChunk(int budget) {
+		private int processChunk(long timeBudgetNanos) {
 			int processed = 0;
-			while (processed < budget) {
+			long startNanos = System.nanoTime();
+			while (System.nanoTime() - startNanos < timeBudgetNanos) {
 				RecipeCollection collection = nextCollection();
 				if (collection == null) {
 					break;
