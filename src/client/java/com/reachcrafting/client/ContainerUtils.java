@@ -53,6 +53,18 @@ public final class ContainerUtils {
 		AutoCraftController.clearHoldSession();
 	}
 
+	public static boolean isExistingOutputRetrievalEnabled() {
+		return ExistingOutputRetrievalController.isEnabled();
+	}
+
+	public static void toggleExistingOutputRetrievalViaResultSlot() {
+		ExistingOutputRetrievalController.toggleViaResultSlot();
+	}
+
+	public static void tickExistingOutputRetrievalController(net.minecraft.client.Minecraft client) {
+		ExistingOutputRetrievalController.tick(client);
+	}
+
 	public static boolean isAutoCraftTogglePending() {
 		return AutoCraftController.isTogglePending();
 	}
@@ -276,7 +288,8 @@ public final class ContainerUtils {
 			|| NearbyContainerDryRun.isActiveSessionRunning()
 			|| InventoryGridRestoreTracker.isRestoring()
 			|| BulkAutoCraftController.isActive()
-			|| ChainCraftController.isActive();
+			|| ChainCraftController.isActive()
+			|| ExistingOutputRetrievalController.isEnabled();
 	}
 
 	public static void abortAllSessions() {
@@ -293,6 +306,7 @@ public final class ContainerUtils {
 		}
 		ChainCraftController.abort(false);
 		NearbyContainerDryRun.abortActiveSession();
+		ExistingOutputRetrievalController.setEnabled(false);
 		InventoryGridRestoreTracker.clear();
 		OffhandConsolidationController.swapBack(net.minecraft.client.Minecraft.getInstance());
 

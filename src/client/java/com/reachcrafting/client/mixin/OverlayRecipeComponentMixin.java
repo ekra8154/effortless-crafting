@@ -36,6 +36,7 @@ public abstract class OverlayRecipeComponentMixin {
 		boolean shiftDown = (click.modifiers() & GLFW.GLFW_MOD_SHIFT) != 0;
 		boolean altDown = (click.modifiers() & GLFW.GLFW_MOD_ALT) != 0;
 		boolean interceptWithMod = ctrlDown
+			|| com.reachcrafting.client.ContainerUtils.isExistingOutputRetrievalEnabled()
 			|| (shiftDown && RecipeBookClickCapture.isBulkModeEnabled())
 			|| (altDown && ReachCraftingConfig.get().altAsRequestKey());
 		com.reachcrafting.ReachCraftingMod.LOGGER.info(
@@ -108,6 +109,7 @@ public abstract class OverlayRecipeComponentMixin {
 			cir.getReturnValueZ()
 		);
 		if (ctrlDown
+			|| com.reachcrafting.client.ContainerUtils.isExistingOutputRetrievalEnabled()
 			|| (shiftDown && RecipeBookClickCapture.isBulkModeEnabled())
 			|| (altDown && ReachCraftingConfig.get().altAsRequestKey())) {
 			return;

@@ -103,6 +103,26 @@ final class NearbyCraftCoordinator {
 		session.start();
 	}
 
+	void startExistingOutputRetrieval(ExistingOutputRetrievalRequest request) {
+		Minecraft client = Minecraft.getInstance();
+		LocalPlayer player = client.player;
+		Level level = client.level;
+		MultiPlayerGameMode gameMode = client.gameMode;
+		Entity cameraEntity = client.getCameraEntity();
+		if (player == null || level == null || gameMode == null || cameraEntity == null) {
+			return;
+		}
+
+		cancelCurrent();
+		ExistingOutputRetrievalSession session = new ExistingOutputRetrievalSession(this, client, player, level, gameMode, cameraEntity, request);
+		if (!session.canStart()) {
+			return;
+		}
+
+		activeSession = session;
+		session.start();
+	}
+
 	boolean tryExpandReservedGrid(SearchRequest request) {
 		Minecraft client = Minecraft.getInstance();
 		LocalPlayer player = client.player;

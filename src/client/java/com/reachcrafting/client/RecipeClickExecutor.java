@@ -138,6 +138,26 @@ final class RecipeClickExecutor {
 			: RecipeDeficitReport.from(ingredientSummary, localAvailableCounts, availableItems.gridStacks(), desiredVariantCopies);
 		String resolvedItemId = BuiltInRegistries.ITEM.getKey(resolvedDisplayStack.getItem()).toString();
 		String outputLabel = resolvedItemId + " x" + resolvedDisplayStack.getCount();
+		if (ExistingOutputRetrievalController.isEnabled()) {
+			if (!ReachCraftingConfig.get().enableNearbyContainerUsage()) {
+				ReachCraftingModClient.sendChat("Nearby container usage is disabled.");
+				return;
+			}
+			NearbyContainerDryRun.startExistingOutputRetrieval(
+				recipeId,
+				selectedRecipe.recipeId(),
+				collection,
+				explicitVariantSelection,
+				resolvedItemId,
+				outputLabel,
+				resolvedDisplayStack,
+				Math.max(effectiveRequestedClicks(craftAll, requestedClicks, desiredVariantCopies), 1)
+			);
+			if (explicitVariantSelection) {
+				tryCloseOverlayAfterRelease();
+			}
+			return;
+		}
 
 		ReachCraftingMod.LOGGER.debug(
 			"[recipe_click] screen={} button={} idx={} craftable={} shift={} ctrl={} output={}",
@@ -701,6 +721,10 @@ final class RecipeClickExecutor {
 		// For finite Ctrl requests, only use the conservative local-output path
 		// when the current inventory can already satisfy the whole request.
 		return localPossibleCopies < Math.max(requestedClicks, 1);
+	}
+
+	private static int effectiveRequestedClicks(boolean craftAll, int requestedClicks, int desiredVariantCopies) {
+		return craftAll ? Math.max(desiredVariantCopies, 1) : Math.max(requestedClicks, 1);
 	}
 
 	private static RecipeDisplayEntry findRecipeEntry(

@@ -77,6 +77,28 @@ public final class NearbyContainerDryRun {
 		COORDINATOR.startCountStaging(new CountStagingRequest(desiredCounts, reason));
 	}
 
+	public static void startExistingOutputRetrieval(
+		RecipeDisplayId requestedRecipeId,
+		RecipeDisplayId resolvedRecipeId,
+		RecipeCollection recipeCollection,
+		boolean explicitVariantSelection,
+		String outputItemId,
+		String outputLabel,
+		net.minecraft.world.item.ItemStack displayStack,
+		int requestedCount
+	) {
+		COORDINATOR.startExistingOutputRetrieval(new ExistingOutputRetrievalRequest(
+			requestedRecipeId,
+			resolvedRecipeId,
+			recipeCollection,
+			explicitVariantSelection,
+			outputItemId,
+			outputLabel,
+			displayStack.copy(),
+			requestedCount
+		));
+	}
+
 	public static void cancelCurrent() {
 		COORDINATOR.cancelCurrent();
 	}
