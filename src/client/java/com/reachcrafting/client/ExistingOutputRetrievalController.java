@@ -6,7 +6,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.CraftingScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 
-final class ExistingOutputRetrievalController {
+public final class ExistingOutputRetrievalController {
 	private static final long DOUBLE_TAP_WINDOW_MS = 250L;
 
 	private static boolean enabled;
@@ -16,7 +16,7 @@ final class ExistingOutputRetrievalController {
 	private ExistingOutputRetrievalController() {
 	}
 
-	static boolean isEnabled() {
+	public static boolean isEnabled() {
 		return enabled && ReachCraftingConfig.get().enableExistingOutputRetrieval();
 	}
 
@@ -29,6 +29,9 @@ final class ExistingOutputRetrievalController {
 		ExistingOutputRetrievalController.enabled = next;
 		ReachCraftingMod.LOGGER.info("[retrieval_mode] setEnabled next={} screen={}", next, Minecraft.getInstance().screen != null ? Minecraft.getInstance().screen.getClass().getSimpleName() : "null");
 		RecipeButtonNearbyIndicator.clearCaches();
+		RecipeBookChunkedScheduler.markForceEagerNextSort();
+		RecipeBookChunkedScheduler.clear();
+		RecipeBookChunkedScheduler.resetFrozenPageState("retrieval_mode_toggled");
 		RecipeBookChunkedScheduler.forceVisibleRecipeBookRefresh();
 		if (next) {
 			triggerCacheWarmupIfNeeded();

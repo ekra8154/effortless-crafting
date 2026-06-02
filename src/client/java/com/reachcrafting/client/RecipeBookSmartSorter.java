@@ -10,6 +10,7 @@ import net.minecraft.client.gui.screens.recipebook.RecipeCollection;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.display.RecipeDisplayEntry;
 import net.minecraft.world.item.crafting.display.RecipeDisplayId;
+import com.reachcrafting.ReachCraftingMod;
 
 public final class RecipeBookSmartSorter {
 	private static final Map<RecipeCollection, Integer> lastPresentedOrder = new IdentityHashMap<>();
@@ -18,7 +19,7 @@ public final class RecipeBookSmartSorter {
 	}
 
 	public static List<RecipeCollection> sorted(List<RecipeCollection> collections) {
-		return sorted(collections, false);
+		return sorted(collections, RecipeBookChunkedScheduler.consumeForceEagerNextSort());
 	}
 
 	public static List<RecipeCollection> sorted(List<RecipeCollection> collections, boolean eager) {
@@ -29,18 +30,18 @@ public final class RecipeBookSmartSorter {
 			return collections;
 		}
 		if (RecipeBookChunkedScheduler.shouldFreezeResort()) {
-			// com.reachcrafting.ReachCraftingMod.LOGGER.info(
-			// 	"[recipe_sort] preserve reason=frozen_page collections={} freeze=true",
-			// 	collections.size()
-			// );
+			ReachCraftingMod.LOGGER.info(
+				"[recipe_sort] preserve reason=frozen_page collections={} freeze=true",
+				collections.size()
+			);
 			return preservePresentedOrder(collections);
 		}
-		if (ContainerUtils.isAnySessionActive()) {
-			// com.reachcrafting.ReachCraftingMod.LOGGER.info(
-			// 	"[recipe_sort] preserve reason=active_session collections={} freeze={}",
-			// 	collections.size(),
-			// 	RecipeBookChunkedScheduler.shouldFreezeResort()
-			// );
+		if (ContainerUtils.isAnySessionActiveExcludingRetrievalMode()) {
+			ReachCraftingMod.LOGGER.info(
+				"[recipe_sort] preserve reason=active_session collections={} freeze={}",
+				collections.size(),
+				RecipeBookChunkedScheduler.shouldFreezeResort()
+			);
 			return preservePresentedOrder(collections);
 		}
 		long startNanos = PerformanceProfiler.start();
@@ -70,12 +71,12 @@ public final class RecipeBookSmartSorter {
 					+ " chain_memo=" + sortContext.chainCraftableByRecipe.size()
 					+ " nearby_memo=" + sortContext.nearbyCraftabilityByRecipe.size()
 			);
-			// com.reachcrafting.ReachCraftingMod.LOGGER.info(
-			// 	"[recipe_sort] sorted mode=eager collections={} chain_memo={} nearby_memo={}",
-			// 	collections.size(),
-			// 	sortContext.chainCraftableByRecipe.size(),
-			// 	sortContext.nearbyCraftabilityByRecipe.size()
-			// );
+			ReachCraftingMod.LOGGER.info(
+				"[recipe_sort] sorted mode=eager collections={} chain_memo={} nearby_memo={}",
+				collections.size(),
+				sortContext.chainCraftableByRecipe.size(),
+				sortContext.nearbyCraftabilityByRecipe.size()
+			);
 			return sorted;
 		}
 
@@ -99,12 +100,12 @@ public final class RecipeBookSmartSorter {
 				+ " settled=" + passSnapshot.settledCount()
 				+ " pending=" + passSnapshot.pendingCount()
 		);
-		// com.reachcrafting.ReachCraftingMod.LOGGER.info(
-		// 	"[recipe_sort] sorted mode=chunked collections={} settled={} pending={}",
-		// 	collections.size(),
-		// 	passSnapshot.settledCount(),
-		// 	passSnapshot.pendingCount()
-		// );
+		ReachCraftingMod.LOGGER.info(
+			"[recipe_sort] sorted mode=chunked collections={} settled={} pending={}",
+			collections.size(),
+			passSnapshot.settledCount(),
+			passSnapshot.pendingCount()
+		);
 		return sorted;
 	}
 
@@ -128,6 +129,12 @@ public final class RecipeBookSmartSorter {
 	static SortScore fallbackScore(RecipeCollection collection, Map<Integer, Integer> recentRanks, int originalIndex) {
 		List<RecipeDisplayEntry> recipes = selectedRecipes(collection);
 		int recentRank = recentRank(recipes, recentRanks);
+		if (ContainerUtils.isExistingOutputRetrievalEnabled()) {
+			if (recentRank != Integer.MAX_VALUE) {
+				return new SortScore(0, recentRank, originalIndex);
+			}
+			return new SortScore(3, 0, originalIndex);
+		}
 		if (recentRank != Integer.MAX_VALUE) {
 			return new SortScore(0, recentRank, originalIndex);
 		}
@@ -140,6 +147,38 @@ public final class RecipeBookSmartSorter {
 	static SortScore fullScore(RecipeCollection collection, SortPassContext context, int originalIndex) {
 		List<RecipeDisplayEntry> recipes = selectedRecipes(collection);
 		int recentRank = recentRank(recipes, context.recentRanks);
+		
+		if (context.retrievalModeEnabled) {
+			boolean explicitVariantSelection = recipes.size() > 1;
+			boolean retrievable = false;
+			for (RecipeDisplayEntry entry : recipes) {
+				NearbyMemoKey nearbyMemoKey = new NearbyMemoKey(entry.id(), explicitVariantSelection);
+				retrievable |= context.retrievabilityByRecipe.computeIfAbsent(
+					nearbyMemoKey,
+					ignored -> RecipeButtonNearbyIndicator.hasRetrievableOutput(
+						entry.id(),
+						collection,
+						ItemStack.EMPTY,
+						explicitVariantSelection
+					)
+				);
+				if (retrievable) {
+					break;
+				}
+			}
+
+			if (retrievable && recentRank != Integer.MAX_VALUE) {
+				return new SortScore(0, recentRank, originalIndex);
+			}
+			if (retrievable) {
+				return new SortScore(1, 0, originalIndex);
+			}
+			if (recentRank != Integer.MAX_VALUE) {
+				return new SortScore(2, recentRank, originalIndex);
+			}
+			return new SortScore(3, 0, originalIndex);
+		}
+
 		if (recentRank != Integer.MAX_VALUE) {
 			return new SortScore(0, recentRank, originalIndex);
 		}
@@ -197,7 +236,7 @@ public final class RecipeBookSmartSorter {
 	private record ScoredCollection(RecipeCollection collection, SortScore score) {
 	}
 
-	private static List<RecipeCollection> preservePresentedOrder(List<RecipeCollection> collections) {
+	public static List<RecipeCollection> preservePresentedOrder(List<RecipeCollection> collections) {
 		Map<Integer, Integer> originalOrder = originalOrder(collections);
 		List<RecipeCollection> preserved = new ArrayList<>(collections);
 		preserved.sort(
@@ -220,8 +259,10 @@ public final class RecipeBookSmartSorter {
 
 	static final class SortPassContext {
 		final Map<Integer, Integer> recentRanks;
+		final boolean retrievalModeEnabled = ExistingOutputRetrievalController.isEnabled();
 		final Map<RecipeDisplayId, Boolean> chainCraftableByRecipe = new HashMap<>();
 		final Map<NearbyMemoKey, RecipeButtonNearbyIndicator.Craftability> nearbyCraftabilityByRecipe = new HashMap<>();
+		final Map<NearbyMemoKey, Boolean> retrievabilityByRecipe = new HashMap<>();
 
 		SortPassContext(Map<Integer, Integer> recentRanks) {
 			this.recentRanks = recentRanks;

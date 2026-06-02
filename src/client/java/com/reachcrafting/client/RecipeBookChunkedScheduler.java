@@ -28,8 +28,9 @@ public final class RecipeBookChunkedScheduler {
 	private static Pass currentPass;
 	private static int lastObservedPageIndex = 0;
 	private static int frozenPageIndex = 0;
-	private static boolean freezeResortUntilManualReopen;
-	private static boolean pendingAutomatedRecipeBookReopen;
+	private static boolean freezeResortUntilManualReopen = false;
+	private static boolean pendingAutomatedRecipeBookReopen = false;
+	private static boolean forceEagerNextSort = false;
 
 	private RecipeBookChunkedScheduler() {
 	}
@@ -83,6 +84,16 @@ public final class RecipeBookChunkedScheduler {
 		return pending;
 	}
 
+	public static void markForceEagerNextSort() {
+		forceEagerNextSort = true;
+	}
+
+	public static boolean consumeForceEagerNextSort() {
+		boolean eager = forceEagerNextSort;
+		forceEagerNextSort = false;
+		return eager;
+	}
+
 	public static void resetFrozenPageState(String reason) {
 		// com.reachcrafting.ReachCraftingMod.LOGGER.info(
 		// 	"[recipe_sort] reset_frozen_state reason={} previous_page={} frozen_page={} freeze_before_clear={}",
@@ -132,19 +143,19 @@ public final class RecipeBookChunkedScheduler {
 
 	public static void onRecentRecipesChanged() {
 		Minecraft client = Minecraft.getInstance();
-		if (ContainerUtils.isAnySessionActive()) {
-			// com.reachcrafting.ReachCraftingMod.LOGGER.info("[recipe_sort] recent_change skipped reason=active_session");
+		if (ContainerUtils.isAnySessionActiveExcludingRetrievalMode()) {
+			ReachCraftingMod.LOGGER.info("[recipe_sort] recent_change skipped reason=active_session");
 			return;
 		}
 		if (shouldFreezeResort()) {
-			// com.reachcrafting.ReachCraftingMod.LOGGER.info(
-			// 	"[recipe_sort] recent_change skipped reason=frozen page={} freeze={}",
-			// 	frozenPageIndex,
-			// 	freezeResortUntilManualReopen
-			// );
+			ReachCraftingMod.LOGGER.info(
+				"[recipe_sort] recent_change skipped reason=frozen page={} freeze={}",
+				frozenPageIndex,
+				freezeResortUntilManualReopen
+			);
 			return;
 		}
-		// com.reachcrafting.ReachCraftingMod.LOGGER.info("[recipe_sort] recent_change requesting refresh");
+		ReachCraftingMod.LOGGER.info("[recipe_sort] recent_change requesting refresh");
 		requestRefresh(client);
 	}
 
@@ -222,7 +233,7 @@ public final class RecipeBookChunkedScheduler {
 		RecipeBookComponentAccessor accessor = (RecipeBookComponentAccessor) component;
 		boolean filtering = client.player.getRecipeBook().isFiltering(accessor.getMenu().getRecipeBookType());
 		ReachCraftingMod.LOGGER.info("[retrieval_virtual] refresh invokeUpdateCollections force={} filtering={} page={} frozen_page={} freeze={}", force, filtering, lastObservedPageIndex, frozenPageIndex, freezeResortUntilManualReopen);
-		accessor.invokeUpdateCollections(false, filtering);
+		accessor.invokeUpdateCollections(force, filtering);
 	}
 
 	private static boolean isRecipeBookOnFirstPage(Minecraft client) {
@@ -259,7 +270,7 @@ public final class RecipeBookChunkedScheduler {
 		long inventoryHash = computeInventoryHash(player, screen);
 		long nearbyRevision = reachableView.revision();
 		int reachableSignature = reachableSignature(reachableView);
-		return new StateKey(screen.getClass(), inventoryHash, nearbyRevision, reachableSignature);
+		return new StateKey(screen.getClass(), inventoryHash, nearbyRevision, reachableSignature, ContainerUtils.isExistingOutputRetrievalEnabled());
 	}
 
 	private static long computeInventoryHash(LocalPlayer player, Screen screen) {
@@ -320,7 +331,7 @@ public final class RecipeBookChunkedScheduler {
 		}
 	}
 
-	private record StateKey(Class<?> screenClass, long inventoryHash, long nearbyRevision, int reachableSignature) {
+	private record StateKey(Class<?> screenClass, long inventoryHash, long nearbyRevision, int reachableSignature, boolean retrievalModeEnabled) {
 	}
 
 	private static final class Pass {

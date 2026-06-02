@@ -288,8 +288,7 @@ public final class ContainerUtils {
 			|| NearbyContainerDryRun.isActiveSessionRunning()
 			|| InventoryGridRestoreTracker.isRestoring()
 			|| BulkAutoCraftController.isActive()
-			|| ChainCraftController.isActive()
-			|| ExistingOutputRetrievalController.isEnabled();
+			|| ChainCraftController.isActive();
 	}
 
 	public static boolean isAnySessionActiveExcludingRetrievalMode() {

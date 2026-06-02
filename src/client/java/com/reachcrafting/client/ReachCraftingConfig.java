@@ -760,11 +760,12 @@ public final class ReachCraftingConfig {
 		if (client == null || client.player == null || client.level == null) {
 			return null;
 		}
+		String prefix = ContainerUtils.isExistingOutputRetrievalEnabled() ? "retrieval_" : "";
 		if (client.isSingleplayer() && client.getSingleplayerServer() != null) {
-			return "local_" + sanitizeStorageId(client.getSingleplayerServer().getWorldData().getLevelName());
+			return prefix + "local_" + sanitizeStorageId(client.getSingleplayerServer().getWorldData().getLevelName());
 		}
 		if (client.getConnection() != null && client.getConnection().getServerData() != null) {
-			return "server_" + sanitizeStorageId(client.getConnection().getServerData().ip);
+			return prefix + "server_" + sanitizeStorageId(client.getConnection().getServerData().ip);
 		}
 		return null;
 	}

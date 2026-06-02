@@ -197,7 +197,7 @@ public final class RecipeButtonNearbyIndicator {
 		return ChainCraftabilityCache.isChainCraftable(recipe) ? IndicatorState.CHAIN : IndicatorState.NONE;
 	}
 
-	private static boolean hasRetrievableOutput(RecipeDisplayId recipe, RecipeCollection collection, ItemStack displayStack, boolean explicitVariantSelection) {
+	public static boolean hasRetrievableOutput(RecipeDisplayId recipe, RecipeCollection collection, ItemStack displayStack, boolean explicitVariantSelection) {
 		if (!ReachCraftingConfig.get().enableExistingOutputRetrieval()
 			|| !ReachCraftingConfig.get().enableNearbyContainerUsage()
 			|| !ReachCraftingConfig.get().cacheContainersForFasterSearch()) {
@@ -215,7 +215,10 @@ public final class RecipeButtonNearbyIndicator {
 			return false;
 		}
 
-		AvailableItemSnapshot availableItems = AvailableItemSnapshot.capture(player, screen);
+		if (VirtualRetrievalRecipeBookEntries.isSyntheticRecipeId(recipe)) {
+			return true;
+		}
+
 		Map<String, Integer> nearbyTotals = NearbyContainerCache.getReachableView(
 			minecraft.level,
 			minecraft.getCameraEntity(),
@@ -229,7 +232,7 @@ public final class RecipeButtonNearbyIndicator {
 			displayStack,
 			explicitVariantSelection,
 			true,
-			availableItems,
+			AvailableItemSnapshot.empty(),
 			nearbyTotals,
 			nearbyTotals,
 			false,

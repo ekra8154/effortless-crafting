@@ -34,6 +34,7 @@ import net.minecraft.world.item.crafting.display.SlotDisplay;
 
 public final class VirtualRetrievalRecipeBookEntries {
 	private static final int SYNTHETIC_RECIPE_ID_BASE = 1_000_000_000;
+	private static final Map<String, RecipeCollection> SYNTHETIC_CACHE = new java.util.HashMap<>();
 
 	private VirtualRetrievalRecipeBookEntries() {
 	}
@@ -111,21 +112,26 @@ public final class VirtualRetrievalRecipeBookEntries {
 				continue;
 			}
 
-			RecipeDisplayId id = syntheticIdFor(entry.getKey());
-			RecipeDisplay display = new ShapelessCraftingRecipeDisplay(
-				List.of(),
-				new SlotDisplay.ItemStackSlotDisplay(new ItemStackTemplate(item, Math.min(Math.max(entry.getValue(), 1), stack.getMaxStackSize()))),
-				new SlotDisplay.ItemSlotDisplay(net.minecraft.world.level.block.Blocks.CRAFTING_TABLE.asItem())
-			);
-			RecipeDisplayEntry syntheticEntry = new RecipeDisplayEntry(
-				id,
-				display,
-				java.util.OptionalInt.empty(),
-				category,
-				java.util.Optional.empty()
-			);
-			RecipeCollection syntheticCollection = new RecipeCollection(List.of(syntheticEntry));
-			syntheticCollection.selectRecipes(new StackedItemContents(), ignored -> true);
+			int displayCount = Math.min(Math.max(entry.getValue(), 1), stack.getMaxStackSize());
+			String cacheKey = entry.getKey() + ":" + displayCount;
+			RecipeCollection syntheticCollection = SYNTHETIC_CACHE.computeIfAbsent(cacheKey, k -> {
+				RecipeDisplayId id = syntheticIdFor(entry.getKey());
+				RecipeDisplay display = new ShapelessCraftingRecipeDisplay(
+					List.of(),
+					new SlotDisplay.ItemStackSlotDisplay(new ItemStackTemplate(item, displayCount)),
+					new SlotDisplay.ItemSlotDisplay(net.minecraft.world.level.block.Blocks.CRAFTING_TABLE.asItem())
+				);
+				RecipeDisplayEntry syntheticEntry = new RecipeDisplayEntry(
+					id,
+					display,
+					java.util.OptionalInt.empty(),
+					category,
+					java.util.Optional.empty()
+				);
+				RecipeCollection col = new RecipeCollection(List.of(syntheticEntry));
+				col.selectRecipes(new StackedItemContents(), ignored -> true);
+				return col;
+			});
 			synthetic.add(syntheticCollection);
 		}
 
