@@ -20,6 +20,8 @@
 	"tooltip.reachcrafting.redistribute_to_craft_when_needed": "Allow already-filled slots to be rebalanced if other variants are needed to craft more items.",
 	"option.reachcrafting.show_nearby_craftable_indicator": "Nearby Craftable Indicator",
 	"tooltip.reachcrafting.show_nearby_craftable_indicator": "Show the orange recipe-book indicator when cached nearby containers suggest a missing recipe can be crafted from nearby storage.",
+	"option.reachcrafting.enable_existing_output_retrieval": "Existing Output Retrieval",
+	"tooltip.reachcrafting.enable_existing_output_retrieval": "Allow Ctrl result-slot toggle or Ctrl double-tap to switch recipe clicks into retrieval mode, pulling already-crafted outputs from nearby containers instead of crafting them.",
 	"option.reachcrafting.cache_containers_for_faster_search": "Nearby Container Caching",
 	"tooltip.reachcrafting.cache_containers_for_faster_search": "Remember observed nearby container contents to power the recipe-book indicator and speed up Ctrl-assisted nearby searches.",
 	"option.reachcrafting.reach_craft_hold_and_release": "Reach Craft Hold And Release",

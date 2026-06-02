@@ -317,6 +317,15 @@ public final class ReachCraftingConfigScreen {
 			.build());
 
 		nearbyGroup.add(entries.startBooleanToggle(
+				Component.translatable("option.reachcrafting.enable_existing_output_retrieval"),
+				config.enableExistingOutputRetrieval()
+			)
+			.setDefaultValue(true)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.enable_existing_output_retrieval"))
+			.setSaveConsumer(config::setEnableExistingOutputRetrieval)
+			.build());
+
+		nearbyGroup.add(entries.startBooleanToggle(
 				Component.translatable("option.reachcrafting.cache_containers_for_faster_search"),
 				config.cacheContainersForFasterSearch()
 			)

@@ -28,6 +28,7 @@ public final class ReachCraftingConfig {
 	private static final RevolvingCraftHandling DEFAULT_REVOLVING_CRAFT_HANDLING = RevolvingCraftHandling.SPECIFIC_VARIANT_ONLY;
 	private static final IngredientPlanning.CountPreference DEFAULT_COUNT_PREFERENCE = IngredientPlanning.CountPreference.HIGHEST_TOTAL;
 	private static final boolean DEFAULT_SHOW_NEARBY_CRAFTABLE_INDICATOR = true;
+	private static final boolean DEFAULT_ENABLE_EXISTING_OUTPUT_RETRIEVAL = true;
 	private static final boolean DEFAULT_CACHE_CONTAINERS_FOR_FASTER_SEARCH = true;
 	private static final boolean DEFAULT_REACH_CRAFT_HOLD_AND_RELEASE = true;
 	private static final boolean DEFAULT_REACH_CRAFT_CLOSE_OVERLAY_AFTER_RELEASE = true;
@@ -82,6 +83,7 @@ public final class ReachCraftingConfig {
 	private RevolvingCraftHandling revolvingCraftHandling;
 	private IngredientPlanning.CountPreference countPreference;
 	private boolean showNearbyCraftableIndicator;
+	private boolean enableExistingOutputRetrieval;
 	private boolean cacheContainersForFasterSearch;
 	private boolean reachCraftHoldAndRelease;
 	private boolean reachCraftCloseOverlayAfterRelease;
@@ -148,6 +150,7 @@ public final class ReachCraftingConfig {
 				? stored.countPreference
 				: DEFAULT_COUNT_PREFERENCE;
 			instance.showNearbyCraftableIndicator = stored.showNearbyCraftableIndicator != null ? stored.showNearbyCraftableIndicator : DEFAULT_SHOW_NEARBY_CRAFTABLE_INDICATOR;
+			instance.enableExistingOutputRetrieval = stored.enableExistingOutputRetrieval != null ? stored.enableExistingOutputRetrieval : DEFAULT_ENABLE_EXISTING_OUTPUT_RETRIEVAL;
 			instance.cacheContainersForFasterSearch = stored.cacheContainersForFasterSearch != null
 				? stored.cacheContainersForFasterSearch
 				: DEFAULT_CACHE_CONTAINERS_FOR_FASTER_SEARCH;
@@ -291,6 +294,18 @@ public final class ReachCraftingConfig {
 
 	public void setShowNearbyCraftableIndicator(boolean showNearbyCraftableIndicator) {
 		this.showNearbyCraftableIndicator = showNearbyCraftableIndicator;
+		RecipeButtonNearbyIndicator.clearCaches();
+	}
+
+	public boolean enableExistingOutputRetrieval() {
+		return enableExistingOutputRetrieval;
+	}
+
+	public void setEnableExistingOutputRetrieval(boolean enableExistingOutputRetrieval) {
+		this.enableExistingOutputRetrieval = enableExistingOutputRetrieval;
+		if (!enableExistingOutputRetrieval) {
+			ExistingOutputRetrievalController.setEnabled(false);
+		}
 		RecipeButtonNearbyIndicator.clearCaches();
 	}
 
@@ -676,6 +691,7 @@ public final class ReachCraftingConfig {
 		defaults.revolvingCraftHandling = DEFAULT_REVOLVING_CRAFT_HANDLING;
 		defaults.countPreference = DEFAULT_COUNT_PREFERENCE;
 		defaults.showNearbyCraftableIndicator = DEFAULT_SHOW_NEARBY_CRAFTABLE_INDICATOR;
+		defaults.enableExistingOutputRetrieval = DEFAULT_ENABLE_EXISTING_OUTPUT_RETRIEVAL;
 		defaults.cacheContainersForFasterSearch = DEFAULT_CACHE_CONTAINERS_FOR_FASTER_SEARCH;
 		defaults.reachCraftHoldAndRelease = DEFAULT_REACH_CRAFT_HOLD_AND_RELEASE;
 		defaults.reachCraftCloseOverlayAfterRelease = DEFAULT_REACH_CRAFT_CLOSE_OVERLAY_AFTER_RELEASE;
@@ -851,6 +867,7 @@ public final class ReachCraftingConfig {
 		private RevolvingCraftHandling revolvingCraftHandling;
 		private IngredientPlanning.CountPreference countPreference;
 		private Boolean showNearbyCraftableIndicator;
+		private Boolean enableExistingOutputRetrieval;
 		private Boolean cacheContainersForFasterSearch;
 		private Boolean reachCraftHoldAndRelease;
 		private Boolean reachCraftCloseOverlayAfterRelease;
@@ -898,6 +915,7 @@ public final class ReachCraftingConfig {
 			this.revolvingCraftHandling = config.revolvingCraftHandling;
 			this.countPreference = config.countPreference;
 			this.showNearbyCraftableIndicator = config.showNearbyCraftableIndicator;
+			this.enableExistingOutputRetrieval = config.enableExistingOutputRetrieval;
 			this.cacheContainersForFasterSearch = config.cacheContainersForFasterSearch;
 			this.reachCraftHoldAndRelease = config.reachCraftHoldAndRelease;
 			this.reachCraftCloseOverlayAfterRelease = config.reachCraftCloseOverlayAfterRelease;

@@ -26,6 +26,7 @@ public final class RecipeButtonNearbyIndicator {
 
 	private enum IndicatorState {
 		NONE,
+		RETRIEVABLE,
 		NEARBY,
 		CHAIN
 	}
@@ -49,6 +50,10 @@ public final class RecipeButtonNearbyIndicator {
 		return resolveIndicatorState(button) == IndicatorState.NEARBY;
 	}
 
+	public static boolean isRetrievable(RecipeButton button) {
+		return resolveIndicatorState(button) == IndicatorState.RETRIEVABLE;
+	}
+
 	public static boolean isChainCraftable(RecipeButton button) {
 		return resolveIndicatorState(button) == IndicatorState.CHAIN;
 	}
@@ -64,7 +69,9 @@ public final class RecipeButtonNearbyIndicator {
 		}
 
 		AbstractWidget widget = (AbstractWidget) (Object) button;
-		if (indicatorState == IndicatorState.NEARBY) {
+		if (indicatorState == IndicatorState.RETRIEVABLE) {
+			renderGreenDot(guiGraphics, widget.getX() + 3, widget.getY() + 3);
+		} else if (indicatorState == IndicatorState.NEARBY) {
 			renderDot(guiGraphics, widget.getX() + 3, widget.getY() + 3);
 		} else {
 			renderChainDot(guiGraphics, widget.getX() + 3, widget.getY() + 3);
@@ -131,7 +138,9 @@ public final class RecipeButtonNearbyIndicator {
 			return;
 		}
 		IndicatorState indicatorState = indicatorStateForRecipe(recipe, collection, ItemStack.EMPTY, true);
-		if (indicatorState == IndicatorState.NEARBY) {
+		if (indicatorState == IndicatorState.RETRIEVABLE) {
+			renderGreenDot(guiGraphics, x, y);
+		} else if (indicatorState == IndicatorState.NEARBY) {
 			renderDot(guiGraphics, x, y);
 		} else if (indicatorState == IndicatorState.CHAIN) {
 			renderChainDot(guiGraphics, x, y);
@@ -156,6 +165,15 @@ public final class RecipeButtonNearbyIndicator {
 	}
 
 	private static IndicatorState resolveCollectionIndicatorState(RecipeCollection collection) {
+		if (ExistingOutputRetrievalController.isEnabled()) {
+			for (RecipeDisplayEntry entry : collection.getRecipes()) {
+				if (hasRetrievableOutput(entry.id(), collection, ItemStack.EMPTY, true)) {
+					return IndicatorState.RETRIEVABLE;
+				}
+			}
+			return IndicatorState.NONE;
+		}
+
 		for (RecipeDisplayEntry entry : collection.getRecipes()) {
 			if (getCraftability(entry.id(), collection, ItemStack.EMPTY, true) != Craftability.NOT_CRAFTABLE) {
 				return IndicatorState.NEARBY;
@@ -170,10 +188,60 @@ public final class RecipeButtonNearbyIndicator {
 	}
 
 	private static IndicatorState indicatorStateForRecipe(RecipeDisplayId recipe, RecipeCollection collection, ItemStack displayStack, boolean explicitVariantSelection) {
+		if (ExistingOutputRetrievalController.isEnabled()) {
+			return hasRetrievableOutput(recipe, collection, displayStack, explicitVariantSelection) ? IndicatorState.RETRIEVABLE : IndicatorState.NONE;
+		}
 		if (getCraftability(recipe, collection, displayStack, explicitVariantSelection) != Craftability.NOT_CRAFTABLE) {
 			return IndicatorState.NEARBY;
 		}
 		return ChainCraftabilityCache.isChainCraftable(recipe) ? IndicatorState.CHAIN : IndicatorState.NONE;
+	}
+
+	private static boolean hasRetrievableOutput(RecipeDisplayId recipe, RecipeCollection collection, ItemStack displayStack, boolean explicitVariantSelection) {
+		if (!ReachCraftingConfig.get().enableExistingOutputRetrieval()
+			|| !ReachCraftingConfig.get().enableNearbyContainerUsage()
+			|| !ReachCraftingConfig.get().cacheContainersForFasterSearch()) {
+			return false;
+		}
+
+		Minecraft minecraft = Minecraft.getInstance();
+		Screen screen = minecraft.screen;
+		if (!(screen instanceof InventoryScreen) && !(screen instanceof CraftingScreen)) {
+			return false;
+		}
+
+		LocalPlayer player = minecraft.player;
+		if (player == null || minecraft.level == null || minecraft.getCameraEntity() == null || recipe == null || collection == null) {
+			return false;
+		}
+
+		AvailableItemSnapshot availableItems = AvailableItemSnapshot.capture(player, screen);
+		Map<String, Integer> nearbyTotals = NearbyContainerCache.getReachableView(
+			minecraft.level,
+			minecraft.getCameraEntity(),
+			player.blockInteractionRange()
+		).aggregateCounts();
+		RecipeVariantResolver.Selection selection = RecipeVariantResolver.resolve(
+			minecraft,
+			player,
+			recipe,
+			collection,
+			displayStack,
+			explicitVariantSelection,
+			true,
+			availableItems,
+			nearbyTotals,
+			nearbyTotals,
+			false,
+			ReachCraftingConfig.get().redistributeToCraftWhenNeeded(),
+			1
+		);
+		if (selection == null || selection.displayStack().isEmpty()) {
+			return false;
+		}
+
+		String outputItemId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(selection.displayStack().getItem()).toString();
+		return nearbyTotals.getOrDefault(outputItemId, 0) > 0;
 	}
 
 	private static EvaluationContext contextFor(
@@ -348,6 +416,17 @@ public final class RecipeButtonNearbyIndicator {
 		guiGraphics.fill(x + 1, y + 1, x + 4, y + 4, inner);
 	}
 
+	public static void renderGreenDot(net.minecraft.client.gui.GuiGraphicsExtractor guiGraphics, int x, int y) {
+		int outer = 0xCC0F6B2E;
+		int inner = 0xFF43C567;
+
+		guiGraphics.fill(x + 1, y, x + 4, y + 1, outer);
+		guiGraphics.fill(x, y + 1, x + 5, y + 4, outer);
+		guiGraphics.fill(x + 1, y + 4, x + 4, y + 5, outer);
+
+		guiGraphics.fill(x + 1, y + 1, x + 4, y + 4, inner);
+	}
+
 	public static void renderChainDot(net.minecraft.client.gui.GuiGraphicsExtractor guiGraphics, int x, int y) {
 		int outer = 0xCC8B4400;
 		int inner = 0xFFFF8800;
@@ -406,5 +485,18 @@ public final class RecipeButtonNearbyIndicator {
 		guiGraphics.fill(x - 2, y + 2, x + 5, y + 5, color);
 		guiGraphics.fill(x - 1, y + 5, x + 4, y + 6, color);
 		guiGraphics.fill(x + 0, y + 6, x + 3, y + 7, color);
+	}
+
+	public static void renderRetrievalX(net.minecraft.client.gui.GuiGraphicsExtractor guiGraphics, int x, int y) {
+		int color = 0xCC147A38;
+		guiGraphics.fill(x - 2, y - 2, x - 1, y - 1, color);
+		guiGraphics.fill(x + 2, y - 2, x + 3, y - 1, color);
+		guiGraphics.fill(x - 1, y - 1, x + 0, y + 0, color);
+		guiGraphics.fill(x + 1, y - 1, x + 2, y + 0, color);
+		guiGraphics.fill(x + 0, y + 0, x + 1, y + 1, color);
+		guiGraphics.fill(x - 1, y + 1, x + 0, y + 2, color);
+		guiGraphics.fill(x + 1, y + 1, x + 2, y + 2, color);
+		guiGraphics.fill(x - 2, y + 2, x - 1, y + 3, color);
+		guiGraphics.fill(x + 2, y + 2, x + 3, y + 3, color);
 	}
 }

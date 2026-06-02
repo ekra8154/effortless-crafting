@@ -148,11 +148,12 @@ final class RecipeBookInputController {
 			RecipeBookFocusManager.defocusRecipeBookSearch(minecraft);
 		}
 
-		boolean autoCraftRequested = altModifierDown && ReachCraftingConfig.get().altAsRequestKey();
+		boolean retrievalRequested = ExistingOutputRetrievalController.isEnabled();
+		boolean autoCraftRequested = !retrievalRequested && altModifierDown && ReachCraftingConfig.get().altAsRequestKey();
 		boolean maxCraftRequested = shiftModifierDown;
 		boolean craftAll = maxCraftRequested;
-		boolean allowNearbyChests = ctrlModifierDown
-			&& ReachCraftingConfig.get().enableNearbyContainerUsage();
+		boolean allowNearbyChests = ReachCraftingConfig.get().enableNearbyContainerUsage()
+			&& (ctrlModifierDown || retrievalRequested);
 		boolean refillableBulkMaxMode = maxCraftRequested && AutoCraftController.isBulkModeEnabled();
 		int requestedClicks = maxCraftRequested
 			? resolveMaxCraftRequestCount(minecraft, player, recipeId, collection, displayStack, explicitVariantSelection, allowNearbyChests)
@@ -169,7 +170,7 @@ final class RecipeBookInputController {
 			ContainerUtils.isGridEmpty(player.containerMenu)
 		);
 
-		if (shouldQueueHeldRecipe(minecraft, maxCraftRequested, autoCraftRequested) && state.replayBatch() == null) {
+		if (!retrievalRequested && shouldQueueHeldRecipe(minecraft, maxCraftRequested, autoCraftRequested) && state.replayBatch() == null) {
 			if (autoCraftRequested) {
 				AutoCraftController.consumeQuickCraft();
 			}
@@ -180,13 +181,16 @@ final class RecipeBookInputController {
 		if (autoCraftRequested) {
 			AutoCraftController.consumeQuickCraft();
 		}
-		AutoCraftController.armHoldSessionForCurrentRequest(autoCraftRequested);
+		if (!retrievalRequested) {
+			AutoCraftController.armHoldSessionForCurrentRequest(autoCraftRequested);
+		}
 		com.reachcrafting.ReachCraftingMod.LOGGER.info(
-			"[recipe_input] execute_mod_click recipe={} explicit_variant={} auto_enabled={} bulk_enabled={}",
+			"[recipe_input] execute_mod_click recipe={} explicit_variant={} auto_enabled={} bulk_enabled={} retrieval_enabled={}",
 			recipeId,
 			explicitVariantSelection,
 			AutoCraftController.isEnabled(),
-			AutoCraftController.isBulkModeEnabled()
+			AutoCraftController.isBulkModeEnabled(),
+			retrievalRequested
 		);
 
 		if (!ContainerUtils.isGridEmpty(player.containerMenu)) {

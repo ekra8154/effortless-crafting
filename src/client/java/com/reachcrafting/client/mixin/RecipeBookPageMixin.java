@@ -95,6 +95,7 @@ public abstract class RecipeBookPageMixin {
 		}
 
 		boolean interceptWithMod = ctrlDown
+			|| com.reachcrafting.client.ContainerUtils.isExistingOutputRetrievalEnabled()
 			|| (shiftDown && RecipeBookClickCapture.isBulkModeEnabled())
 			|| (altDown && ReachCraftingConfig.get().altAsRequestKey());
 		if (!interceptWithMod) {
@@ -145,7 +146,7 @@ public abstract class RecipeBookPageMixin {
 		}
 
 		boolean ctrlDown = (click.modifiers() & GLFW.GLFW_MOD_CONTROL) != 0;
-		if (ctrlDown) {
+		if (ctrlDown || com.reachcrafting.client.ContainerUtils.isExistingOutputRetrievalEnabled()) {
 			return;
 		}
 		boolean altDown = (click.modifiers() & GLFW.GLFW_MOD_ALT) != 0;
