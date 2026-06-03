@@ -63,8 +63,6 @@ public final class RetrievalOutputVariantOverlay {
 		}
 
 		ContextMap context = SlotDisplayContext.fromLevel(minecraft.level);
-		int left = componentAccessor.invokeGetXOrigin();
-		int top = componentAccessor.invokeGetYOrigin();
 		int width = componentAccessor.getWidth();
 		int height = componentAccessor.getHeight();
 		overlay.init(
@@ -73,8 +71,8 @@ public final class RetrievalOutputVariantOverlay {
 			pageAccessor.getIsFiltering(),
 			button.getX(),
 			button.getY(),
-			left + width / 2,
-			top + 13 + height / 2,
+			width / 2,
+			(height / 2) + 13,
 			button.getWidth()
 		);
 		return true;

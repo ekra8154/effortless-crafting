@@ -37,6 +37,8 @@ public abstract class RecipeBookComponentMixin {
 	private String reachcrafting$searchHistoryDraft = "";
 	private boolean reachcrafting$lastKeyPressedWasToggle = false;
 	private int reachcrafting$preservedPageIndex = -1;
+	private boolean reachcrafting$dropKeyHeldFromHover = false;
+	private boolean reachcrafting$offhandKeyHeldFromHover = false;
 
 	@Shadow
 	private String lastSearch;
@@ -59,6 +61,8 @@ public abstract class RecipeBookComponentMixin {
 	@Inject(method = "init", at = @At("TAIL"))
 	private void reachcrafting$onInit(int width, int height, Minecraft client, boolean isFiltering, CallbackInfo ci) {
 		if (!ReachCraftingConfig.get().enabled()) return;
+		reachcrafting$dropKeyHeldFromHover = false;
+		reachcrafting$offhandKeyHeldFromHover = false;
 		boolean automatedReopen = com.reachcrafting.client.RecipeBookChunkedScheduler.consumePendingAutomatedRecipeBookReopen();
 		boolean manualInit = !automatedReopen;
 		if (manualInit) {
@@ -83,6 +87,8 @@ public abstract class RecipeBookComponentMixin {
 	@Inject(method = "setVisible", at = @At("TAIL"))
 	private void reachcrafting$onSetVisible(boolean visible, CallbackInfo ci) {
 		if (!ReachCraftingConfig.get().enabled()) return;
+		reachcrafting$dropKeyHeldFromHover = false;
+		reachcrafting$offhandKeyHeldFromHover = false;
 		com.reachcrafting.client.RecipeBookChunkedScheduler.onRecipeBookVisibilityChanged(visible);
 		if (visible) {
 			lastScreenOpenTime = System.currentTimeMillis();
@@ -175,6 +181,14 @@ public abstract class RecipeBookComponentMixin {
 	@Inject(method = "keyReleased", at = @At("HEAD"), cancellable = true)
 	private void reachcrafting$onKeyReleased(KeyEvent event, CallbackInfoReturnable<Boolean> cir) {
 		if (!ReachCraftingConfig.get().enabled()) return;
+		if (this.minecraft != null && this.minecraft.options != null) {
+			if (this.minecraft.options.keyDrop.matches(event)) {
+				reachcrafting$dropKeyHeldFromHover = false;
+			}
+			if (this.minecraft.options.keySwapOffhand.matches(event)) {
+				reachcrafting$offhandKeyHeldFromHover = false;
+			}
+		}
 		if (event.key() == GLFW.GLFW_KEY_LEFT_ALT || event.key() == GLFW.GLFW_KEY_RIGHT_ALT) {
 			ContainerUtils.handleAutoCraftKeyReleased();
 			cir.setReturnValue(true);
@@ -409,13 +423,24 @@ public abstract class RecipeBookComponentMixin {
 			return false;
 		}
 
-		if (this.minecraft.options.keyDrop.matches(event) && reachcrafting$hasHoveredStack()) {
-			return false;
+		if (this.minecraft.options.keyDrop.matches(event)) {
+			if (reachcrafting$hasHoveredStack()) {
+				reachcrafting$dropKeyHeldFromHover = true;
+				return false;
+			}
+			if (reachcrafting$dropKeyHeldFromHover) {
+				return false;
+			}
 		}
 
-		if (this.minecraft.options.keySwapOffhand.matches(event)
-			&& (reachcrafting$hasHoveredStack() || reachcrafting$hasOffhandStack())) {
-			return false;
+		if (this.minecraft.options.keySwapOffhand.matches(event)) {
+			if (reachcrafting$hasHoveredStack() || reachcrafting$hasOffhandStack()) {
+				reachcrafting$offhandKeyHeldFromHover = true;
+				return false;
+			}
+			if (reachcrafting$offhandKeyHeldFromHover) {
+				return false;
+			}
 		}
 
 		// Exclude system keys that don't produce characters
