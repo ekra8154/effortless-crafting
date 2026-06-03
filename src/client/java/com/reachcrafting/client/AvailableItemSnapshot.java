@@ -29,6 +29,7 @@ public record AvailableItemSnapshot(
 		for (ItemStack stack : player.getInventory().getNonEquipmentItems()) {
 			addStack(inventoryCounts, stack);
 		}
+		ReachCraftingConfig.get().noteExperiencedItemIds(inventoryCounts.keySet());
 
 		Map<String, Integer> gridCounts = new LinkedHashMap<>();
 		List<ItemStack> gridStacks = new ArrayList<>();

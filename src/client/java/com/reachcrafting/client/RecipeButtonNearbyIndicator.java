@@ -15,6 +15,8 @@ import net.minecraft.world.item.crafting.display.RecipeDisplayEntry;
 import net.minecraft.world.item.crafting.display.RecipeDisplayId;
 
 public final class RecipeButtonNearbyIndicator {
+	private static final String RETRIEVAL_X_PATTERN = "#OOO#\nO#O#O\nOO#OO\nO#O#O\n#OOO#";
+	private static final float RETRIEVAL_X_SCALE = 1.2f;
 	private static StateKey currentStateKey;
 	private static EvaluationContext currentContext;
 
@@ -216,7 +218,7 @@ public final class RecipeButtonNearbyIndicator {
 		}
 
 		if (VirtualRetrievalRecipeBookEntries.isSyntheticRecipeId(recipe)) {
-			return true;
+			return VirtualRetrievalRecipeBookEntries.hasLiveNearbyBacking(recipe);
 		}
 
 		Map<String, Integer> nearbyTotals = NearbyContainerCache.getReachableView(
@@ -499,14 +501,47 @@ public final class RecipeButtonNearbyIndicator {
 		guiGraphics.fill(x + 0, y + 6, x + 3, y + 7, color);
 	}
 
+	private static void renderPattern(net.minecraft.client.gui.GuiGraphics guiGraphics, int centerX, int centerY, String pattern, int color) {
+		renderPattern(guiGraphics, centerX, centerY, pattern, color, 1.0f);
+	}
+
+	private static void renderPattern(net.minecraft.client.gui.GuiGraphics guiGraphics, int centerX, int centerY, String pattern, int color, float scale) {
+		if (pattern == null || pattern.isBlank()) {
+			return;
+		}
+
+		String[] rows = pattern.split("\\n");
+		int height = rows.length;
+		int width = 0;
+		for (String row : rows) {
+			width = Math.max(width, row.length());
+		}
+
+		float scaledWidth = width * scale;
+		float scaledHeight = height * scale;
+		float startX = centerX - (scaledWidth / 2.0f);
+		float startY = centerY - (scaledHeight / 2.0f);
+
+		guiGraphics.pose().pushMatrix();
+		guiGraphics.pose().translate(startX, startY);
+		guiGraphics.pose().scale(scale, scale);
+		try {
+			for (int rowIndex = 0; rowIndex < rows.length; rowIndex++) {
+				String row = rows[rowIndex];
+				for (int columnIndex = 0; columnIndex < row.length(); columnIndex++) {
+					if (row.charAt(columnIndex) != '#') {
+						continue;
+					}
+					guiGraphics.fill(columnIndex, rowIndex, columnIndex + 1, rowIndex + 1, color);
+				}
+			}
+		} finally {
+			guiGraphics.pose().popMatrix();
+		}
+	}
+
 	public static void renderRetrievalX(net.minecraft.client.gui.GuiGraphics guiGraphics, int x, int y) {
 		int color = 0x80000000;
-		guiGraphics.fill(x - 1, y - 2, x + 2, y - 1, color);
-		guiGraphics.fill(x - 2, y - 1, x - 1, y + 0, color);
-		guiGraphics.fill(x + 1, y - 1, x + 2, y + 0, color);
-		guiGraphics.fill(x - 2, y + 0, x + 3, y + 1, color);
-		guiGraphics.fill(x - 2, y + 1, x - 1, y + 2, color);
-		guiGraphics.fill(x + 1, y + 1, x + 2, y + 2, color);
-		guiGraphics.fill(x - 1, y + 2, x + 2, y + 3, color);
+		renderPattern(guiGraphics, x, y, RETRIEVAL_X_PATTERN, color, RETRIEVAL_X_SCALE);
 	}
 }

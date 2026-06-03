@@ -28,11 +28,13 @@ import net.minecraft.world.item.crafting.RecipeBookCategory;
 import net.minecraft.world.item.crafting.display.RecipeDisplay;
 import net.minecraft.world.item.crafting.display.RecipeDisplayEntry;
 import net.minecraft.world.item.crafting.display.RecipeDisplayId;
+import net.minecraft.world.item.crafting.display.ShapedCraftingRecipeDisplay;
 import net.minecraft.world.item.crafting.display.ShapelessCraftingRecipeDisplay;
 import net.minecraft.world.item.crafting.display.SlotDisplay;
 
 public final class VirtualRetrievalRecipeBookEntries {
 	private static final int SYNTHETIC_RECIPE_ID_BASE = 1_000_000_000;
+	private static final int PERSISTENT_ONLY_SYNTHETIC_RECIPE_ID_BASE = 1_500_000_000;
 	private static final Map<String, RecipeCollection> SYNTHETIC_CACHE = new java.util.HashMap<>();
 
 	private VirtualRetrievalRecipeBookEntries() {
@@ -69,52 +71,60 @@ public final class VirtualRetrievalRecipeBookEntries {
 			return collections;
 		}
 
-		Set<String> existingOutputIds = collectRealRecipeOutputIds(player);
+		Set<String> currentlyHeldItemIds = collectHeldItemIds(player);
+		ReachCraftingConfig.get().noteExperiencedItemIds(currentlyHeldItemIds);
+		Set<String> craftingTableOutputIds = collectCraftingTableOutputIds(player);
 		Map<String, Integer> nearbyCounts = NearbyContainerCache.getReachableView(
 			minecraft.level,
 			minecraft.getCameraEntity(),
 			player.blockInteractionRange()
 		).aggregateCounts();
-		if (nearbyCounts.isEmpty()) {
-			ReachCraftingMod.LOGGER.info("[retrieval_virtual] inject skipped reason=no_nearby_counts");
+		Set<String> experiencedItemIds = new java.util.LinkedHashSet<>(ReachCraftingConfig.get().experiencedItemIds());
+		experiencedItemIds.addAll(currentlyHeldItemIds);
+		if (nearbyCounts.isEmpty() && experiencedItemIds.isEmpty()) {
+			ReachCraftingMod.LOGGER.info("[retrieval_virtual] inject skipped reason=no_retrieval_candidates");
 			return collections;
 		}
 
 		String search = accessor.getSearchBox() != null ? accessor.getSearchBox().getValue().trim().toLowerCase(Locale.ROOT) : "";
 		Object selectedCategory = accessor.getSelectedTab() != null ? accessor.getSelectedTab().getCategory() : null;
-		ReachCraftingMod.LOGGER.info("[retrieval_virtual] inject start base_collections={} nearby_items={} real_outputs={} search='{}' selected_category={}", collections.size(), nearbyCounts.size(), existingOutputIds.size(), search, selectedCategory != null ? selectedCategory.getClass().getSimpleName() + ":" + selectedCategory : "null");
+		ReachCraftingMod.LOGGER.info("[retrieval_virtual] inject start base_collections={} nearby_items={} experienced_items={} crafting_outputs={} search='{}' selected_category={}", collections.size(), nearbyCounts.size(), experiencedItemIds.size(), craftingTableOutputIds.size(), search, selectedCategory != null ? selectedCategory.getClass().getSimpleName() + ":" + selectedCategory : "null");
 		List<RecipeCollection> synthetic = new ArrayList<>();
 		int skippedExistingOutput = 0;
 		int skippedNullItem = 0;
 		int skippedCategory = 0;
 		int skippedSearch = 0;
-		for (Map.Entry<String, Integer> entry : nearbyCounts.entrySet()) {
-			Item item = BuiltInRegistries.ITEM.getOptional(net.minecraft.resources.Identifier.parse(entry.getKey())).orElse(null);
+		Set<String> candidateItemIds = new java.util.LinkedHashSet<>(nearbyCounts.keySet());
+		candidateItemIds.addAll(experiencedItemIds);
+		for (String itemId : candidateItemIds) {
+			Item item = BuiltInRegistries.ITEM.getOptional(net.minecraft.resources.Identifier.parse(itemId)).orElse(null);
 			if (item == null) {
 				skippedNullItem++;
 				continue;
 			}
-			if (existingOutputIds.contains(entry.getKey())) {
+			if (craftingTableOutputIds.contains(itemId)) {
 				skippedExistingOutput++;
 				continue;
 			}
 
-			RecipeBookCategory category = categoryFor(item, entry.getKey());
+			RecipeBookCategory category = categoryFor(item, itemId);
 			if (!matchesSelectedCategory(selectedCategory, category)) {
 				skippedCategory++;
 				continue;
 			}
 
 			ItemStack stack = new ItemStack(item);
-			if (!matchesSearch(stack, entry.getKey(), search)) {
+			if (!matchesSearch(stack, itemId, search)) {
 				skippedSearch++;
 				continue;
 			}
 
-			int displayCount = Math.min(Math.max(entry.getValue(), 1), stack.getMaxStackSize());
-			String cacheKey = entry.getKey() + ":" + displayCount;
+			boolean hasLiveNearbyBacking = nearbyCounts.containsKey(itemId);
+			int liveCount = nearbyCounts.getOrDefault(itemId, 1);
+			int displayCount = hasLiveNearbyBacking ? Math.min(Math.max(liveCount, 1), stack.getMaxStackSize()) : 1;
+			String cacheKey = itemId + ":" + displayCount + ":" + hasLiveNearbyBacking;
 			RecipeCollection syntheticCollection = SYNTHETIC_CACHE.computeIfAbsent(cacheKey, k -> {
-				RecipeDisplayId id = syntheticIdFor(entry.getKey());
+				RecipeDisplayId id = syntheticIdFor(itemId, hasLiveNearbyBacking);
 				RecipeDisplay display = new ShapelessCraftingRecipeDisplay(
 					List.of(),
 					new SlotDisplay.ItemStackSlotDisplay(new ItemStack(item, displayCount)),
@@ -149,6 +159,12 @@ public final class VirtualRetrievalRecipeBookEntries {
 
 	static boolean isSyntheticRecipeId(RecipeDisplayId recipeId) {
 		return recipeId != null && recipeId.index() >= SYNTHETIC_RECIPE_ID_BASE;
+	}
+
+	static boolean hasLiveNearbyBacking(RecipeDisplayId recipeId) {
+		return recipeId != null
+			&& recipeId.index() >= SYNTHETIC_RECIPE_ID_BASE
+			&& recipeId.index() < PERSISTENT_ONLY_SYNTHETIC_RECIPE_ID_BASE;
 	}
 
 	static int requestCountForSynthetic(ItemStack stack, boolean shiftRequested) {
@@ -192,18 +208,32 @@ public final class VirtualRetrievalRecipeBookEntries {
 		return stack.isEmpty() ? "" : stack.getHoverName().getString().toLowerCase(Locale.ROOT);
 	}
 
-	private static Set<String> collectRealRecipeOutputIds(LocalPlayer player) {
+	private static Set<String> collectCraftingTableOutputIds(LocalPlayer player) {
 		Set<String> outputIds = new HashSet<>();
 		net.minecraft.util.context.ContextMap context = net.minecraft.world.item.crafting.display.SlotDisplayContext.fromLevel(player.level());
 		for (RecipeCollection collection : player.getRecipeBook().getCollections()) {
 			for (RecipeDisplayEntry entry : collection.getRecipes()) {
-				ItemStack output = RecipeVariantResolver.resolveDisplayStack(entry.display(), context);
+				RecipeDisplay display = entry.display();
+				if (!(display instanceof ShapedCraftingRecipeDisplay) && !(display instanceof ShapelessCraftingRecipeDisplay)) {
+					continue;
+				}
+				ItemStack output = RecipeVariantResolver.resolveDisplayStack(display, context);
 				if (!output.isEmpty()) {
 					outputIds.add(BuiltInRegistries.ITEM.getKey(output.getItem()).toString());
 				}
 			}
 		}
 		return outputIds;
+	}
+
+	private static Set<String> collectHeldItemIds(LocalPlayer player) {
+		Set<String> itemIds = new HashSet<>();
+		for (ItemStack stack : player.getInventory().getNonEquipmentItems()) {
+			if (!stack.isEmpty()) {
+				itemIds.add(BuiltInRegistries.ITEM.getKey(stack.getItem()).toString());
+			}
+		}
+		return itemIds;
 	}
 
 	private static boolean matchesSelectedCategory(Object selectedCategory, RecipeBookCategory category) {
@@ -227,9 +257,10 @@ public final class VirtualRetrievalRecipeBookEntries {
 		return lowerName.contains(search) || itemId.toLowerCase(Locale.ROOT).contains(search);
 	}
 
-	private static RecipeDisplayId syntheticIdFor(String itemId) {
+	private static RecipeDisplayId syntheticIdFor(String itemId, boolean hasLiveNearbyBacking) {
 		int hash = Math.abs(itemId.hashCode());
-		return new RecipeDisplayId(SYNTHETIC_RECIPE_ID_BASE + hash);
+		int base = hasLiveNearbyBacking ? SYNTHETIC_RECIPE_ID_BASE : PERSISTENT_ONLY_SYNTHETIC_RECIPE_ID_BASE;
+		return new RecipeDisplayId(base + hash);
 	}
 
 	private static RecipeBookCategory categoryFor(Item item, String itemId) {
