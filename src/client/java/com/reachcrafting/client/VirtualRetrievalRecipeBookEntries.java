@@ -37,6 +37,8 @@ public final class VirtualRetrievalRecipeBookEntries {
 	private static final int SYNTHETIC_RECIPE_ID_BASE = 1_000_000_000;
 	private static final int PERSISTENT_ONLY_SYNTHETIC_RECIPE_ID_BASE = 1_500_000_000;
 	private static final Map<String, RecipeCollection> SYNTHETIC_CACHE = new java.util.HashMap<>();
+	private static final Set<Integer> LIVE_SYNTHETIC_RECIPE_IDS = new java.util.HashSet<>();
+	private static final Set<Integer> PERSISTENT_SYNTHETIC_RECIPE_IDS = new java.util.HashSet<>();
 
 	private VirtualRetrievalRecipeBookEntries() {
 	}
@@ -164,9 +166,7 @@ public final class VirtualRetrievalRecipeBookEntries {
 	}
 
 	static boolean hasLiveNearbyBacking(RecipeDisplayId recipeId) {
-		return recipeId != null
-			&& recipeId.index() >= SYNTHETIC_RECIPE_ID_BASE
-			&& recipeId.index() < PERSISTENT_ONLY_SYNTHETIC_RECIPE_ID_BASE;
+		return recipeId != null && LIVE_SYNTHETIC_RECIPE_IDS.contains(recipeId.index());
 	}
 
 	static int requestCountForSynthetic(ItemStack stack, boolean shiftRequested) {
@@ -275,10 +275,18 @@ public final class VirtualRetrievalRecipeBookEntries {
 		return lowerName.contains(search) || itemId.toLowerCase(Locale.ROOT).contains(search);
 	}
 
-	private static RecipeDisplayId syntheticIdFor(String itemId, boolean hasLiveNearbyBacking) {
+	static RecipeDisplayId syntheticIdFor(String itemId, boolean hasLiveNearbyBacking) {
 		int hash = Math.abs(itemId.hashCode());
 		int base = hasLiveNearbyBacking ? SYNTHETIC_RECIPE_ID_BASE : PERSISTENT_ONLY_SYNTHETIC_RECIPE_ID_BASE;
-		return new RecipeDisplayId(base + hash);
+		int index = base + hash;
+		if (hasLiveNearbyBacking) {
+			LIVE_SYNTHETIC_RECIPE_IDS.add(index);
+			PERSISTENT_SYNTHETIC_RECIPE_IDS.remove(index);
+		} else {
+			PERSISTENT_SYNTHETIC_RECIPE_IDS.add(index);
+			LIVE_SYNTHETIC_RECIPE_IDS.remove(index);
+		}
+		return new RecipeDisplayId(index);
 	}
 
 	private static RecipeBookCategory categoryFor(Item item, String itemId) {
