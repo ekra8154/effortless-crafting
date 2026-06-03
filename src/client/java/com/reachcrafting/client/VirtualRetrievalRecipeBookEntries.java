@@ -22,7 +22,6 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.ItemStackTemplate;
 import net.minecraft.world.entity.player.StackedItemContents;
 import net.minecraft.world.item.crafting.RecipeBookCategories;
 import net.minecraft.world.item.crafting.RecipeBookCategory;
@@ -114,7 +113,7 @@ public final class VirtualRetrievalRecipeBookEntries {
 			RecipeDisplayId id = syntheticIdFor(entry.getKey());
 			RecipeDisplay display = new ShapelessCraftingRecipeDisplay(
 				List.of(),
-				new SlotDisplay.ItemStackSlotDisplay(new ItemStackTemplate(item, Math.min(Math.max(entry.getValue(), 1), stack.getMaxStackSize()))),
+				new SlotDisplay.ItemStackSlotDisplay(new ItemStack(item, Math.min(Math.max(entry.getValue(), 1), stack.getMaxStackSize()))),
 				new SlotDisplay.ItemSlotDisplay(net.minecraft.world.level.block.Blocks.CRAFTING_TABLE.asItem())
 			);
 			RecipeDisplayEntry syntheticEntry = new RecipeDisplayEntry(
