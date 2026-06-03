@@ -98,6 +98,10 @@ public final class RecipeBookClickCapture {
 		return CONTROLLER.getPendingHeldRecipe();
 	}
 
+	public static ReplayBatch getReplayBatch() {
+		return CONTROLLER.getReplayBatch();
+	}
+
 	public static void scheduleReplay(HeldRecipeAction action, int remainingClicks, boolean allowNearby, boolean craftAll, boolean refillableBulkMaxMode) {
 		CONTROLLER.scheduleReplay(action, remainingClicks, allowNearby, craftAll, refillableBulkMaxMode);
 	}

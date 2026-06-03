@@ -47,9 +47,16 @@ public final class RecipeOutputCounter {
 		int queuedOutputCount = 0;
 		String queuedItemId = null;
 		boolean hasQueuedState = countState.queuedState();
-		if (hasQueuedState && !countState.queuedOutputStack().isEmpty()) {
-			queuedItemId = BuiltInRegistries.ITEM.getKey(countState.queuedOutputStack().getItem()).toString();
-			queuedOutputCount = countState.displayedCount() * countState.queuedOutputStack().getCount();
+		boolean retrievalQueuedDisplay = hasQueuedState && ContainerUtils.isExistingOutputRetrievalEnabled();
+		if (hasQueuedState) {
+			if (!countState.queuedOutputStack().isEmpty()) {
+				queuedItemId = BuiltInRegistries.ITEM.getKey(countState.queuedOutputStack().getItem()).toString();
+			}
+			queuedOutputCount = retrievalQueuedDisplay
+				? countState.displayedCount()
+				: !countState.queuedOutputStack().isEmpty()
+					? countState.displayedCount() * countState.queuedOutputStack().getCount()
+					: 0;
 		}
 
 		// 3. Resolve Total Count and Logic
@@ -59,7 +66,7 @@ public final class RecipeOutputCounter {
 			displayCount = gridOutputCount;
 			
 			// If queued item is the same, the queued amount is the intended total.
-			if (queuedItemId != null) {
+			if (!retrievalQueuedDisplay && queuedItemId != null) {
 				String gridItemId = BuiltInRegistries.ITEM.getKey(gridResultStack.getItem()).toString();
 				if (gridItemId.equals(queuedItemId)) {
 					displayCount = queuedOutputCount;
@@ -152,7 +159,18 @@ public final class RecipeOutputCounter {
 	private static QueuedRecipeCountState resolveQueuedCountState(Minecraft minecraft) {
 		var pending = RecipeBookClickCapture.getPendingHeldRecipe();
 		if (pending == null) {
-			return QueuedRecipeCountState.hidden();
+			var replayBatch = RecipeBookClickCapture.getReplayBatch();
+			if (replayBatch == null) {
+				return QueuedRecipeCountState.hidden();
+			}
+			ItemStack queuedOutputStack = replayBatch.action().displayStack().isEmpty()
+				? ItemStack.EMPTY
+				: replayBatch.action().displayStack().copy();
+			return QueuedRecipeCountState.visible(
+				replayBatch.remainingClicks(),
+				true,
+				queuedOutputStack
+			);
 		}
 		return QueuedRecipeCountState.visible(
 			pending.clickCount(),

@@ -376,6 +376,10 @@ final class RecipeBookInputController {
 		return state.pendingHeldRecipe();
 	}
 
+	RecipeBookClickCapture.ReplayBatch getReplayBatch() {
+		return state.replayBatch();
+	}
+
 	boolean isInputQueueActive() {
 		return state.pendingHeldRecipe() != null || state.replayBatch() != null;
 	}
@@ -455,15 +459,23 @@ final class RecipeBookInputController {
 	}
 
 	ItemStack resolvePendingOutputStack(Minecraft minecraft) {
-		if (state.pendingHeldRecipe() == null || minecraft.level == null || minecraft.player == null) {
+		if (state.pendingHeldRecipe() == null) {
 			return ItemStack.EMPTY;
 		}
 
 		RecipeBookClickCapture.HeldRecipeAction action = state.pendingHeldRecipe().action();
+		if (VirtualRetrievalRecipeBookEntries.isSyntheticRecipeId(action.recipeId())) {
+			return action.displayStack().isEmpty() ? ItemStack.EMPTY : action.displayStack().copy();
+		}
+
+		if (minecraft.level == null || minecraft.player == null) {
+			return ItemStack.EMPTY;
+		}
+
 		Map<RecipeDisplayId, RecipeDisplayEntry> knownRecipes = ((ClientRecipeBookAccessor) minecraft.player.getRecipeBook()).getKnown();
 		RecipeDisplayEntry entry = knownRecipes.get(action.recipeId());
 		if (entry == null) {
-			return ItemStack.EMPTY;
+			return action.displayStack().isEmpty() ? ItemStack.EMPTY : action.displayStack().copy();
 		}
 
 		ContextMap context = SlotDisplayContext.fromLevel(minecraft.level);
@@ -767,6 +779,27 @@ final class RecipeBookInputController {
 	}
 
 	private int resolveQueueLimit(Minecraft minecraft, RecipeBookClickCapture.HeldRecipeAction action) {
+		if (VirtualRetrievalRecipeBookEntries.isSyntheticRecipeId(action.recipeId())) {
+			ItemStack displayStack = action.displayStack();
+			if (!displayStack.isEmpty()) {
+				return Math.max(displayStack.getMaxStackSize(), 1);
+			}
+		}
+		if (ExistingOutputRetrievalController.isEnabled()) {
+			ItemStack expectedOutput = action.displayStack().isEmpty()
+				? RecipeClickExecutor.resolveExpectedOutputStack(
+					minecraft,
+					minecraft.player,
+					action.recipeId(),
+					action.collection(),
+					ItemStack.EMPTY,
+					action.explicitVariantSelection()
+				)
+				: action.displayStack().copy();
+			if (!expectedOutput.isEmpty()) {
+				return Math.max(expectedOutput.getMaxStackSize(), 1);
+			}
+		}
 		int queueLimit = Math.max(RecipeClickExecutor.resolveRecipeQueueLimit(minecraft, action.recipeId(), action.collection()), 1);
 		if (AutoCraftController.isBulkModeEnabled()) {
 			return Math.max(queueLimit, RecipeClickExecutor.bulkRecipeQueueLimit());
