@@ -53,7 +53,7 @@ public final class RecipeButtonNearbyIndicator {
 		return resolveIndicatorState(button) == IndicatorState.CHAIN;
 	}
 
-	public static void renderButton(net.minecraft.client.gui.GuiGraphicsExtractor guiGraphics, RecipeButton button) {
+	public static void renderButton(net.minecraft.client.gui.GuiGraphics guiGraphics, RecipeButton button) {
 		if (!ReachCraftingConfig.get().enabled()) {
 			return;
 		}
@@ -126,7 +126,7 @@ public final class RecipeButtonNearbyIndicator {
 		return result;
 	}
 
-	public static void renderOverlayButton(net.minecraft.client.gui.GuiGraphicsExtractor guiGraphics, int x, int y, int width, RecipeDisplayId recipe, RecipeCollection collection) {
+	public static void renderOverlayButton(net.minecraft.client.gui.GuiGraphics guiGraphics, int x, int y, int width, RecipeDisplayId recipe, RecipeCollection collection) {
 		if (!ReachCraftingConfig.get().showNearbyCraftableIndicator()) {
 			return;
 		}
