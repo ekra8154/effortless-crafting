@@ -117,6 +117,15 @@ public final class ReachCraftingConfigScreen {
 			.setSaveConsumer(config::setRecipeBookPageNavigation)
 			.build());
 
+		tweaksGroup.add(entries.startBooleanToggle(
+				Component.translatable("option.reachcrafting.expanded_variant_menu_tooltips"),
+				config.expandedVariantMenuTooltips()
+			)
+			.setDefaultValue(true)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.expanded_variant_menu_tooltips"))
+			.setSaveConsumer(config::setExpandedVariantMenuTooltips)
+			.build());
+
 		crafting.addEntry(tweaksGroup.build());
 
 		// Craft Queuing

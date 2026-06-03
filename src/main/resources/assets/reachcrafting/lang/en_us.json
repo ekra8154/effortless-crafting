@@ -89,6 +89,8 @@
 	"tooltip.reachcrafting.type_to_focus_search": "Automatically focus and highlight the search bar when you start typing while the recipe book is visible. Drop and offhand keys stay functional only when there is something relevant for them to act on.",
 	"option.reachcrafting.recipe_book_page_navigation": "Recipe Book Page Navigation",
 	"tooltip.reachcrafting.recipe_book_page_navigation": "Allow mouse wheel scrolling over the recipe book and Left/Right arrow keys to flip recipe-book pages.",
+	"option.reachcrafting.expanded_variant_menu_tooltips": "Expanded Variant Menu Tooltips",
+	"tooltip.reachcrafting.expanded_variant_menu_tooltips": "When hovering over a specific variant in the expanded recipe menu, display a small tooltip showing what the recipe outputs.",
 	"option.reachcrafting.auto_craft_capability": "Auto Crafting",
 	"tooltip.reachcrafting.auto_craft_capability": "When enabled, press Alt to toggle Auto Crafting (arrow in result slot). This affects items currently in the grid when first toggled on and other non-manual crafts. \nIf bulk is enabled, Alt-click the arrow to temporarily turn on bulk mode. This uncaps the item request limit and performs repeated Auto Crafting. Great for crafting dispensers, honey, etc.",
 	"enum.reachcrafting.auto_craft_capability.none": "Disabled",

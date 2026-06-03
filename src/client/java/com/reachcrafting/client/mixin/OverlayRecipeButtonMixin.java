@@ -41,5 +41,31 @@ public abstract class OverlayRecipeButtonMixin {
 			recipe,
 			collection
 		);
+
+		if (ReachCraftingConfig.get().expandedVariantMenuTooltips()) {
+			widget.setTooltip(null);
+			if (widget.isHovered()) {
+				net.minecraft.client.Minecraft minecraft = net.minecraft.client.Minecraft.getInstance();
+				net.minecraft.util.context.ContextMap context = net.minecraft.world.item.crafting.display.SlotDisplayContext.fromLevel(minecraft.level);
+				for (net.minecraft.world.item.crafting.display.RecipeDisplayEntry entry : collection.getRecipes()) {
+					if (entry.id().equals(recipe)) {
+						net.minecraft.world.item.ItemStack stack = com.reachcrafting.client.RecipeVariantResolver.resolveDisplayStack(entry.display(), context);
+						if (!stack.isEmpty()) {
+							guiGraphics.setTooltipForNextFrame(
+								minecraft.font,
+								java.util.List.of(stack.getHoverName().getVisualOrderText()),
+								net.minecraft.client.gui.screens.inventory.tooltip.DefaultTooltipPositioner.INSTANCE,
+								mouseX,
+								mouseY,
+								true
+							);
+						}
+						break;
+					}
+				}
+			}
+		} else {
+			widget.setTooltip(null);
+		}
 	}
 }

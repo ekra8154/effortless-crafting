@@ -61,6 +61,7 @@ public final class ReachCraftingConfig {
 	private static final boolean DEFAULT_ALT_CLICK_INSTANT_CRAFT = true;
 	private static final boolean DEFAULT_DEBUG_MESSAGES_ENABLED = false;
 	private static final boolean DEFAULT_PERFORMANCE_LOGGING_ENABLED = false;
+	private static final boolean DEFAULT_EXPANDED_VARIANT_MENU_TOOLTIPS = true;
 	public static final List<String> DEFAULT_BLACKLIST = List.of(
 		"minecraft:ender_chest",
 		"minecraft:hopper",
@@ -116,6 +117,7 @@ public final class ReachCraftingConfig {
 	private boolean altClickInstantCraft;
 	private boolean debugMessagesEnabled;
 	private boolean performanceLoggingEnabled;
+	private boolean expandedVariantMenuTooltips;
 	private Set<String> blacklistedContainerIds;
 	private List<Integer> recentRecipeDisplayIds;
 	private Map<String, List<Integer>> recentRecipeDisplayIdsByContext;
@@ -190,6 +192,7 @@ public final class ReachCraftingConfig {
 			instance.altClickInstantCraft = stored.altClickInstantCraft != null ? stored.altClickInstantCraft : DEFAULT_ALT_CLICK_INSTANT_CRAFT;
 			instance.debugMessagesEnabled = stored.debugMessagesEnabled != null ? stored.debugMessagesEnabled : DEFAULT_DEBUG_MESSAGES_ENABLED;
 			instance.performanceLoggingEnabled = stored.performanceLoggingEnabled != null ? stored.performanceLoggingEnabled : DEFAULT_PERFORMANCE_LOGGING_ENABLED;
+			instance.expandedVariantMenuTooltips = stored.expandedVariantMenuTooltips != null ? stored.expandedVariantMenuTooltips : DEFAULT_EXPANDED_VARIANT_MENU_TOOLTIPS;
 			
 			// Enforce capability gate on load
 			if (instance.autoCraftCapability == AutoCraftCapability.NONE) {
@@ -584,6 +587,14 @@ public final class ReachCraftingConfig {
 		this.performanceLoggingEnabled = performanceLoggingEnabled;
 	}
 
+	public boolean expandedVariantMenuTooltips() {
+		return expandedVariantMenuTooltips;
+	}
+
+	public void setExpandedVariantMenuTooltips(boolean expandedVariantMenuTooltips) {
+		this.expandedVariantMenuTooltips = expandedVariantMenuTooltips;
+	}
+
 	public static String getLastSearchText() {
 		return lastSearchText;
 	}
@@ -772,6 +783,7 @@ public final class ReachCraftingConfig {
 		defaults.altClickInstantCraft = DEFAULT_ALT_CLICK_INSTANT_CRAFT;
 		defaults.debugMessagesEnabled = DEFAULT_DEBUG_MESSAGES_ENABLED;
 		defaults.performanceLoggingEnabled = DEFAULT_PERFORMANCE_LOGGING_ENABLED;
+		defaults.expandedVariantMenuTooltips = DEFAULT_EXPANDED_VARIANT_MENU_TOOLTIPS;
 		defaults.blacklistedContainerIds = new LinkedHashSet<>(DEFAULT_BLACKLIST);
 		defaults.recentRecipeDisplayIds = new ArrayList<>();
 		defaults.recentRecipeDisplayIdsByContext = new HashMap<>();
@@ -982,6 +994,7 @@ public final class ReachCraftingConfig {
 		private Boolean altClickInstantCraft;
 		private Boolean debugMessagesEnabled;
 		private Boolean performanceLoggingEnabled;
+		private Boolean expandedVariantMenuTooltips;
 		private Boolean enableEnablingBulkMode;
 		private Set<String> blacklistedContainerIds;
 		private List<Integer> recentRecipeDisplayIds;
@@ -1029,6 +1042,7 @@ public final class ReachCraftingConfig {
 			this.altClickInstantCraft = config.altClickInstantCraft;
 			this.debugMessagesEnabled = config.debugMessagesEnabled;
 			this.performanceLoggingEnabled = config.performanceLoggingEnabled;
+			this.expandedVariantMenuTooltips = config.expandedVariantMenuTooltips;
 			this.blacklistedContainerIds = config.blacklistedContainerIds;
 			this.recentRecipeDisplayIds = config.recentRecipeDisplayIds;
 			this.recentRecipeDisplayIdsByContext = config.recentRecipeDisplayIdsByContext;
