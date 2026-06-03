@@ -55,6 +55,11 @@ public abstract class RecipeBookPageMixin {
 				// right-click clear behavior for single-variant buttons or the
 				// explicit overlay buttons.
 				if (button.getCollection() != null && button.getCollection().getRecipes().size() > 1) {
+					if (com.reachcrafting.client.ContainerUtils.isExistingOutputRetrievalEnabled()
+						&& com.reachcrafting.client.RetrievalOutputVariantOverlay.openForButton(button)) {
+						cir.setReturnValue(true);
+						return;
+					}
 					if (RecipeBookClickCapture.onRecipeButtonRightClicked(
 						button.getCurrentRecipe(),
 						button.getCollection(),

@@ -3,6 +3,7 @@ package com.reachcrafting.client;
 // import com.reachcrafting.ReachCraftingMod;
 import com.reachcrafting.client.mixin.ClientRecipeBookAccessor;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import net.minecraft.client.ClientRecipeBook;
@@ -139,6 +140,19 @@ public final class RecipeVariantResolver {
 			return exactSelection;
 		}
 
+		if (ExistingOutputRetrievalController.isEnabled()) {
+			return resolveRetrievalSelection(
+				minecraft,
+				player,
+				availableItems,
+				exactSelection,
+				candidates,
+				handling,
+				requestedCopies,
+				craftAll
+			);
+		}
+
 		boolean bulkStrictOrUndecided = !craftAll
 			&& BulkAutoCraftController.isActive()
 			&& BulkAutoCraftController.currentVariantContinuationMode() != BulkAutoCraftController.VariantContinuationMode.FAMILY_FALLBACK;
@@ -191,6 +205,60 @@ public final class RecipeVariantResolver {
 
 		return viableCandidates.stream()
 			.max(compareSelections(ReachCraftingConfig.get().countPreference(), craftAll))
+			.orElse(exactSelection);
+	}
+
+	private static Selection resolveRetrievalSelection(
+		Minecraft minecraft,
+		LocalPlayer player,
+		AvailableItemSnapshot availableItems,
+		Selection exactSelection,
+		List<Selection> candidates,
+		ReachCraftingConfig.RevolvingCraftHandling handling,
+		int requestedCopies,
+		boolean craftAll
+	) {
+		if (handling == ReachCraftingConfig.RevolvingCraftHandling.SPECIFIC_VARIANT_ONLY) {
+			return exactSelection;
+		}
+
+		Map<String, Integer> outputTotals = retrievalOutputTotals(minecraft, player, availableItems);
+		List<Selection> outputCandidates = uniqueOutputSelections(candidates, exactSelection);
+		if (outputCandidates.isEmpty()) {
+			return exactSelection;
+		}
+
+		int exactOutputCount = outputTotals.getOrDefault(exactSelection.outputItemId(), 0);
+		if (handling == ReachCraftingConfig.RevolvingCraftHandling.PREFER_CLICKED_TYPE_WITH_COUNT_FALLBACK
+			&& exactOutputCount > 0
+			&& (craftAll || exactOutputCount >= requestedCopies)) {
+			return exactSelection;
+		}
+
+		List<Selection> availableOutputCandidates = outputCandidates.stream()
+			.filter(candidate -> outputTotals.getOrDefault(candidate.outputItemId(), 0) > 0)
+			.toList();
+		if (availableOutputCandidates.isEmpty()) {
+			return exactSelection;
+		}
+
+		Comparator<Selection> byOutputCount = Comparator
+			.comparingInt((Selection selection) -> outputTotals.getOrDefault(selection.outputItemId(), 0))
+			.thenComparing(Selection::outputItemId);
+
+		if (!craftAll) {
+			List<Selection> fullRequestCandidates = availableOutputCandidates.stream()
+				.filter(candidate -> outputTotals.getOrDefault(candidate.outputItemId(), 0) >= requestedCopies)
+				.toList();
+			if (!fullRequestCandidates.isEmpty()) {
+				return fullRequestCandidates.stream()
+					.max(byOutputCount)
+					.orElse(exactSelection);
+			}
+		}
+
+		return availableOutputCandidates.stream()
+			.max(byOutputCount)
 			.orElse(exactSelection);
 	}
 
@@ -405,6 +473,41 @@ public final class RecipeVariantResolver {
 			}
 		}
 		return bestCollection;
+	}
+
+	private static List<Selection> uniqueOutputSelections(List<Selection> candidates, Selection exactSelection) {
+		Map<String, Selection> grouped = new LinkedHashMap<>();
+		for (Selection candidate : candidates) {
+			if (candidate == null || candidate.displayStack().isEmpty()) {
+				continue;
+			}
+			Selection existing = grouped.get(candidate.outputItemId());
+			if (existing == null || candidate.recipeId().equals(exactSelection.recipeId())) {
+				grouped.put(candidate.outputItemId(), candidate);
+			}
+		}
+		return List.copyOf(grouped.values());
+	}
+
+	private static Map<String, Integer> retrievalOutputTotals(
+		Minecraft minecraft,
+		LocalPlayer player,
+		AvailableItemSnapshot availableItems
+	) {
+		Map<String, Integer> totals = availableItems.totalCounts();
+		if (!ReachCraftingConfig.get().enableNearbyContainerUsage()
+			|| minecraft.level == null
+			|| minecraft.getCameraEntity() == null) {
+			return totals;
+		}
+		return AvailableItemSnapshot.mergeCounts(
+			totals,
+			NearbyContainerCache.getReachableView(
+				minecraft.level,
+				minecraft.getCameraEntity(),
+				player.blockInteractionRange()
+			).aggregateCounts()
+		);
 	}
 
 	private static RecipeDisplayEntry findEntry(
