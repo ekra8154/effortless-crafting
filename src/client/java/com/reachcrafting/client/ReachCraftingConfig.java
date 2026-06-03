@@ -119,6 +119,7 @@ public final class ReachCraftingConfig {
 	private Set<String> blacklistedContainerIds;
 	private List<Integer> recentRecipeDisplayIds;
 	private Map<String, List<Integer>> recentRecipeDisplayIdsByContext;
+	private Map<String, Set<String>> experiencedItemIdsByContext;
 
 	private static String lastSearchText = "";
 	private static final List<String> searchHistory = new ArrayList<>();
@@ -206,6 +207,7 @@ public final class ReachCraftingConfig {
 				: new ArrayList<>();
 			trimRecentRecipeDisplayIds(instance.recentRecipeDisplayIds);
 			instance.recentRecipeDisplayIdsByContext = normalizeRecentRecipeContexts(stored.recentRecipeDisplayIdsByContext);
+			instance.experiencedItemIdsByContext = normalizeExperiencedItemContexts(stored.experiencedItemIdsByContext);
 			if (instance.searchHistoryMode == SearchHistoryMode.OFF) {
 				clearSearchHistory();
 			}
@@ -685,6 +687,39 @@ public final class ReachCraftingConfig {
 		recentRecipeDisplayIdsByContext.put(contextId, contextRecent);
 		save();
 	}
+
+	public Set<String> experiencedItemIds() {
+		String contextId = storageContextId();
+		if (contextId == null) {
+			return Set.of();
+		}
+		return Set.copyOf(experiencedItemIdsByContext.getOrDefault(contextId, Set.of()));
+	}
+
+	public void noteExperiencedItemIds(Set<String> itemIds) {
+		if (itemIds == null || itemIds.isEmpty()) {
+			return;
+		}
+		String contextId = storageContextId();
+		if (contextId == null) {
+			return;
+		}
+		Set<String> normalized = new LinkedHashSet<>();
+		for (String itemId : itemIds) {
+			if (itemId != null && !itemId.isBlank()) {
+				normalized.add(itemId);
+			}
+		}
+		if (normalized.isEmpty()) {
+			return;
+		}
+		Set<String> experienced = new LinkedHashSet<>(experiencedItemIdsByContext.getOrDefault(contextId, Set.of()));
+		if (!experienced.addAll(normalized)) {
+			return;
+		}
+		experiencedItemIdsByContext.put(contextId, experienced);
+		save();
+	}
 	
 	public Set<String> blacklistedContainerIds() {
 		return Collections.unmodifiableSet(blacklistedContainerIds);
@@ -740,6 +775,7 @@ public final class ReachCraftingConfig {
 		defaults.blacklistedContainerIds = new LinkedHashSet<>(DEFAULT_BLACKLIST);
 		defaults.recentRecipeDisplayIds = new ArrayList<>();
 		defaults.recentRecipeDisplayIdsByContext = new HashMap<>();
+		defaults.experiencedItemIdsByContext = new HashMap<>();
 		return defaults;
 	}
 
@@ -768,17 +804,47 @@ public final class ReachCraftingConfig {
 		return normalized;
 	}
 
+	private static Map<String, Set<String>> normalizeExperiencedItemContexts(Map<String, Set<String>> stored) {
+		Map<String, Set<String>> normalized = new HashMap<>();
+		if (stored == null) {
+			return normalized;
+		}
+		for (Map.Entry<String, Set<String>> entry : stored.entrySet()) {
+			if (entry.getKey() == null || entry.getKey().isBlank() || entry.getValue() == null) {
+				continue;
+			}
+			Set<String> itemIds = new LinkedHashSet<>();
+			for (String itemId : entry.getValue()) {
+				if (itemId != null && !itemId.isBlank()) {
+					itemIds.add(itemId);
+				}
+			}
+			if (!itemIds.isEmpty()) {
+				normalized.put(entry.getKey(), itemIds);
+			}
+		}
+		return normalized;
+	}
+
 	private static String recipeHistoryContextId() {
+		String contextId = storageContextId();
+		if (contextId == null) {
+			return null;
+		}
+		String prefix = ContainerUtils.isExistingOutputRetrievalEnabled() ? "retrieval_" : "";
+		return prefix + contextId;
+	}
+
+	private static String storageContextId() {
 		net.minecraft.client.Minecraft client = net.minecraft.client.Minecraft.getInstance();
 		if (client == null || client.player == null || client.level == null) {
 			return null;
 		}
-		String prefix = ContainerUtils.isExistingOutputRetrievalEnabled() ? "retrieval_" : "";
 		if (client.isSingleplayer() && client.getSingleplayerServer() != null) {
-			return prefix + "local_" + sanitizeStorageId(client.getSingleplayerServer().getWorldData().getLevelName());
+			return "local_" + sanitizeStorageId(client.getSingleplayerServer().getWorldData().getLevelName());
 		}
 		if (client.getConnection() != null && client.getConnection().getServerData() != null) {
-			return prefix + "server_" + sanitizeStorageId(client.getConnection().getServerData().ip);
+			return "server_" + sanitizeStorageId(client.getConnection().getServerData().ip);
 		}
 		return null;
 	}
@@ -920,6 +986,7 @@ public final class ReachCraftingConfig {
 		private Set<String> blacklistedContainerIds;
 		private List<Integer> recentRecipeDisplayIds;
 		private Map<String, List<Integer>> recentRecipeDisplayIdsByContext;
+		private Map<String, Set<String>> experiencedItemIdsByContext;
 
 		private StoredConfig(ReachCraftingConfig config) {
 			this.enabled = config.enabled;
@@ -965,6 +1032,7 @@ public final class ReachCraftingConfig {
 			this.blacklistedContainerIds = config.blacklistedContainerIds;
 			this.recentRecipeDisplayIds = config.recentRecipeDisplayIds;
 			this.recentRecipeDisplayIdsByContext = config.recentRecipeDisplayIdsByContext;
+			this.experiencedItemIdsByContext = config.experiencedItemIdsByContext;
 		}
 	}
 

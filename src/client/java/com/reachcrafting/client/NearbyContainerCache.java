@@ -245,6 +245,7 @@ public final class NearbyContainerCache {
 		}
 
 		Map<String, Integer> normalizedCounts = normalizeCounts(itemCounts);
+		ReachCraftingConfig.get().noteExperiencedItemIds(normalizedCounts.keySet());
 		ContainerSnapshot previous = SNAPSHOTS.get(key);
 		if (previous != null && previous.itemCounts().equals(normalizedCounts)) {
 			if (lastView != null && !lastView.snapshotsByKey().containsKey(key)) {
