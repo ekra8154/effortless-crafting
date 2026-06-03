@@ -62,6 +62,7 @@ public final class VirtualRetrievalRecipeBookEntries {
 			ReachCraftingMod.LOGGER.info("[retrieval_virtual] inject skipped reason=unsupported_screen screen={}", screen != null ? screen.getClass().getSimpleName() : "null");
 			return collections;
 		}
+		int gridSlotCount = screen instanceof InventoryScreen ? 4 : 9;
 		LocalPlayer player = minecraft.player;
 		if (player == null || minecraft.level == null || minecraft.getCameraEntity() == null) {
 			ReachCraftingMod.LOGGER.info("[retrieval_virtual] inject skipped reason=missing_context player={} level={} camera={}", player != null, minecraft.level != null, minecraft.getCameraEntity() != null);
@@ -74,7 +75,7 @@ public final class VirtualRetrievalRecipeBookEntries {
 
 		Set<String> currentlyHeldItemIds = collectHeldItemIds(player);
 		ReachCraftingConfig.get().noteExperiencedItemIds(currentlyHeldItemIds);
-		Set<String> craftingTableOutputIds = collectCraftingTableOutputIds(player);
+		Set<String> craftingTableOutputIds = collectCraftingTableOutputIds(player, gridSlotCount);
 		Map<String, Integer> nearbyCounts = NearbyContainerCache.getReachableView(
 			minecraft.level,
 			minecraft.getCameraEntity(),
@@ -89,7 +90,7 @@ public final class VirtualRetrievalRecipeBookEntries {
 
 		String search = accessor.getSearchBox() != null ? accessor.getSearchBox().getValue().trim().toLowerCase(Locale.ROOT) : "";
 		Object selectedCategory = accessor.getSelectedTab() != null ? accessor.getSelectedTab().getCategory() : null;
-		ReachCraftingMod.LOGGER.info("[retrieval_virtual] inject start base_collections={} nearby_items={} experienced_items={} crafting_outputs={} search='{}' selected_category={}", collections.size(), nearbyCounts.size(), experiencedItemIds.size(), craftingTableOutputIds.size(), search, selectedCategory != null ? selectedCategory.getClass().getSimpleName() + ":" + selectedCategory : "null");
+		ReachCraftingMod.LOGGER.info("[retrieval_virtual] inject start base_collections={} nearby_items={} experienced_items={} crafting_outputs={} grid_slots={} search='{}' selected_category={}", collections.size(), nearbyCounts.size(), experiencedItemIds.size(), craftingTableOutputIds.size(), gridSlotCount, search, selectedCategory != null ? selectedCategory.getClass().getSimpleName() + ":" + selectedCategory : "null");
 		List<RecipeCollection> synthetic = new ArrayList<>();
 		int skippedExistingOutput = 0;
 		int skippedNullItem = 0;
@@ -209,13 +210,16 @@ public final class VirtualRetrievalRecipeBookEntries {
 		return stack.isEmpty() ? "" : stack.getHoverName().getString().toLowerCase(Locale.ROOT);
 	}
 
-	private static Set<String> collectCraftingTableOutputIds(LocalPlayer player) {
+	private static Set<String> collectCraftingTableOutputIds(LocalPlayer player, int gridSlotCount) {
 		Set<String> outputIds = new HashSet<>();
 		net.minecraft.util.context.ContextMap context = net.minecraft.world.item.crafting.display.SlotDisplayContext.fromLevel(player.level());
 		for (RecipeCollection collection : player.getRecipeBook().getCollections()) {
 			for (RecipeDisplayEntry entry : collection.getRecipes()) {
 				RecipeDisplay display = entry.display();
 				if (!(display instanceof ShapedCraftingRecipeDisplay) && !(display instanceof ShapelessCraftingRecipeDisplay)) {
+					continue;
+				}
+				if (!fitsGrid(display, gridSlotCount)) {
 					continue;
 				}
 				ItemStack output = RecipeVariantResolver.resolveDisplayStack(display, context);
@@ -225,6 +229,19 @@ public final class VirtualRetrievalRecipeBookEntries {
 			}
 		}
 		return outputIds;
+	}
+
+	private static boolean fitsGrid(RecipeDisplay display, int gridSlotCount) {
+		if (display instanceof ShapedCraftingRecipeDisplay shaped) {
+			if (gridSlotCount == 4) {
+				return shaped.width() <= 2 && shaped.height() <= 2;
+			}
+			return gridSlotCount == 9 && shaped.width() <= 3 && shaped.height() <= 3;
+		}
+		if (display instanceof ShapelessCraftingRecipeDisplay shapeless) {
+			return shapeless.ingredients().size() <= gridSlotCount;
+		}
+		return false;
 	}
 
 	private static Set<String> collectHeldItemIds(LocalPlayer player) {
