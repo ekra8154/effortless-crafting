@@ -115,6 +115,17 @@ Scroll to pull is a specialized fast-output workflow that pairs well with the `S
 
 ---
 
+## Retrieval Mode
+
+Retrieval Mode is a state exclusive to nearby crafting that lets you pull existing items directly from nearby chests instead of crafting them.
+
+- **Enable retrieval mode**: Hold `Ctrl` and click the result slot, or double-tap `Ctrl` (ensure neither autocraft nor bulk craft are toggled on).
+- **What retrieval changes**: Indicated by an 'X' in the result slot, this mode tells the recipe book to retrieve items from nearby containers into your inventory instead of crafting them. Manual crafting remains possible while this mode is active.
+- **Expanded visibility**: Shows icons for all items you have seen at least once in-game, including those with no crafting recipes.
+- **Availability indicators**: A green dot on an item icon denotes that at least 1 of that item is currently available in nearby containers to be retrieved.
+
+---
+
 ## Core Mechanics
 
 ### Intelligent Resource Management
@@ -148,6 +159,8 @@ Scroll to pull is a specialized fast-output workflow that pairs well with the `S
 - **Yield and queue indicators**: The UI can show output totals and queued counts directly on recipes.
 - **Chat feedback**: Missing ingredient reports and bulk craft summaries are surfaced in chat.
 - **Recipe filter toggle**: `Spacebar` still supports the craftable/uncraftable recipe filter toggle when not being used for request scaling.
+- **Recipe book navigation**: Scroll or use arrow keys to easily page through the recipe book.
+- **Revolving craft menus & tooltips**: Expanding recipes with multiple variants now clearly displays accurate tooltips for each variant.
 
 ### Extra Controls
 
