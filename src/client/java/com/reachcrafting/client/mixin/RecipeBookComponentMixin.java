@@ -270,8 +270,7 @@ public abstract class RecipeBookComponentMixin {
 			return;
 		}
 		int currentPage = ((RecipeBookPageAccessor) page).getCurrentPage();
-		int frozenPage = com.reachcrafting.client.RecipeBookChunkedScheduler.frozenPageIndex();
-		reachcrafting$preservedPageIndex = currentPage > 0 ? currentPage : frozenPage;
+		reachcrafting$preservedPageIndex = currentPage;
 		// com.reachcrafting.ReachCraftingMod.LOGGER.info(
 		// 	"[recipe_sort] capture_page_before_update resetPage={} filtering={} current_page={} frozen_page={} preserved_page={} freeze={} active_session={}",
 		// 	resetPage,

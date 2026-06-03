@@ -60,7 +60,12 @@ final class ExistingOutputRetrievalSession extends BaseCraftSession {
 		this.request = request;
 		AvailableItemSnapshot localItems = AvailableItemSnapshot.capture(player, client.screen);
 		this.originalContext = ScreenContextSnapshot.capture(client, cameraEntity, player.blockInteractionRange(), localItems);
-		this.candidates = NearbyDiscoveryPlanner.findCandidates(level, cameraEntity, player.blockInteractionRange());
+		NearbyContainerCache.ReachableView reachableView = NearbyContainerCache.getReachableView(level, cameraEntity, player.blockInteractionRange());
+		this.candidates = NearbyContainerCache.prioritizeCandidates(
+			NearbyDiscoveryPlanner.findCandidates(level, cameraEntity, player.blockInteractionRange()),
+			reachableView,
+			Set.of(request.outputItemId())
+		);
 		this.reopenAttemptsRemaining = MAX_REOPEN_ATTEMPTS;
 		this.remainingCount = Math.max(request.requestedCount(), 1);
 	}
@@ -76,6 +81,12 @@ final class ExistingOutputRetrievalSession extends BaseCraftSession {
 			finishSession(false);
 			return;
 		}
+		ReachCraftingMod.LOGGER.info(
+			"[retrieve_existing] start item={} requested={} candidates={}",
+			request.outputItemId(),
+			remainingCount,
+			candidates.size()
+		);
 		sendDebugChat("Retrieving existing: " + request.outputLabel());
 	}
 

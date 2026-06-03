@@ -120,25 +120,27 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 	private void reachcrafting$onMouseClicked(MouseButtonEvent click, boolean filtering, CallbackInfoReturnable<Boolean> cir) {
 		if (!ReachCraftingConfig.get().enabled()) return;
 		if (click.button() == 0
+			&& (click.modifiers() & GLFW.GLFW_MOD_ALT) != 0
+			&& com.reachcrafting.client.ContainerUtils.isAutoCraftEnabled()
+			&& ((Object) this instanceof CraftingScreen || (Object) this instanceof InventoryScreen)) {
+			Slot hoveredSlot = ((AbstractContainerScreenAccessor) this).getHoveredSlot();
+			if (hoveredSlot instanceof ResultSlot && reachcrafting$isArrowClickTarget(hoveredSlot, click.x(), click.y())) {
+				if (com.reachcrafting.client.ContainerUtils.isExistingOutputRetrievalEnabled()) {
+					com.reachcrafting.client.ContainerUtils.disableExistingOutputRetrieval();
+				}
+				com.reachcrafting.client.ContainerUtils.consumeAutoCraftToggle();
+				com.reachcrafting.client.ContainerUtils.toggleAutoCraftEnabledModeViaArrow();
+				cir.setReturnValue(true);
+				return;
+			}
+		}
+		if (click.button() == 0
 			&& ReachCraftingConfig.get().enableExistingOutputRetrieval()
 			&& (click.modifiers() & GLFW.GLFW_MOD_CONTROL) != 0
 			&& ((Object) this instanceof CraftingScreen || (Object) this instanceof InventoryScreen)) {
 			Slot hoveredSlot = ((AbstractContainerScreenAccessor) this).getHoveredSlot();
 			if (hoveredSlot instanceof ResultSlot && reachcrafting$isArrowClickTarget(hoveredSlot, click.x(), click.y())) {
 				com.reachcrafting.client.ContainerUtils.toggleExistingOutputRetrievalViaResultSlot();
-				cir.setReturnValue(true);
-				return;
-			}
-		}
-		if (click.button() == 0
-			&& (click.modifiers() & GLFW.GLFW_MOD_ALT) != 0
-			&& !com.reachcrafting.client.ContainerUtils.isExistingOutputRetrievalEnabled()
-			&& com.reachcrafting.client.ContainerUtils.isAutoCraftEnabled()
-			&& ((Object) this instanceof CraftingScreen || (Object) this instanceof InventoryScreen)) {
-			Slot hoveredSlot = ((AbstractContainerScreenAccessor) this).getHoveredSlot();
-			if (hoveredSlot instanceof ResultSlot && reachcrafting$isArrowClickTarget(hoveredSlot, click.x(), click.y())) {
-				com.reachcrafting.client.ContainerUtils.consumeAutoCraftToggle();
-				com.reachcrafting.client.ContainerUtils.toggleAutoCraftEnabledModeViaArrow();
 				cir.setReturnValue(true);
 				return;
 			}
@@ -229,7 +231,7 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 		if (slot instanceof ResultSlot
 			&& ((Object) this instanceof CraftingScreen || (Object) this instanceof InventoryScreen)
 			&& com.reachcrafting.client.ContainerUtils.isExistingOutputRetrievalEnabled()) {
-			RecipeButtonNearbyIndicator.renderRetrievalX(guiGraphics, slot.x + 6, slot.y + 6);
+			RecipeButtonNearbyIndicator.renderRetrievalX(guiGraphics, slot.x + 8, slot.y + 8);
 			return;
 		}
 		if (com.reachcrafting.client.ContainerUtils.isAutoCraftEnabled() && slot instanceof ResultSlot) {
@@ -247,8 +249,7 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 		if (!ReachCraftingConfig.get().enabled()) return;
 		if (event.key() == GLFW.GLFW_KEY_LEFT_ALT || event.key() == GLFW.GLFW_KEY_RIGHT_ALT) {
 			if (com.reachcrafting.client.ContainerUtils.isExistingOutputRetrievalEnabled()) {
-				cir.setReturnValue(true);
-				return;
+				com.reachcrafting.client.ContainerUtils.disableExistingOutputRetrieval();
 			}
 			com.reachcrafting.client.ContainerUtils.handleAutoCraftKeyPress();
 			cir.setReturnValue(true);
