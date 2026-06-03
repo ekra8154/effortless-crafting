@@ -7,10 +7,13 @@ import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import net.minecraft.client.gui.screens.recipebook.RecipeCollection;
+import net.minecraft.client.gui.screens.inventory.AbstractRecipeBookScreen;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.display.RecipeDisplayEntry;
 import net.minecraft.world.item.crafting.display.RecipeDisplayId;
 import com.reachcrafting.ReachCraftingMod;
+import com.reachcrafting.client.mixin.AbstractRecipeBookScreenAccessor;
+import com.reachcrafting.client.mixin.RecipeBookComponentAccessor;
 
 public final class RecipeBookSmartSorter {
 	private static final Map<RecipeCollection, Integer> lastPresentedOrder = new IdentityHashMap<>();
@@ -306,10 +309,26 @@ public final class RecipeBookSmartSorter {
 	}
 
 	private static void rememberPresentedOrder(List<RecipeCollection> sortedCollections) {
+		if (!shouldRememberPresentedOrder()) {
+			return;
+		}
 		lastPresentedOrder.clear();
 		for (int i = 0; i < sortedCollections.size(); i++) {
 			lastPresentedOrder.put(sortedCollections.get(i), i);
 		}
+	}
+
+	private static boolean shouldRememberPresentedOrder() {
+		var minecraft = net.minecraft.client.Minecraft.getInstance();
+		if (!(minecraft.screen instanceof AbstractRecipeBookScreen<?> recipeBookScreen)) {
+			return true;
+		}
+		var component = ((AbstractRecipeBookScreenAccessor) recipeBookScreen).getRecipeBookComponent();
+		if (!(component instanceof net.minecraft.client.gui.screens.recipebook.RecipeBookComponent<?> recipeBookComponent)) {
+			return true;
+		}
+		var searchBox = ((RecipeBookComponentAccessor) recipeBookComponent).getSearchBox();
+		return searchBox == null || searchBox.getValue().isBlank();
 	}
 
 	static record NearbyMemoKey(RecipeDisplayId recipeId, boolean explicitVariantSelection) {

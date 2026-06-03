@@ -491,15 +491,13 @@ public final class RecipeButtonNearbyIndicator {
 	}
 
 	public static void renderRetrievalX(net.minecraft.client.gui.GuiGraphicsExtractor guiGraphics, int x, int y) {
-		int color = 0xCC147A38;
-		guiGraphics.fill(x - 2, y - 2, x - 1, y - 1, color);
-		guiGraphics.fill(x + 2, y - 2, x + 3, y - 1, color);
-		guiGraphics.fill(x - 1, y - 1, x + 0, y + 0, color);
+		int color = 0x80000000;
+		guiGraphics.fill(x - 1, y - 2, x + 2, y - 1, color);
+		guiGraphics.fill(x - 2, y - 1, x - 1, y + 0, color);
 		guiGraphics.fill(x + 1, y - 1, x + 2, y + 0, color);
-		guiGraphics.fill(x + 0, y + 0, x + 1, y + 1, color);
-		guiGraphics.fill(x - 1, y + 1, x + 0, y + 2, color);
+		guiGraphics.fill(x - 2, y + 0, x + 3, y + 1, color);
+		guiGraphics.fill(x - 2, y + 1, x - 1, y + 2, color);
 		guiGraphics.fill(x + 1, y + 1, x + 2, y + 2, color);
-		guiGraphics.fill(x - 2, y + 2, x - 1, y + 3, color);
-		guiGraphics.fill(x + 2, y + 2, x + 3, y + 3, color);
+		guiGraphics.fill(x - 1, y + 2, x + 2, y + 3, color);
 	}
 }

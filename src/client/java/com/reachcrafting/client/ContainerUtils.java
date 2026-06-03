@@ -61,6 +61,10 @@ public final class ContainerUtils {
 		ExistingOutputRetrievalController.toggleViaResultSlot();
 	}
 
+	public static void disableExistingOutputRetrieval() {
+		ExistingOutputRetrievalController.setEnabled(false);
+	}
+
 	public static void tickExistingOutputRetrievalController(net.minecraft.client.Minecraft client) {
 		ExistingOutputRetrievalController.tick(client);
 	}
