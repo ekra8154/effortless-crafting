@@ -49,7 +49,7 @@ final class ScreenContextRestorer {
 			String.format(java.util.Locale.ROOT, "%.1f", context.mouseY())
 		);
 		if (context.kind() == ScreenKind.INVENTORY_2X2) {
-			client.setScreen(new InventoryScreen(player));
+			client.setScreenAndShow(new InventoryScreen(player));
 			return;
 		}
 		if (context.kind() == ScreenKind.CRAFTING_TABLE_3X3 && context.craftingTablePos() != null) {

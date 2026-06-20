@@ -342,7 +342,7 @@ final class SearchSession extends BaseCraftSession {
 					"[nearby_restore] idx={} reopen_failed kind={} screen={} attempts_exhausted",
 					recipeIndex,
 					originalContext.kind().name().toLowerCase(),
-					client.screen == null ? "<none>" : client.screen.getClass().getSimpleName()
+					client.gui.screen() == null ? "<none>" : client.gui.screen().getClass().getSimpleName()
 				);
 				tryFinishAfterResume();
 			}
@@ -354,7 +354,7 @@ final class SearchSession extends BaseCraftSession {
 		if (state != SearchState.WAITING_FOR_CONTAINER) {
 			return;
 		}
-		if (client.screen instanceof InventoryScreen || client.screen instanceof CraftingScreen) {
+		if (client.gui.screen() instanceof InventoryScreen || client.gui.screen() instanceof CraftingScreen) {
 			return;
 		}
 		if (menu.containerId == player.inventoryMenu.containerId) {
@@ -1572,7 +1572,7 @@ final class SearchSession extends BaseCraftSession {
 	}
 
 	private boolean isOriginalContextSettled() {
-		if (!(client.screen instanceof AbstractContainerScreen<?> containerScreen)) {
+		if (!(client.gui.screen() instanceof AbstractContainerScreen<?> containerScreen)) {
 			return originalContext.kind() == ScreenKind.NONE;
 		}
 
@@ -1824,7 +1824,7 @@ final class SearchSession extends BaseCraftSession {
 	}
 
 	private void restoreRecipeBookSnapshot() {
-		if (!(client.screen instanceof AbstractRecipeBookScreen<?> recipeBookScreen)) {
+		if (!(client.gui.screen() instanceof AbstractRecipeBookScreen<?> recipeBookScreen)) {
 			return;
 		}
 		originalContext.recipeBookState().restore(recipeBookScreen);
@@ -1845,7 +1845,7 @@ final class SearchSession extends BaseCraftSession {
 		if (!originalContext.hasReservedGrid()) {
 			return true;
 		}
-		if (!(client.screen instanceof AbstractContainerScreen<?> containerScreen)) {
+		if (!(client.gui.screen() instanceof AbstractContainerScreen<?> containerScreen)) {
 			lastRestoreFailure = "screen_not_container";
 			return false;
 		}
@@ -1876,7 +1876,7 @@ final class SearchSession extends BaseCraftSession {
 	}
 
 	private boolean expandReservedGrid() {
-		if (!(client.screen instanceof AbstractContainerScreen<?> containerScreen)) {
+		if (!(client.gui.screen() instanceof AbstractContainerScreen<?> containerScreen)) {
 			return false;
 		}
 
@@ -1934,7 +1934,7 @@ final class SearchSession extends BaseCraftSession {
 				gameMode.handlePlaceRecipe(player.containerMenu.containerId, recipeId, false);
 			}
 		}
-		AvailableItemSnapshot postPlaceSnapshot = AvailableItemSnapshot.capture(player, client.screen);
+		AvailableItemSnapshot postPlaceSnapshot = AvailableItemSnapshot.capture(player, client.gui.screen());
 		ReachCraftingMod.LOGGER.info(
 			"[recipe_place] post_place planned idx={} target={} queueLimit={} result={} staged_copies={} grid_reserved={}",
 			recipeIndex,
@@ -1952,7 +1952,7 @@ final class SearchSession extends BaseCraftSession {
 
 
 	private boolean applyPlannedTargetsToGrid(List<Integer> occupiedAnchorSlots) {
-		if (!(client.screen instanceof AbstractContainerScreen<?> containerScreen)) {
+		if (!(client.gui.screen() instanceof AbstractContainerScreen<?> containerScreen)) {
 			return false;
 		}
 

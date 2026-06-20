@@ -58,7 +58,7 @@ final class ExistingOutputRetrievalSession extends BaseCraftSession {
 	) {
 		super(coordinator, client, player, level, gameMode, cameraEntity);
 		this.request = request;
-		AvailableItemSnapshot localItems = AvailableItemSnapshot.capture(player, client.screen);
+		AvailableItemSnapshot localItems = AvailableItemSnapshot.capture(player, client.gui.screen());
 		this.originalContext = ScreenContextSnapshot.capture(client, cameraEntity, player.blockInteractionRange(), localItems);
 		NearbyContainerCache.ReachableView reachableView = NearbyContainerCache.getReachableView(level, cameraEntity, player.blockInteractionRange());
 		this.candidates = NearbyContainerCache.prioritizeCandidates(
@@ -170,8 +170,8 @@ final class ExistingOutputRetrievalSession extends BaseCraftSession {
 		if (state != RetrievalState.WAITING_FOR_CONTAINER) {
 			return;
 		}
-		if (client.screen instanceof net.minecraft.client.gui.screens.inventory.InventoryScreen
-			|| client.screen instanceof net.minecraft.client.gui.screens.inventory.CraftingScreen) {
+		if (client.gui.screen() instanceof net.minecraft.client.gui.screens.inventory.InventoryScreen
+			|| client.gui.screen() instanceof net.minecraft.client.gui.screens.inventory.CraftingScreen) {
 			return;
 		}
 		if (menu.containerId == player.inventoryMenu.containerId) {
@@ -220,7 +220,7 @@ final class ExistingOutputRetrievalSession extends BaseCraftSession {
 	}
 
 	private boolean isOriginalContextSettled() {
-		if (!(client.screen instanceof AbstractContainerScreen<?> containerScreen)) {
+		if (!(client.gui.screen() instanceof AbstractContainerScreen<?> containerScreen)) {
 			return originalContext.kind() == ScreenKind.NONE;
 		}
 

@@ -20,8 +20,8 @@ public final class ContainerFilterRenderer {
 	}
 
 	public static void init() {
-		// Render after translucent world features so the outlines sit on top of normal world geometry.
-		LevelRenderEvents.AFTER_TRANSLUCENT_FEATURES.register(context -> {
+		// Submit line geometry during the collect phase so it flows through the 26.2 deferred render pipeline.
+		LevelRenderEvents.COLLECT_SUBMITS.register(context -> {
 			ReachCraftingConfig config = ReachCraftingConfig.get();
 			if (!config.enabled()) {
 				return;
@@ -42,7 +42,7 @@ public final class ContainerFilterRenderer {
 			}
 
 			Level level = client.level;
-			Vec3 cameraPos = client.gameRenderer.getMainCamera().position();
+			Vec3 cameraPos = client.gameRenderer.mainCamera().position();
 
 			renderList(context, level, cameraPos, InWorldFilterManager.getBlacklistedKeys(), 0.0f, 0.0f, 0.0f); // Black
 			renderList(context, level, cameraPos, InWorldFilterManager.getWhitelistedKeys(), 1.0f, 1.0f, 1.0f); // White
@@ -55,7 +55,6 @@ public final class ContainerFilterRenderer {
 		}
 
 		PoseStack poseStack = context.poseStack();
-		VertexConsumer consumer = context.bufferSource().getBuffer(RenderTypes.lines());
 
 		for (String key : keys) {
 			BlockPos pos = parsePos(level, key);
@@ -84,24 +83,26 @@ public final class ContainerFilterRenderer {
 				box = box.minmax(new AABB(otherHalf.get()));
 			}
 
+			AABB outlineBox = box;
+
 			poseStack.pushPose();
 			poseStack.translate(-cameraPos.x, -cameraPos.y, -cameraPos.z);
-			
-			drawBox(poseStack, consumer, box, r, g, b, 0.8f);
-			
+
+			// 26.2: submit line geometry to the deferred collector instead of drawing into a buffer source directly.
+			context.submitNodeCollector().submitCustomGeometry(poseStack, RenderTypes.lines(),
+				(pose, consumer) -> drawBox(pose, consumer, outlineBox, r, g, b, 0.8f));
+
 			poseStack.popPose();
 		}
 	}
 
-	private static void drawBox(PoseStack poseStack, VertexConsumer consumer, AABB box, float r, float g, float b, float a) {
+	private static void drawBox(PoseStack.Pose pose, VertexConsumer consumer, AABB box, float r, float g, float b, float a) {
 		float minX = (float) box.minX;
 		float minY = (float) box.minY;
 		float minZ = (float) box.minZ;
 		float maxX = (float) box.maxX;
 		float maxY = (float) box.maxY;
 		float maxZ = (float) box.maxZ;
-
-		PoseStack.Pose pose = poseStack.last();
 
 		// Bottom
 		drawEdge(pose, consumer, minX, minY, minZ, maxX, minY, minZ, r, g, b, a);

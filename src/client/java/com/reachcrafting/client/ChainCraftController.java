@@ -120,8 +120,8 @@ public final class ChainCraftController {
 			activeRun = null;
 			return;
 		}
-		if (!(client.screen instanceof CraftingScreen)
-			&& !(client.screen instanceof InventoryScreen)
+		if (!(client.gui.screen() instanceof CraftingScreen)
+			&& !(client.gui.screen() instanceof InventoryScreen)
 			&& !NearbyContainerDryRun.isActiveSessionRunning()) {
 			ReachCraftingModClient.sendChat(Component.translatable("message.reachcrafting.chain_crafting.context_lost").getString());
 			activeRun = null;
@@ -256,7 +256,7 @@ public final class ChainCraftController {
 			|| ContainerUtils.isAutoMovePending()) {
 			return;
 		}
-		if (!(client.screen instanceof CraftingScreen) && !(client.screen instanceof InventoryScreen)) {
+		if (!(client.gui.screen() instanceof CraftingScreen) && !(client.gui.screen() instanceof InventoryScreen)) {
 			return;
 		}
 
@@ -300,7 +300,7 @@ public final class ChainCraftController {
 
 	private static void scheduleCurrentStep() {
 		Minecraft client = Minecraft.getInstance();
-		if (activeRun == null || client.player == null || client.screen == null) {
+		if (activeRun == null || client.player == null || client.gui.screen() == null) {
 			activeRun = null;
 			return;
 		}

@@ -60,7 +60,7 @@ final class AutoCraftController {
 		if (ReachCraftingConfig.get().autoCraftHandling() == ReachCraftingConfig.AutoCraftHandling.HOLD) {
 			if (!holdQuickCraftCancelled && !holdQuickCraftConsumed) {
 				Minecraft client = Minecraft.getInstance();
-				if (client.player != null && client.player.containerMenu != null && (client.screen instanceof CraftingScreen || client.screen instanceof InventoryScreen)) {
+				if (client.player != null && client.player.containerMenu != null && (client.gui.screen() instanceof CraftingScreen || client.gui.screen() instanceof InventoryScreen)) {
 					Slot resultSlot = client.player.containerMenu.getSlot(0);
 					if (resultSlot != null && resultSlot.hasItem()) {
 						AutoMoveController.scheduleAutoMove(ItemStack.EMPTY);

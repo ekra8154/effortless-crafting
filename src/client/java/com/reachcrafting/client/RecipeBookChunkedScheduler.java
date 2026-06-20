@@ -222,8 +222,8 @@ public final class RecipeBookChunkedScheduler {
 			ReachCraftingMod.LOGGER.info("[retrieval_virtual] refresh skipped reason=frozen force={} page={} freeze={}", force, frozenPageIndex, freezeResortUntilManualReopen);
 			return;
 		}
-		if (!(client.screen instanceof AbstractRecipeBookScreen<?> recipeBookScreen) || client.player == null) {
-			ReachCraftingMod.LOGGER.info("[retrieval_virtual] refresh skipped reason=unsupported_screen force={} screen={} player={}", force, client.screen != null ? client.screen.getClass().getSimpleName() : "null", client.player != null);
+		if (!(client.gui.screen() instanceof AbstractRecipeBookScreen<?> recipeBookScreen) || client.player == null) {
+			ReachCraftingMod.LOGGER.info("[retrieval_virtual] refresh skipped reason=unsupported_screen force={} screen={} player={}", force, client.gui.screen() != null ? client.gui.screen().getClass().getSimpleName() : "null", client.player != null);
 			return;
 		}
 
@@ -240,7 +240,7 @@ public final class RecipeBookChunkedScheduler {
 	}
 
 	private static boolean isRecipeBookOnFirstPage(Minecraft client) {
-		if (!(client.screen instanceof AbstractRecipeBookScreen<?> recipeBookScreen)) {
+		if (!(client.gui.screen() instanceof AbstractRecipeBookScreen<?> recipeBookScreen)) {
 			return false;
 		}
 
@@ -255,7 +255,7 @@ public final class RecipeBookChunkedScheduler {
 
 	private static StateKey currentStateKey() {
 		Minecraft minecraft = Minecraft.getInstance();
-		Screen screen = minecraft.screen;
+		Screen screen = minecraft.gui.screen();
 		if (!(screen instanceof InventoryScreen) && !(screen instanceof CraftingScreen)) {
 			return null;
 		}

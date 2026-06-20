@@ -458,7 +458,7 @@ final class RecipeClickExecutor {
 		if (minecraft == null || minecraft.player == null || minecraft.level == null || recipeId == null || collection == null) {
 			return 0;
 		}
-		Screen screen = minecraft.screen;
+		Screen screen = minecraft.gui.screen();
 		if (!(screen instanceof InventoryScreen) && !(screen instanceof CraftingScreen)) {
 			return 0;
 		}
@@ -509,7 +509,7 @@ final class RecipeClickExecutor {
 			return ItemStack.EMPTY;
 		}
 
-		AvailableItemSnapshot availableItems = AvailableItemSnapshot.capture(player, minecraft.screen);
+		AvailableItemSnapshot availableItems = AvailableItemSnapshot.capture(player, minecraft.gui.screen());
 		Map<String, Integer> availableCounts = availableItems.totalCounts();
 		if (ReachCraftingConfig.get().cacheContainersForFasterSearch()) {
 			NearbyContainerCache.ReachableView reachableView = NearbyContainerCache.getReachableView(minecraft.level, minecraft.getCameraEntity(), player.blockInteractionRange());
@@ -747,7 +747,7 @@ final class RecipeClickExecutor {
 			return;
 		}
 		Minecraft minecraft = Minecraft.getInstance();
-		if (!(minecraft.screen instanceof AbstractRecipeBookScreen<?> recipeBookScreen)) {
+		if (!(minecraft.gui.screen() instanceof AbstractRecipeBookScreen<?> recipeBookScreen)) {
 			return;
 		}
 		RecipeBookComponentAccessor componentAccessor = (RecipeBookComponentAccessor) ((AbstractRecipeBookScreenAccessor) recipeBookScreen).getRecipeBookComponent();

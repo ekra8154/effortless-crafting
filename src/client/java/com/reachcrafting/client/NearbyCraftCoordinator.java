@@ -43,7 +43,7 @@ final class NearbyCraftCoordinator {
 			if (interactionBlockTicks > 0) {
 				interactionBlockTicks--;
 			}
-			boolean pauseScreenOpen = client.screen instanceof net.minecraft.client.gui.screens.PauseScreen;
+			boolean pauseScreenOpen = client.gui.screen() instanceof net.minecraft.client.gui.screens.PauseScreen;
 			if (pauseScreenOpen && !pauseScreenOpenLastTick) {
 				ContainerUtils.abortAllSessions();
 			}
@@ -171,7 +171,7 @@ final class NearbyCraftCoordinator {
 		}
 
 		cancelCurrent();
-		AvailableItemSnapshot localItems = AvailableItemSnapshot.capture(player, client.screen);
+		AvailableItemSnapshot localItems = AvailableItemSnapshot.capture(player, client.gui.screen());
 		ScreenContextSnapshot context = ScreenContextSnapshot.capture(client, cameraEntity, player.blockInteractionRange(), localItems);
 		if (reopenScreen) {
 			context = context.withClearedGrid();

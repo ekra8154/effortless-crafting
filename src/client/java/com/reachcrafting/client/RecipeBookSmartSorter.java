@@ -320,7 +320,7 @@ public final class RecipeBookSmartSorter {
 
 	private static boolean shouldRememberPresentedOrder() {
 		var minecraft = net.minecraft.client.Minecraft.getInstance();
-		if (!(minecraft.screen instanceof AbstractRecipeBookScreen<?> recipeBookScreen)) {
+		if (!(minecraft.gui.screen() instanceof AbstractRecipeBookScreen<?> recipeBookScreen)) {
 			return true;
 		}
 		var component = ((AbstractRecipeBookScreenAccessor) recipeBookScreen).getRecipeBookComponent();

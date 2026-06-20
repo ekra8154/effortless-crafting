@@ -88,7 +88,7 @@ public final class RecipeButtonNearbyIndicator {
 		}
 
 		Minecraft minecraft = Minecraft.getInstance();
-		Screen screen = minecraft.screen;
+		Screen screen = minecraft.gui.screen();
 		if (!(screen instanceof InventoryScreen) && !(screen instanceof CraftingScreen)) {
 			return Craftability.NOT_CRAFTABLE;
 		}
@@ -207,7 +207,7 @@ public final class RecipeButtonNearbyIndicator {
 		}
 
 		Minecraft minecraft = Minecraft.getInstance();
-		Screen screen = minecraft.screen;
+		Screen screen = minecraft.gui.screen();
 		if (!(screen instanceof InventoryScreen) && !(screen instanceof CraftingScreen)) {
 			return false;
 		}

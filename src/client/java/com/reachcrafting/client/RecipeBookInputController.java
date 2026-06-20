@@ -132,7 +132,7 @@ final class RecipeBookInputController {
 			return;
 		}
 		Minecraft minecraft = Minecraft.getInstance();
-		Screen screen = minecraft.screen;
+		Screen screen = minecraft.gui.screen();
 		if (!(screen instanceof InventoryScreen) && !(screen instanceof CraftingScreen)) {
 			return;
 		}
@@ -606,7 +606,7 @@ final class RecipeBookInputController {
 			return;
 		}
 
-		Screen screen = minecraft.screen;
+		Screen screen = minecraft.gui.screen();
 		LocalPlayer player = minecraft.player;
 		if (!(screen instanceof InventoryScreen) && !(screen instanceof CraftingScreen)) {
 			state.setReplayBatch(null);

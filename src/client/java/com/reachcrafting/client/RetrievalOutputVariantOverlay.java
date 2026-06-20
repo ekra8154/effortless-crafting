@@ -36,7 +36,7 @@ public final class RetrievalOutputVariantOverlay {
 		}
 
 		Minecraft minecraft = Minecraft.getInstance();
-		if (!(minecraft.screen instanceof AbstractRecipeBookScreen<?> recipeBookScreen) || minecraft.level == null) {
+		if (!(minecraft.gui.screen() instanceof AbstractRecipeBookScreen<?> recipeBookScreen) || minecraft.level == null) {
 			return false;
 		}
 

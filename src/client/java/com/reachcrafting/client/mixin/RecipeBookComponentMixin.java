@@ -384,10 +384,10 @@ public abstract class RecipeBookComponentMixin {
 	}
 
 	private boolean reachcrafting$isSupportedScreen() {
-		if (this.minecraft == null || this.minecraft.screen == null) {
+		if (this.minecraft == null || this.minecraft.gui.screen() == null) {
 			return false;
 		}
-		return this.minecraft.screen instanceof CraftingScreen || this.minecraft.screen instanceof InventoryScreen;
+		return this.minecraft.gui.screen() instanceof CraftingScreen || this.minecraft.gui.screen() instanceof InventoryScreen;
 	}
 
 	private boolean reachcrafting$isEligibleKey(KeyEvent event) {
@@ -562,14 +562,14 @@ public abstract class RecipeBookComponentMixin {
 		}
 		return switch (ReachCraftingConfig.get().autoFocusSearchMode()) {
 			case DISABLED -> false;
-			case CRAFTING_3X3 -> this.minecraft.screen instanceof CraftingScreen;
-			case INVENTORY_2X2_AND_3X3 -> this.minecraft.screen instanceof CraftingScreen
-				|| this.minecraft.screen instanceof InventoryScreen;
+			case CRAFTING_3X3 -> this.minecraft.gui.screen() instanceof CraftingScreen;
+			case INVENTORY_2X2_AND_3X3 -> this.minecraft.gui.screen() instanceof CraftingScreen
+				|| this.minecraft.gui.screen() instanceof InventoryScreen;
 		};
 	}
 
 	private boolean reachcrafting$hasHoveredStack() {
-		if (!(this.minecraft.screen instanceof AbstractContainerScreen<?> containerScreen)) {
+		if (!(this.minecraft.gui.screen() instanceof AbstractContainerScreen<?> containerScreen)) {
 			return false;
 		}
 		Slot hoveredSlot = ((AbstractContainerScreenAccessor) containerScreen).getHoveredSlot();

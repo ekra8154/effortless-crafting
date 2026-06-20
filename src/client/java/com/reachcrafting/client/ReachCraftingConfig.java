@@ -852,7 +852,7 @@ public final class ReachCraftingConfig {
 		if (client == null || client.player == null || client.level == null) {
 			return null;
 		}
-		if (client.isSingleplayer() && client.getSingleplayerServer() != null) {
+		if (client.hasSingleplayerServer() && client.getSingleplayerServer() != null) {
 			return "local_" + sanitizeStorageId(client.getSingleplayerServer().getWorldData().getLevelName());
 		}
 		if (client.getConnection() != null && client.getConnection().getServerData() != null) {

@@ -41,7 +41,7 @@ public final class RecipeBookFocusManager {
 	}
 
 	static void defocusRecipeBookSearch(Minecraft minecraft, HeldRecipeQueueState state) {
-		if (!(minecraft.screen instanceof AbstractRecipeBookScreen<?> recipeBookScreen)) {
+		if (!(minecraft.gui.screen() instanceof AbstractRecipeBookScreen<?> recipeBookScreen)) {
 			return;
 		}
 		RecipeBookComponentAccessor componentAccessor = (RecipeBookComponentAccessor) ((AbstractRecipeBookScreenAccessor) recipeBookScreen).getRecipeBookComponent();
@@ -55,7 +55,7 @@ public final class RecipeBookFocusManager {
 	}
 
 	static void defocusRecipeBookSearch(Minecraft minecraft) {
-		if (!(minecraft.screen instanceof AbstractRecipeBookScreen<?> recipeBookScreen)) {
+		if (!(minecraft.gui.screen() instanceof AbstractRecipeBookScreen<?> recipeBookScreen)) {
 			return;
 		}
 		RecipeBookComponentAccessor componentAccessor = (RecipeBookComponentAccessor) ((AbstractRecipeBookScreenAccessor) recipeBookScreen).getRecipeBookComponent();
@@ -68,7 +68,7 @@ public final class RecipeBookFocusManager {
 	}
 
 	static void refocusRecipeBookSearch(Minecraft minecraft, HeldRecipeQueueState state) {
-		if (!(minecraft.screen instanceof AbstractRecipeBookScreen<?> recipeBookScreen)) {
+		if (!(minecraft.gui.screen() instanceof AbstractRecipeBookScreen<?> recipeBookScreen)) {
 			return;
 		}
 		RecipeBookComponentAccessor componentAccessor = (RecipeBookComponentAccessor) ((AbstractRecipeBookScreenAccessor) recipeBookScreen).getRecipeBookComponent();

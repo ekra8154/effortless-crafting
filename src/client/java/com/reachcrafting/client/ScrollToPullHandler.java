@@ -285,7 +285,7 @@ public final class ScrollToPullHandler {
     }
 
     public static boolean isHoveringOutput(Minecraft minecraft) {
-        if (!(minecraft.screen instanceof AbstractContainerScreen<?> containerScreen)) {
+        if (!(minecraft.gui.screen() instanceof AbstractContainerScreen<?> containerScreen)) {
             return false;
         }
         Slot hoveredSlot = ((AbstractContainerScreenAccessor) containerScreen).getHoveredSlot();

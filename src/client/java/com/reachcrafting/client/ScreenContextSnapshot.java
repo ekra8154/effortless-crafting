@@ -25,7 +25,7 @@ record ScreenContextSnapshot(
 	double mouseY
 ) {
 	static ScreenContextSnapshot capture(Minecraft client, Entity cameraEntity, double reachDistance, AvailableItemSnapshot localItems) {
-		if (client.screen instanceof CraftingScreen craftingScreen) {
+		if (client.gui.screen() instanceof CraftingScreen craftingScreen) {
 			return new ScreenContextSnapshot(
 				ScreenKind.CRAFTING_TABLE_3X3,
 				BaseCraftSession.findNearestCraftingTable(client.level, cameraEntity, reachDistance),
@@ -35,7 +35,7 @@ record ScreenContextSnapshot(
 				client.mouseHandler.ypos()
 			);
 		}
-		if (client.screen instanceof InventoryScreen inventoryScreen) {
+		if (client.gui.screen() instanceof InventoryScreen inventoryScreen) {
 			return new ScreenContextSnapshot(
 				ScreenKind.INVENTORY_2X2,
 				null,

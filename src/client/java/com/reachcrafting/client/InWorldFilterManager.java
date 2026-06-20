@@ -44,7 +44,7 @@ public final class InWorldFilterManager {
 
 	private static String getStorageId() {
 		Minecraft client = Minecraft.getInstance();
-		if (client.isSingleplayer() && client.getSingleplayerServer() != null) {
+		if (client.hasSingleplayerServer() && client.getSingleplayerServer() != null) {
 			return "local_" + client.getSingleplayerServer().getWorldData().getLevelName().replaceAll("[^a-zA-Z0-9_-]", "_");
 		} else if (client.getConnection() != null && client.getConnection().getServerData() != null) {
 			return "server_" + client.getConnection().getServerData().ip.replaceAll("[^a-zA-Z0-9_-]", "_");

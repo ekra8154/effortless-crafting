@@ -84,11 +84,11 @@ final class ChainCraftPlanner {
 			);
 			return Optional.empty();
 		}
-		int gridSlotCount = minecraft.screen instanceof InventoryScreen ? 4 : minecraft.screen instanceof CraftingScreen ? 9 : 0;
+		int gridSlotCount = minecraft.gui.screen() instanceof InventoryScreen ? 4 : minecraft.gui.screen() instanceof CraftingScreen ? 9 : 0;
 		if (gridSlotCount <= 0) {
 			ReachCraftingMod.LOGGER.info(
 				"[chain_debug] abort reason=unsupported_screen screen={}",
-				minecraft.screen != null ? minecraft.screen.getClass().getName() : "<none>"
+				minecraft.gui.screen() != null ? minecraft.gui.screen().getClass().getName() : "<none>"
 			);
 			return Optional.empty();
 		}
@@ -401,13 +401,13 @@ final class ChainCraftPlanner {
 	}
 
 	private Optional<String> resolveIngredientChoiceWithExistingPlanner(List<String> itemIds, Map<String, Integer> virtualCounts) {
-		if (itemIds.size() <= 1 || minecraft.screen == null) {
+		if (itemIds.size() <= 1 || minecraft.gui.screen() == null) {
 			return Optional.empty();
 		}
 		if (itemIds.stream().anyMatch(itemId -> virtualCounts.getOrDefault(itemId, 0) > 0)) {
 			return Optional.empty();
 		}
-		AvailableItemSnapshot availableItems = AvailableItemSnapshot.capture(player, minecraft.screen);
+		AvailableItemSnapshot availableItems = AvailableItemSnapshot.capture(player, minecraft.gui.screen());
 		for (String itemId : itemIds) {
 			for (Candidate candidate : recipesByOutput.getOrDefault(itemId, List.of())) {
 				if (candidate.collection() == null) {

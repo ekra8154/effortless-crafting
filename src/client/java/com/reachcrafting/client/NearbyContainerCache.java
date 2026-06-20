@@ -79,9 +79,9 @@ public final class NearbyContainerCache {
 		if (client.level == null || client.player == null) {
 			return false;
 		}
-		if (!(client.screen instanceof AbstractContainerScreen<?>)
-			|| client.screen instanceof InventoryScreen
-			|| client.screen instanceof CraftingScreen) {
+		if (!(client.gui.screen() instanceof AbstractContainerScreen<?>)
+			|| client.gui.screen() instanceof InventoryScreen
+			|| client.gui.screen() instanceof CraftingScreen) {
 			return false;
 		}
 
@@ -332,11 +332,11 @@ public final class NearbyContainerCache {
 			return;
 		}
 
-		if (menu instanceof InventoryMenu || client.screen instanceof InventoryScreen || client.screen instanceof CraftingScreen) {
+		if (menu instanceof InventoryMenu || client.gui.screen() instanceof InventoryScreen || client.gui.screen() instanceof CraftingScreen) {
 			TRACKED_CONTEXT.clearCandidate();
 			return;
 		}
-		if (!(client.screen instanceof AbstractContainerScreen<?>)) {
+		if (!(client.gui.screen() instanceof AbstractContainerScreen<?>)) {
 			return;
 		}
 

@@ -27,7 +27,7 @@ public final class ExistingOutputRetrievalController {
 			return;
 		}
 		ExistingOutputRetrievalController.enabled = next;
-		ReachCraftingMod.LOGGER.info("[retrieval_mode] setEnabled next={} screen={}", next, Minecraft.getInstance().screen != null ? Minecraft.getInstance().screen.getClass().getSimpleName() : "null");
+		ReachCraftingMod.LOGGER.info("[retrieval_mode] setEnabled next={} screen={}", next, Minecraft.getInstance().gui.screen() != null ? Minecraft.getInstance().gui.screen().getClass().getSimpleName() : "null");
 		RecipeButtonNearbyIndicator.clearCaches();
 		RecipeBookChunkedScheduler.clear();
 		RecipeBookChunkedScheduler.resetFrozenPageState("retrieval_mode_toggled");
@@ -58,7 +58,7 @@ public final class ExistingOutputRetrievalController {
 			return;
 		}
 
-		Screen screen = client.screen;
+		Screen screen = client.gui.screen();
 		if (!(screen instanceof InventoryScreen) && !(screen instanceof CraftingScreen)) {
 			lastCtrlDown = false;
 			return;

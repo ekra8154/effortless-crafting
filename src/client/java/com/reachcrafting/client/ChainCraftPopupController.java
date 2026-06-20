@@ -71,7 +71,7 @@ public final class ChainCraftPopupController {
 		}
 
 		Minecraft client = Minecraft.getInstance();
-		Screen background = client.screen;
+		Screen background = client.gui.screen();
 		if (!(background instanceof CraftingScreen) && !(background instanceof InventoryScreen)) {
 			return;
 		}
@@ -89,7 +89,7 @@ public final class ChainCraftPopupController {
 			.build();
 
 		PENDING_POPUPS.put(popup, new PendingPopup(plan, deferredMissingMessage));
-		client.setScreen(popup);
+		client.setScreenAndShow(popup);
 	}
 
 	private static Component messageFor(ChainCraftPlan plan, int requestedRecipeCopies) {
@@ -152,7 +152,7 @@ public final class ChainCraftPopupController {
 		if (pendingStartPlan == null) {
 			return;
 		}
-		if (client.player == null || (!(client.screen instanceof CraftingScreen) && !(client.screen instanceof InventoryScreen))) {
+		if (client.player == null || (!(client.gui.screen() instanceof CraftingScreen) && !(client.gui.screen() instanceof InventoryScreen))) {
 			pendingStartPlan = null;
 			ReachCraftingModClient.sendChat(Component.translatable("message.reachcrafting.chain_crafting.context_lost").getString());
 			return;

@@ -134,7 +134,7 @@ public class ReachCraftingModClient implements ClientModInitializer {
 			client.gameMode.useItemOn(client.player, net.minecraft.world.InteractionHand.MAIN_HAND, hitResult);
 		} else {
 			forceNextInventorySearchFocus = true;
-			client.setScreen(new net.minecraft.client.gui.screens.inventory.InventoryScreen(client.player));
+			client.setScreenAndShow(new net.minecraft.client.gui.screens.inventory.InventoryScreen(client.player));
 		}
 	}
 }

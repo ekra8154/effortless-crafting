@@ -64,11 +64,11 @@ abstract class BaseCraftSession implements CraftSession {
 	}
 
 	protected boolean isOriginalContextReady(ScreenContextSnapshot context) {
-		return ScreenContextRestorer.isOriginalContextReady(context, client.screen);
+		return ScreenContextRestorer.isOriginalContextReady(context, client.gui.screen());
 	}
 
 	protected void restoreRecipeBookState(ScreenContextSnapshot context) {
-		ScreenContextRestorer.restoreRecipeBookState(context, client.screen);
+		ScreenContextRestorer.restoreRecipeBookState(context, client.gui.screen());
 	}
 
 	protected void restoreMousePosition(ScreenContextSnapshot context) {

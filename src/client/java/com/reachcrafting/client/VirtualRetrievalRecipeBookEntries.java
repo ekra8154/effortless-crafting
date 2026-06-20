@@ -59,7 +59,7 @@ public final class VirtualRetrievalRecipeBookEntries {
 			ReachCraftingMod.LOGGER.info("[retrieval_virtual] inject skipped reason=no_minecraft");
 			return collections;
 		}
-		Screen screen = minecraft.screen;
+		Screen screen = minecraft.gui.screen();
 		if (!(screen instanceof InventoryScreen) && !(screen instanceof CraftingScreen)) {
 			ReachCraftingMod.LOGGER.info("[retrieval_virtual] inject skipped reason=unsupported_screen screen={}", screen != null ? screen.getClass().getSimpleName() : "null");
 			return collections;

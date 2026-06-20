@@ -13,7 +13,7 @@ final class CraftingGridCleaner {
 		if (client.player == null || client.player.containerMenu == null) {
 			return;
 		}
-		if (!(client.screen instanceof CraftingScreen) && !(client.screen instanceof InventoryScreen)) {
+		if (!(client.gui.screen() instanceof CraftingScreen) && !(client.gui.screen() instanceof InventoryScreen)) {
 			return;
 		}
 
@@ -24,14 +24,14 @@ final class CraftingGridCleaner {
 			com.reachcrafting.ReachCraftingMod.LOGGER.debug(
 				"[grid_flush] Retaining staged nearby resources for next bulk craft (items={}, screen={})",
 				PulledResourcesTracker.getWithdrawnItems().size(),
-				client.screen != null ? client.screen.getClass().getSimpleName() : "<none>"
+				client.gui.screen() != null ? client.gui.screen().getClass().getSimpleName() : "<none>"
 			);
 		} else if (allowScreenChange && ReachCraftingConfig.get().putPulledResourcesBack() && !PulledResourcesTracker.isEmpty()) {
 			com.reachcrafting.ReachCraftingMod.LOGGER.debug(
 				"[grid_flush] Initiating return to chests (items={}, starting_new_craft={}, screen={})",
 				PulledResourcesTracker.getWithdrawnItems().size(),
 				isStartingNewCraft,
-				client.screen != null ? client.screen.getClass().getSimpleName() : "<none>"
+				client.gui.screen() != null ? client.gui.screen().getClass().getSimpleName() : "<none>"
 			);
 			NearbyContainerDryRun.startReturn(menu, PulledResourcesTracker.getWithdrawnItems(), isStartingNewCraft);
 			if (NearbyContainerDryRun.isActiveSessionRunning()) {

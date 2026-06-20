@@ -62,7 +62,7 @@ final class CountStagingSession extends BaseCraftSession {
 		this.request = request;
 		this.remainingCounts = normalize(request.desiredCounts());
 		this.acceptedItemIds = Set.copyOf(this.remainingCounts.keySet());
-		AvailableItemSnapshot localItems = AvailableItemSnapshot.capture(player, client.screen);
+		AvailableItemSnapshot localItems = AvailableItemSnapshot.capture(player, client.gui.screen());
 		this.originalContext = ScreenContextSnapshot.capture(client, cameraEntity, player.blockInteractionRange(), localItems);
 		NearbyContainerCache.ReachableView reachableView = NearbyContainerCache.getReachableView(level, cameraEntity, player.blockInteractionRange());
 		this.candidates = NearbyContainerCache.prioritizeCandidates(
@@ -146,7 +146,7 @@ final class CountStagingSession extends BaseCraftSession {
 		if (state != StageState.WAITING_FOR_CONTAINER) {
 			return;
 		}
-		if (client.screen instanceof InventoryScreen || client.screen instanceof CraftingScreen) {
+		if (client.gui.screen() instanceof InventoryScreen || client.gui.screen() instanceof CraftingScreen) {
 			return;
 		}
 		if (menu.containerId == player.inventoryMenu.containerId) {

@@ -180,7 +180,7 @@ final class ReturnSession extends BaseCraftSession {
 	public void onContainerContentsInitialized(AbstractContainerMenu menu) {
 		if (state != SearchState.WAITING_FOR_CONTAINER) return;
 
-		if (client.screen instanceof net.minecraft.client.gui.screens.inventory.InventoryScreen || client.screen instanceof net.minecraft.client.gui.screens.inventory.CraftingScreen) {
+		if (client.gui.screen() instanceof net.minecraft.client.gui.screens.inventory.InventoryScreen || client.gui.screen() instanceof net.minecraft.client.gui.screens.inventory.CraftingScreen) {
 			return;
 		}
 		if (menu.containerId == player.inventoryMenu.containerId) {

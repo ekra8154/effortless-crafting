@@ -98,7 +98,7 @@ public final class ChainCraftabilityCache {
 			}
 			return;
 		}
-		if (!(client.screen instanceof CraftingScreen) && !(client.screen instanceof InventoryScreen)) {
+		if (!(client.gui.screen() instanceof CraftingScreen) && !(client.gui.screen() instanceof InventoryScreen)) {
 			return;
 		}
 		if (ReachCraftingConfig.get().chainCraftingMode() == ReachCraftingConfig.ChainCraftingMode.DISABLED) {
@@ -119,7 +119,7 @@ public final class ChainCraftabilityCache {
 		tickCooldown = RECOMPUTE_INTERVAL_TICKS;
 
 		LocalPlayer player = client.player;
-		int gridSlotCount = client.screen instanceof InventoryScreen ? 4 : 9;
+		int gridSlotCount = client.gui.screen() instanceof InventoryScreen ? 4 : 9;
 		List<RecipeDisplayEntry> allRecipes = new java.util.ArrayList<>();
 		for (RecipeCollection collection : player.getRecipeBook().getCollections()) {
 			allRecipes.addAll(collection.getRecipes());

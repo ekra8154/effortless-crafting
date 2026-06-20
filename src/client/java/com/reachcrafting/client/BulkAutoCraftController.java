@@ -74,7 +74,7 @@ public final class BulkAutoCraftController {
 				0,
 				refillableBulkMaxMode,
 				ingredientSummary,
-				AvailableItemSnapshot.capture(client.player, client.screen).totalCounts(),
+				AvailableItemSnapshot.capture(client.player, client.gui.screen()).totalCounts(),
 				captureProtectedOutputInventorySlots(client, expectedCopy),
 				new java.util.LinkedHashMap<>()
 			);
@@ -358,7 +358,7 @@ public final class BulkAutoCraftController {
 		}
 
 		boolean bulkEnabled = AutoCraftController.isBulkModeEnabled();
-		boolean supportedScreen = isSupportedScreen(client.screen);
+		boolean supportedScreen = isSupportedScreen(client.gui.screen());
 		int outputPerCraft = Math.max(activeSession.expectedOutput().getCount(), 1);
 		int currentOutputCount = countAccessibleOutput(client, activeSession.expectedOutput());
 		int inventoryIncrease = Math.max(0, currentOutputCount - activeSession.lastObservedOutputCount());
@@ -474,7 +474,7 @@ public final class BulkAutoCraftController {
 			}
 		}
 		boolean preserveAutoCraft = Minecraft.getInstance().isWindowActive()
-			&& isSupportedScreen(Minecraft.getInstance().screen)
+			&& isSupportedScreen(Minecraft.getInstance().gui.screen())
 			&& AutoCraftController.isEnabled();
 		AutoCraftController.resetBulkModeAfterSession(preserveAutoCraft);
 		if (ReachCraftingConfig.get().autoCraftOffAfterBulk()) {
@@ -623,10 +623,10 @@ public final class BulkAutoCraftController {
 	}
 
 	private static int getCurrentStagedCraftCopies(Minecraft client) {
-		if (client.player == null || client.screen == null) {
+		if (client.player == null || client.gui.screen() == null) {
 			return 0;
 		}
-		AvailableItemSnapshot snapshot = AvailableItemSnapshot.capture(client.player, client.screen);
+		AvailableItemSnapshot snapshot = AvailableItemSnapshot.capture(client.player, client.gui.screen());
 		return ContainerUtils.currentReservedCraftCopies(snapshot.gridStacks());
 	}
 

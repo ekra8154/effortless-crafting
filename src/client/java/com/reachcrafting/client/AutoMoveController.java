@@ -136,7 +136,7 @@ final class AutoMoveController {
 			sweepAndEjectByProducts(client, menu);
 		}
 
-		if (client.screen == null || (!(client.screen instanceof CraftingScreen) && !(client.screen instanceof InventoryScreen))) {
+		if (client.gui.screen() == null || (!(client.gui.screen() instanceof CraftingScreen) && !(client.gui.screen() instanceof InventoryScreen))) {
 			return;
 		}
 
@@ -381,9 +381,9 @@ final class AutoMoveController {
 			} else {
 				autoMoveWaitingTicks++;
 				int stagedCraftCopies = 0;
-				if (BulkAutoCraftController.isActive() && client.screen != null) {
+				if (BulkAutoCraftController.isActive() && client.gui.screen() != null) {
 					stagedCraftCopies = ContainerUtils.currentReservedCraftCopies(
-						AvailableItemSnapshot.capture(client.player, client.screen).gridStacks()
+						AvailableItemSnapshot.capture(client.player, client.gui.screen()).gridStacks()
 					);
 				}
 				com.reachcrafting.ReachCraftingMod.LOGGER.info(

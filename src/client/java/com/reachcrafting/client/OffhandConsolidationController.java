@@ -97,7 +97,7 @@ public final class OffhandConsolidationController {
 	}
 
 	private static void flushAccumulatedScroll(Minecraft client) {
-		if (client.screen instanceof net.minecraft.client.gui.screens.inventory.AbstractContainerScreen<?> containerScreen) {
+		if (client.gui.screen() instanceof net.minecraft.client.gui.screens.inventory.AbstractContainerScreen<?> containerScreen) {
 			double mouseX = client.mouseHandler.xpos() * (double)client.getWindow().getGuiScaledWidth() / (double)client.getWindow().getScreenWidth();
 			double mouseY = client.mouseHandler.ypos() * (double)client.getWindow().getGuiScaledHeight() / (double)client.getWindow().getScreenHeight();
 			ScrollToPullHandler.handleScroll(containerScreen, mouseX, mouseY, 0.0D);
