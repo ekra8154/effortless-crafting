@@ -6,7 +6,7 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.minecraft.client.KeyMapping;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 // import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import org.lwjgl.glfw.GLFW;
 
@@ -68,7 +68,7 @@ public class ReachCraftingModClient implements ClientModInitializer {
 
 
 		KeyMapping.Category reachCraftingCategory = KeyMapping.Category.register(
-			Identifier.fromNamespaceAndPath(ReachCraftingMod.MOD_ID, "debug")
+			ResourceLocation.fromNamespaceAndPath(ReachCraftingMod.MOD_ID, "debug")
 		);
 
 		showFilterOutlinesKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(

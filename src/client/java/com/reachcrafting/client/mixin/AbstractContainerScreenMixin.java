@@ -226,7 +226,7 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 	}
 
 	@Inject(method = "renderSlot", at = @At("HEAD"))
-	private void reachcrafting$renderResultArrow(GuiGraphics guiGraphics, Slot slot, int i, int j, CallbackInfo ci) {
+	private void reachcrafting$renderResultArrow(GuiGraphics guiGraphics, Slot slot, CallbackInfo ci) {
 		if (!ReachCraftingConfig.get().enabled()) return;
 		if (slot instanceof ResultSlot
 			&& ((Object) this instanceof CraftingScreen || (Object) this instanceof InventoryScreen)
@@ -296,7 +296,7 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 	}
 
 	@Inject(method = "renderSlot", at = @At("TAIL"))
-	private void reachcrafting$renderOutputCounter(GuiGraphics guiGraphics, Slot slot, int i, int j, CallbackInfo ci) {
+	private void reachcrafting$renderOutputCounter(GuiGraphics guiGraphics, Slot slot, CallbackInfo ci) {
 		if (!ReachCraftingConfig.get().enabled()) return;
 		com.reachcrafting.client.RecipeOutputCounter.render(guiGraphics, (AbstractContainerScreen<?>) (Object) this, slot);
 	}

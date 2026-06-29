@@ -5,7 +5,7 @@ import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderContext;
 import net.fabricmc.fabric.api.client.rendering.v1.world.WorldRenderEvents;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.rendertype.RenderTypes;
+import net.minecraft.client.renderer.RenderType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
@@ -55,7 +55,7 @@ public final class ContainerFilterRenderer {
 		}
 
 		PoseStack poseStack = context.matrices();
-		VertexConsumer consumer = context.consumers().getBuffer(RenderTypes.lines());
+		VertexConsumer consumer = context.consumers().getBuffer(RenderType.lines());
 
 		for (String key : keys) {
 			BlockPos pos = parsePos(level, key);
@@ -132,8 +132,8 @@ public final class ContainerFilterRenderer {
 			dy /= len;
 			dz /= len;
 		}
-		consumer.addVertex(pose, x1, y1, z1).setColor(r, g, b, a).setNormal(dx, dy, dz).setLineWidth(2.5f);
-		consumer.addVertex(pose, x2, y2, z2).setColor(r, g, b, a).setNormal(dx, dy, dz).setLineWidth(2.5f);
+		consumer.addVertex(pose, x1, y1, z1).setColor(r, g, b, a).setNormal(dx, dy, dz);
+		consumer.addVertex(pose, x2, y2, z2).setColor(r, g, b, a).setNormal(dx, dy, dz);
 	}
 
 	private static BlockPos parsePos(Level level, String key) {

@@ -21,7 +21,7 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.util.context.ContextMap;
 import net.minecraft.world.InteractionHand;
@@ -1160,7 +1160,7 @@ final class SearchSession extends BaseCraftSession {
 		}
 
 		try {
-			var item = BuiltInRegistries.ITEM.getValue(Identifier.parse(itemId));
+			var item = BuiltInRegistries.ITEM.getValue(ResourceLocation.parse(itemId));
 			return item == null ? ItemStack.EMPTY : item.getDefaultInstance();
 		} catch (Exception ignored) {
 			return ItemStack.EMPTY;

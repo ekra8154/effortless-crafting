@@ -5,7 +5,7 @@ import com.reachcrafting.client.mixin.AbstractRecipeBookScreenAccessor;
 import com.reachcrafting.client.mixin.RecipeBookComponentAccessor;
 import com.reachcrafting.client.mixin.RecipeBookPageAccessor;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.components.CycleButton;
+import net.minecraft.client.gui.components.StateSwitchingButton;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.inventory.AbstractRecipeBookScreen;
 import net.minecraft.client.gui.screens.recipebook.OverlayRecipeComponent;
@@ -32,7 +32,7 @@ record RecipeBookSnapshot(
 		RecipeBookComponent<?> component = ((AbstractRecipeBookScreenAccessor) screen).getRecipeBookComponent();
 		RecipeBookComponentAccessor accessor = (RecipeBookComponentAccessor) component;
 		RecipeBookTabButton selectedTab = accessor.getSelectedTab();
-		CycleButton<Boolean> filterButton = accessor.getFilterButton();
+		StateSwitchingButton filterButton = accessor.getFilterButton();
 		EditBox searchBox = accessor.getSearchBox();
 		RecipeBookPageAccessor pageAccessor = (RecipeBookPageAccessor) accessor.getRecipeBookPage();
 		OverlayRecipeComponent overlay = pageAccessor.getOverlay();
@@ -43,7 +43,7 @@ record RecipeBookSnapshot(
 		ReachCraftingMod.LOGGER.debug("[nearby_capture] Captured search text: '{}' (focused={})", text, searchBox != null && searchBox.isFocused());
 		return new RecipeBookSnapshot(
 			component.isVisible(),
-			filterButton != null && Boolean.TRUE.equals(filterButton.getValue()),
+			filterButton != null && filterButton.isStateTriggered(),
 			text,
 			searchBox != null && searchBox.isFocused(),
 			selectedTab != null ? selectedTab.getCategory() : null,
@@ -64,9 +64,9 @@ record RecipeBookSnapshot(
 			component.toggleVisibility();
 		}
 
-		CycleButton<Boolean> filterButton = accessor.getFilterButton();
-		if (filterButton != null && Boolean.TRUE.equals(filterButton.getValue()) != filtering) {
-			filterButton.setValue(filtering);
+		StateSwitchingButton filterButton = accessor.getFilterButton();
+		if (filterButton != null && filterButton.isStateTriggered() != filtering) {
+			filterButton.setStateTriggered(filtering);
 		}
 
 		EditBox searchBox = accessor.getSearchBox();

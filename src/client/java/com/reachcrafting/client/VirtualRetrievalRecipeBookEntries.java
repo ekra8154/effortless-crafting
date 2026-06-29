@@ -48,7 +48,7 @@ public final class VirtualRetrievalRecipeBookEntries {
 			return collections;
 		}
 		RecipeBookComponentAccessor accessor = (RecipeBookComponentAccessor) component;
-		if (Boolean.TRUE.equals(accessor.getFilterButton().getValue())) {
+		if (accessor.getFilterButton().isStateTriggered()) {
 			ReachCraftingMod.LOGGER.info("[retrieval_virtual] inject skipped reason=craftable_filter_on");
 			return collections;
 		}
@@ -100,7 +100,7 @@ public final class VirtualRetrievalRecipeBookEntries {
 		Set<String> candidateItemIds = new java.util.LinkedHashSet<>(nearbyCounts.keySet());
 		candidateItemIds.addAll(experiencedItemIds);
 		for (String itemId : candidateItemIds) {
-			Item item = BuiltInRegistries.ITEM.getOptional(net.minecraft.resources.Identifier.parse(itemId)).orElse(null);
+			Item item = BuiltInRegistries.ITEM.getOptional(net.minecraft.resources.ResourceLocation.parse(itemId)).orElse(null);
 			if (item == null) {
 				skippedNullItem++;
 				continue;

@@ -3,7 +3,6 @@ package com.reachcrafting.client.mixin;
 import net.minecraft.client.gui.screens.recipebook.RecipeBookPage;
 import net.minecraft.client.gui.screens.recipebook.OverlayRecipeComponent;
 import net.minecraft.client.gui.screens.recipebook.RecipeButton;
-import net.minecraft.client.gui.components.ImageButton;
 // import net.minecraft.client.gui.screens.recipebook.RecipeCollection;
 import java.util.List;
 import org.spongepowered.asm.mixin.Mixin;
@@ -17,12 +16,6 @@ public interface RecipeBookPageAccessor {
 
 	@Accessor("buttons")
 	List<RecipeButton> getButtons();
-
-	@Accessor("forwardButton")
-	ImageButton getForwardButton();
-
-	@Accessor("backButton")
-	ImageButton getBackButton();
 
 	@Accessor("isFiltering")
 	boolean getIsFiltering();
@@ -38,7 +31,4 @@ public interface RecipeBookPageAccessor {
 
 	@Invoker("updateButtonsForPage")
 	void invokeUpdateButtonsForPage();
-
-	@Invoker("updateArrowButtons")
-	void invokeUpdateArrowButtons();
 }

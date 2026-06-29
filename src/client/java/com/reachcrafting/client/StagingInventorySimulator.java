@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.Map;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 
 final class StagingInventorySimulator {
@@ -42,7 +42,7 @@ final class StagingInventorySimulator {
 		}
 
 		try {
-			var item = BuiltInRegistries.ITEM.getValue(Identifier.parse(itemId));
+			var item = BuiltInRegistries.ITEM.getValue(ResourceLocation.parse(itemId));
 			return item == null ? ItemStack.EMPTY : item.getDefaultInstance();
 		} catch (Exception ignored) {
 			return ItemStack.EMPTY;

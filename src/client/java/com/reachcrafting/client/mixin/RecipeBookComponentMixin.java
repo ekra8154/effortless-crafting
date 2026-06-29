@@ -541,13 +541,13 @@ public abstract class RecipeBookComponentMixin {
 		if (!this.isVisible()) {
 			return false;
 		}
-		net.minecraft.client.gui.components.CycleButton<Boolean> filterButton = ((RecipeBookComponentAccessor) this).getFilterButton();
+		net.minecraft.client.gui.components.StateSwitchingButton filterButton = ((RecipeBookComponentAccessor) this).getFilterButton();
 		if (filterButton == null) {
 			return false;
 		}
-		boolean newValue = !filterButton.getValue();
+		boolean newValue = !filterButton.isStateTriggered();
 		reachcrafting$clearSearchForCraftabilityToggle();
-		filterButton.setValue(newValue);
+		filterButton.setStateTriggered(newValue);
 		if (this.minecraft.player != null) {
 			this.minecraft.player.getRecipeBook().setFiltering(this.menu.getRecipeBookType(), newValue);
 			((RecipeBookComponentAccessor) this).invokeSendUpdateSettings();

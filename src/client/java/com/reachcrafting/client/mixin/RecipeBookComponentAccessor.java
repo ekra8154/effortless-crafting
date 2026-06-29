@@ -2,7 +2,7 @@ package com.reachcrafting.client.mixin;
 
 import java.util.List;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.components.CycleButton;
+import net.minecraft.client.gui.components.StateSwitchingButton;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.recipebook.RecipeBookComponent;
 import net.minecraft.client.gui.screens.recipebook.RecipeBookPage;
@@ -21,7 +21,7 @@ public interface RecipeBookComponentAccessor {
 	RecipeBookTabButton getSelectedTab();
 
 	@Accessor("filterButton")
-	CycleButton<Boolean> getFilterButton();
+	StateSwitchingButton getFilterButton();
 
 	@Accessor("searchBox")
 	EditBox getSearchBox();
@@ -41,8 +41,9 @@ public interface RecipeBookComponentAccessor {
 	@Accessor("menu")
 	RecipeBookMenu getMenu();
 
-	@Invoker("replaceSelected")
-	void invokeReplaceSelected(RecipeBookTabButton button);
+	// Mojang left this method unnamed in 1.21.10 and below; it is named "replaceSelected" only from 1.21.11.
+	@Invoker("method_2582")
+	boolean invokeReplaceSelected(RecipeBookTabButton button);
 
 	@Invoker("getXOrigin")
 	int invokeGetXOrigin();
