@@ -11,7 +11,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.StringJoiner;
-import net.fabricmc.fabric.api.recipe.v1.FabricRecipeManager;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.inventory.CraftingScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
@@ -563,17 +562,11 @@ final class ChainCraftPlanner {
 			return;
 		}
 
-		if (minecraft.getConnection() == null || !(minecraft.getConnection().recipes() instanceof FabricRecipeManager recipeManager)) {
-			ReachCraftingMod.LOGGER.info("[chain_debug] synced_recipe_index unavailable connection={} fabric_recipe_manager={}", minecraft.getConnection() != null, false);
-			return;
-		}
-
-		int added = addRecipeHolderCandidates(
-			index,
-			knownRecipeIds,
-			recipeManager.getSynchronizedRecipes().recipes()
-		);
-		ReachCraftingMod.LOGGER.info("[chain_debug] synced_recipe_index added={}", added);
+		// Multiplayer synchronized full-recipe access requires the Fabric recipe-sync API
+		// (net.fabricmc.fabric.api.recipe.v1.FabricRecipeManager#getSynchronizedRecipes), which does
+		// not exist in fabric-api for 1.21.9 (added in 0.138 / 1.21.10). On this version the client only
+		// receives recipe displays, so chain-craft cannot enumerate synchronized recipes in multiplayer.
+		ReachCraftingMod.LOGGER.info("[chain_debug] synced_recipe_index unavailable (no Fabric recipe-sync API on this MC version)");
 	}
 
 	private int addRecipeHolderCandidates(
