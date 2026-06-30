@@ -1133,7 +1133,7 @@ final class SearchSession extends BaseCraftSession {
 
 	private List<ItemStack> snapshotPlayerInventorySlots() {
 		List<ItemStack> slots = new ArrayList<>();
-		for (ItemStack stack : player.getInventory().getNonEquipmentItems()) {
+		for (ItemStack stack : player.getInventory().items) {
 			slots.add(stack.copy());
 		}
 		return slots;

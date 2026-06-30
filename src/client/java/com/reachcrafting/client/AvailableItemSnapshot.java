@@ -26,7 +26,7 @@ public record AvailableItemSnapshot(
 	}
 	public static AvailableItemSnapshot capture(LocalPlayer player, Screen screen) {
 		Map<String, Integer> inventoryCounts = new LinkedHashMap<>();
-		for (ItemStack stack : player.getInventory().getNonEquipmentItems()) {
+		for (ItemStack stack : player.getInventory().items) {
 			addStack(inventoryCounts, stack);
 		}
 		ReachCraftingConfig.get().noteExperiencedItemIds(inventoryCounts.keySet());
@@ -107,7 +107,7 @@ public record AvailableItemSnapshot(
 		}
 
 		StringJoiner joiner = new StringJoiner(", ");
-		List<ItemStack> items = player.getInventory().getNonEquipmentItems();
+		List<ItemStack> items = player.getInventory().items;
 		for (int i = 0; i < items.size(); i++) {
 			ItemStack stack = items.get(i);
 			if (stack.isEmpty()) {

@@ -202,7 +202,7 @@ public final class ChainCraftabilityCache {
 
 	private static Map<String, Integer> captureAvailableCounts(LocalPlayer player, Minecraft client) {
 		Map<String, Integer> availableCounts = new java.util.HashMap<>();
-		for (ItemStack stack : player.getInventory().getNonEquipmentItems()) {
+		for (ItemStack stack : player.getInventory().items) {
 			if (!stack.isEmpty()) {
 				String id = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
 				availableCounts.merge(id, stack.getCount(), Integer::sum);
@@ -427,7 +427,7 @@ public final class ChainCraftabilityCache {
 
 	private static long computeInventoryHash(LocalPlayer player) {
 		long hash = 0;
-		for (ItemStack stack : player.getInventory().getNonEquipmentItems()) {
+		for (ItemStack stack : player.getInventory().items) {
 			if (!stack.isEmpty()) {
 				hash = hash * 31 + BuiltInRegistries.ITEM.getKey(stack.getItem()).hashCode();
 				hash = hash * 31 + stack.getCount();

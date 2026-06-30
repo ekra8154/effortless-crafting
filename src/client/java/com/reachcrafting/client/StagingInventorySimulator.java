@@ -30,7 +30,7 @@ final class StagingInventorySimulator {
 
 	private static List<ItemStack> snapshotPlayerInventorySlots(LocalPlayer player) {
 		List<ItemStack> slots = new ArrayList<>();
-		for (ItemStack stack : player.getInventory().getNonEquipmentItems()) {
+		for (ItemStack stack : player.getInventory().items) {
 			slots.add(stack.copy());
 		}
 		return slots;

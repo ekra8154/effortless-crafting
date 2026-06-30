@@ -277,7 +277,7 @@ public final class RecipeButtonNearbyIndicator {
 
 	private static long computeInventoryHash(LocalPlayer player, Screen screen) {
 		long hash = 0;
-		for (ItemStack stack : player.getInventory().getNonEquipmentItems()) {
+		for (ItemStack stack : player.getInventory().items) {
 			if (!stack.isEmpty()) {
 				hash = hash * 31 + net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).hashCode();
 				hash = hash * 31 + stack.getCount();

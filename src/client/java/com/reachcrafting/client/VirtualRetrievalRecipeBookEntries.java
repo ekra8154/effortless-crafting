@@ -245,7 +245,7 @@ public final class VirtualRetrievalRecipeBookEntries {
 
 	private static Set<String> collectHeldItemIds(LocalPlayer player) {
 		Set<String> itemIds = new HashSet<>();
-		for (ItemStack stack : player.getInventory().getNonEquipmentItems()) {
+		for (ItemStack stack : player.getInventory().items) {
 			if (!stack.isEmpty()) {
 				itemIds.add(BuiltInRegistries.ITEM.getKey(stack.getItem()).toString());
 			}
