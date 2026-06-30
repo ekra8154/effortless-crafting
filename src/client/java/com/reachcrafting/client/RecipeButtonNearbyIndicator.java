@@ -522,9 +522,9 @@ public final class RecipeButtonNearbyIndicator {
 		float startX = centerX - (scaledWidth / 2.0f);
 		float startY = centerY - (scaledHeight / 2.0f);
 
-		guiGraphics.pose().pushMatrix();
-		guiGraphics.pose().translate(startX, startY);
-		guiGraphics.pose().scale(scale, scale);
+		guiGraphics.pose().pushPose();
+		guiGraphics.pose().translate(startX, startY, 0);
+		guiGraphics.pose().scale(scale, scale, 1.0f);
 		try {
 			for (int rowIndex = 0; rowIndex < rows.length; rowIndex++) {
 				String row = rows[rowIndex];
@@ -536,7 +536,7 @@ public final class RecipeButtonNearbyIndicator {
 				}
 			}
 		} finally {
-			guiGraphics.pose().popMatrix();
+			guiGraphics.pose().popPose();
 		}
 	}
 

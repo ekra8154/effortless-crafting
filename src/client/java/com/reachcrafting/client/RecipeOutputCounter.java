@@ -100,9 +100,9 @@ public final class RecipeOutputCounter {
 		float x = slotX + 17;
 		float y = slotY - 4;
 
-		guiGraphics.pose().pushMatrix();
-		guiGraphics.pose().translate(x, y);
-		guiGraphics.pose().scale(scale, scale);
+		guiGraphics.pose().pushPose();
+		guiGraphics.pose().translate(x, y, 0);
+		guiGraphics.pose().scale(scale, scale, 1.0f);
 		
 		// Draw at (0,0) relative to translated/scaled position
 		guiGraphics.drawString(font, text, 1, 1, SHADOW_COLOR, false);
@@ -113,7 +113,7 @@ public final class RecipeOutputCounter {
 			renderBreakdown(guiGraphics, font, count, textWidth + 1, -1, color);
 		}
 		
-		guiGraphics.pose().popMatrix();
+		guiGraphics.pose().popPose();
 	}
 
 	private static void renderBreakdown(GuiGraphics guiGraphics, Font font, int count, int x, int y, int color) {
@@ -121,9 +121,9 @@ public final class RecipeOutputCounter {
 		int remainder = count % 64;
 		String line1 = (stacks == 1 ? "64" : (stacks + "x64"));
 		
-		guiGraphics.pose().pushMatrix();
-		guiGraphics.pose().translate(x, y);
-		guiGraphics.pose().scale(0.75f, 0.75f);
+		guiGraphics.pose().pushPose();
+		guiGraphics.pose().translate(x, y, 0);
+		guiGraphics.pose().scale(0.75f, 0.75f, 1.0f);
 		
 		if (remainder > 0) {
 			String line1WithParen = "(" + line1;
@@ -140,7 +140,7 @@ public final class RecipeOutputCounter {
 			guiGraphics.drawString(font, text, 0, 0, color, false);
 		}
 		
-		guiGraphics.pose().popMatrix();
+		guiGraphics.pose().popPose();
 	}
 
 	private static List<ItemStack> getGridStacks(AbstractContainerScreen<?> screen) {

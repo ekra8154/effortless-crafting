@@ -51,13 +51,12 @@ public abstract class OverlayRecipeButtonMixin {
 					if (entry.id().equals(recipe)) {
 						net.minecraft.world.item.ItemStack stack = com.reachcrafting.client.RecipeVariantResolver.resolveDisplayStack(entry.display(), context);
 						if (!stack.isEmpty()) {
-							guiGraphics.setTooltipForNextFrame(
+							guiGraphics.renderTooltip(
 								minecraft.font,
 								java.util.List.of(stack.getHoverName().getVisualOrderText()),
 								net.minecraft.client.gui.screens.inventory.tooltip.DefaultTooltipPositioner.INSTANCE,
 								mouseX,
-								mouseY,
-								true
+								mouseY
 							);
 						}
 						break;
