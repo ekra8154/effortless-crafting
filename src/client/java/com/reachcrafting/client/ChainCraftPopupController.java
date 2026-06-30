@@ -26,8 +26,8 @@ public final class ChainCraftPopupController {
 			if (!(screen instanceof PopupScreen popup) || !isChainCraftPopup(popup)) {
 				return;
 			}
-			ScreenMouseEvents.allowMouseClick(screen).register((currentScreen, click) -> {
-				if (click.button() != GLFW.GLFW_MOUSE_BUTTON_LEFT || !isChainCraftPopup(popup)) {
+			ScreenMouseEvents.allowMouseClick(screen).register((currentScreen, mouseX, mouseY, button) -> {
+				if (button != GLFW.GLFW_MOUSE_BUTTON_LEFT || !isChainCraftPopup(popup)) {
 					return true;
 				}
 				LinearLayout layout = ((PopupScreenAccessor) popup).reachcrafting$getLayout();
@@ -35,7 +35,7 @@ public final class ChainCraftPopupController {
 				int top = layout.getY() - 18;
 				int right = layout.getX() + layout.getWidth() + 18;
 				int bottom = layout.getY() + layout.getHeight() + 18;
-				if (click.x() < left || click.x() > right || click.y() < top || click.y() > bottom) {
+				if (mouseX < left || mouseX > right || mouseY < top || mouseY > bottom) {
 					cancel(popup);
 					return false;
 				}

@@ -67,9 +67,7 @@ public class ReachCraftingModClient implements ClientModInitializer {
 		
 
 
-		KeyMapping.Category reachCraftingCategory = KeyMapping.Category.register(
-			ResourceLocation.fromNamespaceAndPath(ReachCraftingMod.MOD_ID, "debug")
-		);
+		String reachCraftingCategory = "key.categories." + ReachCraftingMod.MOD_ID;
 
 		showFilterOutlinesKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
 			"key.reachcrafting.show_filter_outlines",

@@ -21,8 +21,6 @@ import net.minecraft.client.gui.screens.Screen;
 import com.mojang.blaze3d.platform.InputConstants;
 import org.lwjgl.glfw.GLFW;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.input.MouseButtonEvent;
-import net.minecraft.client.input.KeyEvent;
 import com.reachcrafting.client.RecipeButtonNearbyIndicator;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.inventory.ResultSlot;
@@ -95,8 +93,8 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 		if (ReachCraftingConfig.get().inWorldFilterMode() == ReachCraftingConfig.InWorldFilterMode.NONE) return;
 
 		Minecraft client = Minecraft.getInstance();
-		if ((InputConstants.isKeyDown(client.getWindow(), GLFW.GLFW_KEY_LEFT_CONTROL)
-			|| InputConstants.isKeyDown(client.getWindow(), GLFW.GLFW_KEY_RIGHT_CONTROL))
+		if ((InputConstants.isKeyDown(client.getWindow().getWindow(), GLFW.GLFW_KEY_LEFT_CONTROL)
+			|| InputConstants.isKeyDown(client.getWindow().getWindow(), GLFW.GLFW_KEY_RIGHT_CONTROL))
 			&& NearbyContainerCache.isTrackedContainerEligibleForFilterUi()) {
 			
 			Component titleComponent = ((Screen) (Object) this).getTitle();
@@ -117,14 +115,14 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 	}
 
 	@Inject(method = "mouseClicked", at = @At("HEAD"), cancellable = true)
-	private void reachcrafting$onMouseClicked(MouseButtonEvent click, boolean filtering, CallbackInfoReturnable<Boolean> cir) {
+	private void reachcrafting$onMouseClicked(double mouseX, double mouseY, int button, CallbackInfoReturnable<Boolean> cir) {
 		if (!ReachCraftingConfig.get().enabled()) return;
-		if (click.button() == 0
-			&& (click.modifiers() & GLFW.GLFW_MOD_ALT) != 0
+		if (button == 0
+			&& Screen.hasAltDown()
 			&& com.reachcrafting.client.ContainerUtils.isAutoCraftEnabled()
 			&& ((Object) this instanceof CraftingScreen || (Object) this instanceof InventoryScreen)) {
 			Slot hoveredSlot = ((AbstractContainerScreenAccessor) this).getHoveredSlot();
-			if (hoveredSlot instanceof ResultSlot && reachcrafting$isArrowClickTarget(hoveredSlot, click.x(), click.y())) {
+			if (hoveredSlot instanceof ResultSlot && reachcrafting$isArrowClickTarget(hoveredSlot, mouseX, mouseY)) {
 				if (com.reachcrafting.client.ContainerUtils.isExistingOutputRetrievalEnabled()) {
 					com.reachcrafting.client.ContainerUtils.disableExistingOutputRetrieval();
 				}
@@ -134,24 +132,24 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 				return;
 			}
 		}
-		if (click.button() == 0
+		if (button == 0
 			&& ReachCraftingConfig.get().enableExistingOutputRetrieval()
-			&& (click.modifiers() & GLFW.GLFW_MOD_CONTROL) != 0
+			&& Screen.hasControlDown()
 			&& ((Object) this instanceof CraftingScreen || (Object) this instanceof InventoryScreen)) {
 			Slot hoveredSlot = ((AbstractContainerScreenAccessor) this).getHoveredSlot();
-			if (hoveredSlot instanceof ResultSlot && reachcrafting$isArrowClickTarget(hoveredSlot, click.x(), click.y())) {
+			if (hoveredSlot instanceof ResultSlot && reachcrafting$isArrowClickTarget(hoveredSlot, mouseX, mouseY)) {
 				com.reachcrafting.client.ContainerUtils.toggleExistingOutputRetrievalViaResultSlot();
 				cir.setReturnValue(true);
 				return;
 			}
 		}
 		if (ReachCraftingConfig.get().inWorldFilterMode() == ReachCraftingConfig.InWorldFilterMode.NONE) return;
-		if (click.button() != 0) return; // Only left click
+		if (button != 0) return; // Only left click
 		
 		Minecraft client = Minecraft.getInstance();
 		if (!NearbyContainerCache.isTrackedContainerEligibleForFilterUi()) return;
 		
-		boolean ctrlDown = (click.modifiers() & GLFW.GLFW_MOD_CONTROL) != 0;
+		boolean ctrlDown = Screen.hasControlDown();
 		if (!ctrlDown) return;
 
 		Component titleComponent = ((Screen) (Object) this).getTitle();
@@ -164,7 +162,7 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 		double dotEndX = dotStartX + 5;
 		double dotEndY = dotStartY + 5;
 
-		if (click.x() >= dotStartX && click.x() <= dotEndX && click.y() >= dotStartY && click.y() <= dotEndY) {
+		if (mouseX >= dotStartX && mouseX <= dotEndX && mouseY >= dotStartY && mouseY <= dotEndY) {
 			NearbyContainerCache.toggleTrackedContainerInclusion();
 			cir.setReturnValue(true);
 		}
@@ -180,12 +178,12 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 		Minecraft client = Minecraft.getInstance();
 		if (client == null) return;
 		var window = client.getWindow();
-		if (InputConstants.isKeyDown(window, GLFW.GLFW_KEY_LEFT_CONTROL)
-			|| InputConstants.isKeyDown(window, GLFW.GLFW_KEY_RIGHT_CONTROL)
-			|| InputConstants.isKeyDown(window, GLFW.GLFW_KEY_LEFT_SHIFT)
-			|| InputConstants.isKeyDown(window, GLFW.GLFW_KEY_RIGHT_SHIFT)
-			|| InputConstants.isKeyDown(window, GLFW.GLFW_KEY_LEFT_ALT)
-			|| InputConstants.isKeyDown(window, GLFW.GLFW_KEY_RIGHT_ALT)) {
+		if (InputConstants.isKeyDown(window.getWindow(), GLFW.GLFW_KEY_LEFT_CONTROL)
+			|| InputConstants.isKeyDown(window.getWindow(), GLFW.GLFW_KEY_RIGHT_CONTROL)
+			|| InputConstants.isKeyDown(window.getWindow(), GLFW.GLFW_KEY_LEFT_SHIFT)
+			|| InputConstants.isKeyDown(window.getWindow(), GLFW.GLFW_KEY_RIGHT_SHIFT)
+			|| InputConstants.isKeyDown(window.getWindow(), GLFW.GLFW_KEY_LEFT_ALT)
+			|| InputConstants.isKeyDown(window.getWindow(), GLFW.GLFW_KEY_RIGHT_ALT)) {
 			return;
 		}
 
@@ -245,15 +243,15 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 	}
 
 	@Inject(method = "keyPressed", at = @At("HEAD"), cancellable = true)
-	private void reachcrafting$onKeyPressed(KeyEvent event, CallbackInfoReturnable<Boolean> cir) {
+	private void reachcrafting$onKeyPressed(int keyCode, int scanCode, int modifiers, CallbackInfoReturnable<Boolean> cir) {
 		if (!ReachCraftingConfig.get().enabled()) return;
-		if (event.key() == GLFW.GLFW_KEY_LEFT_ALT || event.key() == GLFW.GLFW_KEY_RIGHT_ALT) {
+		if (keyCode == GLFW.GLFW_KEY_LEFT_ALT || keyCode == GLFW.GLFW_KEY_RIGHT_ALT) {
 			if (com.reachcrafting.client.ContainerUtils.isExistingOutputRetrievalEnabled()) {
 				com.reachcrafting.client.ContainerUtils.disableExistingOutputRetrieval();
 			}
 			com.reachcrafting.client.ContainerUtils.handleAutoCraftKeyPress();
 			cir.setReturnValue(true);
-		} else if (event.key() == GLFW.GLFW_KEY_ESCAPE) {
+		} else if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
 			if (com.reachcrafting.client.ContainerUtils.isAnySessionActive() || com.reachcrafting.client.ContainerUtils.isAutomatedInteractionRunning()) {
 				com.reachcrafting.client.ContainerUtils.abortAllSessions();
 			}
@@ -266,8 +264,8 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 	private void reachcrafting$onContainerTick(CallbackInfo ci) {
 		if (!ReachCraftingConfig.get().enabled()) return;
 		// Detect Alt release via polling to avoid Mixin remapping issues with inherited methods
-		boolean altDown = InputConstants.isKeyDown(Minecraft.getInstance().getWindow(), GLFW.GLFW_KEY_LEFT_ALT) 
-					   || InputConstants.isKeyDown(Minecraft.getInstance().getWindow(), GLFW.GLFW_KEY_RIGHT_ALT);
+		boolean altDown = InputConstants.isKeyDown(Minecraft.getInstance().getWindow().getWindow(), GLFW.GLFW_KEY_LEFT_ALT) 
+					   || InputConstants.isKeyDown(Minecraft.getInstance().getWindow().getWindow(), GLFW.GLFW_KEY_RIGHT_ALT);
 		com.reachcrafting.client.ContainerUtils.tickExistingOutputRetrievalController(Minecraft.getInstance());
 		com.reachcrafting.client.ContainerUtils.tickAutoCraftController();
 		

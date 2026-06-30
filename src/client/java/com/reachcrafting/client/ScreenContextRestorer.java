@@ -99,6 +99,6 @@ final class ScreenContextRestorer {
 		double clampedX = Mth.clamp(context.mouseX(), 0.0D, Math.max(0.0D, client.getWindow().getScreenWidth() - 1.0D));
 		double clampedY = Mth.clamp(context.mouseY(), 0.0D, Math.max(0.0D, client.getWindow().getScreenHeight() - 1.0D));
 		client.mouseHandler.setIgnoreFirstMove();
-		GLFW.glfwSetCursorPos(client.getWindow().handle(), clampedX, clampedY);
+		GLFW.glfwSetCursorPos(client.getWindow().getWindow(), clampedX, clampedY);
 	}
 }

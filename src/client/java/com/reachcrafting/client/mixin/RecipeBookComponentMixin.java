@@ -12,9 +12,6 @@ import net.minecraft.client.gui.screens.inventory.CraftingScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.client.gui.screens.recipebook.RecipeBookComponent;
 import net.minecraft.client.gui.screens.recipebook.RecipeCollection;
-import net.minecraft.client.input.CharacterEvent;
-import net.minecraft.client.input.KeyEvent;
-import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.inventory.RecipeBookMenu;
 import org.lwjgl.glfw.GLFW;
@@ -101,7 +98,7 @@ public abstract class RecipeBookComponentMixin {
 	}
 
 	@Inject(method = "mouseClicked", at = @At("HEAD"))
-	private void reachcrafting$onMouseClicked(MouseButtonEvent click, boolean filtering, CallbackInfoReturnable<Boolean> cir) {
+	private void reachcrafting$onMouseClicked(double mouseX, double mouseY, int button, CallbackInfoReturnable<Boolean> cir) {
 		if (!ReachCraftingConfig.get().enabled()) return;
 		if (this.searchBox != null && this.isVisible() && reachcrafting$isSupportedScreen()) {
 			reachcrafting$commitCurrentSearchToHistory();
@@ -110,10 +107,10 @@ public abstract class RecipeBookComponentMixin {
 	}
 
 	@Inject(method = "keyPressed", at = @At("HEAD"), cancellable = true)
-	private void reachcrafting$onKeyPressedHead(KeyEvent event, CallbackInfoReturnable<Boolean> cir) {
+	private void reachcrafting$onKeyPressedHead(int keyCode, int scanCode, int modifiers, CallbackInfoReturnable<Boolean> cir) {
 		if (!ReachCraftingConfig.get().enabled()) return;
 		reachcrafting$lastKeyPressedWasToggle = false;
-		if (event.key() == GLFW.GLFW_KEY_SPACE
+		if (keyCode == GLFW.GLFW_KEY_SPACE
 			&& reachcrafting$isToggleBoundToSpace()
 			&& reachcrafting$isSearchReadyToReplace()
 			&& reachcrafting$toggleCraftabilityAndClearSearch()) {
@@ -122,15 +119,15 @@ public abstract class RecipeBookComponentMixin {
 			return;
 		}
 		if (ReachCraftingConfig.get().recipeBookPageNavigation()
-			&& (event.key() == GLFW.GLFW_KEY_LEFT || event.key() == GLFW.GLFW_KEY_RIGHT)
+			&& (keyCode == GLFW.GLFW_KEY_LEFT || keyCode == GLFW.GLFW_KEY_RIGHT)
 			&& reachcrafting$shouldPageWithArrowKey()) {
-			if (reachcrafting$turnRecipeBookPage(event.key() == GLFW.GLFW_KEY_RIGHT)) {
+			if (reachcrafting$turnRecipeBookPage(keyCode == GLFW.GLFW_KEY_RIGHT)) {
 				cir.setReturnValue(true);
 				return;
 			}
 		}
 		if (this.searchBox != null && this.searchBox.isFocused()) {
-			int key = event.key();
+			int key = keyCode;
 			if (key == GLFW.GLFW_KEY_UP || key == GLFW.GLFW_KEY_DOWN) {
 				if (reachcrafting$navigateSearchHistory(key == GLFW.GLFW_KEY_UP)) {
 					cir.setReturnValue(true);
@@ -146,11 +143,11 @@ public abstract class RecipeBookComponentMixin {
 			}
 		}
 
-		if (event.key() == GLFW.GLFW_KEY_LEFT_ALT || event.key() == GLFW.GLFW_KEY_RIGHT_ALT) {
+		if (keyCode == GLFW.GLFW_KEY_LEFT_ALT || keyCode == GLFW.GLFW_KEY_RIGHT_ALT) {
 			ContainerUtils.handleAutoCraftKeyPress();
 			cir.setReturnValue(true);
-		} else if (com.reachcrafting.client.ReachCraftingModClient.toggleCraftableFilterKey.matches(event)) {
-			boolean isSpace = event.key() == GLFW.GLFW_KEY_SPACE;
+		} else if (com.reachcrafting.client.ReachCraftingModClient.toggleCraftableFilterKey.matches(keyCode, scanCode)) {
+			boolean isSpace = keyCode == GLFW.GLFW_KEY_SPACE;
 			boolean requestModifierHeld = com.reachcrafting.client.RecipeBookFocusManager.isControlKeyDown(this.minecraft)
 				|| com.reachcrafting.client.RecipeBookFocusManager.isShiftKeyDown(this.minecraft)
 				|| (ReachCraftingConfig.get().altAsRequestKey() && com.reachcrafting.client.RecipeBookFocusManager.isAltKeyDown(this.minecraft));
@@ -170,7 +167,7 @@ public abstract class RecipeBookComponentMixin {
 		}
 
 		if (ReachCraftingConfig.get().typeToFocusSearch() && this.searchBox != null && this.isVisible() && !this.searchBox.isFocused()) {
-			if (reachcrafting$isEligibleKey(event)) {
+			if (reachcrafting$isEligibleKey(keyCode, scanCode)) {
 				this.searchBox.setFocused(true);
 				this.searchBox.setCursorPosition(this.searchBox.getValue().length());
 				this.searchBox.setHighlightPos(0);
@@ -179,28 +176,28 @@ public abstract class RecipeBookComponentMixin {
 	}
 
 	@Inject(method = "keyReleased", at = @At("HEAD"), cancellable = true)
-	private void reachcrafting$onKeyReleased(KeyEvent event, CallbackInfoReturnable<Boolean> cir) {
+	private void reachcrafting$onKeyReleased(int keyCode, int scanCode, int modifiers, CallbackInfoReturnable<Boolean> cir) {
 		if (!ReachCraftingConfig.get().enabled()) return;
 		if (this.minecraft != null && this.minecraft.options != null) {
-			if (this.minecraft.options.keyDrop.matches(event)) {
+			if (this.minecraft.options.keyDrop.matches(keyCode, scanCode)) {
 				reachcrafting$dropKeyHeldFromHover = false;
 			}
-			if (this.minecraft.options.keySwapOffhand.matches(event)) {
+			if (this.minecraft.options.keySwapOffhand.matches(keyCode, scanCode)) {
 				reachcrafting$offhandKeyHeldFromHover = false;
 			}
 		}
-		if (event.key() == GLFW.GLFW_KEY_LEFT_ALT || event.key() == GLFW.GLFW_KEY_RIGHT_ALT) {
+		if (keyCode == GLFW.GLFW_KEY_LEFT_ALT || keyCode == GLFW.GLFW_KEY_RIGHT_ALT) {
 			ContainerUtils.handleAutoCraftKeyReleased();
 			cir.setReturnValue(true);
 		}
 	}
 
 	@Inject(method = "keyPressed", at = @At("TAIL"))
-	private void reachcrafting$onKeyPressed(KeyEvent event, CallbackInfoReturnable<Boolean> cir) {
+	private void reachcrafting$onKeyPressed(int keyCode, int scanCode, int modifiers, CallbackInfoReturnable<Boolean> cir) {
 		if (!ReachCraftingConfig.get().enabled()) return;
 		if (this.searchBox != null && this.isVisible() && reachcrafting$isSupportedScreen()) {
 			if (this.searchBox.isFocused()) {
-				int key = event.key();
+				int key = keyCode;
 				if (key != GLFW.GLFW_KEY_UP && key != GLFW.GLFW_KEY_DOWN) {
 					reachcrafting$resetSearchHistoryNavigation();
 				}
@@ -211,14 +208,14 @@ public abstract class RecipeBookComponentMixin {
 	}
 
 	@Inject(method = "charTyped", at = @At("HEAD"), cancellable = true)
-	private void reachcrafting$onCharTypedHead(CharacterEvent event, CallbackInfoReturnable<Boolean> cir) {
+	private void reachcrafting$onCharTypedHead(char codePoint, int modifiers, CallbackInfoReturnable<Boolean> cir) {
 		if (!ReachCraftingConfig.get().enabled()) return;
 		if (reachcrafting$lastKeyPressedWasToggle) {
 			reachcrafting$lastKeyPressedWasToggle = false;
 			cir.setReturnValue(true);
 			return;
 		}
-		if (event.codepoint() == ' ' && reachcrafting$isToggleBoundToSpace() && reachcrafting$isSearchReadyToReplace()) {
+		if (codePoint == ' ' && reachcrafting$isToggleBoundToSpace() && reachcrafting$isSearchReadyToReplace()) {
 			if (reachcrafting$toggleCraftabilityAndClearSearch()) {
 				reachcrafting$lastKeyPressedWasToggle = true;
 				cir.setReturnValue(true);
@@ -226,14 +223,14 @@ public abstract class RecipeBookComponentMixin {
 			}
 		}
 		if (this.searchBox != null && this.searchBox.isFocused()) {
-			if (Character.isDigit(event.codepoint())) {
+			if (Character.isDigit(codePoint)) {
 				cir.setReturnValue(false);
 			}
 		}
 	}
 
 	@Inject(method = "charTyped", at = @At("TAIL"))
-	private void reachcrafting$onCharTyped(CharacterEvent event, CallbackInfoReturnable<Boolean> cir) {
+	private void reachcrafting$onCharTyped(char codePoint, int modifiers, CallbackInfoReturnable<Boolean> cir) {
 		if (!ReachCraftingConfig.get().enabled()) return;
 		if (this.searchBox != null && this.isVisible() && reachcrafting$isSupportedScreen()) {
 			if (this.searchBox.isFocused()) {
@@ -390,19 +387,19 @@ public abstract class RecipeBookComponentMixin {
 		return this.minecraft.screen instanceof CraftingScreen || this.minecraft.screen instanceof InventoryScreen;
 	}
 
-	private boolean reachcrafting$isEligibleKey(KeyEvent event) {
+	private boolean reachcrafting$isEligibleKey(int keyCode, int scanCode) {
 		if (this.minecraft == null || this.minecraft.options == null) {
 			return false;
 		}
 
-		int key = event.key();
+		int key = keyCode;
 
 		// Exclude movement keys during 'coyote time' after opening the screen (prevents "wwww" searches)
 		if (System.currentTimeMillis() - lastScreenOpenTime < 500) {
-			if (this.minecraft.options.keyUp.matches(event) ||
-				this.minecraft.options.keyDown.matches(event) ||
-				this.minecraft.options.keyLeft.matches(event) ||
-				this.minecraft.options.keyRight.matches(event)) {
+			if (this.minecraft.options.keyUp.matches(keyCode, scanCode) ||
+				this.minecraft.options.keyDown.matches(keyCode, scanCode) ||
+				this.minecraft.options.keyLeft.matches(keyCode, scanCode) ||
+				this.minecraft.options.keyRight.matches(keyCode, scanCode)) {
 				return false;
 			}
 		}
@@ -413,7 +410,7 @@ public abstract class RecipeBookComponentMixin {
 			key == GLFW.GLFW_KEY_LEFT_ALT || key == GLFW.GLFW_KEY_RIGHT_ALT ||
 			key == GLFW.GLFW_KEY_LEFT_SUPER || key == GLFW.GLFW_KEY_RIGHT_SUPER ||
 			key == GLFW.GLFW_KEY_SPACE ||
-			com.reachcrafting.client.ReachCraftingModClient.toggleCraftableFilterKey.matches(event)) {
+			com.reachcrafting.client.ReachCraftingModClient.toggleCraftableFilterKey.matches(keyCode, scanCode)) {
 			return false;
 		}
 
@@ -423,7 +420,7 @@ public abstract class RecipeBookComponentMixin {
 			return false;
 		}
 
-		if (this.minecraft.options.keyDrop.matches(event)) {
+		if (this.minecraft.options.keyDrop.matches(keyCode, scanCode)) {
 			if (reachcrafting$hasHoveredStack()) {
 				reachcrafting$dropKeyHeldFromHover = true;
 				return false;
@@ -433,7 +430,7 @@ public abstract class RecipeBookComponentMixin {
 			}
 		}
 
-		if (this.minecraft.options.keySwapOffhand.matches(event)) {
+		if (this.minecraft.options.keySwapOffhand.matches(keyCode, scanCode)) {
 			if (reachcrafting$hasHoveredStack() || reachcrafting$hasOffhandStack()) {
 				reachcrafting$offhandKeyHeldFromHover = true;
 				return false;

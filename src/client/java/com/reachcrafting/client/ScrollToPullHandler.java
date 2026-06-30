@@ -293,11 +293,11 @@ public final class ScrollToPullHandler {
     }
 
     private static boolean isShiftKeyDown(Minecraft minecraft) {
-        return InputConstants.isKeyDown(minecraft.getWindow(), GLFW.GLFW_KEY_LEFT_SHIFT)
-            || InputConstants.isKeyDown(minecraft.getWindow(), GLFW.GLFW_KEY_RIGHT_SHIFT);
+        return InputConstants.isKeyDown(minecraft.getWindow().getWindow(), GLFW.GLFW_KEY_LEFT_SHIFT)
+            || InputConstants.isKeyDown(minecraft.getWindow().getWindow(), GLFW.GLFW_KEY_RIGHT_SHIFT);
     }
 
     private static boolean isSpaceKeyDown(Minecraft minecraft) {
-        return InputConstants.isKeyDown(minecraft.getWindow(), GLFW.GLFW_KEY_SPACE);
+        return InputConstants.isKeyDown(minecraft.getWindow().getWindow(), GLFW.GLFW_KEY_SPACE);
     }
 }

@@ -93,14 +93,14 @@ final class RecipeBookInputController {
 			}
 		});
 		ScreenEvents.AFTER_INIT.register((client, screen, scaledWidth, scaledHeight) -> {
-			ScreenMouseEvents.allowMouseClick(screen).register((currentScreen, event) -> {
+			ScreenMouseEvents.allowMouseClick(screen).register((currentScreen, mouseX, mouseY, button) -> {
 				if (!ReachCraftingConfig.get().enabled()) {
 					return true;
 				}
-				if (event.button() != GLFW.GLFW_MOUSE_BUTTON_RIGHT) {
+				if (button != GLFW.GLFW_MOUSE_BUTTON_RIGHT) {
 					return true;
 				}
-				RecipeBookClickCapture.HeldRecipeAction action = RecipeBookFocusManager.findHoveredHeldRecipeAction(currentScreen, event.x(), event.y());
+				RecipeBookClickCapture.HeldRecipeAction action = RecipeBookFocusManager.findHoveredHeldRecipeAction(currentScreen, mouseX, mouseY);
 				return action == null || !clearHeldRecipe(action);
 			});
 			ScreenMouseEvents.allowMouseScroll(screen).register((currentScreen, mouseX, mouseY, horizontalAmount, verticalAmount) -> {

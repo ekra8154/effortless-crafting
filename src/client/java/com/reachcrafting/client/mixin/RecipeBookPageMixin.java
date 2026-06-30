@@ -6,7 +6,7 @@ import java.util.List;
 import net.minecraft.client.gui.screens.recipebook.OverlayRecipeComponent;
 import net.minecraft.client.gui.screens.recipebook.RecipeButton;
 import net.minecraft.client.gui.screens.recipebook.RecipeBookPage;
-import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.client.gui.screens.Screen;
 import org.lwjgl.glfw.GLFW;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -22,30 +22,31 @@ public abstract class RecipeBookPageMixin {
 	private List<RecipeButton> buttons;
 
 	@Inject(
-		method = "mouseClicked(Lnet/minecraft/client/input/MouseButtonEvent;IIIIZ)Z",
+		method = "mouseClicked(DDIIIII)Z",
 		at = @At("HEAD"),
 		cancellable = true
 	)
 	private void reachcrafting$interceptRecipeButtonClick(
-		MouseButtonEvent click,
+		double mouseX,
+		double mouseY,
+		int mouseButton,
 		int left,
 		int top,
 		int width,
 		int height,
-		boolean filtering,
 		CallbackInfoReturnable<Boolean> cir
 	) {
 		if (!ReachCraftingConfig.get().enabled()) {
 			return;
 		}
-		if (click.button() == GLFW.GLFW_MOUSE_BUTTON_RIGHT) {
+		if (mouseButton == GLFW.GLFW_MOUSE_BUTTON_RIGHT) {
 			OverlayRecipeComponent overlay = ((RecipeBookPageAccessor) (Object) this).getOverlay();
 			if (overlay != null && overlay.isVisible()) {
 				return;
 			}
 
 			for (RecipeButton button : this.buttons) {
-				if (!button.isMouseOver(click.x(), click.y())) {
+				if (!button.isMouseOver(mouseX, mouseY)) {
 					continue;
 				}
 
@@ -82,13 +83,13 @@ public abstract class RecipeBookPageMixin {
 			}
 		}
 
-		if (click.button() != GLFW.GLFW_MOUSE_BUTTON_LEFT) {
+		if (mouseButton != GLFW.GLFW_MOUSE_BUTTON_LEFT) {
 			return;
 		}
 
-		boolean ctrlDown = (click.modifiers() & GLFW.GLFW_MOD_CONTROL) != 0;
-		boolean shiftDown = (click.modifiers() & GLFW.GLFW_MOD_SHIFT) != 0;
-		boolean altDown = (click.modifiers() & GLFW.GLFW_MOD_ALT) != 0;
+		boolean ctrlDown = Screen.hasControlDown();
+		boolean shiftDown = Screen.hasShiftDown();
+		boolean altDown = Screen.hasAltDown();
 		if (shiftDown) {
 			RecipeBookClickCapture.defocusRecipeBookSearch(net.minecraft.client.Minecraft.getInstance());
 		}
@@ -107,7 +108,7 @@ public abstract class RecipeBookPageMixin {
 		}
 
 		for (RecipeButton button : this.buttons) {
-			if (!button.isMouseOver(click.x(), click.y())) {
+			if (!button.isMouseOver(mouseX, mouseY)) {
 				continue;
 			}
 
@@ -115,7 +116,7 @@ public abstract class RecipeBookPageMixin {
 				button.getCurrentRecipe(),
 				button.getCollection(),
 				button.getDisplayStack(),
-				click.button(),
+				mouseButton,
 				shiftDown,
 				ctrlDown,
 				altDown,
@@ -127,19 +128,20 @@ public abstract class RecipeBookPageMixin {
 	}
 
 	@Inject(
-		method = "mouseClicked(Lnet/minecraft/client/input/MouseButtonEvent;IIIIZ)Z",
+		method = "mouseClicked(DDIIIII)Z",
 		at = @At("RETURN")
 	)
 	private void reachcrafting$afterVanillaRecipeButtonClick(
-		MouseButtonEvent click,
+		double mouseX,
+		double mouseY,
+		int mouseButton,
 		int left,
 		int top,
 		int width,
 		int height,
-		boolean filtering,
 		CallbackInfoReturnable<Boolean> cir
 	) {
-		if (!ReachCraftingConfig.get().enabled() || !cir.getReturnValueZ() || click.button() != GLFW.GLFW_MOUSE_BUTTON_LEFT) {
+		if (!ReachCraftingConfig.get().enabled() || !cir.getReturnValueZ() || mouseButton != GLFW.GLFW_MOUSE_BUTTON_LEFT) {
 			return;
 		}
 
@@ -149,14 +151,14 @@ public abstract class RecipeBookPageMixin {
 			return;
 		}
 
-		boolean ctrlDown = (click.modifiers() & GLFW.GLFW_MOD_CONTROL) != 0;
+		boolean ctrlDown = Screen.hasControlDown();
 		if (ctrlDown || com.reachcrafting.client.ContainerUtils.isExistingOutputRetrievalEnabled()) {
 			return;
 		}
-		boolean altDown = (click.modifiers() & GLFW.GLFW_MOD_ALT) != 0;
+		boolean altDown = Screen.hasAltDown();
 
 		for (RecipeButton button : this.buttons) {
-			if (!button.isMouseOver(click.x(), click.y())) {
+			if (!button.isMouseOver(mouseX, mouseY)) {
 				continue;
 			}
 
