@@ -13,7 +13,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.CraftingRecipe;
 import net.minecraft.world.item.crafting.Ingredient;
-import net.minecraft.world.item.crafting.Recipe;
+import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.ShapedRecipe;
 import net.minecraft.world.item.crafting.ShapelessRecipe;
 
@@ -24,7 +24,7 @@ public final class RecipeVariantResolver {
 	public static Selection resolve(
 		Minecraft minecraft,
 		LocalPlayer player,
-		Recipe<?> clickedRecipe,
+		RecipeHolder<?> clickedRecipe,
 		RecipeCollection collection,
 		ItemStack clickedDisplayStack,
 		boolean explicitVariantSelection,
@@ -54,7 +54,7 @@ public final class RecipeVariantResolver {
 	public static Selection resolve(
 		Minecraft minecraft,
 		LocalPlayer player,
-		Recipe<?> clickedRecipe,
+		RecipeHolder<?> clickedRecipe,
 		RecipeCollection collection,
 		ItemStack clickedDisplayStack,
 		boolean explicitVariantSelection,
@@ -94,7 +94,7 @@ public final class RecipeVariantResolver {
 			.map(candidate -> toSelection(
 				minecraft,
 				candidate,
-				candidate.getId().equals(clickedRecipe.getId()) ? clickedDisplayStack : ItemStack.EMPTY,
+				candidate.id().equals(clickedRecipe.id()) ? clickedDisplayStack : ItemStack.EMPTY,
 				availableItems,
 				usableCounts,
 				preferenceTotals,
@@ -103,7 +103,7 @@ public final class RecipeVariantResolver {
 			))
 			.toList();
 		int requestedCopies = Math.max(desiredCopiesPerSlot, 1);
-		boolean lockToCurrentVariant = BulkAutoCraftController.shouldLockToCurrentVariant(clickedRecipe.getId(), collection, explicitVariantSelection);
+		boolean lockToCurrentVariant = BulkAutoCraftController.shouldLockToCurrentVariant(clickedRecipe.id(), collection, explicitVariantSelection);
 
 		if (lockToCurrentVariant) {
 			ResourceLocation lockedId = BulkAutoCraftController.getActiveLockedRecipeId();
@@ -194,11 +194,11 @@ public final class RecipeVariantResolver {
 			.orElse(null);
 	}
 
-	private static boolean isMatchForGrid(Recipe<?> recipe, List<ItemStack> gridStacks) {
-		if (recipe instanceof ShapedRecipe shaped) {
+	private static boolean isMatchForGrid(RecipeHolder<?> recipe, List<ItemStack> gridStacks) {
+		if (recipe.value() instanceof ShapedRecipe shaped) {
 			return matchesShapedGrid(shaped, gridStacks);
 		}
-		if (recipe instanceof ShapelessRecipe shapeless) {
+		if (recipe.value() instanceof ShapelessRecipe shapeless) {
 			return matchesShapelessGrid(shapeless, gridStacks);
 		}
 
@@ -356,14 +356,14 @@ public final class RecipeVariantResolver {
 	private static RecipeCollection resolveCanonicalCollection(
 		LocalPlayer player,
 		RecipeCollection collection,
-		Recipe<?> recipe
+		RecipeHolder<?> recipe
 	) {
 		ClientRecipeBook recipeBook = player.getRecipeBook();
 		RecipeCollection bestCollection = collection;
 		int bestSize = collection != null ? collection.getRecipes().size() : 0;
 		for (RecipeCollection candidate : recipeBook.getCollections()) {
 			boolean containsRecipe = candidate.getRecipes().stream()
-				.anyMatch(entry -> entry.getId().equals(recipe.getId()));
+				.anyMatch(entry -> entry.id().equals(recipe.id()));
 			if (!containsRecipe) {
 				continue;
 			}
@@ -379,7 +379,7 @@ public final class RecipeVariantResolver {
 
 	private static Selection toSelection(
 		Minecraft minecraft,
-		Recipe<?> recipe,
+		RecipeHolder<?> recipe,
 		ItemStack preferredDisplayStack,
 		AvailableItemSnapshot availableItems,
 		Map<String, Integer> usableCounts,
@@ -409,7 +409,7 @@ public final class RecipeVariantResolver {
 		int preferredTotalCount = ingredientSummary.acceptedItemIds().stream()
 			.mapToInt(itemId -> preferenceTotals.getOrDefault(itemId, 0))
 			.sum();
-		return new Selection(recipe, recipe.getId(), ingredientSummary, displayStack, outputItemId, outputLabel, copiesAvailable, preferredTotalCount);
+		return new Selection(recipe, recipe.id(), ingredientSummary, displayStack, outputItemId, outputLabel, copiesAvailable, preferredTotalCount);
 	}
 
 	private static Comparator<Selection> compareSelections(IngredientPlanning.CountPreference countPreference, boolean craftAll) {
@@ -432,15 +432,15 @@ public final class RecipeVariantResolver {
 		return byCopies.thenComparing(byPreferredCount).thenComparing(Selection::outputItemId);
 	}
 
-	public static ItemStack resolveDisplayStack(Recipe<?> recipe, Minecraft minecraft) {
+	public static ItemStack resolveDisplayStack(RecipeHolder<?> recipe, Minecraft minecraft) {
 		if (recipe == null || minecraft.level == null) {
 			return ItemStack.EMPTY;
 		}
-		return recipe.getResultItem(minecraft.level.registryAccess()).copy();
+		return recipe.value().getResultItem(minecraft.level.registryAccess()).copy();
 	}
 
 	public record Selection(
-		Recipe<?> recipe,
+		RecipeHolder<?> recipe,
 		ResourceLocation recipeId,
 		RecipeIngredientSummary ingredientSummary,
 		ItemStack displayStack,

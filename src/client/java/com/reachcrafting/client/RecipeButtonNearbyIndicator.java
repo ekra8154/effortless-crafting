@@ -9,7 +9,7 @@ import net.minecraft.client.gui.screens.recipebook.RecipeButton;
 import net.minecraft.client.player.LocalPlayer;
 import java.util.Map;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.crafting.Recipe;
+import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.client.gui.screens.recipebook.RecipeCollection;
 
 public final class RecipeButtonNearbyIndicator {
@@ -20,7 +20,7 @@ public final class RecipeButtonNearbyIndicator {
 		return shouldShow(button.getRecipe(), button.getCollection(), RecipeVariantResolver.resolveDisplayStack(button.getRecipe(), Minecraft.getInstance()), false);
 	}
 
-	public static boolean shouldShow(Recipe<?> recipe, RecipeCollection collection, ItemStack displayStack, boolean explicitVariantSelection) {
+	public static boolean shouldShow(RecipeHolder<?> recipe, RecipeCollection collection, ItemStack displayStack, boolean explicitVariantSelection) {
 		if (!ReachCraftingConfig.get().enabled()
 			|| !ReachCraftingConfig.get().enableNearbyContainerUsage()
 			|| !ReachCraftingConfig.get().showNearbyCraftableIndicator()
@@ -45,7 +45,7 @@ public final class RecipeButtonNearbyIndicator {
 		NearbyContainerCache.ReachableView reachableView = NearbyContainerCache.getReachableView(
 			minecraft.level,
 			minecraft.getCameraEntity(),
-			minecraft.gameMode != null ? minecraft.gameMode.getPickRange() : 4.5D
+			minecraft.player != null ? minecraft.player.blockInteractionRange() : 4.5D
 		);
 		if (reachableView.isEmpty()) {
 			return false;
@@ -120,7 +120,7 @@ public final class RecipeButtonNearbyIndicator {
 		return ContainerUtils.currentReservedCraftCopies(availableItems.gridStacks());
 	}
 
-	public static void renderOverlayButton(GuiGraphics guiGraphics, int x, int y, int width, Recipe<?> recipe, RecipeCollection collection) {
+	public static void renderOverlayButton(GuiGraphics guiGraphics, int x, int y, int width, RecipeHolder<?> recipe, RecipeCollection collection) {
 		if (shouldShow(recipe, collection, RecipeVariantResolver.resolveDisplayStack(recipe, Minecraft.getInstance()), true)) {
 			renderDot(guiGraphics, x, y);
 		}

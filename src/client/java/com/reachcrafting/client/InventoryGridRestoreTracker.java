@@ -201,7 +201,7 @@ public final class InventoryGridRestoreTracker {
 			trackedItemIds.add(itemId);
 			int targetMenuIdx = inventoryIndexToMenuIndex(menu, entry.getKey());
 			Slot target = targetMenuIdx >= 0 ? menu.getSlot(targetMenuIdx) : null;
-			int currentCount = target != null && target.hasItem() && ItemStack.isSameItemSameTags(target.getItem(), snapshot) ? target.getItem().getCount() : 0;
+			int currentCount = target != null && target.hasItem() && ItemStack.isSameItemSameComponents(target.getItem(), snapshot) ? target.getItem().getCount() : 0;
 			if (!first) {
 				targets.append(", ");
 			}
@@ -235,7 +235,7 @@ public final class InventoryGridRestoreTracker {
 
 	private static void restoreSnapshotBaseline(AbstractContainerMenu menu, MultiPlayerGameMode gameMode, int targetMenuIdx, ItemStack snapshot, Set<Integer> processedGridSlots) {
 		Slot target = menu.getSlot(targetMenuIdx);
-		if (target.hasItem() && !ItemStack.isSameItemSameTags(target.getItem(), snapshot)) {
+		if (target.hasItem() && !ItemStack.isSameItemSameComponents(target.getItem(), snapshot)) {
 			return;
 		}
 
@@ -250,7 +250,7 @@ public final class InventoryGridRestoreTracker {
 
 	private static void topOffSnapshotSlot(AbstractContainerMenu menu, MultiPlayerGameMode gameMode, int targetMenuIdx, ItemStack snapshot, Set<Integer> processedGridSlots) {
 		Slot target = menu.getSlot(targetMenuIdx);
-		if (!target.hasItem() || !ItemStack.isSameItemSameTags(target.getItem(), snapshot)) {
+		if (!target.hasItem() || !ItemStack.isSameItemSameComponents(target.getItem(), snapshot)) {
 			return;
 		}
 
@@ -275,7 +275,7 @@ public final class InventoryGridRestoreTracker {
 			}
 
 			Slot gridSlot = menu.getSlot(gridIdx);
-			if (!gridSlot.hasItem() || !ItemStack.isSameItemSameTags(gridSlot.getItem(), desiredStack)) {
+			if (!gridSlot.hasItem() || !ItemStack.isSameItemSameComponents(gridSlot.getItem(), desiredStack)) {
 				continue;
 			}
 
@@ -301,7 +301,7 @@ public final class InventoryGridRestoreTracker {
 			}
 
 			Slot gridSlot = menu.getSlot(gridIdx);
-			if (!gridSlot.hasItem() || !ItemStack.isSameItemSameTags(gridSlot.getItem(), desiredStack)) {
+			if (!gridSlot.hasItem() || !ItemStack.isSameItemSameComponents(gridSlot.getItem(), desiredStack)) {
 				continue;
 			}
 
@@ -497,7 +497,7 @@ public final class InventoryGridRestoreTracker {
 				if (!target.hasItem()) continue;
 
 				ItemStack carried = client.player.containerMenu.getCarried();
-				if (!ItemStack.isSameItemSameTags(target.getItem(), carried)) continue;
+				if (!ItemStack.isSameItemSameComponents(target.getItem(), carried)) continue;
 
 				int maxStack = Math.min(target.getMaxStackSize(), carried.getMaxStackSize());
 				if (target.getItem().getCount() >= maxStack) continue;
@@ -555,7 +555,7 @@ public final class InventoryGridRestoreTracker {
 		if (!client.player.containerMenu.getCarried().isEmpty()) {
 			Slot target = menu.getSlot(targetIdx);
 			boolean canMerge = !target.hasItem() || 
-				(ItemStack.isSameItemSameTags(target.getItem(), client.player.containerMenu.getCarried()) 
+				(ItemStack.isSameItemSameComponents(target.getItem(), client.player.containerMenu.getCarried()) 
 				 && target.getItem().getCount() < target.getItem().getMaxStackSize());
             
 			if (canMerge) {

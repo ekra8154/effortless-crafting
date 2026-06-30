@@ -49,7 +49,7 @@ public final class OffhandConsolidationController {
 						}
 						// If item in slot changed, we only swap back if NOT in a bulk session.
 						// During bulk, byproducts might briefly touch this slot or server sync might be weird.
-						if (!AutoMoveController.isAutomatedInteractionRunning() && !ItemStack.isSameItemSameTags(s.getItem(), swappedItem)) {
+						if (!AutoMoveController.isAutomatedInteractionRunning() && !ItemStack.isSameItemSameComponents(s.getItem(), swappedItem)) {
 							swapBack(client);
 							return;
 						}
@@ -121,7 +121,7 @@ public final class OffhandConsolidationController {
 		}
 
 		ItemStack offhand = client.player.getOffhandItem();
-		if (offhand.isEmpty() || !ItemStack.isSameItemSameTags(offhand, resultStack)) {
+		if (offhand.isEmpty() || !ItemStack.isSameItemSameComponents(offhand, resultStack)) {
 			return false;
 		}
 

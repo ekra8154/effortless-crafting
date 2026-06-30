@@ -5,7 +5,7 @@ import net.minecraft.client.gui.screens.recipebook.RecipeCollection;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.inventory.AbstractContainerMenu;
-import net.minecraft.world.item.crafting.Recipe;
+import net.minecraft.world.item.crafting.RecipeHolder;
 
 public final class NearbyContainerDryRun {
 	private static final NearbyCraftCoordinator COORDINATOR = NearbyCraftCoordinator.getInstance();
@@ -19,7 +19,7 @@ public final class NearbyContainerDryRun {
 
 	public static void start(
 		ResourceLocation recipeId,
-		Recipe<?> recipe,
+		RecipeHolder<?> recipe,
 		RecipeCollection recipeCollection,
 		boolean explicitVariantSelection,
 		int recipeIndex,
@@ -47,7 +47,7 @@ public final class NearbyContainerDryRun {
 
 	public static boolean tryExpandReservedGrid(
 		ResourceLocation recipeId,
-		Recipe<?> recipe,
+		RecipeHolder<?> recipe,
 		RecipeCollection recipeCollection,
 		boolean explicitVariantSelection,
 		int recipeIndex,

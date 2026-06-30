@@ -14,7 +14,7 @@ import net.minecraft.client.gui.screens.recipebook.RecipeBookComponent;
 import net.minecraft.client.gui.screens.recipebook.RecipeButton;
 import net.minecraft.client.gui.screens.recipebook.RecipeUpdateListener;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.crafting.Recipe;
+import net.minecraft.world.item.crafting.RecipeHolder;
 import org.lwjgl.glfw.GLFW;
 
 public final class RecipeBookFocusManager {
@@ -111,13 +111,13 @@ public final class RecipeBookFocusManager {
 				if (!(entry instanceof AbstractWidget widget) || !widget.isMouseOver(mouseX, mouseY)) {
 					continue;
 				}
-				Recipe<?> recipe = ((OverlayRecipeButtonAccessor) entry).getRecipe();
+				RecipeHolder<?> recipe = ((OverlayRecipeButtonAccessor) entry).getRecipe();
 				if (recipe == null) {
 					continue;
 				}
 				return new RecipeBookClickCapture.HeldRecipeAction(
 					recipe,
-					recipe.getId(),
+					recipe.id(),
 					overlay.getRecipeCollection(),
 					ItemStack.EMPTY,
 					GLFW.GLFW_MOUSE_BUTTON_LEFT,
@@ -133,7 +133,7 @@ public final class RecipeBookFocusManager {
 			}
 			return new RecipeBookClickCapture.HeldRecipeAction(
 				button.getRecipe(),
-				button.getRecipe().getId(),
+				button.getRecipe().id(),
 				button.getCollection(),
 				RecipeVariantResolver.resolveDisplayStack(button.getRecipe(), minecraft),
 				GLFW.GLFW_MOUSE_BUTTON_LEFT,

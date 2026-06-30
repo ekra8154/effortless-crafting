@@ -59,7 +59,7 @@ final class MenuTransferHelper {
 			if (!(slot.container instanceof Inventory) || !slot.hasItem() || !slot.mayPickup(player)) {
 				continue;
 			}
-			if (ItemStack.isSameItemSameTags(slot.getItem(), desiredStack) && slot.mayPlace(desiredStack)) {
+			if (ItemStack.isSameItemSameComponents(slot.getItem(), desiredStack) && slot.mayPlace(desiredStack)) {
 				return slot;
 			}
 		}
@@ -74,7 +74,7 @@ final class MenuTransferHelper {
 		}
 
 		int moveCount = Math.min(remaining, sourceStack.getCount());
-		boolean canLeftClickMerge = targetStack.isEmpty() || (ItemStack.isSameItemSameTags(sourceStack, targetStack) && targetStack.getCount() + moveCount <= targetStack.getMaxStackSize());
+		boolean canLeftClickMerge = targetStack.isEmpty() || (ItemStack.isSameItemSameComponents(sourceStack, targetStack) && targetStack.getCount() + moveCount <= targetStack.getMaxStackSize());
 
 		if (canLeftClickMerge && moveCount == sourceStack.getCount()) {
 			pickup(gameMode, player, menu, sourceSlot, GLFW.GLFW_MOUSE_BUTTON_LEFT);
@@ -134,7 +134,7 @@ final class MenuTransferHelper {
 
 		int maxTargetCount = Math.min(targetSlot.getMaxStackSize(), sourceStack.getMaxStackSize());
 		int currentTargetCount = targetStack.isEmpty() ? 0 : targetStack.getCount();
-		boolean compatibleTarget = targetStack.isEmpty() || ItemStack.isSameItemSameTags(sourceStack, targetStack);
+		boolean compatibleTarget = targetStack.isEmpty() || ItemStack.isSameItemSameComponents(sourceStack, targetStack);
 		if (!compatibleTarget) {
 			return WithdrawalMoveResult.failed();
 		}
@@ -329,7 +329,7 @@ final class MenuTransferHelper {
 		maxTargetCount = Math.min(target.getMaxStackSize(), sourceStack.getMaxStackSize());
 		if (targetStack.isEmpty()) {
 			roomInTarget = maxTargetCount;
-		} else if (ItemStack.isSameItemSameTags(targetStack, sourceStack)) {
+		} else if (ItemStack.isSameItemSameComponents(targetStack, sourceStack)) {
 			roomInTarget = maxTargetCount - targetStack.getCount();
 		} else {
 			roomInTarget = 0;

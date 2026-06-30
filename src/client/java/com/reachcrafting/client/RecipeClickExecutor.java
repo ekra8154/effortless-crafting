@@ -14,7 +14,7 @@ import net.minecraft.client.multiplayer.MultiPlayerGameMode;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.crafting.Recipe;
+import net.minecraft.world.item.crafting.RecipeHolder;
 
 final class RecipeClickExecutor {
 	private static final int BULK_QUEUE_LIMIT = 10_000;
@@ -26,7 +26,7 @@ final class RecipeClickExecutor {
 		Minecraft minecraft,
 		LocalPlayer player,
 		Screen screen,
-		Recipe<?> recipe,
+		RecipeHolder<?> recipe,
 		net.minecraft.client.gui.screens.recipebook.RecipeCollection collection,
 		ItemStack displayStack,
 		int mouseButton,
@@ -72,15 +72,15 @@ final class RecipeClickExecutor {
 			desiredVariantCopies
 		);
 		if (selectedRecipe == null) {
-			ReachCraftingMod.LOGGER.warn("[recipe_click] missing recipe for id={}", recipe.getId());
+			ReachCraftingMod.LOGGER.warn("[recipe_click] missing recipe for id={}", recipe.id());
 			return;
 		}
 		boolean craftable = collection != null && collection.isCraftable(selectedRecipe.recipe());
 		int recipeIndex = collection != null ? collection.getRecipes().indexOf(selectedRecipe.recipe()) : -1;
-		if (!selectedRecipe.recipeId().equals(recipe.getId())) {
+		if (!selectedRecipe.recipeId().equals(recipe.id())) {
 			ReachCraftingMod.LOGGER.debug(
 				"[recipe_variant] clicked_id={} selected_id={} mode={} output={}",
-				recipe.getId(),
+				recipe.id(),
 				selectedRecipe.recipeId(),
 				ReachCraftingConfig.get().revolvingCraftHandling().name().toLowerCase(),
 				selectedRecipe.outputLabel()
@@ -155,7 +155,7 @@ final class RecipeClickExecutor {
 		if (useDryRun) {
 			armBulkAutoCraft(
 				recipe,
-				recipe.getId(),
+				recipe.id(),
 				selectedRecipe.recipe(),
 				selectedRecipe.recipeId(),
 				collection,
@@ -271,7 +271,7 @@ final class RecipeClickExecutor {
 			if (AutoCraftController.isEnabled()) {
 				armBulkAutoCraft(
 					recipe,
-					recipe.getId(),
+					recipe.id(),
 					selectedRecipe.recipe(),
 					selectedRecipe.recipeId(),
 					collection,
@@ -296,7 +296,7 @@ final class RecipeClickExecutor {
 
 	static int resolveGridMatchedCount(
 		Minecraft minecraft,
-		Recipe<?> recipe,
+		RecipeHolder<?> recipe,
 		net.minecraft.client.gui.screens.recipebook.RecipeCollection collection,
 		boolean explicitVariantSelection
 	) {
@@ -337,13 +337,13 @@ final class RecipeClickExecutor {
 			return 0;
 		}
 
-		return ItemStack.isSameItemSameTags(currentResult, displayStack) ? gridCount : 0;
+		return ItemStack.isSameItemSameComponents(currentResult, displayStack) ? gridCount : 0;
 	}
 
 	static ItemStack resolveExpectedOutputStack(
 		Minecraft minecraft,
 		LocalPlayer player,
-		Recipe<?> recipe,
+		RecipeHolder<?> recipe,
 		net.minecraft.client.gui.screens.recipebook.RecipeCollection collection,
 		ItemStack displayStack,
 		boolean explicitVariantSelection
@@ -381,7 +381,7 @@ final class RecipeClickExecutor {
 
 	static int resolveRecipeQueueLimit(
 		Minecraft minecraft,
-		Recipe<?> recipe,
+		RecipeHolder<?> recipe,
 		net.minecraft.client.gui.screens.recipebook.RecipeCollection collection
 	) {
 		if (minecraft == null || minecraft.player == null || minecraft.level == null || recipe == null) {
@@ -402,9 +402,9 @@ final class RecipeClickExecutor {
 	}
 
 	private static void armBulkAutoCraft(
-		Recipe<?> clickedRecipe,
+		RecipeHolder<?> clickedRecipe,
 		net.minecraft.resources.ResourceLocation clickedRecipeId,
-		Recipe<?> recipe,
+		RecipeHolder<?> recipe,
 		net.minecraft.resources.ResourceLocation recipeId,
 		net.minecraft.client.gui.screens.recipebook.RecipeCollection collection,
 		ItemStack displayStack,
@@ -495,8 +495,8 @@ final class RecipeClickExecutor {
 	}
 
 	private static double reachDistance(Minecraft minecraft, LocalPlayer player) {
-		if (minecraft.gameMode != null) {
-			return minecraft.gameMode.getPickRange();
+		if (player != null) {
+			return player.blockInteractionRange();
 		}
 		return 4.5D;
 	}

@@ -13,11 +13,11 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.CraftingRecipe;
 import net.minecraft.world.item.crafting.Ingredient;
-import net.minecraft.world.item.crafting.Recipe;
+import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.ShapedRecipe;
 
 public record RecipeIngredientSummary(List<IngredientSlot> slots, List<String> rawSlots, String compactSummary) {
-	public static RecipeIngredientSummary fromRecipe(Recipe<?> recipe, int craftingGridSlotCount) {
+	public static RecipeIngredientSummary fromRecipe(RecipeHolder<?> recipe, int craftingGridSlotCount) {
 		List<Ingredient> ingredients = extractIngredients(recipe, craftingGridSlotCount);
 		List<IngredientSlot> slots = new ArrayList<>();
 		List<String> rawSlots = new ArrayList<>();
@@ -68,12 +68,12 @@ public record RecipeIngredientSummary(List<IngredientSlot> slots, List<String> r
 		return requiredSlots;
 	}
 
-	private static List<Ingredient> extractIngredients(Recipe<?> recipe, int craftingGridSlotCount) {
-		if (!(recipe instanceof CraftingRecipe craftingRecipe)) {
+	private static List<Ingredient> extractIngredients(RecipeHolder<?> recipe, int craftingGridSlotCount) {
+		if (!(recipe.value() instanceof CraftingRecipe craftingRecipe)) {
 			return List.of();
 		}
 
-		if (recipe instanceof ShapedRecipe shapedRecipe) {
+		if (recipe.value() instanceof ShapedRecipe shapedRecipe) {
 			return expandShapedIngredients(shapedRecipe, craftingGridSlotCount);
 		}
 

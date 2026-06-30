@@ -106,7 +106,7 @@ public class ReachCraftingModClient implements ClientModInitializer {
 		if (client.player == null || client.level == null) return;
 
 		net.minecraft.world.phys.Vec3 eyePos = client.player.getEyePosition(0);
-		double reach = client.gameMode != null ? client.gameMode.getPickRange() : 4.5D;
+		double reach = client.player != null ? client.player.blockInteractionRange() : 4.5D;
 		net.minecraft.core.BlockPos tablePos = ContainerUtils.findNearestCraftingTable(client.level, eyePos, reach);
 
 		if (tablePos != null) {

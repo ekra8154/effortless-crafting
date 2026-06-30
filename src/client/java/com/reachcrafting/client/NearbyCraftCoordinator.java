@@ -107,7 +107,7 @@ final class NearbyCraftCoordinator {
 
 		cancelCurrent();
 		AvailableItemSnapshot localItems = AvailableItemSnapshot.capture(player, client.screen);
-		double reachDistance = gameMode.getPickRange();
+		double reachDistance = player.blockInteractionRange();
 		ScreenContextSnapshot context = ScreenContextSnapshot.capture(client, cameraEntity, reachDistance, localItems);
 		if (reopenScreen) {
 			context = context.withClearedGrid();

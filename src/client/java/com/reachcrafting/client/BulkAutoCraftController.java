@@ -8,7 +8,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.crafting.Recipe;
+import net.minecraft.world.item.crafting.RecipeHolder;
 
 public final class BulkAutoCraftController {
 	private static final int REFILL_WINDOW_COPIES = 10_000;
@@ -87,7 +87,7 @@ public final class BulkAutoCraftController {
 			return;
 		}
 
-		if (!ItemStack.isSameItemSameTags(activeSession.expectedOutput(), expectedCopy)) {
+		if (!ItemStack.isSameItemSameComponents(activeSession.expectedOutput(), expectedCopy)) {
 			if (sameRecipe) {
 				String previousOutputName = activeSession.expectedOutput().getHoverName().getString();
 				int baselineOutputCount = countAccessibleOutput(client, expectedCopy);
@@ -718,19 +718,19 @@ public final class BulkAutoCraftController {
 			if (!(slot.container instanceof Inventory) || !slot.hasItem()) {
 				continue;
 			}
-			if (ItemStack.isSameItemSameTags(slot.getItem(), expectedOutput)) {
+			if (ItemStack.isSameItemSameComponents(slot.getItem(), expectedOutput)) {
 				count += slot.getItem().getCount();
 			}
 		}
 
 		// Also count the offhand slot, which is not usually in the menu's slots list in 3x3
 		ItemStack offhand = client.player.getOffhandItem();
-		if (!offhand.isEmpty() && ItemStack.isSameItemSameTags(offhand, expectedOutput)) {
+		if (!offhand.isEmpty() && ItemStack.isSameItemSameComponents(offhand, expectedOutput)) {
 			count += offhand.getCount();
 		}
 
 		ItemStack carried = client.player.containerMenu.getCarried();
-		if (!carried.isEmpty() && ItemStack.isSameItemSameTags(carried, expectedOutput)) {
+		if (!carried.isEmpty() && ItemStack.isSameItemSameComponents(carried, expectedOutput)) {
 			count += carried.getCount();
 		}
 		
@@ -747,14 +747,14 @@ public final class BulkAutoCraftController {
 				continue;
 			}
 			ItemStack stack = slot.getItem();
-			if (ItemStack.isSameItemSameTags(stack, expectedOutput) && stack.getCount() < stack.getMaxStackSize()) {
+			if (ItemStack.isSameItemSameComponents(stack, expectedOutput) && stack.getCount() < stack.getMaxStackSize()) {
 				return true;
 			}
 		}
 
 		ItemStack offhand = client.player.getOffhandItem();
 		return !offhand.isEmpty()
-			&& ItemStack.isSameItemSameTags(offhand, expectedOutput)
+			&& ItemStack.isSameItemSameComponents(offhand, expectedOutput)
 			&& offhand.getCount() < offhand.getMaxStackSize();
 	}
 
@@ -766,7 +766,7 @@ public final class BulkAutoCraftController {
 		int room = 0;
 		for (int inventorySlot = 0; inventorySlot < client.player.getInventory().items.size(); inventorySlot++) {
 			ItemStack stack = client.player.getInventory().items.get(inventorySlot);
-			if (stack.isEmpty() || !ItemStack.isSameItemSameTags(stack, expectedOutput)) {
+			if (stack.isEmpty() || !ItemStack.isSameItemSameComponents(stack, expectedOutput)) {
 				continue;
 			}
 			room += Math.max(0, stack.getMaxStackSize() - stack.getCount());
@@ -784,7 +784,7 @@ public final class BulkAutoCraftController {
 			if (!(slot.container instanceof Inventory) || !slot.hasItem()) {
 				continue;
 			}
-			if (ItemStack.isSameItemSameTags(slot.getItem(), expectedOutput)) {
+			if (ItemStack.isSameItemSameComponents(slot.getItem(), expectedOutput)) {
 				protectedSlots.add(slot.getContainerSlot());
 			}
 		}

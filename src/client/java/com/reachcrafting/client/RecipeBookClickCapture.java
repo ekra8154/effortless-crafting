@@ -5,7 +5,7 @@ import net.minecraft.client.gui.screens.recipebook.RecipeButton;
 import net.minecraft.client.gui.screens.recipebook.RecipeCollection;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.crafting.Recipe;
+import net.minecraft.world.item.crafting.RecipeHolder;
 
 public final class RecipeBookClickCapture {
 	private static final RecipeBookInputController CONTROLLER = RecipeBookInputController.getInstance();
@@ -18,7 +18,7 @@ public final class RecipeBookClickCapture {
 	}
 
 	public static void onRecipeButtonClicked(
-		Recipe<?> recipe,
+		RecipeHolder<?> recipe,
 		RecipeCollection collection,
 		ItemStack displayStack,
 		int mouseButton,
@@ -40,7 +40,7 @@ public final class RecipeBookClickCapture {
 	}
 
 	public static void onVanillaRecipeButtonClicked(
-		Recipe<?> recipe,
+		RecipeHolder<?> recipe,
 		RecipeCollection collection,
 		ItemStack displayStack,
 		boolean explicitVariantSelection,
@@ -50,7 +50,7 @@ public final class RecipeBookClickCapture {
 	}
 
 	public static boolean onRecipeButtonRightClicked(
-		Recipe<?> recipe,
+		RecipeHolder<?> recipe,
 		RecipeCollection collection,
 		ItemStack displayStack,
 		boolean explicitVariantSelection
@@ -59,7 +59,7 @@ public final class RecipeBookClickCapture {
 	}
 
 	public static int getHeldQueuedCount(
-		Recipe<?> recipe,
+		RecipeHolder<?> recipe,
 		RecipeCollection collection,
 		boolean explicitVariantSelection
 	) {
@@ -91,7 +91,7 @@ public final class RecipeBookClickCapture {
 	}
 
 	public static QueuedRecipeCountState getQueuedCountState(
-		Recipe<?> recipe,
+		RecipeHolder<?> recipe,
 		RecipeCollection collection,
 		boolean explicitVariantSelection
 	) {
@@ -103,7 +103,7 @@ public final class RecipeBookClickCapture {
 	}
 
 	public static boolean hasPendingHeldRecipe(
-		Recipe<?> recipe,
+		RecipeHolder<?> recipe,
 		RecipeCollection collection,
 		boolean explicitVariantSelection
 	) {
@@ -115,7 +115,7 @@ public final class RecipeBookClickCapture {
 	}
 
 	public record HeldRecipeAction(
-		Recipe<?> recipe,
+		RecipeHolder<?> recipe,
 		ResourceLocation recipeId,
 		RecipeCollection collection,
 		ItemStack displayStack,
@@ -134,9 +134,9 @@ public final class RecipeBookClickCapture {
 					return true;
 				}
 				boolean thisCollectionContainsOther = collection.getRecipes().stream()
-					.anyMatch(candidate -> candidate.getId().equals(other.recipeId));
+					.anyMatch(candidate -> candidate.id().equals(other.recipeId));
 				boolean otherCollectionContainsThis = other.collection.getRecipes().stream()
-					.anyMatch(candidate -> candidate.getId().equals(recipeId));
+					.anyMatch(candidate -> candidate.id().equals(recipeId));
 				if (thisCollectionContainsOther && otherCollectionContainsThis) {
 					return true;
 				}

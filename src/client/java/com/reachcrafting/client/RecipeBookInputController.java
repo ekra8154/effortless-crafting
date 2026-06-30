@@ -10,7 +10,7 @@ import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.client.gui.screens.recipebook.RecipeButton;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.crafting.Recipe;
+import net.minecraft.world.item.crafting.RecipeHolder;
 import org.lwjgl.glfw.GLFW;
 
 final class RecipeBookInputController {
@@ -114,7 +114,7 @@ final class RecipeBookInputController {
 	}
 
 	void onRecipeButtonClicked(
-		Recipe<?> recipe,
+		RecipeHolder<?> recipe,
 		net.minecraft.client.gui.screens.recipebook.RecipeCollection collection,
 		ItemStack displayStack,
 		int mouseButton,
@@ -171,7 +171,7 @@ final class RecipeBookInputController {
 			state.setReplayDelayTicks(1);
 			RecipeBookClickCapture.HeldRecipeAction action = new RecipeBookClickCapture.HeldRecipeAction(
 				recipe,
-				recipe.getId(),
+				recipe.id(),
 				collection,
 				displayStack != null ? displayStack.copy() : ItemStack.EMPTY,
 				mouseButton,
@@ -200,7 +200,7 @@ final class RecipeBookInputController {
 	}
 
 	void onVanillaRecipeButtonClicked(
-		Recipe<?> recipe,
+		RecipeHolder<?> recipe,
 		net.minecraft.client.gui.screens.recipebook.RecipeCollection collection,
 		ItemStack displayStack,
 		boolean explicitVariantSelection,
@@ -242,7 +242,7 @@ final class RecipeBookInputController {
 	}
 
 	boolean onRecipeButtonRightClicked(
-		Recipe<?> recipe,
+		RecipeHolder<?> recipe,
 		net.minecraft.client.gui.screens.recipebook.RecipeCollection collection,
 		ItemStack displayStack,
 		boolean explicitVariantSelection
@@ -252,7 +252,7 @@ final class RecipeBookInputController {
 		}
 		return clearHeldRecipe(new RecipeBookClickCapture.HeldRecipeAction(
 			recipe,
-			recipe.getId(),
+			recipe.id(),
 			collection,
 			displayStack != null ? displayStack.copy() : ItemStack.EMPTY,
 			GLFW.GLFW_MOUSE_BUTTON_LEFT,
@@ -261,7 +261,7 @@ final class RecipeBookInputController {
 	}
 
 	QueuedRecipeCountState getQueuedCountState(
-		Recipe<?> recipe,
+		RecipeHolder<?> recipe,
 		net.minecraft.client.gui.screens.recipebook.RecipeCollection collection,
 		boolean explicitVariantSelection
 	) {
@@ -301,7 +301,7 @@ final class RecipeBookInputController {
 	}
 
 	int getHeldQueuedCount(
-		Recipe<?> recipe,
+		RecipeHolder<?> recipe,
 		net.minecraft.client.gui.screens.recipebook.RecipeCollection collection,
 		boolean explicitVariantSelection
 	) {
@@ -392,7 +392,7 @@ final class RecipeBookInputController {
 	}
 
 	boolean hasPendingHeldRecipe(
-		Recipe<?> recipe,
+		RecipeHolder<?> recipe,
 		net.minecraft.client.gui.screens.recipebook.RecipeCollection collection,
 		boolean explicitVariantSelection
 	) {
@@ -425,7 +425,7 @@ final class RecipeBookInputController {
 	private int resolveMaxCraftRequestCount(
 		Minecraft minecraft,
 		LocalPlayer player,
-		Recipe<?> recipe,
+		RecipeHolder<?> recipe,
 		net.minecraft.client.gui.screens.recipebook.RecipeCollection collection,
 		ItemStack displayStack,
 		boolean explicitVariantSelection,
@@ -451,7 +451,7 @@ final class RecipeBookInputController {
 	}
 
 	private void queueHeldRecipe(
-		Recipe<?> recipe,
+		RecipeHolder<?> recipe,
 		net.minecraft.client.gui.screens.recipebook.RecipeCollection collection,
 		ItemStack displayStack,
 		int mouseButton,
@@ -460,7 +460,7 @@ final class RecipeBookInputController {
 	) {
 		RecipeBookClickCapture.HeldRecipeAction action = new RecipeBookClickCapture.HeldRecipeAction(
 			recipe,
-			recipe.getId(),
+			recipe.id(),
 			collection,
 			displayStack != null ? displayStack.copy() : ItemStack.EMPTY,
 			mouseButton,
@@ -715,7 +715,7 @@ final class RecipeBookInputController {
 
 	private boolean matchesAction(
 		RecipeBookClickCapture.HeldRecipeAction action,
-		Recipe<?> recipe,
+		RecipeHolder<?> recipe,
 		net.minecraft.client.gui.screens.recipebook.RecipeCollection collection,
 		boolean explicitVariantSelection
 	) {
@@ -724,7 +724,7 @@ final class RecipeBookInputController {
 		}
 		return action.sameRecipe(new RecipeBookClickCapture.HeldRecipeAction(
 			recipe,
-			recipe.getId(),
+			recipe.id(),
 			collection,
 			ItemStack.EMPTY,
 			org.lwjgl.glfw.GLFW.GLFW_MOUSE_BUTTON_LEFT,

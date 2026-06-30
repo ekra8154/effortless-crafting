@@ -7,7 +7,7 @@ import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.recipebook.OverlayRecipeComponent;
 import net.minecraft.client.gui.screens.recipebook.RecipeCollection;
-import net.minecraft.world.item.crafting.Recipe;
+import net.minecraft.world.item.crafting.RecipeHolder;
 import org.lwjgl.glfw.GLFW;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -23,7 +23,7 @@ public abstract class OverlayRecipeComponentMixin {
 			return;
 		}
 		OverlayRecipeComponent overlay = (OverlayRecipeComponent) (Object) this;
-		Recipe<?> recipe = overlay.getLastRecipeClicked();
+		RecipeHolder<?> recipe = overlay.getLastRecipeClicked();
 		RecipeCollection collection = overlay.getRecipeCollection();
 		if (recipe == null || collection == null) {
 			return;

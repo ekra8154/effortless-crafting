@@ -29,7 +29,7 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.crafting.Recipe;
+import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
@@ -52,10 +52,10 @@ final class SearchSession extends BaseCraftSession {
 	private final RecipeCollection recipeCollection;
 	private final boolean explicitVariantSelection;
 	private final int recipeIndex;
-	private final Recipe<?> initialRequestedRecipe;
+	private final RecipeHolder<?> initialRequestedRecipe;
 	private final ResourceLocation initialRequestedRecipeId;
 	private final String initialRequestedOutputLabel;
-	private Recipe<?> recipe;
+	private RecipeHolder<?> recipe;
 	private ResourceLocation recipeId;
 	private String outputLabel;
 	private RecipeIngredientSummary ingredientSummary;
@@ -118,12 +118,12 @@ final class SearchSession extends BaseCraftSession {
 		this.craftAll = request.craftAll();
 		this.requestedSingleClicks = Math.max(request.requestedSingleClicks(), 1);
 		this.allowNearby = request.allowNearby() && ReachCraftingConfig.get().enableNearbyContainerUsage();
-		this.originalContext = ScreenContextSnapshot.capture(client, cameraEntity, gameMode != null ? gameMode.getPickRange() : 4.5D, this.localItems);
+		this.originalContext = ScreenContextSnapshot.capture(client, cameraEntity, net.minecraft.client.Minecraft.getInstance().player != null ? net.minecraft.client.Minecraft.getInstance().player.blockInteractionRange() : 4.5D, this.localItems);
 		this.planningPolicy = ReachCraftingConfig.get().toPlanningPolicy();
 		Set<String> accepted = new HashSet<>(this.ingredientSummary.acceptedItemIds());
 		if (recipeCollection != null && (planningPolicy.redistributeToCraftWhenNeeded() || ReachCraftingConfig.get().revolvingCraftHandling() != ReachCraftingConfig.RevolvingCraftHandling.SPECIFIC_VARIANT_ONLY)) {
 			int craftingGridSize = Math.max(this.originalContext.gridStacks().size(), 4);
-			for (Recipe<?> collectionRecipe : recipeCollection.getRecipes()) {
+			for (RecipeHolder<?> collectionRecipe : recipeCollection.getRecipes()) {
 				accepted.addAll(RecipeIngredientSummary.fromRecipe(collectionRecipe, craftingGridSize).acceptedItemIds());
 			}
 		}
@@ -135,8 +135,8 @@ final class SearchSession extends BaseCraftSession {
 			this.craftAll
 		);
 		this.remainingItemIds = new ArrayList<>(initialDeficit.missingItemIds());
-		this.reachableView = NearbyContainerCache.getReachableView(level, cameraEntity, gameMode != null ? gameMode.getPickRange() : 4.5D);
-		this.candidates = this.allowNearby ? findCandidates(level, cameraEntity, gameMode != null ? gameMode.getPickRange() : 4.5D) : List.of();
+		this.reachableView = NearbyContainerCache.getReachableView(level, cameraEntity, net.minecraft.client.Minecraft.getInstance().player != null ? net.minecraft.client.Minecraft.getInstance().player.blockInteractionRange() : 4.5D);
+		this.candidates = this.allowNearby ? findCandidates(level, cameraEntity, net.minecraft.client.Minecraft.getInstance().player != null ? net.minecraft.client.Minecraft.getInstance().player.blockInteractionRange() : 4.5D) : List.of();
 		this.useCachedSearch = this.allowNearby
 			&& ReachCraftingConfig.get().cacheContainersForFasterSearch()
 			&& !this.reachableView.isEmpty();
@@ -430,7 +430,7 @@ final class SearchSession extends BaseCraftSession {
 			if (!ContainerUtils.canAttemptOpen(level, pos, blockState)) {
 				continue;
 			}
-			if (ContainerUtils.squaredDistanceToBlock(eyePos, pos) > Mth.square(gameMode != null ? gameMode.getPickRange() : 4.5D)) {
+			if (ContainerUtils.squaredDistanceToBlock(eyePos, pos) > Mth.square(net.minecraft.client.Minecraft.getInstance().player != null ? net.minecraft.client.Minecraft.getInstance().player.blockInteractionRange() : 4.5D)) {
 				continue;
 			}
 
@@ -1319,7 +1319,7 @@ final class SearchSession extends BaseCraftSession {
 		}
 
 		try {
-			var item = BuiltInRegistries.ITEM.get(new ResourceLocation(itemId));
+			var item = BuiltInRegistries.ITEM.get(ResourceLocation.parse(itemId));
 			return item == null ? ItemStack.EMPTY : item.getDefaultInstance();
 		} catch (Exception ignored) {
 			return ItemStack.EMPTY;
@@ -1348,7 +1348,7 @@ final class SearchSession extends BaseCraftSession {
 			if (remaining <= 0) {
 				break;
 			}
-			if (slot.isEmpty() || !ItemStack.isSameItemSameTags(slot, prototype)) {
+			if (slot.isEmpty() || !ItemStack.isSameItemSameComponents(slot, prototype)) {
 				continue;
 			}
 
@@ -1434,7 +1434,7 @@ final class SearchSession extends BaseCraftSession {
 	}
 
 	private void refreshReachableView() {
-		reachableView = NearbyContainerCache.getReachableView(level, cameraEntity, gameMode != null ? gameMode.getPickRange() : 4.5D);
+		reachableView = NearbyContainerCache.getReachableView(level, cameraEntity, net.minecraft.client.Minecraft.getInstance().player != null ? net.minecraft.client.Minecraft.getInstance().player.blockInteractionRange() : 4.5D);
 	}
 
 	private boolean shouldStartFallbackDiscovery() {
@@ -1723,21 +1723,21 @@ final class SearchSession extends BaseCraftSession {
 		return ReachCraftingConfig.get().bulkVariantSwitching() ? initialRequestedRecipeId : recipeId;
 	}
 
-	private Recipe<?> resolveRecipeById(ResourceLocation targetRecipeId) {
+	private RecipeHolder<?> resolveRecipeById(ResourceLocation targetRecipeId) {
 		if (targetRecipeId == null) {
 			return recipe;
 		}
 		if (recipeCollection != null) {
-			for (Recipe<?> candidate : recipeCollection.getRecipes()) {
-				if (targetRecipeId.equals(candidate.getId())) {
+			for (RecipeHolder<?> candidate : recipeCollection.getRecipes()) {
+				if (targetRecipeId.equals(candidate.id())) {
 					return candidate;
 				}
 			}
 		}
-		if (recipe != null && targetRecipeId.equals(recipe.getId())) {
+		if (recipe != null && targetRecipeId.equals(recipe.id())) {
 			return recipe;
 		}
-		if (initialRequestedRecipe != null && targetRecipeId.equals(initialRequestedRecipe.getId())) {
+		if (initialRequestedRecipe != null && targetRecipeId.equals(initialRequestedRecipe.id())) {
 			return initialRequestedRecipe;
 		}
 		return recipe != null ? recipe : initialRequestedRecipe;
@@ -2075,7 +2075,7 @@ final class SearchSession extends BaseCraftSession {
 
 			Slot targetSlot = menu.getSlot(slotIndex);
 			ItemStack currentStack = targetSlot.getItem();
-			if (currentStack.isEmpty() || !ItemStack.isSameItemSameTags(currentStack, originalStack)) {
+			if (currentStack.isEmpty() || !ItemStack.isSameItemSameComponents(currentStack, originalStack)) {
 				return false;
 			}
 
@@ -2278,7 +2278,7 @@ final class SearchSession extends BaseCraftSession {
 
 		Slot targetSlot = menu.getSlot(targetSlotIndex);
 		ItemStack currentStack = targetSlot.getItem();
-		if (!currentStack.isEmpty() && !ItemStack.isSameItemSameTags(currentStack, desiredStack)) {
+		if (!currentStack.isEmpty() && !ItemStack.isSameItemSameComponents(currentStack, desiredStack)) {
 			if (!moveGridSlotBackToInventory(menu, targetSlot)) {
 				lastRestoreFailure = "wrong_item_in_grid actual=" + ContainerUtils.formatStack(currentStack) + " desired=" + ContainerUtils.formatStack(desiredStack);
 				return false;
@@ -2304,7 +2304,7 @@ final class SearchSession extends BaseCraftSession {
 		}
 
 		ItemStack restoredStack = targetSlot.getItem();
-		boolean restored = ItemStack.isSameItemSameTags(restoredStack, desiredStack) && restoredStack.getCount() >= desiredStack.getCount();
+		boolean restored = ItemStack.isSameItemSameComponents(restoredStack, desiredStack) && restoredStack.getCount() >= desiredStack.getCount();
 		if (!restored) {
 			lastRestoreFailure = "post_check actual=" + ContainerUtils.formatStack(restoredStack) + " desired=" + ContainerUtils.formatStack(desiredStack);
 		}

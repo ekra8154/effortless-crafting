@@ -54,7 +54,7 @@ final class ScreenContextRestorer {
 		if (context.kind() == ScreenKind.CRAFTING_TABLE_3X3 && context.craftingTablePos() != null) {
 			Vec3 eyePos = cameraEntity.getEyePosition(0);
 			BlockPos pos = context.craftingTablePos();
-			if (level.getBlockState(pos).is(Blocks.CRAFTING_TABLE) && ContainerUtils.squaredDistanceToBlock(eyePos, pos) <= Mth.square(gameMode != null ? gameMode.getPickRange() : 4.5D)) {
+			if (level.getBlockState(pos).is(Blocks.CRAFTING_TABLE) && ContainerUtils.squaredDistanceToBlock(eyePos, pos) <= Mth.square(player != null ? player.blockInteractionRange() : 4.5D)) {
 				Vec3 hitPos = ContainerUtils.closestPointOnUnitBlock(eyePos, pos);
 				Vec3 delta = hitPos.subtract(eyePos);
 				Direction face = Direction.getNearest(delta.x, delta.y, delta.z).getOpposite();

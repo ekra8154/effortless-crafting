@@ -149,7 +149,7 @@ final class ReturnSession extends BaseCraftSession {
 			BlockState blockState = level.getBlockState(pos);
 			if (!InWorldFilterManager.isContainerActive(level, pos, blockState)) continue;
 			if (!ContainerUtils.canAttemptOpen(level, pos, blockState)) continue;
-			if (ContainerUtils.squaredDistanceToBlock(eyePos, pos) > net.minecraft.util.Mth.square(gameMode != null ? gameMode.getPickRange() : 4.5D)) continue;
+			if (ContainerUtils.squaredDistanceToBlock(eyePos, pos) > net.minecraft.util.Mth.square(player != null ? player.blockInteractionRange() : 4.5D)) continue;
 
 			Vec3 hitPos = ContainerUtils.closestPointOnUnitBlock(eyePos, pos);
 			Vec3 delta = hitPos.subtract(eyePos);
@@ -380,7 +380,7 @@ final class ReturnSession extends BaseCraftSession {
 			}
 
 			ItemStack current = targetSlot.getItem();
-			if (!current.isEmpty() && !ItemStack.isSameItemSameTags(current, snapshot)) {
+			if (!current.isEmpty() && !ItemStack.isSameItemSameComponents(current, snapshot)) {
 				continue;
 			}
 
@@ -436,7 +436,7 @@ final class ReturnSession extends BaseCraftSession {
 			if (slot.getContainerSlot() == excludedInventorySlot) {
 				continue;
 			}
-			if (!ItemStack.isSameItemSameTags(slot.getItem(), desiredStack)) {
+			if (!ItemStack.isSameItemSameComponents(slot.getItem(), desiredStack)) {
 				continue;
 			}
 
@@ -462,7 +462,7 @@ final class ReturnSession extends BaseCraftSession {
 		if (count == 0) return true;
 		
 		ItemStack current = slot.hasItem() ? slot.getItem() : ItemStack.EMPTY;
-		boolean same = current.isEmpty() || ItemStack.isSameItemSameTags(current, stack);
+		boolean same = current.isEmpty() || ItemStack.isSameItemSameComponents(current, stack);
 		return same && count < max;
 	}
 

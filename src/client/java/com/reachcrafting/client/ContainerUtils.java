@@ -313,7 +313,7 @@ public final class ContainerUtils {
 
 	public static String getItemName(String itemId) {
 		try {
-			net.minecraft.resources.ResourceLocation resourceLocation = new net.minecraft.resources.ResourceLocation(itemId);
+			net.minecraft.resources.ResourceLocation resourceLocation = net.minecraft.resources.ResourceLocation.parse(itemId);
 			if (!net.minecraft.core.registries.BuiltInRegistries.ITEM.containsKey(resourceLocation)) {
 				return itemId;
 			}

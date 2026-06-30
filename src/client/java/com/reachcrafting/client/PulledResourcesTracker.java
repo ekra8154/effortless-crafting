@@ -43,7 +43,7 @@ public final class PulledResourcesTracker {
 			
 			if (existing == null || existing.isEmpty()) {
 				shouldUpdate = true;
-			} else if (!ItemStack.isSameItemSameTags(existing, current)) {
+			} else if (!ItemStack.isSameItemSameComponents(existing, current)) {
 				shouldUpdate = true;
 			} else if (current.getCount() > existing.getCount()) {
 				shouldUpdate = true;
@@ -76,7 +76,7 @@ public final class PulledResourcesTracker {
 		if (snapshot == null || snapshot.isEmpty()) {
 			return 0;
 		}
-		if (!ItemStack.isSameItemSameTags(snapshot, currentStack)) {
+		if (!ItemStack.isSameItemSameComponents(snapshot, currentStack)) {
 			return 0;
 		}
 		return snapshot.getCount();
@@ -106,7 +106,7 @@ public final class PulledResourcesTracker {
 		// Consolidate with previous entry if same pos/slot to avoid 1-by-1 return overhead
 		if (!WITHDRAWN_ITEMS.isEmpty()) {
 			WithdrawnItem last = WITHDRAWN_ITEMS.get(WITHDRAWN_ITEMS.size() - 1);
-			if (last.containerPos().equals(containerPos) && last.slotIndex() == slotIndex && ItemStack.isSameItemSameTags(last.stack(), stack)) {
+			if (last.containerPos().equals(containerPos) && last.slotIndex() == slotIndex && ItemStack.isSameItemSameComponents(last.stack(), stack)) {
 				last.stack().grow(stack.getCount());
 				return;
 			}

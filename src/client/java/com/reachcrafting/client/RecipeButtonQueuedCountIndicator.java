@@ -6,7 +6,7 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.screens.recipebook.RecipeCollection;
 import net.minecraft.client.gui.screens.recipebook.RecipeButton;
-import net.minecraft.world.item.crafting.Recipe;
+import net.minecraft.world.item.crafting.RecipeHolder;
 
 public final class RecipeButtonQueuedCountIndicator {
 	private static final int BADGE_WIDTH = 9;
@@ -50,7 +50,7 @@ public final class RecipeButtonQueuedCountIndicator {
 		int x,
 		int y,
 		int width,
-		Recipe<?> recipe,
+		RecipeHolder<?> recipe,
 		RecipeCollection collection
 	) {
 		if (!ReachCraftingConfig.get().enabled()) {

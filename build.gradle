@@ -51,13 +51,13 @@ processResources {
 }
 
 tasks.withType(JavaCompile).configureEach {
-	options.release = 17
+	options.release = 21
 }
 
 java {
 	withSourcesJar()
 	toolchain {
-		languageVersion = JavaLanguageVersion.of(17)
+		languageVersion = JavaLanguageVersion.of(21)
 	}
 }
 
