@@ -46,6 +46,12 @@ public class ReachCraftingModClient implements ClientModInitializer {
 		}
 	}
 
+	public static void sendChainCraftChat(String message) {
+		if (ReachCraftingConfig.get().showChainCraftMessages()) {
+			sendChat(message);
+		}
+	}
+
 	@Override
 	public void onInitializeClient() {
 		ReachCraftingConfig.load();
@@ -53,6 +59,10 @@ public class ReachCraftingModClient implements ClientModInitializer {
 		RecipeBookClickCapture.init();
 		NearbyContainerDryRun.init();
 		ContainerFilterRenderer.init();
+		ChainCraftabilityCache.init();
+		RecipeBookChunkedScheduler.init();
+		ChainCraftController.init();
+		RecipeBookScrollController.init();
 		String reachCraftingCategory = "key.categories." + ReachCraftingMod.MOD_ID;
 
 		showFilterOutlinesKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(

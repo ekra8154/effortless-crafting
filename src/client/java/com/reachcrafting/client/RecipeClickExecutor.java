@@ -138,6 +138,29 @@ final class RecipeClickExecutor {
 		);
 
 		boolean useDryRun = forceDryRun || allowNearbyChests;
+
+		// Chain-craft offer: if the recipe cannot be completed even with nearby containers, try to
+		// build a plan that crafts the missing intermediates first. The "missing" chat is deferred to
+		// the confirmation popup (shown only if the user declines the chain craft).
+		if (deficitReport.hasMissingIngredients()
+			&& ReachCraftingConfig.get().chainCraftingMode() != ReachCraftingConfig.ChainCraftingMode.DISABLED
+			&& !ChainCraftController.isActive()
+			&& !AutoCraftController.isBulkModeEnabled()) {
+			java.util.Optional<ChainCraftPlan> chainPlan = craftAll
+				? ChainCraftPlanner.planMax(minecraft, player, selectedRecipe, availableCounts, allowNearbyChests, Math.max(requestedClicks, 1))
+				: ChainCraftPlanner.plan(minecraft, player, selectedRecipe, availableCounts, allowNearbyChests, Math.max(desiredVariantCopies, 1));
+			if (chainPlan.isPresent()) {
+				int requestedChainCopies = craftAll ? chainPlan.get().finalRecipeCopies() : Math.max(desiredVariantCopies, 1);
+				ChainCraftPopupController.handlePlan(
+					chainPlan.get(),
+					requestedChainCopies,
+					false,
+					"Missing: " + deficitReport.compactMissingSummary()
+				);
+				return;
+			}
+		}
+
 		if (deficitReport.hasMissingIngredients()) {
 			ReachCraftingModClient.sendDebugChat("Missing from inventory: " + deficitReport.compactMissingSummary());
 			if (!useDryRun) {
@@ -190,6 +213,10 @@ final class RecipeClickExecutor {
 					postPlaceSnapshot.hasReservedGrid()
 				);
 				ContainerUtils.scheduleAutoMove(selectedRecipe.displayStack());
+				if (!ChainCraftController.isActive()) {
+					ReachCraftingConfig.get().noteRecentRecipe(selectedRecipe.recipeId());
+					RecipeBookChunkedScheduler.onRecentRecipesChanged();
+				}
 				ReachCraftingModClient.sendDebugChat("Placed recipe: " + outputLabel);
 				if (explicitVariantSelection) {
 					tryCloseOverlayAfterRelease();
@@ -286,6 +313,10 @@ final class RecipeClickExecutor {
 					ingredientSummary
 				);
 				ContainerUtils.scheduleAutoMove(selectedRecipe.displayStack());
+			}
+			if (!ChainCraftController.isActive()) {
+				ReachCraftingConfig.get().noteRecentRecipe(selectedRecipe.recipeId());
+				RecipeBookChunkedScheduler.onRecentRecipesChanged();
 			}
 			ReachCraftingModClient.sendDebugChat("Placed recipe: " + outputLabel);
 			if (explicitVariantSelection) {

@@ -11,12 +11,15 @@ import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.client.gui.screens.recipebook.RecipeBookComponent;
 import net.minecraft.client.gui.screens.recipebook.RecipeBookPage;
 import net.minecraft.client.gui.screens.recipebook.RecipeButton;
+import net.minecraft.client.gui.screens.recipebook.RecipeCollection;
 import net.minecraft.world.inventory.RecipeBookMenu;
+import java.util.List;
 import org.lwjgl.glfw.GLFW;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
@@ -60,6 +63,7 @@ public abstract class RecipeBookComponentMixin {
 
 	@Inject(method = "setVisible", at = @At("TAIL"))
 	private void reachcrafting$onSetVisible(boolean visible, CallbackInfo ci) {
+		com.reachcrafting.client.RecipeBookChunkedScheduler.onRecipeBookVisibilityChanged(visible);
 		if (!ReachCraftingConfig.get().enabled()) {
 			return;
 		}
@@ -71,6 +75,30 @@ public abstract class RecipeBookComponentMixin {
 			reachcrafting$commitCurrentSearchToHistory();
 			reachcrafting$resetSearchHistoryNavigation();
 		}
+	}
+
+	/**
+	 * Reorders the recipe-book collection list according to the smart sorter before the page renders
+	 * them. Targets {@code RecipeBookPage.updateCollections(List, boolean)} inside the component's own
+	 * {@code updateCollections(boolean)}.
+	 */
+	@ModifyArg(
+		method = "updateCollections",
+		at = @At(
+			value = "INVOKE",
+			target = "Lnet/minecraft/client/gui/screens/recipebook/RecipeBookPage;updateCollections(Ljava/util/List;Z)V"
+		),
+		index = 0
+	)
+	private List<RecipeCollection> reachcrafting$sortRecipeBookCollections(List<RecipeCollection> collections) {
+		if (!ReachCraftingConfig.get().enabled()) {
+			return collections;
+		}
+		boolean eager = com.reachcrafting.client.RecipeBookChunkedScheduler.consumeForceEagerNextSort();
+		if (com.reachcrafting.client.RecipeBookChunkedScheduler.shouldFreezeResort()) {
+			return com.reachcrafting.client.RecipeBookSmartSorter.preservePresentedOrder(collections);
+		}
+		return com.reachcrafting.client.RecipeBookSmartSorter.sorted(collections, eager);
 	}
 
 	@Inject(method = "mouseClicked", at = @At("HEAD"))
@@ -213,7 +241,7 @@ public abstract class RecipeBookComponentMixin {
 		if (!reachcrafting$isSupportedScreen()) {
 			return;
 		}
-		if (ReachCraftingConfig.get().rememberPreviousSearch()) {
+		if (ReachCraftingConfig.get().shouldRestoreLastSearch()) {
 			String lastSearchText = ReachCraftingConfig.getLastSearchText();
 			if (!lastSearchText.isEmpty()) {
 				ReachCraftingConfig.pushSearchHistory(lastSearchText);

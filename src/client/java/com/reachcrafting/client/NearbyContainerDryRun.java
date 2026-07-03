@@ -1,6 +1,7 @@
 package com.reachcrafting.client;
 
 import java.util.List;
+import java.util.Map;
 import net.minecraft.client.gui.screens.recipebook.RecipeCollection;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.ResourceLocation;
@@ -43,6 +44,10 @@ public final class NearbyContainerDryRun {
 			requestedSingleClicks,
 			allowNearby
 		));
+	}
+
+	public static void startCountStaging(Map<String, Integer> desiredCounts, String reason) {
+		COORDINATOR.startCountStaging(new CountStagingRequest(desiredCounts, reason));
 	}
 
 	public static boolean tryExpandReservedGrid(

@@ -16,8 +16,45 @@ public final class RecipeButtonNearbyIndicator {
 	private RecipeButtonNearbyIndicator() {
 	}
 
+	public enum Craftability {
+		NOT_CRAFTABLE,
+		LOCALLY_CRAFTABLE,
+		NEARBY_CRAFTABLE
+	}
+
 	public static boolean shouldShow(RecipeButton button) {
 		return shouldShow(button.getRecipe(), button.getCollection(), RecipeVariantResolver.resolveDisplayStack(button.getRecipe(), Minecraft.getInstance()), false);
+	}
+
+	/**
+	 * Classifies whether the recipe (identified by id within {@code collection}) is craftable using
+	 * nearby container contents. 1.20.1 computes this live (no persistent cache), so this simply
+	 * resolves the recipe and reuses {@link #shouldShow}.
+	 */
+	public static Craftability getCraftability(net.minecraft.resources.ResourceLocation recipeId, RecipeCollection collection, ItemStack displayStack, boolean explicitVariantSelection) {
+		if (recipeId == null || collection == null) {
+			return Craftability.NOT_CRAFTABLE;
+		}
+		Recipe<?> recipe = null;
+		for (Recipe<?> candidate : collection.getRecipes()) {
+			if (candidate.getId().equals(recipeId)) {
+				recipe = candidate;
+				break;
+			}
+		}
+		if (recipe == null) {
+			return Craftability.NOT_CRAFTABLE;
+		}
+		ItemStack stack = (displayStack == null || displayStack.isEmpty())
+			? RecipeVariantResolver.resolveDisplayStack(recipe, Minecraft.getInstance())
+			: displayStack;
+		return shouldShow(recipe, collection, stack, explicitVariantSelection)
+			? Craftability.NEARBY_CRAFTABLE
+			: Craftability.NOT_CRAFTABLE;
+	}
+
+	/** 1.20.1 computes nearby-craftability live; there is no persistent cache to clear. */
+	public static void clearCaches() {
 	}
 
 	public static boolean shouldShow(Recipe<?> recipe, RecipeCollection collection, ItemStack displayStack, boolean explicitVariantSelection) {

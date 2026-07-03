@@ -1,0 +1,560 @@
+package com.reachcrafting.client;
+
+import com.reachcrafting.ReachCraftingMod;
+import java.util.Map;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.inventory.CraftingScreen;
+import net.minecraft.client.gui.screens.inventory.InventoryScreen;
+import net.minecraft.client.gui.screens.recipebook.RecipeCollection;
+import net.minecraft.core.RegistryAccess;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.crafting.CraftingRecipe;
+import net.minecraft.world.item.crafting.Recipe;
+
+public final class ChainCraftController {
+	private static final int STEP_TIMEOUT_TICKS = 200;
+	private static final int BATCH_SETTLE_QUIET_TICKS = 8;
+	private static ChainCraftRun activeRun;
+	private static PendingWarmupRetry pendingWarmupRetry;
+
+	private ChainCraftController() {
+	}
+
+	public static void init() {
+		ClientTickEvents.END_CLIENT_TICK.register(ChainCraftController::tick);
+	}
+
+	static void start(ChainCraftPlan plan) {
+		if (plan == null || plan.steps().isEmpty()) {
+			return;
+		}
+		abort(false);
+		activeRun = ChainCraftRun.start(plan);
+	}
+
+	static boolean isActive() {
+		return activeRun != null || pendingWarmupRetry != null;
+	}
+
+	static boolean isRunningIntermediateStep() {
+		return activeRun != null && activeRun.currentStepIndex() < activeRun.plan().steps().size() - 1;
+	}
+
+	static boolean isUsingPreStagedNearbyResources() {
+		return activeRun != null && activeRun.preStagedNearbyResources();
+	}
+
+	static void abort(boolean report) {
+		if (activeRun == null && pendingWarmupRetry == null) {
+			return;
+		}
+		activeRun = null;
+		pendingWarmupRetry = null;
+		if (report) {
+			ReachCraftingModClient.sendAbortedChat("Crafting session aborted.");
+		}
+	}
+
+	static void armRetryAfterNearbyWarmup(
+		RecipeBookClickCapture.HeldRecipeAction action,
+		int remainingClicks,
+		boolean allowNearby,
+		boolean craftAll,
+		boolean refillableBulkMaxMode,
+		ItemStack expectedOutput
+	) {
+		Minecraft client = Minecraft.getInstance();
+		int baselineOutputCount = countAccessibleOutput(client, expectedOutput);
+		pendingWarmupRetry = new PendingWarmupRetry(
+			action,
+			Math.max(remainingClicks, 1),
+			allowNearby,
+			craftAll,
+			refillableBulkMaxMode,
+			expectedOutput.copy(),
+			baselineOutputCount
+		);
+		ReachCraftingMod.LOGGER.info(
+			"[chain_retry] armed_after_nearby_warmup recipe={} clicks={} output={} baseline_count={}",
+			action.recipeId(),
+			remainingClicks,
+			ContainerUtils.formatStack(expectedOutput),
+			baselineOutputCount
+		);
+	}
+
+	static void onAutoMoveFinished(Minecraft client, boolean success) {
+		if (activeRun == null) {
+			return;
+		}
+		if (!success) {
+			failCurrentStep();
+			return;
+		}
+		if (activeRun.needsBatchSettlement()) {
+			activeRun = activeRun.withSettlingBatch();
+			return;
+		}
+		activeRun = activeRun.withCompletedBatch();
+		if (activeRun == null || activeRun.currentStepIndex() >= activeRun.plan().steps().size()) {
+			activeRun = null;
+			return;
+		}
+		activeRun = activeRun.withWaiting(false, 0);
+	}
+
+	private static void tick(Minecraft client) {
+		ChainCraftPopupController.tick(client);
+		tickPendingWarmupRetry(client);
+		if (activeRun == null) {
+			return;
+		}
+		if (client.player == null) {
+			activeRun = null;
+			return;
+		}
+		if (!(client.screen instanceof CraftingScreen)
+			&& !(client.screen instanceof InventoryScreen)
+			&& !NearbyContainerDryRun.isActiveSessionRunning()) {
+			ReachCraftingModClient.sendChat(Component.translatable("message.reachcrafting.chain_crafting.context_lost").getString());
+			activeRun = null;
+			return;
+		}
+		if (!client.isWindowActive()) {
+			abort(true);
+			return;
+		}
+		if (activeRun.settlingBatch()) {
+			tickBatchSettlement(client);
+			return;
+		}
+		if (!activeRun.waitingForStep()) {
+			if (activeRun.waitingForStaging()) {
+				if (NearbyContainerDryRun.isActiveSessionRunning()) {
+					return;
+				}
+				boolean fullyAvailable = ChainCraftStagingPlanner.isFullyAvailableLocally(client, activeRun.plan());
+				ReachCraftingMod.LOGGER.info(
+					"[chain_stage] completed available={} missing={}",
+					fullyAvailable,
+					AvailableItemSnapshot.formatCounts(ChainCraftStagingPlanner.missingStagingCounts(client, activeRun.plan()))
+				);
+				activeRun = activeRun.withStagingComplete(fullyAvailable);
+				return;
+			}
+			if (!activeRun.stagingAttempted() && shouldAttemptPreStage(client, activeRun.plan())) {
+				Map<String, Integer> missingCounts = ChainCraftStagingPlanner.missingStagingCounts(client, activeRun.plan());
+				if (missingCounts.isEmpty()) {
+					activeRun = activeRun.withStagingComplete(true);
+					return;
+				}
+				ReachCraftingMod.LOGGER.info("[chain_stage] request missing={}", AvailableItemSnapshot.formatCounts(missingCounts));
+				NearbyContainerDryRun.startCountStaging(missingCounts, "chain_crafting");
+				if (NearbyContainerDryRun.isActiveSessionRunning()) {
+					activeRun = activeRun.withWaitingForStaging();
+					return;
+				}
+				activeRun = activeRun.withStagingComplete(false);
+				return;
+			}
+			if (!ContainerUtils.isInputQueueActive()
+				&& !ContainerUtils.isAutoMovePending()
+				&& !NearbyContainerDryRun.isActiveSessionRunning()) {
+				scheduleCurrentStep();
+			}
+			return;
+		}
+
+		int updatedWaitTicks = activeRun.waitTicks() + 1;
+		activeRun = activeRun.withWaiting(true, updatedWaitTicks);
+		if (updatedWaitTicks > STEP_TIMEOUT_TICKS
+			&& !ContainerUtils.isInputQueueActive()
+			&& !ContainerUtils.isAutoMovePending()
+			&& !NearbyContainerDryRun.isActiveSessionRunning()) {
+			failCurrentStep();
+		}
+	}
+
+	private static void tickBatchSettlement(Minecraft client) {
+		if (activeRun == null || client.player == null || client.player.containerMenu == null) {
+			activeRun = null;
+			return;
+		}
+		int observedCopies = activeRun.observedProducedRecipeCopies();
+		if (observedCopies >= activeRun.scheduledBatchCopies()) {
+			ReachCraftingMod.LOGGER.info(
+				"[chain_execute] batch_settled reason=observed_target index={} observed_copies={} scheduled_copies={}",
+				activeRun.currentStepIndex(),
+				observedCopies,
+				activeRun.scheduledBatchCopies()
+			);
+			completeSettledBatch();
+			return;
+		}
+		if (ContainerUtils.isAutoMovePending()) {
+			activeRun = activeRun.withSettlingBatchProgress(observedCopies, 0);
+			return;
+		}
+
+		Slot resultSlot = client.player.containerMenu.getSlot(0);
+		if (!ContainerUtils.isAutoMovePending()
+			&& resultSlot.hasItem()
+			&& ItemStack.isSameItemSameTags(resultSlot.getItem(), activeRun.currentStep().displayStack())) {
+			ReachCraftingMod.LOGGER.info(
+				"[chain_execute] batch_settle_auto_move index={} observed_copies={} scheduled_copies={} result={}",
+				activeRun.currentStepIndex(),
+				observedCopies,
+				activeRun.scheduledBatchCopies(),
+				ContainerUtils.formatStack(resultSlot.getItem())
+			);
+			ContainerUtils.scheduleAutoMove(activeRun.currentStep().displayStack());
+			activeRun = activeRun.withSettlingBatchProgress(observedCopies, 0);
+			return;
+		}
+
+		int quietTicks = observedCopies > activeRun.settleObservedCopies()
+			? 0
+			: activeRun.settleQuietTicks() + 1;
+		activeRun = activeRun.withSettlingBatchProgress(observedCopies, quietTicks);
+		if (quietTicks >= BATCH_SETTLE_QUIET_TICKS) {
+			ReachCraftingMod.LOGGER.info(
+				"[chain_execute] batch_settled reason=quiet index={} observed_copies={} scheduled_copies={} quiet_ticks={}",
+				activeRun.currentStepIndex(),
+				observedCopies,
+				activeRun.scheduledBatchCopies(),
+				quietTicks
+			);
+			completeSettledBatch();
+		}
+	}
+
+	private static void completeSettledBatch() {
+		if (activeRun == null) {
+			return;
+		}
+		activeRun = activeRun.withCompletedBatch();
+		if (activeRun == null || activeRun.currentStepIndex() >= activeRun.plan().steps().size()) {
+			activeRun = null;
+			return;
+		}
+		activeRun = activeRun.withWaiting(false, 0);
+	}
+
+	private static void tickPendingWarmupRetry(Minecraft client) {
+		if (pendingWarmupRetry == null
+			|| activeRun != null
+			|| client.player == null
+			|| NearbyContainerDryRun.isActiveSessionRunning()
+			|| ContainerUtils.isInputQueueActive()
+			|| ContainerUtils.isAutoMovePending()) {
+			return;
+		}
+		if (!(client.screen instanceof CraftingScreen) && !(client.screen instanceof InventoryScreen)) {
+			return;
+		}
+
+		PendingWarmupRetry retry = pendingWarmupRetry;
+		pendingWarmupRetry = null;
+		int currentOutputCount = countAccessibleOutput(client, retry.expectedOutput());
+		if (currentOutputCount > retry.baselineOutputCount()) {
+			ReachCraftingMod.LOGGER.info(
+				"[chain_retry] skip_after_warmup reason=output_already_created recipe={} output={} baseline_count={} current_count={}",
+				retry.action().recipeId(),
+				ContainerUtils.formatStack(retry.expectedOutput()),
+				retry.baselineOutputCount(),
+				currentOutputCount
+			);
+			return;
+		}
+		ReachCraftingMod.LOGGER.info(
+			"[chain_retry] replay_after_nearby_warmup recipe={} clicks={} output={}",
+			retry.action().recipeId(),
+			retry.remainingClicks(),
+			ContainerUtils.formatStack(retry.expectedOutput())
+		);
+		AutoCraftController.armHoldSessionForCurrentRequest(true);
+		RecipeBookClickCapture.scheduleReplay(
+			retry.action(),
+			retry.remainingClicks(),
+			retry.allowNearby(),
+			retry.craftAll(),
+			retry.refillableBulkMaxMode()
+		);
+	}
+
+	private static boolean shouldAttemptPreStage(Minecraft client, ChainCraftPlan plan) {
+		if (client == null || client.player == null || plan == null) {
+			return false;
+		}
+		return plan.steps().stream().anyMatch(ChainCraftPlan.Step::allowNearby)
+			&& ReachCraftingConfig.get().enableNearbyContainerUsage();
+	}
+
+	private static void scheduleCurrentStep() {
+		Minecraft client = Minecraft.getInstance();
+		if (activeRun == null || client.player == null || client.screen == null) {
+			activeRun = null;
+			return;
+		}
+		ChainCraftPlan.Step step = activeRun.currentStep();
+		int batchCopies = activeRun.nextBatchCopies();
+		int baselineOutputCount = countAccessibleOutput(client, step.displayStack());
+		RecipeBookClickCapture.HeldRecipeAction action = resolveExecutableAction(client, step);
+		if (action == null) {
+			ReachCraftingMod.LOGGER.info(
+				"[chain_execute] step_unavailable recipe={} output={} ingredients={} known_recipes={}",
+				step.recipeId(),
+				ContainerUtils.formatStack(step.displayStack()),
+				step.ingredientSummary().compactSummary(),
+				countKnownRecipes(client)
+			);
+			failCurrentStep();
+			return;
+		}
+		ReachCraftingMod.LOGGER.info(
+			"[chain_execute] schedule_step index={} recipe={} output={} batch_copies={} remaining_copies={} final_step={}",
+			activeRun.currentStepIndex(),
+			step.recipeId(),
+			ContainerUtils.formatStack(step.displayStack()),
+			batchCopies,
+			activeRun.remainingStepCopies(),
+			step.finalStep()
+		);
+		AutoCraftController.armHoldSessionForCurrentRequest(true);
+		RecipeBookClickCapture.scheduleReplay(
+			action,
+			batchCopies,
+			step.allowNearby(),
+			false,
+			false
+		);
+		activeRun = activeRun.withScheduledBatch(batchCopies, baselineOutputCount);
+	}
+
+	private static RecipeBookClickCapture.HeldRecipeAction resolveExecutableAction(Minecraft client, ChainCraftPlan.Step step) {
+		if (client.level == null || client.player == null) {
+			return null;
+		}
+		RegistryAccess registryAccess = client.level.registryAccess();
+		int gridSlotCount = client.screen instanceof InventoryScreen ? 4 : 9;
+
+		// Prefer the exact recipe the step planned for, if it is currently known/executable.
+		for (RecipeCollection collection : client.player.getRecipeBook().getCollections()) {
+			for (Recipe<?> recipe : collection.getRecipes()) {
+				if (recipe.getId().equals(step.recipeId()) && matchesStep(client, step, recipe, registryAccess, gridSlotCount)) {
+					return new RecipeBookClickCapture.HeldRecipeAction(
+						recipe,
+						recipe.getId(),
+						collection,
+						step.displayStack().copy(),
+						org.lwjgl.glfw.GLFW.GLFW_MOUSE_BUTTON_LEFT,
+						true
+					);
+				}
+			}
+		}
+
+		// Otherwise fall back to any known recipe that produces the same output from the same ingredients.
+		for (RecipeCollection collection : client.player.getRecipeBook().getCollections()) {
+			for (Recipe<?> recipe : collection.getRecipes()) {
+				if (!matchesStep(client, step, recipe, registryAccess, gridSlotCount)) {
+					continue;
+				}
+				ReachCraftingMod.LOGGER.info(
+					"[chain_execute] resolved_dynamic planned_recipe={} executable_recipe={} output={}",
+					step.recipeId(),
+					recipe.getId(),
+					ContainerUtils.formatStack(step.displayStack())
+				);
+				return new RecipeBookClickCapture.HeldRecipeAction(
+					recipe,
+					recipe.getId(),
+					collection,
+					step.displayStack().copy(),
+					org.lwjgl.glfw.GLFW.GLFW_MOUSE_BUTTON_LEFT,
+					true
+				);
+			}
+		}
+		return null;
+	}
+
+	private static boolean matchesStep(Minecraft client, ChainCraftPlan.Step step, Recipe<?> recipe, RegistryAccess registryAccess, int gridSlotCount) {
+		if (!(recipe instanceof CraftingRecipe)) {
+			return false;
+		}
+		ItemStack output = recipe.getResultItem(registryAccess);
+		if (output == null || output.isEmpty()) {
+			return false;
+		}
+		String outputId = BuiltInRegistries.ITEM.getKey(output.getItem()).toString();
+		String stepOutputId = BuiltInRegistries.ITEM.getKey(step.displayStack().getItem()).toString();
+		if (!outputId.equals(stepOutputId) || output.getCount() != step.displayStack().getCount()) {
+			return false;
+		}
+		RecipeIngredientSummary summary = RecipeIngredientSummary.fromRecipe(recipe, gridSlotCount);
+		return summary.compactSummary().equals(step.ingredientSummary().compactSummary());
+	}
+
+	private static int countKnownRecipes(Minecraft client) {
+		int count = 0;
+		for (RecipeCollection collection : client.player.getRecipeBook().getCollections()) {
+			count += collection.getRecipes().size();
+		}
+		return count;
+	}
+
+	private static void failCurrentStep() {
+		if (activeRun == null) {
+			return;
+		}
+		String itemName = activeRun.currentStep().displayStack().getHoverName().getString();
+		ReachCraftingModClient.sendChat(Component.translatable("message.reachcrafting.chain_crafting.failed", itemName).getString());
+		activeRun = null;
+	}
+
+	static int countAccessibleOutput(Minecraft client, ItemStack expectedOutput) {
+		if (client == null || client.player == null || expectedOutput == null || expectedOutput.isEmpty()) {
+			return 0;
+		}
+		int count = 0;
+		for (Slot slot : client.player.containerMenu.slots) {
+			if (!(slot.container instanceof Inventory) || !slot.hasItem()) {
+				continue;
+			}
+			if (ItemStack.isSameItemSameTags(slot.getItem(), expectedOutput)) {
+				count += slot.getItem().getCount();
+			}
+		}
+		ItemStack offhand = client.player.getOffhandItem();
+		if (!offhand.isEmpty() && ItemStack.isSameItemSameTags(offhand, expectedOutput)) {
+			count += offhand.getCount();
+		}
+		return count;
+	}
+
+	private record ChainCraftRun(
+		ChainCraftPlan plan,
+		int currentStepIndex,
+		boolean waitingForStep,
+		boolean waitingForStaging,
+		boolean stagingAttempted,
+		boolean preStagedNearbyResources,
+		int waitTicks,
+		int remainingStepCopies,
+		int scheduledBatchCopies,
+		int baselineOutputCount,
+		boolean settlingBatch,
+		int settleObservedCopies,
+		int settleQuietTicks
+	) {
+		private static ChainCraftRun start(ChainCraftPlan plan) {
+			return new ChainCraftRun(plan, 0, false, false, false, false, 0, plan.steps().get(0).recipeCopies(), 0, 0, false, 0, 0);
+		}
+
+		ChainCraftPlan.Step currentStep() {
+			return plan.steps().get(currentStepIndex);
+		}
+
+		int nextBatchCopies() {
+			return Math.min(Math.max(remainingStepCopies, 1), maxBatchCopies(currentStep()));
+		}
+
+		ChainCraftRun withScheduledBatch(int batchCopies, int outputCountBeforeBatch) {
+			return new ChainCraftRun(plan, currentStepIndex, true, false, stagingAttempted, preStagedNearbyResources, 0, remainingStepCopies, Math.max(batchCopies, 1), outputCountBeforeBatch, false, 0, 0);
+		}
+
+		ChainCraftRun withWaitingForStaging() {
+			return new ChainCraftRun(plan, currentStepIndex, false, true, true, false, 0, remainingStepCopies, scheduledBatchCopies, baselineOutputCount, false, 0, 0);
+		}
+
+		ChainCraftRun withStagingComplete(boolean preStaged) {
+			return new ChainCraftRun(plan, currentStepIndex, false, false, true, preStaged, 0, remainingStepCopies, scheduledBatchCopies, baselineOutputCount, false, 0, 0);
+		}
+
+		boolean needsBatchSettlement() {
+			return scheduledBatchCopies > 1 && observedProducedRecipeCopies() < scheduledBatchCopies;
+		}
+
+		ChainCraftRun withSettlingBatch() {
+			int observedCopies = observedProducedRecipeCopies();
+			ReachCraftingMod.LOGGER.info(
+				"[chain_execute] batch_settling index={} scheduled_copies={} observed_copies={} remaining_before={}",
+				currentStepIndex,
+				scheduledBatchCopies,
+				observedCopies,
+				remainingStepCopies
+			);
+			return new ChainCraftRun(plan, currentStepIndex, true, false, stagingAttempted, preStagedNearbyResources, 0, remainingStepCopies, scheduledBatchCopies, baselineOutputCount, true, observedCopies, 0);
+		}
+
+		ChainCraftRun withSettlingBatchProgress(int observedCopies, int quietTicks) {
+			return new ChainCraftRun(plan, currentStepIndex, true, false, stagingAttempted, preStagedNearbyResources, waitTicks + 1, remainingStepCopies, scheduledBatchCopies, baselineOutputCount, true, observedCopies, quietTicks);
+		}
+
+		ChainCraftRun withCompletedBatch() {
+			int producedCopies = observedProducedRecipeCopies();
+			int completedCopies = Math.max(1, Math.min(Math.max(scheduledBatchCopies, 1), producedCopies));
+			int remaining = remainingStepCopies - completedCopies;
+			ReachCraftingMod.LOGGER.info(
+				"[chain_execute] batch_finished index={} scheduled_copies={} observed_copies={} completed_copies={} remaining_before={}",
+				currentStepIndex,
+				scheduledBatchCopies,
+				producedCopies,
+				completedCopies,
+				remainingStepCopies
+			);
+			if (remaining > 0) {
+				ReachCraftingMod.LOGGER.info(
+					"[chain_execute] step_batch_complete index={} remaining_copies={}",
+					currentStepIndex,
+					remaining
+				);
+				return new ChainCraftRun(plan, currentStepIndex, false, false, stagingAttempted, preStagedNearbyResources, 0, remaining, 0, 0, false, 0, 0);
+			}
+			int nextIndex = currentStepIndex + 1;
+			if (nextIndex >= plan.steps().size()) {
+				ReachCraftingConfig.get().noteRecentRecipe(currentStep().recipeId());
+				ReachCraftingMod.LOGGER.info("[chain_execute] complete steps={}", plan.steps().size());
+				return null;
+			}
+			ReachCraftingMod.LOGGER.info(
+				"[chain_execute] step_complete index={} next_index={}",
+				currentStepIndex,
+				nextIndex
+			);
+			return new ChainCraftRun(plan, nextIndex, false, false, stagingAttempted, preStagedNearbyResources, 0, plan.steps().get(nextIndex).recipeCopies(), 0, 0, false, 0, 0);
+		}
+
+		ChainCraftRun withWaiting(boolean updatedWaitingForStep, int updatedWaitTicks) {
+			return new ChainCraftRun(plan, currentStepIndex, updatedWaitingForStep, waitingForStaging, stagingAttempted, preStagedNearbyResources, updatedWaitTicks, remainingStepCopies, scheduledBatchCopies, baselineOutputCount, settlingBatch, settleObservedCopies, settleQuietTicks);
+		}
+
+		private static int maxBatchCopies(ChainCraftPlan.Step step) {
+			return 64;
+		}
+
+		private int observedProducedRecipeCopies() {
+			int currentCount = countAccessibleOutput(Minecraft.getInstance(), currentStep().displayStack());
+			int producedItems = Math.max(0, currentCount - baselineOutputCount);
+			int outputPerCraft = Math.max(currentStep().displayStack().getCount(), 1);
+			return producedItems / outputPerCraft;
+		}
+	}
+
+	private record PendingWarmupRetry(
+		RecipeBookClickCapture.HeldRecipeAction action,
+		int remainingClicks,
+		boolean allowNearby,
+		boolean craftAll,
+		boolean refillableBulkMaxMode,
+		ItemStack expectedOutput,
+		int baselineOutputCount
+	) {
+	}
+}
