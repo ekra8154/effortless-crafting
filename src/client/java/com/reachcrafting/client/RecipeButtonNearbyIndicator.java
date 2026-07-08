@@ -2,6 +2,7 @@ package com.reachcrafting.client;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.CraftingScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
@@ -55,6 +56,29 @@ public final class RecipeButtonNearbyIndicator {
 
 	/** 1.20.1 computes nearby-craftability live; there is no persistent cache to clear. */
 	public static void clearCaches() {
+	}
+
+	/**
+	 * Renders the recipe-book button indicator: a yellow dot when the recipe is craftable using
+	 * nearby containers, otherwise an orange dot when it is chain-craftable. Directly-craftable
+	 * recipes get no dot (vanilla already highlights them).
+	 */
+	public static void renderButton(GuiGraphics guiGraphics, RecipeButton button) {
+		if (!ReachCraftingConfig.get().enabled()) return;
+		if (!ReachCraftingConfig.get().showNearbyCraftableIndicator()) return;
+		Recipe<?> recipe = button.getRecipe();
+		RecipeCollection collection = button.getCollection();
+		if (recipe == null || collection == null) return;
+
+		AbstractWidget widget = (AbstractWidget) (Object) button;
+		int x = widget.getX() + 3;
+		int y = widget.getY() + 3;
+		ItemStack displayStack = RecipeVariantResolver.resolveDisplayStack(recipe, Minecraft.getInstance());
+		if (shouldShow(recipe, collection, displayStack, false)) {
+			renderDot(guiGraphics, x, y);
+		} else if (ChainCraftabilityCache.isChainCraftable(recipe.getId())) {
+			renderChainDot(guiGraphics, x, y);
+		}
 	}
 
 	public static boolean shouldShow(Recipe<?> recipe, RecipeCollection collection, ItemStack displayStack, boolean explicitVariantSelection) {
@@ -164,8 +188,19 @@ public final class RecipeButtonNearbyIndicator {
 	}
 
 	public static void renderDot(GuiGraphics guiGraphics, int x, int y) {
-		int outer = 0xCC8B3A10;
-		int inner = 0xFFFFB24A;
+		int outer = 0xCC8B7B00;
+		int inner = 0xFFFFDD00;
+
+		guiGraphics.fill(x + 1, y, x + 4, y + 1, outer);
+		guiGraphics.fill(x, y + 1, x + 5, y + 4, outer);
+		guiGraphics.fill(x + 1, y + 4, x + 4, y + 5, outer);
+
+		guiGraphics.fill(x + 1, y + 1, x + 4, y + 4, inner);
+	}
+
+	public static void renderChainDot(GuiGraphics guiGraphics, int x, int y) {
+		int outer = 0xCC8B4400;
+		int inner = 0xFFFF8800;
 
 		guiGraphics.fill(x + 1, y, x + 4, y + 1, outer);
 		guiGraphics.fill(x, y + 1, x + 5, y + 4, outer);
