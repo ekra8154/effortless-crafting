@@ -3,11 +3,21 @@ plugins {
 	id 'maven-publish'
 }
 
+def formatMinecraftSupportLabel = { String supportRange ->
+	def normalizedRange = supportRange.trim()
+	if (normalizedRange.contains('-')) {
+		return normalizedRange.split('-', 2).collect { it.trim().replaceAll(/(?i)\.x/, '.X') }.join('-')
+	}
+	return normalizedRange.replaceAll(/(?i)\.x/, '.X')
+}
+
+def buildArchiveName = "${project.archives_base_name}-fabric-${formatMinecraftSupportLabel(project.minecraft_support_range)}"
+
 version = project.mod_version
 group = project.maven_group
 
 base {
-	archivesName = project.archives_base_name
+	archivesName = buildArchiveName
 }
 
 repositories {
@@ -63,6 +73,8 @@ java {
 
 jar {
 	inputs.property "archivesName", project.base.archivesName
+	archiveVersion = "v${project.version}"
+
 
 	from("LICENSE") {
 		rename { "${it}_${inputs.properties.archivesName}"}
@@ -79,4 +91,16 @@ publishing {
 
 	repositories {
 	}
+}
+
+tasks.named("sourcesJar") {
+	archiveVersion = "v${project.version}"
+}
+
+tasks.matching { it.name == "remapJar" }.configureEach {
+	archiveVersion = "v${project.version}"
+}
+
+tasks.matching { it.name == "remapSourcesJar" }.configureEach {
+	archiveVersion = "v${project.version}"
 }
