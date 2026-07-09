@@ -91,9 +91,13 @@ final class RecipeClickExecutor {
 		RecipeIngredientSummary ingredientSummary = selectedRecipe.ingredientSummary();
 		Map<String, Integer> localAvailableCounts = availableItems.totalCounts();
 		Map<String, Integer> availableCounts = availableItems.totalCounts();
+		// Chain planning must see ALL nearby items (intermediates' base materials), not just the
+		// final recipe's accepted ingredients.
+		Map<String, Integer> chainAvailableCounts = availableCounts;
 		if (allowNearbyChests && ReachCraftingConfig.get().cacheContainersForFasterSearch()) {
 			NearbyContainerCache.ReachableView reachableView = NearbyContainerCache.getReachableView(minecraft.level, minecraft.getCameraEntity(), reachDistance(minecraft, player));
 			availableCounts = AvailableItemSnapshot.mergeCounts(availableCounts, reachableView.countsFor(ingredientSummary.acceptedItemIds()));
+			chainAvailableCounts = AvailableItemSnapshot.mergeCounts(localAvailableCounts, reachableView.aggregateCounts());
 		}
 		RecipeDeficitReport deficitReport = craftAll
 			? RecipeDeficitReport.from(ingredientSummary, availableCounts, availableItems.gridStacks(), true)
@@ -147,8 +151,8 @@ final class RecipeClickExecutor {
 			&& !ChainCraftController.isActive()
 			&& !AutoCraftController.isBulkModeEnabled()) {
 			java.util.Optional<ChainCraftPlan> chainPlan = craftAll
-				? ChainCraftPlanner.planMax(minecraft, player, selectedRecipe, availableCounts, allowNearbyChests, Math.max(requestedClicks, 1))
-				: ChainCraftPlanner.plan(minecraft, player, selectedRecipe, availableCounts, allowNearbyChests, Math.max(desiredVariantCopies, 1));
+				? ChainCraftPlanner.planMax(minecraft, player, selectedRecipe, chainAvailableCounts, allowNearbyChests, Math.max(requestedClicks, 1))
+				: ChainCraftPlanner.plan(minecraft, player, selectedRecipe, chainAvailableCounts, allowNearbyChests, Math.max(desiredVariantCopies, 1));
 			if (chainPlan.isPresent()) {
 				int requestedChainCopies = craftAll ? chainPlan.get().finalRecipeCopies() : Math.max(desiredVariantCopies, 1);
 				ChainCraftPopupController.handlePlan(

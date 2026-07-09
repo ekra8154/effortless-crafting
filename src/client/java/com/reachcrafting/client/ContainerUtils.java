@@ -288,6 +288,7 @@ public final class ContainerUtils {
 		} else {
 			BulkAutoCraftController.clear();
 		}
+		ChainCraftController.abort(false);
 		NearbyContainerDryRun.abortActiveSession();
 		InventoryGridRestoreTracker.clear();
 		OffhandConsolidationController.swapBack(net.minecraft.client.Minecraft.getInstance());

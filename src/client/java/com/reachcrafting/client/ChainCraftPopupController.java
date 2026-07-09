@@ -55,20 +55,43 @@ public final class ChainCraftPopupController {
 
 		final ChainCraftPlan confirmedPlan = plan;
 		final String deferred = deferredMissingMessage;
+		java.util.concurrent.atomic.AtomicBoolean resolved = new java.util.concurrent.atomic.AtomicBoolean(false);
+		it.unimi.dsi.fastutil.booleans.BooleanConsumer callback = accepted -> {
+			if (!resolved.compareAndSet(false, true)) {
+				return;
+			}
+			if (accepted) {
+				pendingStartPlan = confirmedPlan;
+			} else if (deferred != null && !deferred.isBlank()) {
+				ReachCraftingModClient.sendMissingIngredientsChat(deferred);
+			}
+			client.setScreen(background);
+		};
 		ConfirmScreen popup = new ConfirmScreen(
-			accepted -> {
-				if (accepted) {
-					pendingStartPlan = confirmedPlan;
-				} else if (deferred != null && !deferred.isBlank()) {
-					ReachCraftingModClient.sendMissingIngredientsChat(deferred);
-				}
-				client.setScreen(background);
-			},
+			callback,
 			Component.translatable("popup.reachcrafting.chain_crafting.title"),
 			messageFor(plan, requestedRecipeCopies),
 			Component.translatable("popup.reachcrafting.chain_crafting.yes"),
 			Component.translatable("popup.reachcrafting.chain_crafting.no")
-		);
+		) {
+			@Override
+			public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+				// Match the modern PopupScreen behavior: Enter / numpad-Enter / Space confirms.
+				if (keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER
+					|| keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_KP_ENTER
+					|| keyCode == org.lwjgl.glfw.GLFW.GLFW_KEY_SPACE) {
+					callback.accept(true);
+					return true;
+				}
+				return super.keyPressed(keyCode, scanCode, modifiers);
+			}
+
+			@Override
+			public void onClose() {
+				// ESC = cancel; restore the crafting screen instead of vanilla's setScreen(null).
+				callback.accept(false);
+			}
+		};
 		client.setScreen(popup);
 	}
 
