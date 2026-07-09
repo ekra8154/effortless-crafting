@@ -17,6 +17,9 @@ public final class BulkAutoCraftController {
 	private static BulkOutputDisposition currentBatchOutputDisposition = BulkOutputDisposition.NORMAL_KEEP;
 	// private static int tickCounter = 0;
 	private static boolean performedDiscoveryThisSession = false;
+	// Tracked alongside activeSession (single active session at a time): whether this bulk run
+	// actually depends on nearby container resources, vs merely being allowed to use them.
+	private static boolean sessionNearbyResourcesRequired = false;
 
 	private BulkAutoCraftController() {
 	}
@@ -25,11 +28,13 @@ public final class BulkAutoCraftController {
 		RecipeBookClickCapture.HeldRecipeAction action,
 		int requestedRecipeCopies,
 		boolean allowNearby,
+		boolean nearbyResourcesRequired,
 		boolean refillableBulkMaxMode,
 		VariantContinuationMode variantContinuationMode,
 		ItemStack expectedOutput,
 		RecipeIngredientSummary ingredientSummary
 	) {
+		sessionNearbyResourcesRequired = nearbyResourcesRequired;
 		if (!AutoCraftController.isBulkModeEnabled() || action == null || requestedRecipeCopies <= 1 || expectedOutput == null || expectedOutput.isEmpty()) {
 			return;
 		}
@@ -140,6 +145,22 @@ public final class BulkAutoCraftController {
 		currentBatchOutputDisposition = BulkOutputDisposition.NORMAL_KEEP;
 		// tickCounter = 0;
 		performedDiscoveryThisSession = false;
+		sessionNearbyResourcesRequired = false;
+	}
+
+	static boolean needsNearbyStagingRoom() {
+		return activeSession != null && sessionNearbyResourcesRequired;
+	}
+
+	static boolean nearbyResourcesRequired() {
+		return activeSession != null && sessionNearbyResourcesRequired;
+	}
+
+	static boolean shouldDelayInventoryFullFallbackEject() {
+		return activeSession != null
+			&& activeSession.allowNearby()
+			&& !sessionNearbyResourcesRequired
+			&& !activeSession.refillableBulkMaxMode();
 	}
 
 	static void noteScheduledBatchCraftCopies(Minecraft client) {
@@ -274,7 +295,8 @@ public final class BulkAutoCraftController {
 			|| currentResult == null
 			|| currentResult.isEmpty()
 			|| !AutoCraftController.isBulkModeEnabled()
-			|| !ReachCraftingConfig.get().ejectItemsWhenFull()) {
+			|| !ReachCraftingConfig.get().ejectItemsWhenFull()
+			|| !needsNearbyStagingRoom()) {
 			currentBatchOutputDisposition = BulkOutputDisposition.NORMAL_KEEP;
 			return currentBatchOutputDisposition;
 		}
@@ -475,7 +497,7 @@ public final class BulkAutoCraftController {
 				activeSession.action(),
 				activeSession.requestedRecipeCopies() - activeSession.completedRecipeCopies(),
 				activeSession.allowNearby(),
-				false,
+				activeSession.refillableBulkMaxMode() && !activeSession.allowNearby(),
 				activeSession.refillableBulkMaxMode()
 			);
 		}
@@ -502,6 +524,9 @@ public final class BulkAutoCraftController {
 			com.reachcrafting.ReachCraftingMod.LOGGER.info("[bulk_craft] STOP aborted={} reason={} activeSession=false", aborted, reason);
 		}
 		if (activeSession != null) {
+			if (activeSession.completedRecipeCopies() > 0) {
+				ReachCraftingConfig.get().noteRecentRecipe(activeSession.action().recipeId());
+			}
 			String status = aborted ? "terminated" : "complete";
 			java.util.Map<String, Integer> summaryForChat = activeSession.summary();
 			String expectedItemName = activeSession.expectedOutput().getHoverName().getString();
@@ -597,7 +622,7 @@ public final class BulkAutoCraftController {
 					activeSession.action(),
 					activeSession.requestedRecipeCopies() - activeSession.completedRecipeCopies(),
 					activeSession.allowNearby(),
-					false,
+					activeSession.refillableBulkMaxMode() && !activeSession.allowNearby(),
 					activeSession.refillableBulkMaxMode()
 				);
 			}

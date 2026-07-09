@@ -3,7 +3,6 @@ package com.reachcrafting.client.mixin;
 import com.reachcrafting.client.ReachCraftingConfig;
 import com.reachcrafting.client.RecipeButtonNearbyIndicator;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.screens.recipebook.RecipeButton;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -17,9 +16,6 @@ public abstract class RecipeButtonMixin {
 		if (!ReachCraftingConfig.get().enabled()) return;
 		RecipeButton button = (RecipeButton) (Object) this;
 		com.reachcrafting.client.RecipeButtonQueuedCountIndicator.render(guiGraphics, button);
-		if (RecipeButtonNearbyIndicator.shouldShow(button)) {
-			AbstractWidget widget = (AbstractWidget) (Object) this;
-			RecipeButtonNearbyIndicator.renderDot(guiGraphics, widget.getX() + 3, widget.getY() + 3);
-		}
+		RecipeButtonNearbyIndicator.renderButton(guiGraphics, button);
 	}
 }

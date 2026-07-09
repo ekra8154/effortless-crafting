@@ -9,8 +9,21 @@ import net.minecraft.world.item.crafting.RecipeHolder;
 
 public final class RecipeBookClickCapture {
 	private static final RecipeBookInputController CONTROLLER = RecipeBookInputController.getInstance();
+	private static boolean suppressNextVanillaRecipeClick = false;
 
 	private RecipeBookClickCapture() {
+	}
+
+	public static void suppressNextVanillaRecipeClick() {
+		suppressNextVanillaRecipeClick = true;
+	}
+
+	public static boolean consumeSuppressedVanillaRecipeClick() {
+		if (!suppressNextVanillaRecipeClick) {
+			return false;
+		}
+		suppressNextVanillaRecipeClick = false;
+		return true;
 	}
 
 	public static void init() {
@@ -90,6 +103,18 @@ public final class RecipeBookClickCapture {
 		CONTROLLER.scheduleReplay(action, remainingClicks, allowNearby, craftAll, refillableBulkMaxMode);
 	}
 
+	public static void scheduleReplay(HeldRecipeAction action, int remainingClicks, boolean allowNearby, boolean craftAll, boolean refillableBulkMaxMode, boolean autoCraftRequested) {
+		CONTROLLER.scheduleReplay(action, remainingClicks, allowNearby, craftAll, refillableBulkMaxMode, autoCraftRequested);
+	}
+
+	public static ReplayBatch getReplayBatch() {
+		return CONTROLLER.getReplayBatch();
+	}
+
+	public static boolean isBulkModeEnabled() {
+		return AutoCraftController.isBulkModeEnabled();
+	}
+
 	public static QueuedRecipeCountState getQueuedCountState(
 		RecipeHolder<?> recipe,
 		RecipeCollection collection,
@@ -148,6 +173,6 @@ public final class RecipeBookClickCapture {
 	public record PendingHeldRecipe(HeldRecipeAction action, int clickCount, boolean locked) {
 	}
 
-	public record ReplayBatch(HeldRecipeAction action, int remainingClicks, boolean allowNearby, boolean craftAll, boolean refillableBulkMaxMode) {
+	public record ReplayBatch(HeldRecipeAction action, int remainingClicks, boolean allowNearby, boolean craftAll, boolean refillableBulkMaxMode, boolean autoCraftRequested) {
 	}
 }

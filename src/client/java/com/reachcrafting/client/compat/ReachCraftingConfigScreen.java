@@ -48,13 +48,46 @@ public final class ReachCraftingConfigScreen {
 			.setSaveConsumer(config::setTypeToFocusSearch)
 			.build());
 
+		tweaksGroup.add(entries.startEnumSelector(
+				Component.translatable("option.reachcrafting.search_history_mode"),
+				ReachCraftingConfig.SearchHistoryMode.class,
+				config.searchHistoryMode()
+			)
+			.setDefaultValue(ReachCraftingConfig.SearchHistoryMode.ON)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.search_history_mode"))
+			.setSaveConsumer(config::setSearchHistoryMode)
+			.setEnumNameProvider(value -> Component.translatable("enum.reachcrafting.search_history_mode." + value.name().toLowerCase()))
+			.build());
+
+		tweaksGroup.add(entries.startEnumSelector(
+				Component.translatable("option.reachcrafting.auto_focus_search"),
+				ReachCraftingConfig.AutoFocusSearchMode.class,
+				config.autoFocusSearchMode()
+			)
+			.setDefaultValue(ReachCraftingConfig.AutoFocusSearchMode.DISABLED)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.auto_focus_search"))
+			.setSaveConsumer(config::setAutoFocusSearchMode)
+			.setEnumNameProvider(value -> Component.translatable("enum.reachcrafting.auto_focus_search." + value.name().toLowerCase()))
+			.build());
+
+		tweaksGroup.add(entries.startEnumSelector(
+				Component.translatable("option.reachcrafting.recipe_book_sorting_mode"),
+				ReachCraftingConfig.RecipeBookSortingMode.class,
+				config.recipeBookSortingMode()
+			)
+			.setDefaultValue(ReachCraftingConfig.RecipeBookSortingMode.SMART)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.recipe_book_sorting_mode"))
+			.setSaveConsumer(config::setRecipeBookSortingMode)
+			.setEnumNameProvider(value -> Component.translatable("enum.reachcrafting.recipe_book_sorting_mode." + value.name().toLowerCase()))
+			.build());
+
 		tweaksGroup.add(entries.startBooleanToggle(
-				Component.translatable("option.reachcrafting.remember_previous_search"),
-				config.rememberPreviousSearch()
+				Component.translatable("option.reachcrafting.recipe_book_page_navigation"),
+				config.recipeBookPageNavigation()
 			)
 			.setDefaultValue(true)
-			.setTooltip(Component.translatable("tooltip.reachcrafting.remember_previous_search"))
-			.setSaveConsumer(config::setRememberPreviousSearch)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.recipe_book_page_navigation"))
+			.setSaveConsumer(config::setRecipeBookPageNavigation)
 			.build());
 
 		tweaksGroup.add(entries.startBooleanToggle(
@@ -159,6 +192,17 @@ public final class ReachCraftingConfigScreen {
 			.setTooltip(Component.translatable("tooltip.reachcrafting.auto_craft_handling"))
 			.setSaveConsumer(config::setAutoCraftHandling)
 			.setEnumNameProvider(value -> Component.translatable("enum.reachcrafting.auto_craft_handling." + value.name().toLowerCase()))
+			.build());
+
+		autoGroup.add(entries.startEnumSelector(
+				Component.translatable("option.reachcrafting.chain_crafting_mode"),
+				ReachCraftingConfig.ChainCraftingMode.class,
+				config.chainCraftingMode()
+			)
+			.setDefaultValue(ReachCraftingConfig.ChainCraftingMode.CONFIRM)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.chain_crafting_mode"))
+			.setSaveConsumer(config::setChainCraftingMode)
+			.setEnumNameProvider(value -> Component.translatable("enum.reachcrafting.chain_crafting_mode." + value.name().toLowerCase()))
 			.build());
 
 		autoGroup.add(entries.startBooleanToggle(
@@ -335,21 +379,30 @@ public final class ReachCraftingConfigScreen {
 			.build());
 
 		messagesGroup.add(entries.startBooleanToggle(
-				Component.translatable("option.reachcrafting.show_bulk_craft_summary_message"),
-				config.showBulkCraftSummaryMessage()
-			)
-			.setDefaultValue(true)
-			.setTooltip(Component.translatable("tooltip.reachcrafting.show_bulk_craft_summary_message"))
-			.setSaveConsumer(config::setShowBulkCraftSummaryMessage)
-			.build());
-
-		messagesGroup.add(entries.startBooleanToggle(
 				Component.translatable("option.reachcrafting.show_missing_ingredients_message"),
 				config.showMissingIngredientsMessage()
 			)
 			.setDefaultValue(true)
 			.setTooltip(Component.translatable("tooltip.reachcrafting.show_missing_ingredients_message"))
 			.setSaveConsumer(config::setShowMissingIngredientsMessage)
+			.build());
+
+		messagesGroup.add(entries.startBooleanToggle(
+				Component.translatable("option.reachcrafting.show_chain_craft_messages"),
+				config.showChainCraftMessages()
+			)
+			.setDefaultValue(true)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.show_chain_craft_messages"))
+			.setSaveConsumer(config::setShowChainCraftMessages)
+			.build());
+
+		messagesGroup.add(entries.startBooleanToggle(
+				Component.translatable("option.reachcrafting.performance_logging_enabled"),
+				config.performanceLoggingEnabled()
+			)
+			.setDefaultValue(false)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.performance_logging_enabled"))
+			.setSaveConsumer(config::setPerformanceLoggingEnabled)
 			.build());
 
 		messagesGroup.add(entries.startBooleanToggle(

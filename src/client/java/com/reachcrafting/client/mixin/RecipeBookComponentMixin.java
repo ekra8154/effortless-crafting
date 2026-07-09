@@ -11,12 +11,15 @@ import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.client.gui.screens.recipebook.RecipeBookComponent;
 import net.minecraft.client.gui.screens.recipebook.RecipeBookPage;
 import net.minecraft.client.gui.screens.recipebook.RecipeButton;
+import net.minecraft.client.gui.screens.recipebook.RecipeCollection;
 import net.minecraft.world.inventory.RecipeBookMenu;
+import java.util.List;
 import org.lwjgl.glfw.GLFW;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
@@ -53,13 +56,91 @@ public abstract class RecipeBookComponentMixin {
 		if (!ReachCraftingConfig.get().enabled()) {
 			return;
 		}
+		boolean automatedReopen = com.reachcrafting.client.RecipeBookChunkedScheduler.consumePendingAutomatedRecipeBookReopen();
+		boolean manualInit = !automatedReopen;
+		if (manualInit) {
+			com.reachcrafting.client.RecipeBookChunkedScheduler.resetFrozenPageState("manual_screen_init");
+		}
 		lastScreenOpenTime = System.currentTimeMillis();
 		reachcrafting$applyAutoFocus();
+		if (manualInit && this.isVisible()) {
+			net.minecraft.client.gui.screens.recipebook.RecipeBookPage page = ((RecipeBookComponentAccessor) this).getRecipeBookPage();
+			if (page != null) {
+				RecipeBookPageAccessor pageAccessor = (RecipeBookPageAccessor) page;
+				if (pageAccessor.getCurrentPage() != 0) {
+					pageAccessor.setCurrentPage(0);
+					pageAccessor.invokeUpdateButtonsForPage();
+				}
+				com.reachcrafting.client.RecipeBookChunkedScheduler.noteVisiblePageIndex(0);
+			}
+		}
 		com.reachcrafting.client.ReachCraftingModClient.forceNextInventorySearchFocus = false;
+	}
+
+	private int reachcrafting$preservedPageIndex = -1;
+	private boolean reachcrafting$isResetPage = false;
+
+	@Inject(method = "render", at = @At("TAIL"))
+	private void reachcrafting$onRender(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick, CallbackInfo ci) {
+		if (!ReachCraftingConfig.get().enabled() || !this.isVisible()) {
+			return;
+		}
+		net.minecraft.client.gui.screens.recipebook.RecipeBookPage page = ((RecipeBookComponentAccessor) this).getRecipeBookPage();
+		if (page != null) {
+			com.reachcrafting.client.RecipeBookChunkedScheduler.noteVisiblePageIndex(((RecipeBookPageAccessor) page).getCurrentPage());
+			com.reachcrafting.client.RecipeBookChunkedScheduler.noteVisibleButtons(((RecipeBookPageAccessor) page).getButtons());
+		}
+	}
+
+	@Inject(method = "updateCollections", at = @At("HEAD"))
+	private void reachcrafting$capturePageBeforeUpdate(boolean resetPage, CallbackInfo ci) {
+		reachcrafting$isResetPage = resetPage;
+		if (!ReachCraftingConfig.get().enabled()) {
+			reachcrafting$preservedPageIndex = -1;
+			return;
+		}
+		if (!(com.reachcrafting.client.RecipeBookChunkedScheduler.shouldFreezeResort() || ContainerUtils.isAnySessionActive())) {
+			reachcrafting$preservedPageIndex = -1;
+			return;
+		}
+		net.minecraft.client.gui.screens.recipebook.RecipeBookPage page = ((RecipeBookComponentAccessor) this).getRecipeBookPage();
+		if (page == null) {
+			reachcrafting$preservedPageIndex = -1;
+			return;
+		}
+		reachcrafting$preservedPageIndex = ((RecipeBookPageAccessor) page).getCurrentPage();
+	}
+
+	@Inject(method = "updateCollections", at = @At("TAIL"))
+	private void reachcrafting$restorePageAfterUpdate(boolean resetPage, CallbackInfo ci) {
+		net.minecraft.client.gui.screens.recipebook.RecipeBookPage page = ((RecipeBookComponentAccessor) this).getRecipeBookPage();
+		if (page == null) {
+			reachcrafting$preservedPageIndex = -1;
+			return;
+		}
+		RecipeBookPageAccessor pageAccessor = (RecipeBookPageAccessor) page;
+		if (reachcrafting$preservedPageIndex < 1) {
+			if (reachcrafting$isResetPage) {
+				pageAccessor.invokeUpdateButtonsForPage();
+			}
+			reachcrafting$preservedPageIndex = -1;
+			return;
+		}
+
+		int totalPages = Math.max(1, pageAccessor.getTotalPages());
+		int targetPage = Math.min(reachcrafting$preservedPageIndex, totalPages - 1);
+		int currentPage = pageAccessor.getCurrentPage();
+		if (targetPage != currentPage) {
+			pageAccessor.setCurrentPage(targetPage);
+		}
+		pageAccessor.invokeUpdateButtonsForPage();
+		com.reachcrafting.client.RecipeBookChunkedScheduler.noteVisiblePageIndex(pageAccessor.getCurrentPage());
+		reachcrafting$preservedPageIndex = -1;
 	}
 
 	@Inject(method = "setVisible", at = @At("TAIL"))
 	private void reachcrafting$onSetVisible(boolean visible, CallbackInfo ci) {
+		com.reachcrafting.client.RecipeBookChunkedScheduler.onRecipeBookVisibilityChanged(visible);
 		if (!ReachCraftingConfig.get().enabled()) {
 			return;
 		}
@@ -71,6 +152,28 @@ public abstract class RecipeBookComponentMixin {
 			reachcrafting$commitCurrentSearchToHistory();
 			reachcrafting$resetSearchHistoryNavigation();
 		}
+	}
+
+	/**
+	 * Reorders the recipe-book collection list according to the smart sorter before the page renders
+	 * them. Targets {@code RecipeBookPage.updateCollections(List, boolean)} inside the component's own
+	 * {@code updateCollections(boolean)}.
+	 */
+	@ModifyArg(
+		method = "updateCollections",
+		at = @At(
+			value = "INVOKE",
+			target = "Lnet/minecraft/client/gui/screens/recipebook/RecipeBookPage;updateCollections(Ljava/util/List;Z)V"
+		),
+		index = 0
+	)
+	private List<RecipeCollection> reachcrafting$sortRecipeBookCollections(List<RecipeCollection> collections) {
+		if (!ReachCraftingConfig.get().enabled()) {
+			return collections;
+		}
+		boolean eager = (this.searchBox != null && !this.searchBox.getValue().isBlank())
+			|| com.reachcrafting.client.RecipeBookChunkedScheduler.consumeForceEagerNextSort();
+		return com.reachcrafting.client.RecipeBookSmartSorter.sorted(collections, eager);
 	}
 
 	@Inject(method = "mouseClicked", at = @At("HEAD"))
@@ -90,6 +193,14 @@ public abstract class RecipeBookComponentMixin {
 			return;
 		}
 		reachcrafting$lastKeyPressedWasToggle = false;
+		if (ReachCraftingConfig.get().recipeBookPageNavigation()
+			&& (keyCode == GLFW.GLFW_KEY_LEFT || keyCode == GLFW.GLFW_KEY_RIGHT)
+			&& reachcrafting$shouldPageWithArrowKey()) {
+			if (reachcrafting$turnRecipeBookPage(keyCode == GLFW.GLFW_KEY_RIGHT)) {
+				cir.setReturnValue(true);
+				return;
+			}
+		}
 		if (this.searchBox != null && this.searchBox.isFocused()) {
 			if (keyCode == GLFW.GLFW_KEY_UP || keyCode == GLFW.GLFW_KEY_DOWN) {
 				if (reachcrafting$navigateSearchHistory(keyCode == GLFW.GLFW_KEY_UP)) {
@@ -213,7 +324,7 @@ public abstract class RecipeBookComponentMixin {
 		if (!reachcrafting$isSupportedScreen()) {
 			return;
 		}
-		if (ReachCraftingConfig.get().rememberPreviousSearch()) {
+		if (ReachCraftingConfig.get().shouldRestoreLastSearch()) {
 			String lastSearchText = ReachCraftingConfig.getLastSearchText();
 			if (!lastSearchText.isEmpty()) {
 				ReachCraftingConfig.pushSearchHistory(lastSearchText);
@@ -338,6 +449,36 @@ public abstract class RecipeBookComponentMixin {
 		if (this.searchBox != null) {
 			ReachCraftingConfig.pushSearchHistory(this.searchBox.getValue());
 		}
+	}
+
+	private boolean reachcrafting$shouldPageWithArrowKey() {
+		if (!this.isVisible() || !reachcrafting$isSupportedScreen()) {
+			return false;
+		}
+		if (this.searchBox == null) {
+			return true;
+		}
+		return !this.searchBox.isFocused() || this.searchBox.getValue().isEmpty();
+	}
+
+	private boolean reachcrafting$turnRecipeBookPage(boolean forward) {
+		net.minecraft.client.gui.screens.recipebook.RecipeBookPage page = ((RecipeBookComponentAccessor) this).getRecipeBookPage();
+		if (page == null) {
+			return false;
+		}
+		RecipeBookPageAccessor pageAccessor = (RecipeBookPageAccessor) page;
+		int currentPage = pageAccessor.getCurrentPage();
+		int totalPages = Math.max(1, pageAccessor.getTotalPages());
+		int targetPage = forward
+			? Math.min(currentPage + 1, totalPages - 1)
+			: Math.max(currentPage - 1, 0);
+		if (targetPage == currentPage) {
+			return false;
+		}
+		pageAccessor.setCurrentPage(targetPage);
+		pageAccessor.invokeUpdateButtonsForPage();
+		com.reachcrafting.client.RecipeBookChunkedScheduler.noteVisiblePageIndex(targetPage);
+		return true;
 	}
 
 	private void reachcrafting$resetSearchHistoryNavigation() {

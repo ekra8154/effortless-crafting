@@ -35,13 +35,20 @@ public class ReachCraftingModClient implements ClientModInitializer {
 	}
 
 	public static void sendBulkSummaryChat(String message) {
-		if (ReachCraftingConfig.get().showBulkCraftSummaryMessage()) {
-			sendChat(message);
-		}
+		// Bulk summaries are disabled on 1.20.1: the output accounting here has never been reliable
+		// (see "failed attempts to make chat output accurate") and the counts it reports are wrong.
+		// The summary is still logged for debugging.
+		com.reachcrafting.ReachCraftingMod.LOGGER.info("[bulk_summary_suppressed] {}", message);
 	}
 
 	public static void sendMissingIngredientsChat(String message) {
 		if (ReachCraftingConfig.get().showMissingIngredientsMessage()) {
+			sendChat(message);
+		}
+	}
+
+	public static void sendChainCraftChat(String message) {
+		if (ReachCraftingConfig.get().showChainCraftMessages()) {
 			sendChat(message);
 		}
 	}
@@ -53,6 +60,10 @@ public class ReachCraftingModClient implements ClientModInitializer {
 		RecipeBookClickCapture.init();
 		NearbyContainerDryRun.init();
 		ContainerFilterRenderer.init();
+		ChainCraftabilityCache.init();
+		RecipeBookChunkedScheduler.init();
+		ChainCraftController.init();
+		RecipeBookScrollController.init();
 		String reachCraftingCategory = "key.categories." + ReachCraftingMod.MOD_ID;
 
 		showFilterOutlinesKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(

@@ -24,6 +24,12 @@ final class AutoCraftController {
 	}
 
 	static void handleKeyPress() {
+		if (autoCraftKeyHeld) {
+			// 1.20.1 delivers GLFW key-repeat events to keyPressed while alt is held. Without this
+			// guard, a repeat arriving after bulk latches (e.g. alt held through the toggle click)
+			// would arm the "alt re-held" cancel gesture and kill bulk on release.
+			return;
+		}
 		autoCraftKeyHeld = true;
 		holdQuickCraftCancelled = false;
 		holdQuickCraftConsumed = false;
