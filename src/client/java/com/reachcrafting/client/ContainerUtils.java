@@ -270,11 +270,16 @@ public final class ContainerUtils {
 	}
 
 	public static boolean isAnySessionActive() {
-		return RecipeBookInputController.getInstance().isInputQueueActive() 
-			|| AutoMoveController.isAutomatedInteractionRunning() 
+		return RecipeBookInputController.getInstance().isInputQueueActive()
+			|| AutoMoveController.isAutomatedInteractionRunning()
 			|| NearbyContainerDryRun.isActiveSessionRunning()
 			|| InventoryGridRestoreTracker.isRestoring()
-			|| BulkAutoCraftController.isActive();
+			|| BulkAutoCraftController.isActive()
+			|| ChainCraftController.isActive();
+	}
+
+	public static boolean isChainCraftActive() {
+		return ChainCraftController.isActive();
 	}
 
 	public static void abortAllSessions() {
@@ -282,6 +287,7 @@ public final class ContainerUtils {
 
 		AutoCraftController.clearHoldSession();
 		clearInputQueue();
+		AutoMoveController.settleCompletedWork(net.minecraft.client.Minecraft.getInstance());
 		AutoMoveController.abort();
 		if (BulkAutoCraftController.isActive()) {
 			BulkAutoCraftController.stop(true);

@@ -17,6 +17,56 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(OverlayRecipeComponent.class)
 public abstract class OverlayRecipeComponentMixin {
+	/**
+	 * Intercepts modded overlay clicks (ctrl / bulk-shift / alt request) BEFORE vanilla places the
+	 * recipe, so the mod owns the click and vanilla's placement is suppressed entirely.
+	 */
+	@Inject(method = "mouseClicked", at = @At("HEAD"), cancellable = true)
+	private void reachcrafting$interceptOverlayRecipeClicked(double mouseX, double mouseY, int button, CallbackInfoReturnable<Boolean> cir) {
+		if (!ReachCraftingConfig.get().enabled() || button != GLFW.GLFW_MOUSE_BUTTON_LEFT) {
+			return;
+		}
+
+		OverlayRecipeComponent overlay = (OverlayRecipeComponent) (Object) this;
+		RecipeCollection collection = overlay.getRecipeCollection();
+		Recipe<?> recipe = reachcrafting$findHoveredRecipe(overlay, mouseX, mouseY);
+		if (recipe == null || collection == null) {
+			return;
+		}
+
+		boolean ctrlDown = Screen.hasControlDown();
+		boolean shiftDown = Screen.hasShiftDown();
+		boolean altDown = Screen.hasAltDown();
+		boolean interceptWithMod = ctrlDown
+			|| (shiftDown && RecipeBookClickCapture.isBulkModeEnabled())
+			|| (altDown && ReachCraftingConfig.get().altAsRequestKey());
+		com.reachcrafting.ReachCraftingMod.LOGGER.info(
+			"[overlay_click] head recipe={} ctrl={} shift={} alt={} intercept={} collection_size={}",
+			recipe.getId(),
+			ctrlDown,
+			shiftDown,
+			altDown,
+			interceptWithMod,
+			collection.getRecipes().size()
+		);
+		if (!interceptWithMod) {
+			return;
+		}
+
+		RecipeBookClickCapture.suppressNextVanillaRecipeClick();
+		RecipeBookClickCapture.onRecipeButtonClicked(
+			recipe,
+			collection,
+			null,
+			button,
+			shiftDown,
+			ctrlDown,
+			altDown,
+			true
+		);
+		cir.setReturnValue(true);
+	}
+
 	@Inject(method = "mouseClicked", at = @At("RETURN"))
 	private void reachcrafting$onOverlayRecipeClicked(double mouseX, double mouseY, int button, CallbackInfoReturnable<Boolean> cir) {
 		if (!ReachCraftingConfig.get().enabled()) {
@@ -43,21 +93,56 @@ public abstract class OverlayRecipeComponentMixin {
 		boolean ctrlDown = Screen.hasControlDown();
 		boolean shiftDown = Screen.hasShiftDown();
 		boolean altDown = Screen.hasAltDown();
-		if (ctrlDown || (altDown && !shiftDown && ReachCraftingConfig.get().altAsRequestKey())) {
-			RecipeBookClickCapture.onRecipeButtonClicked(
-				recipe,
-				collection,
-				null,
-				button,
-				shiftDown,
-				ctrlDown,
-				altDown,
-				true
-			);
+		com.reachcrafting.ReachCraftingMod.LOGGER.info(
+			"[overlay_click] return recipe={} ctrl={} shift={} alt={} vanillaAccepted={}",
+			recipe.getId(),
+			ctrlDown,
+			shiftDown,
+			altDown,
+			cir.getReturnValueZ()
+		);
+		if (ctrlDown
+			|| (shiftDown && RecipeBookClickCapture.isBulkModeEnabled())
+			|| (altDown && ReachCraftingConfig.get().altAsRequestKey())) {
 			return;
 		}
 
 		RecipeBookClickCapture.onVanillaRecipeButtonClicked(recipe, collection, null, true, altDown);
 	}
 
+	@Inject(method = "render", at = @At("TAIL"))
+	private void reachcrafting$onRender(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick, CallbackInfo ci) {
+		if (!ReachCraftingConfig.get().enabled()) return;
+		OverlayRecipeComponent overlay = (OverlayRecipeComponent) (Object) this;
+		if (!overlay.isVisible()) return;
+
+		RecipeCollection collection = overlay.getRecipeCollection();
+		if (collection == null) return;
+
+		java.util.List<Object> buttons = ((OverlayRecipeComponentAccessor) overlay).getRecipeButtons();
+		for (Object buttonObj : buttons) {
+			if (buttonObj instanceof AbstractWidget widget) {
+				if (widget.visible) {
+					Recipe<?> recipe = ((OverlayRecipeButtonAccessor) widget).getRecipe();
+					com.reachcrafting.client.RecipeButtonQueuedCountIndicator.renderOverlayButton(
+						guiGraphics,
+						widget.getX(),
+						widget.getY(),
+						widget.getWidth(),
+						recipe,
+						collection
+					);
+				}
+			}
+		}
+	}
+
+	private Recipe<?> reachcrafting$findHoveredRecipe(OverlayRecipeComponent overlay, double mouseX, double mouseY) {
+		for (Object buttonObj : ((OverlayRecipeComponentAccessor) overlay).getRecipeButtons()) {
+			if (buttonObj instanceof AbstractWidget widget && widget.visible && widget.isMouseOver(mouseX, mouseY)) {
+				return ((OverlayRecipeButtonAccessor) widget).getRecipe();
+			}
+		}
+		return null;
+	}
 }

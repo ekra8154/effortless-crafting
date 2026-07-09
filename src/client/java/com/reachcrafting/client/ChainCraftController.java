@@ -283,7 +283,8 @@ public final class ChainCraftController {
 			retry.remainingClicks(),
 			retry.allowNearby(),
 			retry.craftAll(),
-			retry.refillableBulkMaxMode()
+			retry.refillableBulkMaxMode(),
+			true
 		);
 	}
 

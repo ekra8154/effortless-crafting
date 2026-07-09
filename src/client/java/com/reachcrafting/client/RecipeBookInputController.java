@@ -148,10 +148,21 @@ final class RecipeBookInputController {
 		boolean craftAll = maxCraftRequested;
 		boolean allowNearbyChests = ctrlModifierDown
 			&& ReachCraftingConfig.get().enableNearbyContainerUsage();
-		boolean refillableBulkMaxMode = maxCraftRequested && allowNearbyChests && AutoCraftController.isBulkModeEnabled();
+		boolean refillableBulkMaxMode = maxCraftRequested && AutoCraftController.isBulkModeEnabled();
 		int requestedClicks = maxCraftRequested
 			? resolveMaxCraftRequestCount(minecraft, player, recipe, collection, displayStack, explicitVariantSelection, allowNearbyChests)
 			: 1;
+		com.reachcrafting.ReachCraftingMod.LOGGER.info(
+			"[recipe_input] mod_click recipe={} explicit_variant={} auto_requested={} instant_setting={} max_requested={} allow_nearby={} requested_clicks={} grid_empty={}",
+			recipe.getId(),
+			explicitVariantSelection,
+			autoCraftRequested,
+			ReachCraftingConfig.get().altClickInstantCraft(),
+			maxCraftRequested,
+			allowNearbyChests,
+			requestedClicks,
+			ContainerUtils.isGridEmpty(player.containerMenu)
+		);
 
 		if (shouldQueueHeldRecipe(minecraft, maxCraftRequested, autoCraftRequested) && state.replayBatch() == null) {
 			if (autoCraftRequested) {
@@ -177,7 +188,7 @@ final class RecipeBookInputController {
 				mouseButton,
 				explicitVariantSelection
 			);
-			state.setReplayBatch(new RecipeBookClickCapture.ReplayBatch(action, requestedClicks, allowNearbyChests, craftAll, refillableBulkMaxMode));
+			state.setReplayBatch(new RecipeBookClickCapture.ReplayBatch(action, requestedClicks, allowNearbyChests, craftAll, refillableBulkMaxMode, autoCraftRequested));
 			return;
 		}
 
@@ -195,6 +206,7 @@ final class RecipeBookInputController {
 			explicitVariantSelection,
 			requestedClicks,
 			refillableBulkMaxMode,
+			autoCraftRequested,
 			state
 		);
 	}
@@ -208,6 +220,17 @@ final class RecipeBookInputController {
 	) {
 		if (!ReachCraftingConfig.get().enabled()) {
 			return;
+		}
+		if (RecipeBookClickCapture.consumeSuppressedVanillaRecipeClick()) {
+			com.reachcrafting.ReachCraftingMod.LOGGER.info(
+				"[recipe_input] suppressed vanilla_click recipe={} explicit_variant={}",
+				recipe != null ? recipe.getId() : null,
+				explicitVariantSelection
+			);
+			return;
+		}
+		if (recipe != null) {
+			ReachCraftingConfig.get().noteRecentRecipe(recipe.getId());
 		}
 		boolean autoCraftRequested = altModifierDown && ReachCraftingConfig.get().altAsRequestKey();
 		if (autoCraftRequested) {
@@ -328,6 +351,10 @@ final class RecipeBookInputController {
 		return state.pendingHeldRecipe();
 	}
 
+	RecipeBookClickCapture.ReplayBatch getReplayBatch() {
+		return state.replayBatch();
+	}
+
 	boolean isInputQueueActive() {
 		return state.pendingHeldRecipe() != null || state.replayBatch() != null;
 	}
@@ -350,6 +377,10 @@ final class RecipeBookInputController {
 	}
 
 	void scheduleReplay(RecipeBookClickCapture.HeldRecipeAction action, int remainingClicks, boolean allowNearby, boolean craftAll, boolean refillableBulkMaxMode) {
+		scheduleReplay(action, remainingClicks, allowNearby, craftAll, refillableBulkMaxMode, true);
+	}
+
+	void scheduleReplay(RecipeBookClickCapture.HeldRecipeAction action, int remainingClicks, boolean allowNearby, boolean craftAll, boolean refillableBulkMaxMode, boolean autoCraftRequested) {
 		if (!ReachCraftingConfig.get().enabled() || action == null || remainingClicks <= 0) {
 			return;
 		}
@@ -388,7 +419,7 @@ final class RecipeBookInputController {
 			refillableBulkMaxMode,
 			action.recipeId()
 		);
-		state.setReplayBatch(new RecipeBookClickCapture.ReplayBatch(action, remainingClicks, allowNearby, craftAll, refillableBulkMaxMode));
+		state.setReplayBatch(new RecipeBookClickCapture.ReplayBatch(action, remainingClicks, allowNearby, craftAll, refillableBulkMaxMode, autoCraftRequested));
 	}
 
 	boolean hasPendingHeldRecipe(
@@ -431,7 +462,7 @@ final class RecipeBookInputController {
 		boolean explicitVariantSelection,
 		boolean allowNearbyChests
 	) {
-		if (allowNearbyChests && AutoCraftController.isBulkModeEnabled()) {
+		if (AutoCraftController.isBulkModeEnabled()) {
 			return RecipeClickExecutor.bulkRecipeQueueLimit();
 		}
 
@@ -522,7 +553,8 @@ final class RecipeBookInputController {
 			state.pendingHeldRecipe().clickCount(),
 			resolvedRequest.allowNearby(),
 			false,
-			false
+			false,
+			resolvedRequest.autoCraftRequested()
 		));
 		state.setPendingHeldRecipe(null);
 	}
@@ -548,32 +580,42 @@ final class RecipeBookInputController {
 
 		NearbyContainerDryRun.runPendingPostReturnCompaction(minecraft);
 
+		RecipeBookClickCapture.ReplayBatch replayBatch = state.replayBatch();
 		com.reachcrafting.ReachCraftingMod.LOGGER.debug(
 			"[recipe_replay] screen={} recipe_idx={} remaining_clicks={} allow_nearby={} craft_all={}",
 			screen.getClass().getSimpleName(),
-			state.replayBatch().action().recipeId(),
-			state.replayBatch().remainingClicks(),
-			state.replayBatch().allowNearby(),
-			state.replayBatch().craftAll()
+			replayBatch.action().recipeId(),
+			replayBatch.remainingClicks(),
+			replayBatch.allowNearby(),
+			replayBatch.craftAll()
 		);
 
 		RecipeClickExecutor.executeRecipeButtonClick(
 			minecraft,
 			player,
 			screen,
-			state.replayBatch().action().recipe(),
-			state.replayBatch().action().collection(),
-			state.replayBatch().action().displayStack().copy(),
-			state.replayBatch().action().mouseButton(),
-			state.replayBatch().craftAll(),
-			state.replayBatch().allowNearby(),
+			replayBatch.action().recipe(),
+			replayBatch.action().collection(),
+			replayBatch.action().displayStack().copy(),
+			replayBatch.action().mouseButton(),
+			replayBatch.craftAll(),
+			replayBatch.allowNearby(),
 			true,
-			state.replayBatch().action().explicitVariantSelection(),
-			state.replayBatch().remainingClicks(),
-			state.replayBatch().refillableBulkMaxMode(),
+			replayBatch.action().explicitVariantSelection(),
+			replayBatch.remainingClicks(),
+			replayBatch.refillableBulkMaxMode(),
+			replayBatch.autoCraftRequested(),
 			state
 		);
-		state.setReplayBatch(null);
+		if (state.replayBatch() == replayBatch) {
+			state.setReplayBatch(null);
+		} else {
+			com.reachcrafting.ReachCraftingMod.LOGGER.info(
+				"[recipe_replay] preserved_replacement old_recipe={} new_recipe={}",
+				replayBatch.action().recipeId(),
+				state.replayBatch() != null ? state.replayBatch().action().recipeId() : "<none>"
+			);
+		}
 	}
 
 	private boolean handleHeldRecipeScroll(Screen screen, double mouseX, double mouseY, double verticalAmount) {

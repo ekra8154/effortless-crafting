@@ -65,7 +65,11 @@ public final class ChainCraftPopupController {
 			} else if (deferred != null && !deferred.isBlank()) {
 				ReachCraftingModClient.sendMissingIngredientsChat(deferred);
 			}
-			client.setScreen(background);
+			// Defer the screen swap to the next tick: when the popup is confirmed with Space/Enter,
+			// GLFW still delivers the trailing char event this frame, and a synchronous swap would
+			// route that character into the restored screen's focused search box (replacing its
+			// selected text). Queued via tell(), the char lands harmlessly on the closing popup.
+			client.tell(() -> client.setScreen(background));
 		};
 		ConfirmScreen popup = new ConfirmScreen(
 			callback,

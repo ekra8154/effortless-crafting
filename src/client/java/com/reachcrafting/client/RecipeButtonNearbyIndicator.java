@@ -184,6 +184,8 @@ public final class RecipeButtonNearbyIndicator {
 	public static void renderOverlayButton(GuiGraphics guiGraphics, int x, int y, int width, Recipe<?> recipe, RecipeCollection collection) {
 		if (shouldShow(recipe, collection, RecipeVariantResolver.resolveDisplayStack(recipe, Minecraft.getInstance()), true)) {
 			renderDot(guiGraphics, x, y);
+		} else if (recipe != null && ChainCraftabilityCache.isChainCraftable(recipe.getId())) {
+			renderChainDot(guiGraphics, x, y);
 		}
 	}
 
