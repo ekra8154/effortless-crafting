@@ -39,10 +39,15 @@ public final class RecipeButtonQueuedCountIndicator {
 		int textY = badgeY;
 
 		// Transparent placeholder area so we have a stable badge region to skin later.
+		// Pre-1.21.6 GUI rendering is depth-buffered: item icons in the buttons sit at z~150-200,
+		// so the badge must be lifted above them (like vanilla renderItemDecorations) to be visible.
+		guiGraphics.pose().pushPose();
+		guiGraphics.pose().translate(0.0F, 0.0F, 300.0F);
 		guiGraphics.fill(badgeX, badgeY, badgeX + BADGE_WIDTH, badgeY + BADGE_HEIGHT, BACKGROUND_COLOR);
 
 		guiGraphics.drawString(font, text, textX + 1, textY + 1, SHADOW_COLOR, false);
 		guiGraphics.drawString(font, text, textX, textY, TEXT_COLOR, false);
+		guiGraphics.pose().popPose();
 	}
 
 	public static void renderOverlayButton(
@@ -71,8 +76,11 @@ public final class RecipeButtonQueuedCountIndicator {
 		int textX = badgeX + (BADGE_WIDTH - textWidth) / 2;
 		int textY = badgeY;
 
+		guiGraphics.pose().pushPose();
+		guiGraphics.pose().translate(0.0F, 0.0F, 300.0F);
 		guiGraphics.fill(badgeX, badgeY, badgeX + BADGE_WIDTH, badgeY + BADGE_HEIGHT, BACKGROUND_COLOR);
 		guiGraphics.drawString(font, text, textX + 1, textY + 1, SHADOW_COLOR, false);
 		guiGraphics.drawString(font, text, textX, textY, TEXT_COLOR, false);
+		guiGraphics.pose().popPose();
 	}
 }
