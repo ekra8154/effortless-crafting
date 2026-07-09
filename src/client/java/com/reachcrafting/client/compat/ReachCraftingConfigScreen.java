@@ -379,15 +379,6 @@ public final class ReachCraftingConfigScreen {
 			.build());
 
 		messagesGroup.add(entries.startBooleanToggle(
-				Component.translatable("option.reachcrafting.show_bulk_craft_summary_message"),
-				config.showBulkCraftSummaryMessage()
-			)
-			.setDefaultValue(true)
-			.setTooltip(Component.translatable("tooltip.reachcrafting.show_bulk_craft_summary_message"))
-			.setSaveConsumer(config::setShowBulkCraftSummaryMessage)
-			.build());
-
-		messagesGroup.add(entries.startBooleanToggle(
 				Component.translatable("option.reachcrafting.show_missing_ingredients_message"),
 				config.showMissingIngredientsMessage()
 			)
