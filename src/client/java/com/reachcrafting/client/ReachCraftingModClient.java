@@ -59,6 +59,11 @@ public class ReachCraftingModClient implements ClientModInitializer {
 		NearbyContainerCache.init();
 		RecipeBookClickCapture.init();
 		NearbyContainerDryRun.init();
+		RecipeBookChunkedScheduler.init();
+		ChainCraftabilityCache.init();
+		ChainCraftPopupController.init();
+		ChainCraftController.init();
+		BulkChainCraftController.init();
 		ContainerFilterRenderer.init();
 		ChainCraftabilityCache.init();
 		RecipeBookChunkedScheduler.init();

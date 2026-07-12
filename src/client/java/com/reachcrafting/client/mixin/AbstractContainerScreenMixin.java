@@ -78,8 +78,12 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 		}
 
 		NearbyContainerCache.onContainerScreenRemoved(this.menu);
-
-		if (!com.reachcrafting.client.ContainerUtils.isAnySessionActive()) {
+		
+		// The chain craft confirm popup replaces this screen without closing
+		// the container; wiping hold state there kills the bulk latch (and
+		// pulled-resource tracking) before the confirmed session can start.
+		if (!com.reachcrafting.client.ContainerUtils.isAnySessionActive()
+			&& !com.reachcrafting.client.ChainCraftPopupController.isOpeningConfirmPopup()) {
 			com.reachcrafting.client.ContainerUtils.clearHoldSession();
 			com.reachcrafting.client.PulledResourcesTracker.clear();
 			com.reachcrafting.client.InventoryGridRestoreTracker.clear();

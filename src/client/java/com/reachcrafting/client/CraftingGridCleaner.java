@@ -19,7 +19,8 @@ final class CraftingGridCleaner {
 
 		AbstractContainerMenu menu = client.player.containerMenu;
 
-		boolean retainBulkResources = isStartingNewCraft && BulkAutoCraftController.shouldRetainPulledResourcesForNextBulkCraft();
+		boolean retainBulkResources = isStartingNewCraft
+			&& (BulkAutoCraftController.shouldRetainPulledResourcesForNextBulkCraft() || BulkChainCraftController.isActive());
 		if (allowScreenChange && retainBulkResources) {
 			com.reachcrafting.ReachCraftingMod.LOGGER.debug(
 				"[grid_flush] Retaining staged nearby resources for next bulk craft (items={}, screen={})",

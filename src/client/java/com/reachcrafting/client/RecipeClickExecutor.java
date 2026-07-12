@@ -4,6 +4,7 @@ import com.reachcrafting.ReachCraftingMod;
 import com.reachcrafting.client.mixin.RecipeBookComponentAccessor;
 import com.reachcrafting.client.mixin.RecipeBookPageAccessor;
 import java.util.Map;
+import java.util.Optional;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.CraftingScreen;
@@ -101,6 +102,7 @@ final class RecipeClickExecutor {
 		if (allowNearbyChests && ReachCraftingConfig.get().cacheContainersForFasterSearch()) {
 			NearbyContainerCache.ReachableView reachableView = NearbyContainerCache.getReachableView(minecraft.level, minecraft.getCameraEntity(), reachDistance(minecraft, player));
 			availableCounts = AvailableItemSnapshot.mergeCounts(availableCounts, reachableView.countsFor(ingredientSummary.acceptedItemIds()));
+			// Lockstep with BulkChainCraftController.collectAvailableCounts.
 			chainAvailableCounts = AvailableItemSnapshot.mergeCounts(localAvailableCounts, reachableView.aggregateCounts());
 			nearbyCacheIncomplete = reachableView.snapshotsByKey().size() < reachableView.nearestAccessByKey().size();
 		}
@@ -162,10 +164,15 @@ final class RecipeClickExecutor {
 			&& (!allowNearbyChests || ChainCraftController.isUsingPreStagedNearbyResources());
 		boolean useDryRun = (allowNearbyChests && !directChainReplay) || (forceDryRun && !directChainReplay);
 		ReachCraftingConfig.ChainCraftingMode chainMode = ReachCraftingConfig.get().chainCraftingMode();
+		// Bulk mode implies autocraft semantics even when Alt is not physically
+		// held at click time, so bulk requests also qualify for chain offers.
+		// Active sessions are excluded so their replayed clicks never re-offer.
 		boolean canOfferChainCraft = deficitReport.hasMissingIngredients()
-			&& autoCraftRequested
+			&& (autoCraftRequested || AutoCraftController.isBulkModeEnabled())
 			&& chainMode != ReachCraftingConfig.ChainCraftingMode.DISABLED
-			&& !ChainCraftController.isActive();
+			&& !ChainCraftController.isActive()
+			&& !BulkAutoCraftController.isActive()
+			&& !BulkChainCraftController.isActive();
 		String missingMessage = deficitReport.hasMissingIngredients()
 			? "Missing: " + deficitReport.compactMissingSummary()
 			: "";
@@ -178,15 +185,40 @@ final class RecipeClickExecutor {
 			ReachCraftingModClient.sendDebugChat("Ready: " + outputLabel);
 		}
 
+		if (deficitReport.hasMissingIngredients()) {
+			ReachCraftingMod.LOGGER.debug("[chain_gate_hold_state] {}", AutoCraftController.describeHoldState());
+			ReachCraftingMod.LOGGER.info(
+				"[chain_gate] recipe={} missing={} auto_requested={} mode={} use_dry_run={} force_dry_run={} allow_nearby={} bulk_mode={} craft_all={} effective_craft_all={} requested_clicks={} desired_copies={} available={} chain_available={} local_available={}",
+				selectedRecipe.recipeId(),
+				deficitReport.compactMissingSummary(),
+				autoCraftRequested,
+				chainMode,
+				useDryRun,
+				forceDryRun,
+				allowNearbyChests,
+				AutoCraftController.isBulkModeEnabled(),
+				craftAll,
+				effectiveCraftAll,
+				requestedClicks,
+				desiredVariantCopies,
+				AvailableItemSnapshot.formatCounts(availableCounts),
+				AvailableItemSnapshot.formatCounts(chainAvailableCounts),
+				AvailableItemSnapshot.formatCounts(localAvailableCounts)
+			);
+		}
+
 		if (canOfferChainCraft) {
 			long chainOfferStartNanos = PerformanceProfiler.start();
-			java.util.Optional<ChainCraftOffer> chainOffer = planChainCraftOffer(
+			// A refillable bulk max request is a craft-all for planning purposes:
+			// plan the largest achievable count instead of one exact huge count.
+			boolean chainCraftAll = effectiveCraftAll || refillableBulkMaxMode;
+			Optional<ChainCraftOffer> chainOffer = planChainCraftOffer(
 				minecraft,
 				player,
 				selectedRecipe,
 				chainAvailableCounts,
 				allowNearbyChests,
-				effectiveCraftAll,
+				chainCraftAll,
 				requestedClicks,
 				desiredVariantCopies
 			);
@@ -207,7 +239,18 @@ final class RecipeClickExecutor {
 					AutoCraftController.isBulkModeEnabled()
 				);
 				if (AutoCraftController.isBulkModeEnabled()) {
-					ReachCraftingModClient.sendChat(net.minecraft.network.chat.Component.translatable("message.reachcrafting.chain_crafting.bulk_unsupported").getString());
+					if (!ReachCraftingConfig.get().enableBulkChainCrafting()) {
+						ReachCraftingModClient.sendChat(net.minecraft.network.chat.Component.translatable("message.reachcrafting.chain_crafting.bulk_unsupported").getString());
+						return;
+					}
+					ChainCraftPopupController.handleBulkChainPlan(
+						chainPlan,
+						selectedRecipe,
+						allowNearbyChests,
+						chainOffer.get().requestedRecipeCopies(),
+						chainOffer.get().maxRequest(),
+						missingMessage
+					);
 					return;
 				}
 				int popupRequestedCopies = chainOffer.get().maxRequest()
@@ -268,6 +311,7 @@ final class RecipeClickExecutor {
 			);
 			if (allowNearbyChests
 				&& AutoCraftController.isBulkModeEnabled()
+				&& (!ChainCraftController.isActive() || ChainCraftController.isRunningFinalStep())
 				&& !effectiveCraftAll
 				&& !immediateLocalCraftDeficit.hasMissingIngredients()
 				&& minecraft.gameMode != null) {
@@ -348,8 +392,15 @@ final class RecipeClickExecutor {
 		MultiPlayerGameMode gameMode = minecraft.gameMode;
 		if (gameMode != null) {
 			int queueLimit = resolveRecipeQueueLimit(minecraft, selectedRecipe.recipe(), collection);
+			// Intermediate chain steps must keep exact per-click placement; a
+			// shift place would craft-all and desync batch settlement. The
+			// FINAL chain step is a flat bulk craft though — one shift place
+			// crafts the whole batch at flat bulk speed instead of one copy
+			// per settlement round.
+			boolean chainFinalBulkPlace = AutoCraftController.isBulkModeEnabled() && ChainCraftController.isRunningFinalStep();
 			boolean useBulkPlace = effectiveCraftAll
-				|| (AutoCraftController.isBulkModeEnabled() && requestedClicks >= queueLimit);
+				|| chainFinalBulkPlace
+				|| (AutoCraftController.isBulkModeEnabled() && !ChainCraftController.isActive() && requestedClicks >= queueLimit);
 			boolean repeatDirectPlacement = AutoCraftController.isBulkModeEnabled() || directChainReplay;
 
 			if (useBulkPlace) {
@@ -601,10 +652,18 @@ final class RecipeClickExecutor {
 	) {
 		if (effectiveCraftAll) {
 			int upperBound = Math.max(requestedClicks, 1);
-			if (AutoCraftController.isBulkModeEnabled()) {
-				return ChainCraftPlanner.plan(minecraft, player, selectedRecipe, availableCounts, allowNearbyChests, 1);
-			}
-			return ChainCraftPlanner.planMax(minecraft, player, selectedRecipe, availableCounts, allowNearbyChests, upperBound);
+			// Bulk accepts single-step plans: leftovers can make the final
+			// directly craftable for small counts, which would otherwise
+			// break the max search's monotonicity (see planMax).
+			return ChainCraftPlanner.planMax(
+				minecraft,
+				player,
+				selectedRecipe,
+				availableCounts,
+				allowNearbyChests,
+				upperBound,
+				AutoCraftController.isBulkModeEnabled()
+			);
 		}
 		return ChainCraftPlanner.plan(
 			minecraft,
@@ -642,8 +701,10 @@ final class RecipeClickExecutor {
 		if (exactOrMax.isPresent()) {
 			return java.util.Optional.of(new ChainCraftOffer(exactOrMax.get(), requestedRecipeCopies, effectiveCraftAll));
 		}
-		if (requestedRecipeCopies <= 1 || AutoCraftController.isBulkModeEnabled()) {
-			return java.util.Optional.empty();
+		// Craft-all already ran planMax, so an empty result is final; only exact
+		// count requests benefit from the smaller-count fallback search.
+		if (requestedRecipeCopies <= 1 || effectiveCraftAll) {
+			return Optional.empty();
 		}
 		return ChainCraftPlanner.planMax(
 			minecraft,
@@ -651,7 +712,8 @@ final class RecipeClickExecutor {
 			selectedRecipe,
 			availableCounts,
 			allowNearbyChests,
-			requestedRecipeCopies - 1
+			requestedRecipeCopies - 1,
+			AutoCraftController.isBulkModeEnabled()
 		).map(plan -> new ChainCraftOffer(plan, requestedRecipeCopies, false));
 	}
 
