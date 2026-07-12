@@ -150,6 +150,62 @@ public final class InWorldFilterManager {
 		return INSTANCE_WHITELIST.contains(getPosKey(level, pos));
 	}
 
+	private static boolean sneakCycleConsumedPress;
+
+	/**
+	 * True when sneak + bare-hand right-click on the crosshair block should
+	 * cycle its filter state instead of opening it: a blacklist/whitelist
+	 * filter is active, the outlines are currently shown, the player is
+	 * sneaking with an empty main hand, and the target is a container.
+	 */
+	private static boolean isSneakClickCycleTargeted(Minecraft client) {
+		ReachCraftingConfig config = ReachCraftingConfig.get();
+		if (!config.enabled()
+			|| !config.sneakClickWhileHighlighted()
+			|| config.inWorldFilterMode() == ReachCraftingConfig.InWorldFilterMode.NONE
+			|| !ContainerFilterRenderer.areOutlinesVisible()) {
+			return false;
+		}
+		if (client.player == null
+			|| client.level == null
+			|| !client.player.isShiftKeyDown()
+			|| !client.player.getMainHandItem().isEmpty()) {
+			return false;
+		}
+		if (!(client.hitResult instanceof net.minecraft.world.phys.BlockHitResult blockHit)
+			|| blockHit.getType() != net.minecraft.world.phys.HitResult.Type.BLOCK) {
+			return false;
+		}
+		BlockState state = client.level.getBlockState(blockHit.getBlockPos());
+		return ContainerUtils.isPotentiallySupportedContainer(state);
+	}
+
+	/**
+	 * Returns true whenever the use action must be cancelled (the container
+	 * must not open), but cycles at most once per physical press: startUseItem
+	 * auto-repeats every few ticks while the button is held, which would spin
+	 * through the three states.
+	 */
+	public static boolean trySneakClickCycle(Minecraft client) {
+		if (!isSneakClickCycleTargeted(client)) {
+			return false;
+		}
+		if (!sneakCycleConsumedPress) {
+			sneakCycleConsumedPress = true;
+			BlockPos pos = ((net.minecraft.world.phys.BlockHitResult) client.hitResult).getBlockPos();
+			toggleInclusion(client.level, pos, client.level.getBlockState(pos));
+			client.player.swing(net.minecraft.world.InteractionHand.MAIN_HAND);
+		}
+		return true;
+	}
+
+	/** Called every client tick; re-arms the sneak-click cycle once the use button is released. */
+	public static void tickSneakCycleLatch(Minecraft client) {
+		if (!client.options.keyUse.isDown()) {
+			sneakCycleConsumedPress = false;
+		}
+	}
+
 	public static void toggleInclusion(Level level, BlockPos pos, BlockState state) {
 		updateContext();
 		String key = getPosKey(level, pos, state);
