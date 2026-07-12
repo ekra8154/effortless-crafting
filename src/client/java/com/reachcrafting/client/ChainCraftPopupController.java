@@ -65,7 +65,11 @@ public final class ChainCraftPopupController {
 			return;
 		}
 		boolean downgraded = !maxRequest && requestedRecipeCopies > plan.finalRecipeCopies();
-		if (mode == ReachCraftingConfig.ChainCraftingMode.ALWAYS) {
+		// A single-step plan is pure direct crafting — the case the yellow
+		// craftable indicator promises needs no chaining. Flat bulk max never
+		// prompts for that, so neither does bulk chain; the per-iteration
+		// replans still add conversion steps later if directs run dry.
+		if (mode == ReachCraftingConfig.ChainCraftingMode.ALWAYS || plan.steps().size() <= 1) {
 			if (downgraded) {
 				ReachCraftingModClient.sendChainCraftChat(bulkAlwaysPartialMessage(plan, requestedRecipeCopies).getString());
 			}
