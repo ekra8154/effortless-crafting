@@ -473,8 +473,11 @@ public final class InventoryGridRestoreTracker {
 			// During bulk crafting, throw byproducts directly instead of
 			// moving them to inventory. This prevents the last craft's
 			// byproducts (e.g. glass bottles) from fragmenting in inventory.
-			if (AutoCraftController.isBulkModeEnabled() && BulkAutoCraftController.isActive()) {
-				java.util.Set<String> acceptedIds = BulkAutoCraftController.getAcceptedItemIds();
+			// Covers both flat bulk and bulk chain sessions: the accepted set
+			// is the flat session's ingredients or the chain plan's union.
+			if (AutoCraftController.isBulkModeEnabled()
+				&& (BulkAutoCraftController.isActive() || BulkChainCraftController.isActive())) {
+				java.util.Set<String> acceptedIds = ContainerUtils.bulkSessionAcceptedItemIds();
 				if (acceptedIds != null && !acceptedIds.contains(itemId)) {
 					ReachCraftingMod.LOGGER.info("[grid_flush] THROW byproduct from grid slot {}: {}x{}", gridIdx, itemCount, itemName);
 					gameMode.handleContainerInput(menu.containerId, gridSlot.index, 1, ContainerInput.THROW, client.player);
