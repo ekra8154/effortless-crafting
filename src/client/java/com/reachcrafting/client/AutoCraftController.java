@@ -104,6 +104,14 @@ final class AutoCraftController {
 			autoCraftTogglePending = false;
 		} else if (ReachCraftingConfig.get().autoCraftHandling() == ReachCraftingConfig.AutoCraftHandling.HOLD) {
 			holdQuickCraftConsumed = true;
+			// Every quick-craft consumption means Alt is participating in a
+			// recipe request (click queue, scroll accumulation, or release).
+			// Its eventual release must fire the request, not read as the
+			// re-held cancel gesture and kill the sticky latch — the click
+			// paths already disarm via armHoldSessionForCurrentRequest, but
+			// scroll accumulation reaches Alt release before that runs.
+			holdStickyBulkAltOverride = false;
+			holdStickyNormalAltOverride = false;
 		}
 	}
 
