@@ -59,6 +59,25 @@ final class RecipeBookInputController {
 			}
 
 			if (state.pendingHeldRecipe() != null) {
+				// The queue cap depends on the current mode (bulk allows far
+				// more than the plain limit), so re-validate every tick: if
+				// bulk is disabled while a count is queued, clamp it back to
+				// what the active mode may fire instead of letting a stale
+				// bulk-sized request execute without bulk's fit protection.
+				int queueLimit = resolveQueueLimit(client, state.pendingHeldRecipe().action());
+				if (state.pendingHeldRecipe().clickCount() > queueLimit) {
+					com.reachcrafting.ReachCraftingMod.LOGGER.info(
+						"[recipe_input] queued_count_clamped from={} to={} bulk_enabled={}",
+						state.pendingHeldRecipe().clickCount(),
+						queueLimit,
+						AutoCraftController.isBulkModeEnabled()
+					);
+					state.setPendingHeldRecipe(new RecipeBookClickCapture.PendingHeldRecipe(
+						state.pendingHeldRecipe().action(),
+						queueLimit,
+						queueLimit >= 2
+					));
+				}
 				ModifierState activeModifiers = currentModifierState(controlDown, shiftDown, altDown);
 				boolean anyRelevantReleaseThisTick = (state.wasControlDown() && !controlDown)
 					|| (state.wasShiftDown() && !shiftDown)
@@ -567,6 +586,18 @@ final class RecipeBookInputController {
 		if (!ReachCraftingConfig.get().enabled() || state.pendingHeldRecipe() == null) {
 			return;
 		}
+		// A release landing while a session runs (queue built just before the
+		// session started) must not fire: the grid flush below would return
+		// the session's staged materials to chests mid-run.
+		if (isCraftingSessionControllerActive()) {
+			com.reachcrafting.ReachCraftingMod.LOGGER.info(
+				"[recipe_input] pending_queue_dropped_session_active recipe={} count={}",
+				state.pendingHeldRecipe().action().recipeId(),
+				state.pendingHeldRecipe().clickCount()
+			);
+			state.setPendingHeldRecipe(null);
+			return;
+		}
 
 		Minecraft minecraft = Minecraft.getInstance();
 		ResolvedRequest resolvedRequest = resolveRequest(modifierState);
@@ -620,6 +651,43 @@ final class RecipeBookInputController {
 		NearbyContainerDryRun.runPendingPostReturnCompaction(minecraft);
 
 		RecipeBookClickCapture.ReplayBatch replayBatch = state.replayBatch();
+		// Batches capture mode-dependent state at request time but can sit
+		// through a grid-flush delay or dry-run stall, during which the bulk
+		// latch may drop (Alt tap, gesture kill orphaning a session's batch).
+		// Session-owned replays are exempt: their copy counts legitimately
+		// exceed the plain per-recipe queue limit.
+		if (!isCraftingSessionControllerActive()) {
+			if (replayBatch.refillableBulkMaxMode() && !AutoCraftController.isBulkModeEnabled()) {
+				com.reachcrafting.ReachCraftingMod.LOGGER.info(
+					"[recipe_replay] dropped_stale_bulk_batch recipe={} remaining_clicks={}",
+					replayBatch.action().recipeId(),
+					replayBatch.remainingClicks()
+				);
+				state.setReplayBatch(null);
+				return;
+			}
+			// Craft-all batches are exempt too: they re-derive their real count
+			// from live material deficits at execute time, and a plain shift-max
+			// may legitimately exceed the per-recipe scroll queue limit.
+			int queueLimit = resolveQueueLimit(minecraft, replayBatch.action());
+			if (!replayBatch.craftAll() && replayBatch.remainingClicks() > queueLimit) {
+				com.reachcrafting.ReachCraftingMod.LOGGER.info(
+					"[recipe_replay] clamped_stale_batch recipe={} from={} to={}",
+					replayBatch.action().recipeId(),
+					replayBatch.remainingClicks(),
+					queueLimit
+				);
+				replayBatch = new RecipeBookClickCapture.ReplayBatch(
+					replayBatch.action(),
+					queueLimit,
+					replayBatch.allowNearby(),
+					replayBatch.craftAll(),
+					replayBatch.refillableBulkMaxMode(),
+					replayBatch.autoCraftRequested()
+				);
+				state.setReplayBatch(replayBatch);
+			}
+		}
 		com.reachcrafting.ReachCraftingMod.LOGGER.debug(
 			"[recipe_replay] screen={} recipe_idx={} remaining_clicks={} allow_nearby={} craft_all={}",
 			screen.getClass().getSimpleName(),
@@ -678,9 +746,18 @@ final class RecipeBookInputController {
 	private boolean canUseHeldQueueControls(Minecraft minecraft) {
 		return ReachCraftingConfig.get().reachCraftHoldAndRelease()
 			&& state.replayBatch() == null
+			&& !isCraftingSessionControllerActive()
 			&& (RecipeBookFocusManager.isControlKeyDown(minecraft)
 				|| RecipeBookFocusManager.isShiftKeyDown(minecraft)
 				|| (RecipeBookFocusManager.isAltKeyDown(minecraft) && ReachCraftingConfig.get().altAsRequestKey()));
+	}
+
+	/** A crafting session owns the grid and inventory while it runs; queue
+	 * accumulation and releases must not interleave with it. */
+	private boolean isCraftingSessionControllerActive() {
+		return BulkAutoCraftController.isActive()
+			|| ChainCraftController.isActive()
+			|| BulkChainCraftController.isActive();
 	}
 
 	private boolean adjustHeldRecipeCount(Minecraft minecraft, RecipeBookClickCapture.HeldRecipeAction action, int delta) {
@@ -691,11 +768,15 @@ final class RecipeBookInputController {
 		int multiplier = RecipeBookFocusManager.isSpaceKeyDown(minecraft) ? 16 : 1;
 		int effectiveDelta = delta * multiplier;
 
+		// On every adjustment, not just the first: Alt may join an
+		// accumulation that started under Ctrl/Shift, and its release must
+		// then count as firing the request rather than an Alt-tap gesture.
+		if (RecipeBookFocusManager.isAltKeyDown(minecraft) && ReachCraftingConfig.get().altAsRequestKey()) {
+			AutoCraftController.consumeQuickCraft();
+		}
+
 		if (state.pendingHeldRecipe() == null) {
 			int updatedCount = nextQueuedCountFromCurrentState(minecraft, action, effectiveDelta);
-			if (RecipeBookFocusManager.isAltKeyDown(minecraft) && ReachCraftingConfig.get().altAsRequestKey()) {
-				AutoCraftController.consumeQuickCraft();
-			}
 			state.setPendingHeldRecipe(new RecipeBookClickCapture.PendingHeldRecipe(action, updatedCount, updatedCount >= 2));
 			return true;
 		}
