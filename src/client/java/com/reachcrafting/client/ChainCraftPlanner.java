@@ -34,15 +34,17 @@ final class ChainCraftPlanner {
 	private final LocalPlayer player;
 	private final boolean allowNearby;
 	private final int gridSlotCount;
+	private final boolean allowSingleStepPlan;
 	private final ContextMap context;
 	private final Map<String, List<Candidate>> recipesByOutput;
 
-	private ChainCraftPlanner(Minecraft minecraft, LocalPlayer player, boolean allowNearby, int gridSlotCount) {
+	private ChainCraftPlanner(Minecraft minecraft, LocalPlayer player, boolean allowNearby, int gridSlotCount, boolean allowSingleStepPlan) {
 		long startNanos = PerformanceProfiler.start();
 		this.minecraft = minecraft;
 		this.player = player;
 		this.allowNearby = allowNearby;
 		this.gridSlotCount = gridSlotCount;
+		this.allowSingleStepPlan = allowSingleStepPlan;
 		this.context = SlotDisplayContext.fromLevel(minecraft.level);
 		this.recipesByOutput = buildRecipeIndex();
 		int candidateCount = this.recipesByOutput.values().stream().mapToInt(List::size).sum();
@@ -91,7 +93,7 @@ final class ChainCraftPlanner {
 			);
 			return Optional.empty();
 		}
-		return new ChainCraftPlanner(minecraft, player, allowNearby, gridSlotCount)
+		return new ChainCraftPlanner(minecraft, player, allowNearby, gridSlotCount, false)
 			.plan(finalSelection, availableCounts, requestedRecipeCopies);
 	}
 
@@ -103,17 +105,58 @@ final class ChainCraftPlanner {
 		boolean allowNearby,
 		int upperBound
 	) {
+		return planMax(minecraft, player, finalSelection, availableCounts, allowNearby, upperBound, false);
+	}
+
+	/**
+	 * allowSingleStepPlan lets the bulk chain loop accept degenerate plans
+	 * whose final recipe is directly craftable (e.g. leftover intermediates
+	 * from a failed iteration already cover the requirement). The offer path
+	 * keeps rejecting them so plain requests stay on the normal craft path.
+	 * Without it the binary search loses monotonicity: small counts fail as
+	 * "not a chain" while larger counts plan fine.
+	 */
+	static Optional<ChainCraftPlan> planMax(
+		Minecraft minecraft,
+		LocalPlayer player,
+		RecipeVariantResolver.Selection finalSelection,
+		Map<String, Integer> availableCounts,
+		boolean allowNearby,
+		int upperBound,
+		boolean allowSingleStepPlan
+	) {
 		int high = Math.max(upperBound, 0);
 		if (high <= 0) {
 			ReachCraftingMod.LOGGER.info("[chain_debug] plan_max abort reason=non_positive_upper_bound upper_bound={}", upperBound);
 			return Optional.empty();
 		}
+		if (minecraft == null || minecraft.level == null || player == null || finalSelection == null) {
+			ReachCraftingMod.LOGGER.info(
+				"[chain_debug] plan_max abort reason=invalid_inputs minecraft={} level={} player={} selection={}",
+				minecraft != null,
+				minecraft != null && minecraft.level != null,
+				player != null,
+				finalSelection != null
+			);
+			return Optional.empty();
+		}
+		int gridSlotCount = minecraft.screen instanceof InventoryScreen ? 4 : minecraft.screen instanceof CraftingScreen ? 9 : 0;
+		if (gridSlotCount <= 0) {
+			ReachCraftingMod.LOGGER.info(
+				"[chain_debug] plan_max abort reason=unsupported_screen screen={}",
+				minecraft.screen != null ? minecraft.screen.getClass().getName() : "<none>"
+			);
+			return Optional.empty();
+		}
 
+		// One planner (and one recipe-index build) serves the whole binary
+		// search; each probe only needs fresh planning state.
+		ChainCraftPlanner planner = new ChainCraftPlanner(minecraft, player, allowNearby, gridSlotCount, allowSingleStepPlan);
 		ChainCraftPlan bestPlan = null;
 		int low = 0;
 		while (low < high) {
 			int mid = (low + high + 1) / 2;
-			Optional<ChainCraftPlan> candidate = plan(minecraft, player, finalSelection, availableCounts, allowNearby, mid);
+			Optional<ChainCraftPlan> candidate = planner.plan(finalSelection, availableCounts, mid);
 			if (candidate.isPresent()) {
 				bestPlan = candidate.get();
 				low = mid;
@@ -148,7 +191,7 @@ final class ChainCraftPlanner {
 		);
 		boolean planned = planRecipe(finalCandidate, requestedRecipeCopies, state, new HashSet<>(), true);
 		List<ChainCraftPlan.Step> steps = state.toSteps(allowNearby);
-		if (!planned || steps.size() <= 1) {
+		if (!planned || steps.isEmpty() || (steps.size() <= 1 && !allowSingleStepPlan)) {
 			ReachCraftingMod.LOGGER.info(
 				"[chain_debug] unavailable final_recipe={} planned={} steps={} final_counts={}",
 				finalCandidate.recipeId(),
@@ -552,7 +595,7 @@ final class ChainCraftPlanner {
 	}
 
 	private void addSynchronizedRecipeCandidates(Map<String, List<Candidate>> index, Set<RecipeDisplayId> knownRecipeIds) {
-		if (minecraft.hasSingleplayerServer() && minecraft.getSingleplayerServer() != null) {
+		if (minecraft.isSingleplayer() && minecraft.getSingleplayerServer() != null) {
 			int added = addRecipeHolderCandidates(
 				index,
 				knownRecipeIds,
