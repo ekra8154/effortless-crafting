@@ -15,6 +15,12 @@ public abstract class MinecraftInteractionBlockMixin {
 		if (!com.reachcrafting.client.ReachCraftingConfig.get().enabled()) return;
 		if (NearbyContainerDryRun.shouldBlockWorldInteraction()) {
 			ci.cancel();
+			return;
+		}
+		// Sneak + bare-hand right-click on a container while filter outlines
+		// are shown cycles its filter state; the container must not open.
+		if (com.reachcrafting.client.InWorldFilterManager.trySneakClickCycle((Minecraft) (Object) this)) {
+			ci.cancel();
 		}
 	}
 
