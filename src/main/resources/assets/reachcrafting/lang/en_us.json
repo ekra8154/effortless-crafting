@@ -118,6 +118,8 @@
   "tooltip.reachcrafting.show_craft_aborted_message": "Whether to show a chat message when a crafting session is aborted early by esc or for some other reason.",
   "option.reachcrafting.show_bulk_craft_summary_message": "Bulk Craft Summary",
   "tooltip.reachcrafting.show_bulk_craft_summary_message": "Whether to show a chat summary of the total items crafted after a bulk session.",
+  "option.reachcrafting.bulk_despawn_warning_seconds": "Bulk Despawn Warning (Seconds)",
+  "tooltip.reachcrafting.bulk_despawn_warning_seconds": "Warn in chat when a single bulk craft session has been running this many seconds. Items ejected on the ground despawn 5 minutes after being dropped, so very long sessions risk losing their earliest ejections. Set to -1 to disable.",
   "option.reachcrafting.show_missing_ingredients_message": "Missing Ingredients",
   "tooltip.reachcrafting.show_missing_ingredients_message": "Whether to report specifically which ingredients are missing when a craft cannot be completed.",
   "option.reachcrafting.show_chain_craft_messages": "Chain Craft Messages",
