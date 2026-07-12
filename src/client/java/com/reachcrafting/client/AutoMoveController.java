@@ -221,6 +221,11 @@ final class AutoMoveController {
 			if (!menu.getCarried().isEmpty()) {
 				tryResolveCarriedStack(client, menu);
 			}
+			// The craft that settled may have left ingredient remainders in
+			// the grid (milk buckets -> empty buckets). Throw them before
+			// restaging, or handlePlaceRecipe stows them into inventory where
+			// they eat a slot per craft and starve future batch staging.
+			ejectUnneededGridItems(client, menu);
 			if (ChainCraftController.restageFinalStepForRapidEject(client)) {
 				autoMoveWaitingTicks = 0;
 				return;
@@ -383,22 +388,7 @@ final class AutoMoveController {
 					}
 
 					// Eject any by-products left in the grid
-					if (AutoCraftController.isBulkModeEnabled()) {
-						java.util.Set<String> acceptedIds = BulkAutoCraftController.getAcceptedItemIds();
-						if (acceptedIds != null) {
-							int gridSlotCount = (menu instanceof net.minecraft.world.inventory.CraftingMenu) ? 9 : 4;
-							for (int i = 1; i <= gridSlotCount; i++) {
-								Slot gridSlot = menu.getSlot(i);
-								if (gridSlot.hasItem()) {
-									String itemId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(gridSlot.getItem().getItem()).toString();
-									if (!acceptedIds.contains(itemId)) {
-										com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] EJECT grid byproduct {} from grid slot {}", itemId, i);
-										client.gameMode.handleContainerInput(menu.containerId, gridSlot.index, 1, ContainerInput.THROW, client.player);
-									}
-								}
-							}
-						}
-					}
+					ejectUnneededGridItems(client, menu);
 
 					// com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] EJECT path done. {}", logBottleDistribution(menu));
 					pendingAutoMove = false;
@@ -684,24 +674,11 @@ final class AutoMoveController {
 			}
 
 			if (ReachCraftingConfig.get().ejectItemsWhenFull() && AutoCraftController.isBulkModeEnabled()) {
-				java.util.Set<String> acceptedIds = BulkAutoCraftController.getAcceptedItemIds();
-				if (acceptedIds != null) {
-					int gridSlotCount = (menu instanceof net.minecraft.world.inventory.CraftingMenu) ? 9 : 4;
-					for (int i = 1; i <= gridSlotCount; i++) {
-						Slot gridSlot = menu.getSlot(i);
-						if (gridSlot.hasItem()) {
-							String itemId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(gridSlot.getItem().getItem()).toString();
-							if (!acceptedIds.contains(itemId)) {
-								com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] ORGANIZE eject grid byproduct {} from grid slot {}", itemId, i);
-								client.gameMode.handleContainerInput(menu.containerId, gridSlot.index, 1, ContainerInput.THROW, client.player);
-								movesThisTick++;
-							}
-						}
-					}
-					if (movesThisTick > 0) {
-						autoMoveWaitingTicks = 0;
-						return;
-					}
+				int ejectedSlots = ejectUnneededGridItems(client, menu);
+				if (ejectedSlots > 0) {
+					movesThisTick += ejectedSlots;
+					autoMoveWaitingTicks = 0;
+					return;
 				}
 			}
 
@@ -837,6 +814,37 @@ final class AutoMoveController {
 				}
 			}
 		}
+	}
+
+	/**
+	 * Throws grid items the active bulk session has no use for — crafting
+	 * remainders (milk buckets leave empty buckets) and stray byproducts.
+	 * Only acts when a bulk session, flat or chain, can vouch for its
+	 * accepted item set. Returns the number of grid slots ejected.
+	 */
+	private static int ejectUnneededGridItems(Minecraft client, AbstractContainerMenu menu) {
+		if (!AutoCraftController.isBulkModeEnabled() || client.gameMode == null || client.player == null) {
+			return 0;
+		}
+		java.util.Set<String> acceptedIds = ContainerUtils.bulkSessionAcceptedItemIds();
+		if (acceptedIds == null) {
+			return 0;
+		}
+		int gridSlotCount = (menu instanceof net.minecraft.world.inventory.CraftingMenu) ? 9 : 4;
+		int ejectedSlots = 0;
+		for (int i = 1; i <= gridSlotCount; i++) {
+			Slot gridSlot = menu.getSlot(i);
+			if (!gridSlot.hasItem()) {
+				continue;
+			}
+			String itemId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(gridSlot.getItem().getItem()).toString();
+			if (!acceptedIds.contains(itemId)) {
+				com.reachcrafting.ReachCraftingMod.LOGGER.debug("[auto_move] EJECT grid byproduct {} from grid slot {}", itemId, i);
+				client.gameMode.handleContainerInput(menu.containerId, gridSlot.index, 1, ContainerInput.THROW, client.player);
+				ejectedSlots++;
+			}
+		}
+		return ejectedSlots;
 	}
 
 	private static boolean tryResolveCarriedStack(Minecraft client, AbstractContainerMenu menu) {

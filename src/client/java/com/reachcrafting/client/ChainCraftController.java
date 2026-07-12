@@ -91,6 +91,27 @@ public final class ChainCraftController {
 		return activeRun != null && activeRun.preStagedNearbyResources();
 	}
 
+	/**
+	 * Union of every plan step's accepted inputs and outputs. Anything outside
+	 * this set that appears during the run is a byproduct the plan cannot use
+	 * (e.g. empty buckets left in the grid by milk), so bulk ejection may
+	 * throw it; anything any step consumes or produces stays protected.
+	 */
+	static java.util.Set<String> getActivePlanAcceptedItemIds() {
+		ChainCraftRun run = activeRun;
+		if (run == null) {
+			return null;
+		}
+		java.util.Set<String> acceptedIds = new java.util.HashSet<>();
+		for (ChainCraftPlan.Step step : run.plan().steps()) {
+			acceptedIds.addAll(step.ingredientSummary().acceptedItemIds());
+			if (!step.displayStack().isEmpty()) {
+				acceptedIds.add(net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(step.displayStack().getItem()).toString());
+			}
+		}
+		return acceptedIds;
+	}
+
 	static void abort(boolean report) {
 		if (activeRun == null && pendingWarmupRetry == null) {
 			return;
