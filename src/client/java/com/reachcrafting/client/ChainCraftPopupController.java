@@ -17,6 +17,8 @@ import org.lwjgl.glfw.GLFW;
 public final class ChainCraftPopupController {
 	private static final Map<PopupScreen, PendingPopup> PENDING_POPUPS = new WeakHashMap<>();
 	private static ChainCraftPlan pendingStartPlan;
+	private static BulkChainRequest pendingBulkChainStart;
+	private static boolean openingConfirmPopup;
 
 	private ChainCraftPopupController() {
 	}
@@ -70,6 +72,37 @@ public final class ChainCraftPopupController {
 			return;
 		}
 
+		showConfirmPopup(messageFor(plan, requestedRecipeCopies), new PendingPopup(plan, deferredMissingMessage, null));
+	}
+
+	static void handleBulkChainPlan(
+		ChainCraftPlan plan,
+		RecipeVariantResolver.Selection selection,
+		boolean allowNearby,
+		int requestedRecipeCopies,
+		boolean maxRequest,
+		String deferredMissingMessage
+	) {
+		ReachCraftingConfig.ChainCraftingMode mode = ReachCraftingConfig.get().chainCraftingMode();
+		if (mode == ReachCraftingConfig.ChainCraftingMode.DISABLED || plan == null || selection == null) {
+			return;
+		}
+		boolean downgraded = !maxRequest && requestedRecipeCopies > plan.finalRecipeCopies();
+		if (mode == ReachCraftingConfig.ChainCraftingMode.ALWAYS) {
+			if (downgraded) {
+				ReachCraftingModClient.sendChainCraftChat(bulkAlwaysPartialMessage(plan, requestedRecipeCopies).getString());
+			}
+			BulkChainCraftController.start(selection, allowNearby, plan.finalRecipeCopies());
+			return;
+		}
+
+		showConfirmPopup(
+			bulkMessageFor(plan, requestedRecipeCopies, maxRequest),
+			new PendingPopup(null, deferredMissingMessage, new BulkChainRequest(selection, allowNearby, plan.finalRecipeCopies()))
+		);
+	}
+
+	private static void showConfirmPopup(Component message, PendingPopup pending) {
 		Minecraft client = Minecraft.getInstance();
 		Screen background = client.gui.screen();
 		if (!(background instanceof CraftingScreen) && !(background instanceof InventoryScreen)) {
@@ -81,15 +114,27 @@ public final class ChainCraftPopupController {
 			Component.translatable("popup.reachcrafting.chain_crafting.title")
 		)
 			.setWidth(260)
-			.addMessage(messageFor(plan, requestedRecipeCopies))
+			.addMessage(message)
 			.addButton(Component.translatable("popup.reachcrafting.chain_crafting.yes"), ChainCraftPopupController::confirm)
 			.addButton(Component.translatable("popup.reachcrafting.chain_crafting.no"), ChainCraftPopupController::cancel)
 			.onClose(() -> {
 			})
 			.build();
 
-		PENDING_POPUPS.put(popup, new PendingPopup(plan, deferredMissingMessage));
-		client.setScreenAndShow(popup);
+		PENDING_POPUPS.put(popup, pending);
+		// Swapping in the popup fires the crafting screen's removed(), which
+		// the close mixin must not mistake for the container closing: that
+		// would wipe the bulk latch and pulled-resource tracking mid-flow.
+		openingConfirmPopup = true;
+		try {
+			client.setScreenAndShow(popup);
+		} finally {
+			openingConfirmPopup = false;
+		}
+	}
+
+	public static boolean isOpeningConfirmPopup() {
+		return openingConfirmPopup;
 	}
 
 	private static Component messageFor(ChainCraftPlan plan, int requestedRecipeCopies) {
@@ -117,12 +162,53 @@ public final class ChainCraftPopupController {
 		);
 	}
 
+	private static Component bulkMessageFor(ChainCraftPlan plan, int requestedRecipeCopies, boolean maxRequest) {
+		int outputPerCraft = Math.max(plan.finalOutput().getCount(), 1);
+		String itemName = plan.finalOutput().getHoverName().getString();
+		int achievableItems = plan.finalRecipeCopies() * outputPerCraft;
+		if (maxRequest) {
+			return Component.translatable(
+				"popup.reachcrafting.chain_crafting.bulk_max_message",
+				achievableItems,
+				itemName
+			);
+		}
+		if (requestedRecipeCopies <= plan.finalRecipeCopies()) {
+			return Component.translatable(
+				"popup.reachcrafting.chain_crafting.bulk_message",
+				achievableItems,
+				itemName
+			);
+		}
+		return Component.translatable(
+			"popup.reachcrafting.chain_crafting.bulk_partial_message",
+			requestedRecipeCopies * outputPerCraft,
+			itemName,
+			achievableItems
+		);
+	}
+
+	private static Component bulkAlwaysPartialMessage(ChainCraftPlan plan, int requestedRecipeCopies) {
+		int outputPerCraft = Math.max(plan.finalOutput().getCount(), 1);
+		String itemName = plan.finalOutput().getHoverName().getString();
+		return Component.translatable(
+			"message.reachcrafting.chain_crafting.bulk_partial_always",
+			requestedRecipeCopies * outputPerCraft,
+			itemName,
+			plan.finalRecipeCopies() * outputPerCraft
+		);
+	}
+
 	public static boolean confirm(PopupScreen popup) {
 		PendingPopup pending = PENDING_POPUPS.remove(popup);
 		if (pending == null) {
 			return false;
 		}
-		pendingStartPlan = pending.plan();
+		if (pending.bulkChain() != null) {
+			pendingBulkChainStart = pending.bulkChain();
+		} else {
+			pendingStartPlan = pending.plan();
+		}
 		popup.onClose();
 		return true;
 	}
@@ -149,12 +235,19 @@ public final class ChainCraftPopupController {
 	}
 
 	static void tick(Minecraft client) {
-		if (pendingStartPlan == null) {
+		if (pendingStartPlan == null && pendingBulkChainStart == null) {
 			return;
 		}
 		if (client.player == null || (!(client.gui.screen() instanceof CraftingScreen) && !(client.gui.screen() instanceof InventoryScreen))) {
 			pendingStartPlan = null;
+			pendingBulkChainStart = null;
 			ReachCraftingModClient.sendChat(Component.translatable("message.reachcrafting.chain_crafting.context_lost").getString());
+			return;
+		}
+		if (pendingBulkChainStart != null) {
+			BulkChainRequest request = pendingBulkChainStart;
+			pendingBulkChainStart = null;
+			BulkChainCraftController.start(request.selection(), request.allowNearby(), request.targetCopies());
 			return;
 		}
 		ChainCraftPlan plan = pendingStartPlan;
@@ -168,6 +261,9 @@ public final class ChainCraftPopupController {
 		}
 	}
 
-	private record PendingPopup(ChainCraftPlan plan, String deferredMissingMessage) {
+	private record PendingPopup(ChainCraftPlan plan, String deferredMissingMessage, BulkChainRequest bulkChain) {
+	}
+
+	private record BulkChainRequest(RecipeVariantResolver.Selection selection, boolean allowNearby, int targetCopies) {
 	}
 }

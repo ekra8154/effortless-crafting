@@ -24,6 +24,13 @@ final class AutoCraftController {
 	}
 
 	static void handleKeyPress() {
+		// keyPressed also fires for OS key repeats while Alt is held. A
+		// repeat is not a re-press: without this guard, latching bulk via
+		// Alt+click and holding Alt a moment longer arms the re-held cancel
+		// gesture and the latch dies on release.
+		if (autoCraftKeyHeld) {
+			return;
+		}
 		autoCraftKeyHeld = true;
 		holdQuickCraftCancelled = false;
 		holdQuickCraftConsumed = false;
@@ -79,6 +86,13 @@ final class AutoCraftController {
 		if (ReachCraftingConfig.get().autoCraftHandling() == ReachCraftingConfig.AutoCraftHandling.TOGGLE) {
 			autoCraftTogglePending = false;
 		} else if (ReachCraftingConfig.get().autoCraftHandling() == ReachCraftingConfig.AutoCraftHandling.HOLD) {
+			// With a mode latched, another key while Alt is held (e.g. Ctrl
+			// joining an Alt+Ctrl request) only cancels the pending Alt-tap
+			// quick craft; it must not kill the latch or a running session.
+			if (holdStickyBulkLatched || holdStickyNormalLatched) {
+				holdQuickCraftConsumed = true;
+				return;
+			}
 			if (!holdQuickCraftCancelled) {
 				holdQuickCraftCancelled = true;
 				BulkAutoCraftController.stop(true, "hold_cancel_on_key");
@@ -118,6 +132,23 @@ final class AutoCraftController {
 			return holdStickyBulkLatched ? ReachCraftingConfig.AutoCraftMode.BULK : ReachCraftingConfig.AutoCraftMode.NORMAL;
 		}
 		return ReachCraftingConfig.get().autoCraftEnabledMode();
+	}
+
+	/** Compact state dump for debugging bulk/hold gating decisions. */
+	static String describeHoldState() {
+		return "enabled=" + isEnabled()
+			+ " bulk=" + isBulkModeEnabled()
+			+ " handling=" + ReachCraftingConfig.get().autoCraftHandling()
+			+ " capability=" + ReachCraftingConfig.get().autoCraftCapability()
+			+ " stickyBulk=" + holdStickyBulkLatched
+			+ " stickyNormal=" + holdStickyNormalLatched
+			+ " bulkAltOverride=" + holdStickyBulkAltOverride
+			+ " sessionActive=" + holdSessionActive
+			+ " quickCraftCancelled=" + holdQuickCraftCancelled
+			+ " quickCraftConsumed=" + holdQuickCraftConsumed
+			+ " altHeld=" + isPhysicalAltHeld()
+			+ " keyHeld=" + autoCraftKeyHeld
+			+ " graceTicks=" + holdReleaseGraceTicks;
 	}
 
 	static boolean isBulkModeEnabled() {
@@ -203,7 +234,24 @@ final class AutoCraftController {
 		ReachCraftingConfig.save();
 	}
 
+	/** Shared end-of-bulk-session teardown for flat bulk and bulk chain. */
+	static void finishBulkSessionTeardown() {
+		Minecraft client = Minecraft.getInstance();
+		boolean preserveAutoCraft = client.isWindowActive()
+			&& (client.gui.screen() instanceof CraftingScreen || client.gui.screen() instanceof InventoryScreen)
+			&& isEnabled();
+		resetBulkModeAfterSession(preserveAutoCraft);
+		if (ReachCraftingConfig.get().autoCraftOffAfterBulk()) {
+			setEnabled(false);
+			ReachCraftingModClient.sendDebugChat("Auto Crafting disabled after bulk craft.");
+		} else {
+			ReachCraftingModClient.sendDebugChat("Auto Crafting mode reset to normal.");
+		}
+		OffhandConsolidationController.swapBack(client);
+	}
+
 	static void resetBulkModeAfterSession(boolean preserveAutoCraft) {
+		com.reachcrafting.ReachCraftingMod.LOGGER.debug("[hold_state] resetBulkModeAfterSession preserve={} {}", preserveAutoCraft, describeHoldState());
 		if (ReachCraftingConfig.get().autoCraftHandling() == ReachCraftingConfig.AutoCraftHandling.HOLD) {
 			if (!preserveAutoCraft || !isPhysicalAltHeld()) {
 				clearHoldRuntimeState();
@@ -227,6 +275,12 @@ final class AutoCraftController {
 		if (altTriggered || holdStickyNormalLatched || holdStickyBulkLatched || isPhysicalAltHeld() || holdReleaseGraceTicks > 0) {
 			holdSessionActive = true;
 		}
+		if (altTriggered) {
+			// Alt participated in a recipe request; releasing it afterward
+			// must not read as the re-held cancel gesture and kill the latch.
+			holdStickyBulkAltOverride = false;
+			holdStickyNormalAltOverride = false;
+		}
 	}
 
 	static void clearHoldSession() {
@@ -243,6 +297,7 @@ final class AutoCraftController {
 		}
 
 		if (!Minecraft.getInstance().isWindowActive()) {
+			logLatchWipe("tick_window_inactive");
 			holdReleaseGraceTicks = 0;
 			holdStickyNormalLatched = false;
 			holdStickyBulkLatched = false;
@@ -298,7 +353,14 @@ final class AutoCraftController {
 		return minecraft != null && RecipeBookFocusManager.isAltKeyDown(minecraft);
 	}
 
+	private static void logLatchWipe(String site) {
+		if (holdStickyBulkLatched || holdStickyNormalLatched) {
+			com.reachcrafting.ReachCraftingMod.LOGGER.debug("[hold_state] latch_wipe site=" + site, new Exception("latch wipe call site"));
+		}
+	}
+
 	private static void clearHoldRuntimeState() {
+		logLatchWipe("clearHoldRuntimeState");
 		autoCraftKeyHeld = false;
 		autoCraftTogglePending = false;
 		holdSessionActive = false;
@@ -313,6 +375,7 @@ final class AutoCraftController {
 	}
 
 	private static void demoteBulkToNormalHoldMode() {
+		logLatchWipe("demoteBulkToNormalHoldMode");
 		holdStickyBulkLatched = false;
 		holdStickyBulkAltOverride = false;
 		holdStickyNormalLatched = true;
@@ -322,6 +385,7 @@ final class AutoCraftController {
 	}
 
 	private static void demoteBulkToPhysicalHoldMode() {
+		logLatchWipe("demoteBulkToPhysicalHoldMode");
 		holdStickyBulkLatched = false;
 		holdStickyBulkAltOverride = false;
 		holdStickyNormalLatched = false;
