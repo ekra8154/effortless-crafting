@@ -286,6 +286,23 @@ public final class ContainerUtils {
 		RecipeBookInputController.getInstance().clearInputQueue();
 	}
 
+	/**
+	 * Accepted item ids of whichever bulk session is running: the flat bulk
+	 * session's recipe ingredients, or the union of the active chain plan's
+	 * step inputs/outputs during a bulk chain session. Null when no bulk
+	 * session can vouch for what is needed — callers must not eject then.
+	 */
+	static java.util.Set<String> bulkSessionAcceptedItemIds() {
+		java.util.Set<String> flatSessionIds = BulkAutoCraftController.getAcceptedItemIds();
+		if (flatSessionIds != null) {
+			return flatSessionIds;
+		}
+		if (BulkChainCraftController.isActive()) {
+			return ChainCraftController.getActivePlanAcceptedItemIds();
+		}
+		return null;
+	}
+
 	public static boolean isAnySessionActive() {
 		return RecipeBookInputController.getInstance().isInputQueueActive()
 			|| AutoMoveController.isAutomatedInteractionRunning()
