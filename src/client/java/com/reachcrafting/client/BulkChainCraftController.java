@@ -209,7 +209,12 @@ public final class BulkChainCraftController {
 			return;
 		}
 
-		activeSession = session.withIterationAccounted(craftedCopies, 0, MAX_BATCH_FINAL_COPIES);
+		// Start the next size search near what just fit (doubled so batches
+		// can grow as slots free up) instead of re-walking down from the max
+		// every iteration — on a cramped inventory that ladder alone cost
+		// six planner passes per batch.
+		int nextCap = Math.min(MAX_BATCH_FINAL_COPIES, Math.max(4, session.plannedIterationCopies() * 2));
+		activeSession = session.withIterationAccounted(craftedCopies, 0, nextCap);
 		if (activeSession.completedCopies() >= activeSession.requestedTotalCopies()) {
 			stop(false, "requested_copies_completed");
 			return;
@@ -236,27 +241,46 @@ public final class BulkChainCraftController {
 			return;
 		}
 
-		// Shrink the batch until staged materials, in-flight intermediates,
-		// and outputs all fit in the player inventory. This is what keeps a
+		// Size the batch so staged materials, in-flight intermediates, and
+		// outputs all fit in the player inventory. This is what keeps a
 		// non-stackable intermediate (64 bows = 64 slots) from clogging the
-		// inventory: the batch shrinks to what free slots can hold and the
-		// intermediates are consumed within the same iteration.
-		while (plan.isPresent() && !ChainInventoryFitEstimator.planFits(client, client.player, plan.get(), willEjectFinalOutputs(session, plan.get()))) {
-			int copies = plan.get().finalRecipeCopies();
-			if (copies <= 1) {
-				plan = Optional.empty();
-				break;
+		// inventory. Bisect for the LARGEST fitting copy count — plain
+		// halving overshoots downward and can waste a third of the usable
+		// slots every iteration (observed: batches of 16 leaving a whole
+		// row idle, and 2 where 3 would fit).
+		if (!ChainInventoryFitEstimator.planFits(client, client.player, plan.get(), willEjectFinalOutputs(session, plan.get()))) {
+			int failCopies = plan.get().finalRecipeCopies();
+			ReachCraftingMod.LOGGER.info("[bulk_chain] batch_shrink from_copies={} reason=inventory_fit", failCopies);
+			Optional<ChainCraftPlan> best = Optional.empty();
+			int lo = 0;
+			int hi = failCopies;
+			while (hi - lo > 1) {
+				int mid = (lo + hi) / 2;
+				Optional<ChainCraftPlan> candidate = ChainCraftPlanner.planMax(
+					client,
+					client.player,
+					session.selection(),
+					availableCounts,
+					session.allowNearby(),
+					mid,
+					true
+				);
+				if (candidate.isEmpty()) {
+					hi = mid;
+					continue;
+				}
+				if (ChainInventoryFitEstimator.planFits(client, client.player, candidate.get(), willEjectFinalOutputs(session, candidate.get()))) {
+					best = candidate;
+					if (candidate.get().finalRecipeCopies() < mid) {
+						// Materials cap below mid: this is already the max.
+						break;
+					}
+					lo = candidate.get().finalRecipeCopies();
+				} else {
+					hi = Math.min(mid, candidate.get().finalRecipeCopies());
+				}
 			}
-			ReachCraftingMod.LOGGER.info("[bulk_chain] batch_shrink from_copies={} reason=inventory_fit", copies);
-			plan = ChainCraftPlanner.planMax(
-				client,
-				client.player,
-				session.selection(),
-				availableCounts,
-				session.allowNearby(),
-				copies / 2,
-				true
-			);
+			plan = best;
 		}
 		if (plan.isEmpty()) {
 			ReachCraftingModClient.sendChat("Bulk chain craft stopped: not enough inventory space to continue. Free up some slots and request again.");
