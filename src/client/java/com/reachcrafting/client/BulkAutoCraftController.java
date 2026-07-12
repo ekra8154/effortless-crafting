@@ -32,6 +32,11 @@ public final class BulkAutoCraftController {
 		if (!AutoCraftController.isBulkModeEnabled() || action == null || requestedRecipeCopies <= 1 || expectedOutput == null || expectedOutput.isEmpty()) {
 			return;
 		}
+		// Chain step replays run with bulk mode latched during a bulk chain
+		// session; they must never arm a competing flat bulk session.
+		if (ChainCraftController.isActive() || BulkChainCraftController.isActive()) {
+			return;
+		}
 
 		Minecraft client = Minecraft.getInstance();
 		if (client.player == null) {
@@ -473,17 +478,7 @@ public final class BulkAutoCraftController {
 				}
 			}
 		}
-		boolean preserveAutoCraft = Minecraft.getInstance().isWindowActive()
-			&& isSupportedScreen(Minecraft.getInstance().screen)
-			&& AutoCraftController.isEnabled();
-		AutoCraftController.resetBulkModeAfterSession(preserveAutoCraft);
-		if (ReachCraftingConfig.get().autoCraftOffAfterBulk()) {
-			AutoCraftController.setEnabled(false);
-			ReachCraftingModClient.sendDebugChat("Auto Crafting disabled after bulk craft.");
-		} else {
-			ReachCraftingModClient.sendDebugChat("Auto Crafting mode reset to normal.");
-		}
-		OffhandConsolidationController.swapBack(Minecraft.getInstance());
+		AutoCraftController.finishBulkSessionTeardown();
 		clear();
 	}
 
@@ -622,7 +617,7 @@ public final class BulkAutoCraftController {
 		return screen instanceof CraftingScreen || screen instanceof InventoryScreen;
 	}
 
-	private static int getCurrentStagedCraftCopies(Minecraft client) {
+	static int getCurrentStagedCraftCopies(Minecraft client) {
 		if (client.player == null || client.screen == null) {
 			return 0;
 		}
@@ -630,7 +625,7 @@ public final class BulkAutoCraftController {
 		return ContainerUtils.currentReservedCraftCopies(snapshot.gridStacks());
 	}
 
-	private static int countAccessibleOutput(Minecraft client, ItemStack expectedOutput) {
+	static int countAccessibleOutput(Minecraft client, ItemStack expectedOutput) {
 		if (client.player == null || expectedOutput == null || expectedOutput.isEmpty()) {
 			return 0;
 		}
