@@ -287,12 +287,13 @@ public final class ContainerUtils {
 	}
 
 	public static boolean isAnySessionActive() {
-		return RecipeBookInputController.getInstance().isInputQueueActive() 
-			|| AutoMoveController.isAutomatedInteractionRunning() 
+		return RecipeBookInputController.getInstance().isInputQueueActive()
+			|| AutoMoveController.isAutomatedInteractionRunning()
 			|| NearbyContainerDryRun.isActiveSessionRunning()
 			|| InventoryGridRestoreTracker.isRestoring()
 			|| BulkAutoCraftController.isActive()
-			|| ChainCraftController.isActive();
+			|| ChainCraftController.isActive()
+			|| BulkChainCraftController.isActive();
 	}
 
 	public static boolean isAnySessionActiveExcludingRetrievalMode() {
@@ -301,7 +302,8 @@ public final class ContainerUtils {
 			|| NearbyContainerDryRun.isActiveSessionRunning()
 			|| InventoryGridRestoreTracker.isRestoring()
 			|| BulkAutoCraftController.isActive()
-			|| ChainCraftController.isActive();
+			|| ChainCraftController.isActive()
+			|| BulkChainCraftController.isActive();
 	}
 
 	public static void abortAllSessions() {
@@ -315,6 +317,9 @@ public final class ContainerUtils {
 			BulkAutoCraftController.stop(true);
 		} else {
 			BulkAutoCraftController.clear();
+		}
+		if (BulkChainCraftController.isActive()) {
+			BulkChainCraftController.stop(true, "abort_all_sessions");
 		}
 		ChainCraftController.abort(false);
 		NearbyContainerDryRun.abortActiveSession();
