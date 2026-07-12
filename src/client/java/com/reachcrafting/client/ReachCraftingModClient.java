@@ -63,6 +63,7 @@ public class ReachCraftingModClient implements ClientModInitializer {
 		ChainCraftabilityCache.init();
 		ChainCraftPopupController.init();
 		ChainCraftController.init();
+		BulkChainCraftController.init();
 		ContainerFilterRenderer.init();
 		
 

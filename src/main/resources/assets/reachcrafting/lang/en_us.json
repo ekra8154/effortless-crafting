@@ -131,8 +131,14 @@
 	"popup.reachcrafting.chain_crafting.partial_message": "Not enough resources for %s %s. Craft %s instead?",
 	"popup.reachcrafting.chain_crafting.yes": "Yes (Enter / Space)",
 	"popup.reachcrafting.chain_crafting.no": "No (Esc)",
-	"message.reachcrafting.chain_crafting.bulk_unsupported": "Chain crafting is available for this request, but is not yet supported in bulk mode.",
 	"message.reachcrafting.chain_crafting.partial_always": "Not enough resources for %s %s. Proceeding with %s instead.",
 	"message.reachcrafting.chain_crafting.failed": "Chain craft stopped while crafting %s.",
-	"message.reachcrafting.chain_crafting.context_lost": "Chain craft stopped because the crafting screen changed."
+	"message.reachcrafting.chain_crafting.context_lost": "Chain craft stopped because the crafting screen changed.",
+	"option.reachcrafting.enable_bulk_chain_crafting": "Bulk Chain Crafting",
+	"tooltip.reachcrafting.enable_bulk_chain_crafting": "Allow bulk requests to chain craft missing intermediates in repeated, inventory-sized batches until the requested amount is reached or materials run out.",
+	"message.reachcrafting.chain_crafting.bulk_unsupported": "Chain crafting is available for this request, but bulk chain crafting is disabled in settings.",
+	"popup.reachcrafting.chain_crafting.bulk_message": "Craft %s %s with bulk chain crafting?",
+	"popup.reachcrafting.chain_crafting.bulk_max_message": "Craft up to %s %s with bulk chain crafting?",
+	"popup.reachcrafting.chain_crafting.bulk_partial_message": "Not enough resources for %s %s. Bulk chain craft %s instead?",
+	"message.reachcrafting.chain_crafting.bulk_partial_always": "Not enough resources for %s %s. Bulk chain crafting %s instead."
 }
