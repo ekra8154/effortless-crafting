@@ -87,7 +87,11 @@ final class CountStagingSession extends BaseCraftSession {
 
 	@Override
 	public void start() {
-		PulledResourcesTracker.clearWithdrawals();
+		// A bulk chain session stages repeatedly; its withdrawals accumulate
+		// so leftovers can be returned to their source chests at session end.
+		if (!BulkChainCraftController.isActive()) {
+			PulledResourcesTracker.clearWithdrawals();
+		}
 		ReachCraftingMod.LOGGER.info(
 			"[chain_stage] start reason={} desired={} candidates={}",
 			request.reason(),

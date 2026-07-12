@@ -81,6 +81,32 @@ Combinations of these modifiers stack naturally.
 
 ---
 
+## Chain Crafting
+
+Chain crafting extends autocraft by working backward through craftable dependencies when the final recipe is missing intermediate ingredients.
+
+- **Dependency crafting**: If you request an autocraft for something like a comparator but only have logs, redstone, stone, and quartz, the mod can craft planks, sticks, redstone torches, and then the comparator.
+- **Ask first or always**: Chain crafting can be disabled, ask for confirmation, or run automatically from the mod settings.
+- **Nearby-aware requests**: Holding `Ctrl` allows the chain planner to use cached nearby containers along with your inventory.
+- **Partial fallback**: If the full requested amount cannot be crafted but at least one final output can, the mod can offer to craft the possible amount instead.
+- **Conservative execution**: Intermediate results go into your inventory, and each step still uses the normal autocraft placement and validation path.
+- **Bulk chain crafting**: Bulk requests that need intermediates start a bulk chain session (see below) instead of being rejected.
+
+---
+
+## Bulk Chain Crafting
+
+Bulk chain crafting combines bulk mode with chain crafting: request hundreds of an item while only base materials sit in nearby chests, and the mod repeatedly chain crafts batches until the requested amount is reached or materials run out.
+
+- **How to start**: With bulk mode latched, request an amount (`Ctrl + Alt + scroll`) or use `Ctrl + Shift + click` for as much as materials allow. If intermediates are missing, the confirmation shows the achievable amount up front (e.g. requesting 200 dispensers with materials for 173 offers 173).
+- **Inventory-sized batches**: Each batch is planned fresh from your current inventory and nearby containers, and sized so staged materials, intermediates, and outputs actually fit — non-stackable intermediates like bows automatically shrink the batch instead of clogging your inventory.
+- **Leftovers are consumed, not wasted**: Byproducts and surplus intermediates from one batch (extra slabs, planks, sticks) are counted as available materials when the next batch is planned.
+- **Cleanup**: Leftover pulled materials are returned to their source chests when the session finishes. If your inventory becomes too full to continue, the session stops with a clear message instead of throwing items.
+- **Safe shutdown**: Same rules as bulk — `Esc`, closing the screen, or losing window focus aborts the session cleanly.
+- **Settings**: Toggle the feature with **Bulk Chain Crafting** in the mod settings; the chain crafting mode (ask first / always) applies to the initial confirmation.
+
+---
+
 ## Bulk Crafting
 
 - **Enable bulk mode**: Hold `Alt` and click the crafting result arrow. Bulk mode is shown with an orange outline around the arrow. It remains on even after alt is released until a craft has been completed or aborted, or toggled back off. 

@@ -275,7 +275,18 @@ public final class ContainerUtils {
 			|| NearbyContainerDryRun.isActiveSessionRunning()
 			|| InventoryGridRestoreTracker.isRestoring()
 			|| BulkAutoCraftController.isActive()
-			|| ChainCraftController.isActive();
+			|| ChainCraftController.isActive()
+			|| BulkChainCraftController.isActive();
+	}
+
+	public static boolean isAnySessionActiveExcludingRetrievalMode() {
+		return RecipeBookInputController.getInstance().isInputQueueActive()
+			|| AutoMoveController.isAutomatedInteractionRunning()
+			|| NearbyContainerDryRun.isActiveSessionRunning()
+			|| InventoryGridRestoreTracker.isRestoring()
+			|| BulkAutoCraftController.isActive()
+			|| ChainCraftController.isActive()
+			|| BulkChainCraftController.isActive();
 	}
 
 	public static boolean isChainCraftActive() {
@@ -293,6 +304,9 @@ public final class ContainerUtils {
 			BulkAutoCraftController.stop(true);
 		} else {
 			BulkAutoCraftController.clear();
+		}
+		if (BulkChainCraftController.isActive()) {
+			BulkChainCraftController.stop(true, "abort_all_sessions");
 		}
 		ChainCraftController.abort(false);
 		NearbyContainerDryRun.abortActiveSession();

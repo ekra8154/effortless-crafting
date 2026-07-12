@@ -206,6 +206,15 @@ public final class ReachCraftingConfigScreen {
 			.build());
 
 		autoGroup.add(entries.startBooleanToggle(
+				Component.translatable("option.reachcrafting.enable_bulk_chain_crafting"),
+				config.enableBulkChainCrafting()
+			)
+			.setDefaultValue(true)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.enable_bulk_chain_crafting"))
+			.setSaveConsumer(config::setEnableBulkChainCrafting)
+			.build());
+
+		autoGroup.add(entries.startBooleanToggle(
 				Component.translatable("option.reachcrafting.alt_as_request_key"),
 				config.altAsRequestKey()
 			)

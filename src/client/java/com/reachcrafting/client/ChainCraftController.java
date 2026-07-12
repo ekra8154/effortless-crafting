@@ -11,6 +11,7 @@ import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.CraftingRecipe;
@@ -22,6 +23,7 @@ public final class ChainCraftController {
 	private static final int BATCH_SETTLE_QUIET_TICKS = 8;
 	private static ChainCraftRun activeRun;
 	private static PendingWarmupRetry pendingWarmupRetry;
+	private static RecipeDisplayId activeFinalStepRecipeId;
 
 	private ChainCraftController() {
 	}
@@ -46,6 +48,44 @@ public final class ChainCraftController {
 		return activeRun != null && activeRun.currentStepIndex() < activeRun.plan().steps().size() - 1;
 	}
 
+	static boolean isRunningFinalStep() {
+		return activeRun != null && activeRun.currentStepIndex() == activeRun.plan().steps().size() - 1;
+	}
+
+	/**
+	 * Final-step output thrown by the bulk chain eject path never reaches the
+	 * inventory, so settlement must count it explicitly or the batch would
+	 * misread as unproduced and re-craft copies whose inputs are spent.
+	 */
+	static void noteFinalOutputEjected(int itemCount) {
+		if (activeRun == null || itemCount <= 0 || !isRunningFinalStep()) {
+			return;
+		}
+		activeRun = activeRun.withBatchEjectedItems(activeRun.batchEjectedItems() + itemCount);
+	}
+
+	/**
+	 * Rapid eject loop for the final step: after each result throw, restage
+	 * the recipe directly so the next craft is ready a tick later, matching
+	 * flat bulk's craft-and-eject pace. Recipes with non-stackable
+	 * ingredients (a bow per dispenser) stage only one copy per placement, so
+	 * without this each craft would cost a whole settlement round.
+	 */
+	static boolean restageFinalStepForRapidEject(Minecraft client) {
+		if (activeRun == null
+			|| client.player == null
+			|| client.gameMode == null
+			|| activeFinalStepRecipeId == null
+			|| !isRunningFinalStep()) {
+			return false;
+		}
+		if (activeRun.observedProducedRecipeCopies() >= activeRun.scheduledBatchCopies()) {
+			return false;
+		}
+		client.gameMode.handlePlaceRecipe(client.player.containerMenu.containerId, activeFinalStepRecipeId, true);
+		return true;
+	}
+
 	static boolean isUsingPreStagedNearbyResources() {
 		return activeRun != null && activeRun.preStagedNearbyResources();
 	}
@@ -56,6 +96,7 @@ public final class ChainCraftController {
 		}
 		activeRun = null;
 		pendingWarmupRetry = null;
+		activeFinalStepRecipeId = null;
 		if (report) {
 			ReachCraftingModClient.sendAbortedChat("Crafting session aborted.");
 		}
@@ -166,6 +207,12 @@ public final class ChainCraftController {
 			if (!ContainerUtils.isInputQueueActive()
 				&& !ContainerUtils.isAutoMovePending()
 				&& !NearbyContainerDryRun.isActiveSessionRunning()) {
+				// Recipe placement only sees the inventory: a needed
+				// ingredient stuck on the cursor (e.g. the last bow) makes
+				// the step fail as "missing". Stow it first.
+				if (tryStowCarriedStack(client)) {
+					return;
+				}
 				scheduleCurrentStep();
 			}
 			return;
@@ -289,6 +336,29 @@ public final class ChainCraftController {
 		);
 	}
 
+	private static boolean tryStowCarriedStack(Minecraft client) {
+		if (client.player == null || client.gameMode == null || client.player.containerMenu == null) {
+			return false;
+		}
+		ItemStack carried = client.player.containerMenu.getCarried();
+		if (carried.isEmpty()) {
+			return false;
+		}
+		String itemId = BuiltInRegistries.ITEM.getKey(carried.getItem()).toString();
+		Slot destination = MenuTransferHelper.findPlayerDestinationSlot(client.player, client.player.containerMenu, itemId);
+		if (destination == null) {
+			return false;
+		}
+		ReachCraftingMod.LOGGER.info(
+			"[chain_execute] stow_carried item={} count={} dest_slot={}",
+			itemId,
+			carried.getCount(),
+			destination.index
+		);
+		client.gameMode.handleContainerInput(client.player.containerMenu.containerId, destination.index, 0, ContainerInput.PICKUP, client.player);
+		return true;
+	}
+
 	private static boolean shouldAttemptPreStage(Minecraft client, ChainCraftPlan plan) {
 		if (client == null || client.player == null || plan == null) {
 			return false;
@@ -328,6 +398,7 @@ public final class ChainCraftController {
 			step.finalStep()
 		);
 		AutoCraftController.armHoldSessionForCurrentRequest(true);
+		activeFinalStepRecipeId = step.finalStep() ? action.recipeId() : null;
 		RecipeBookClickCapture.scheduleReplay(
 			action,
 			batchCopies,
@@ -416,7 +487,15 @@ public final class ChainCraftController {
 			return;
 		}
 		String itemName = activeRun.currentStep().displayStack().getHoverName().getString();
-		ReachCraftingModClient.sendChat(Component.translatable("message.reachcrafting.chain_crafting.failed", itemName).getString());
+		// During a bulk chain session a failed step is an internal retry
+		// event: the outer loop accounts real progress and replans, and its
+		// summary is the user-facing outcome. Chatting "stopped" here reads
+		// as a false alarm right before "complete".
+		if (BulkChainCraftController.isActive()) {
+			ReachCraftingMod.LOGGER.info("[chain_execute] step_failed_during_bulk_chain item={}", itemName);
+		} else {
+			ReachCraftingModClient.sendChat(Component.translatable("message.reachcrafting.chain_crafting.failed", itemName).getString());
+		}
 		activeRun = null;
 	}
 
@@ -437,6 +516,13 @@ public final class ChainCraftController {
 		if (!offhand.isEmpty() && ItemStack.isSameItemSameComponents(offhand, expectedOutput)) {
 			count += offhand.getCount();
 		}
+		// A full inventory can leave a produced item on the cursor; it is
+		// still produced, and missing it makes settlement re-craft a copy
+		// whose ingredients were already consumed.
+		ItemStack carried = client.player.containerMenu.getCarried();
+		if (!carried.isEmpty() && ItemStack.isSameItemSameComponents(carried, expectedOutput)) {
+			count += carried.getCount();
+		}
 		return count;
 	}
 
@@ -453,10 +539,11 @@ public final class ChainCraftController {
 		int baselineOutputCount,
 		boolean settlingBatch,
 		int settleObservedCopies,
-		int settleQuietTicks
+		int settleQuietTicks,
+		int batchEjectedItems
 	) {
 		private static ChainCraftRun start(ChainCraftPlan plan) {
-			return new ChainCraftRun(plan, 0, false, false, false, false, 0, plan.steps().get(0).recipeCopies(), 0, 0, false, 0, 0);
+			return new ChainCraftRun(plan, 0, false, false, false, false, 0, plan.steps().getFirst().recipeCopies(), 0, 0, false, 0, 0, 0);
 		}
 
 		ChainCraftPlan.Step currentStep() {
@@ -468,15 +555,19 @@ public final class ChainCraftController {
 		}
 
 		ChainCraftRun withScheduledBatch(int batchCopies, int outputCountBeforeBatch) {
-			return new ChainCraftRun(plan, currentStepIndex, true, false, stagingAttempted, preStagedNearbyResources, 0, remainingStepCopies, Math.max(batchCopies, 1), outputCountBeforeBatch, false, 0, 0);
+			return new ChainCraftRun(plan, currentStepIndex, true, false, stagingAttempted, preStagedNearbyResources, 0, remainingStepCopies, Math.max(batchCopies, 1), outputCountBeforeBatch, false, 0, 0, 0);
 		}
 
 		ChainCraftRun withWaitingForStaging() {
-			return new ChainCraftRun(plan, currentStepIndex, false, true, true, false, 0, remainingStepCopies, scheduledBatchCopies, baselineOutputCount, false, 0, 0);
+			return new ChainCraftRun(plan, currentStepIndex, false, true, true, false, 0, remainingStepCopies, scheduledBatchCopies, baselineOutputCount, false, 0, 0, 0);
 		}
 
 		ChainCraftRun withStagingComplete(boolean preStaged) {
-			return new ChainCraftRun(plan, currentStepIndex, false, false, true, preStaged, 0, remainingStepCopies, scheduledBatchCopies, baselineOutputCount, false, 0, 0);
+			return new ChainCraftRun(plan, currentStepIndex, false, false, true, preStaged, 0, remainingStepCopies, scheduledBatchCopies, baselineOutputCount, false, 0, 0, 0);
+		}
+
+		ChainCraftRun withBatchEjectedItems(int updatedBatchEjectedItems) {
+			return new ChainCraftRun(plan, currentStepIndex, waitingForStep, waitingForStaging, stagingAttempted, preStagedNearbyResources, waitTicks, remainingStepCopies, scheduledBatchCopies, baselineOutputCount, settlingBatch, settleObservedCopies, settleQuietTicks, updatedBatchEjectedItems);
 		}
 
 		boolean needsBatchSettlement() {
@@ -492,11 +583,11 @@ public final class ChainCraftController {
 				observedCopies,
 				remainingStepCopies
 			);
-			return new ChainCraftRun(plan, currentStepIndex, true, false, stagingAttempted, preStagedNearbyResources, 0, remainingStepCopies, scheduledBatchCopies, baselineOutputCount, true, observedCopies, 0);
+			return new ChainCraftRun(plan, currentStepIndex, true, false, stagingAttempted, preStagedNearbyResources, 0, remainingStepCopies, scheduledBatchCopies, baselineOutputCount, true, observedCopies, 0, batchEjectedItems);
 		}
 
 		ChainCraftRun withSettlingBatchProgress(int observedCopies, int quietTicks) {
-			return new ChainCraftRun(plan, currentStepIndex, true, false, stagingAttempted, preStagedNearbyResources, waitTicks + 1, remainingStepCopies, scheduledBatchCopies, baselineOutputCount, true, observedCopies, quietTicks);
+			return new ChainCraftRun(plan, currentStepIndex, true, false, stagingAttempted, preStagedNearbyResources, waitTicks + 1, remainingStepCopies, scheduledBatchCopies, baselineOutputCount, true, observedCopies, quietTicks, batchEjectedItems);
 		}
 
 		ChainCraftRun withCompletedBatch() {
@@ -517,7 +608,7 @@ public final class ChainCraftController {
 					currentStepIndex,
 					remaining
 				);
-				return new ChainCraftRun(plan, currentStepIndex, false, false, stagingAttempted, preStagedNearbyResources, 0, remaining, 0, 0, false, 0, 0);
+				return new ChainCraftRun(plan, currentStepIndex, false, false, stagingAttempted, preStagedNearbyResources, 0, remaining, 0, 0, false, 0, 0, 0);
 			}
 			int nextIndex = currentStepIndex + 1;
 			if (nextIndex >= plan.steps().size()) {
@@ -530,11 +621,11 @@ public final class ChainCraftController {
 				currentStepIndex,
 				nextIndex
 			);
-			return new ChainCraftRun(plan, nextIndex, false, false, stagingAttempted, preStagedNearbyResources, 0, plan.steps().get(nextIndex).recipeCopies(), 0, 0, false, 0, 0);
+			return new ChainCraftRun(plan, nextIndex, false, false, stagingAttempted, preStagedNearbyResources, 0, plan.steps().get(nextIndex).recipeCopies(), 0, 0, false, 0, 0, 0);
 		}
 
 		ChainCraftRun withWaiting(boolean updatedWaitingForStep, int updatedWaitTicks) {
-			return new ChainCraftRun(plan, currentStepIndex, updatedWaitingForStep, waitingForStaging, stagingAttempted, preStagedNearbyResources, updatedWaitTicks, remainingStepCopies, scheduledBatchCopies, baselineOutputCount, settlingBatch, settleObservedCopies, settleQuietTicks);
+			return new ChainCraftRun(plan, currentStepIndex, updatedWaitingForStep, waitingForStaging, stagingAttempted, preStagedNearbyResources, updatedWaitTicks, remainingStepCopies, scheduledBatchCopies, baselineOutputCount, settlingBatch, settleObservedCopies, settleQuietTicks, batchEjectedItems);
 		}
 
 		private static int maxBatchCopies(ChainCraftPlan.Step step) {
@@ -543,7 +634,7 @@ public final class ChainCraftController {
 
 		private int observedProducedRecipeCopies() {
 			int currentCount = countAccessibleOutput(Minecraft.getInstance(), currentStep().displayStack());
-			int producedItems = Math.max(0, currentCount - baselineOutputCount);
+			int producedItems = Math.max(0, currentCount - baselineOutputCount) + batchEjectedItems;
 			int outputPerCraft = Math.max(currentStep().displayStack().getCount(), 1);
 			return producedItems / outputPerCraft;
 		}

@@ -27,6 +27,10 @@ final class AutoMoveController {
 	private static int directEjectPendingCount = 0;
 	private static int directEjectCreditedCount = 0;
 	private static int directEjectAwaitingStagedCopiesTicks = 0;
+	private static boolean chainEjectAwaitingRefresh = false;
+	private static int chainEjectRefreshTicks = 0;
+	private static int chainEjectPendingCount = 0;
+	private static ItemStack chainEjectPendingStack = ItemStack.EMPTY;
 
 	private AutoMoveController() {
 	}
@@ -126,6 +130,10 @@ final class AutoMoveController {
 		directEjectPendingCount = 0;
 		directEjectCreditedCount = 0;
 		directEjectAwaitingStagedCopiesTicks = 0;
+		chainEjectAwaitingRefresh = false;
+		chainEjectRefreshTicks = 0;
+		chainEjectPendingCount = 0;
+		chainEjectPendingStack = ItemStack.EMPTY;
 		autoMoveTargetStack = ItemStack.EMPTY;
 		autoMoveExpectedStack = ItemStack.EMPTY;
 		autoMoveSnapshotCounts.clear();
@@ -216,7 +224,42 @@ final class AutoMoveController {
 			ChainCraftController.onAutoMoveFinished(client, true);
 			return;
 		}
-		
+
+		// Chain final eject settlement: a result-slot THROW is only counted
+		// once the slot is observed empty, proving the server crafted and
+		// dropped. Crediting per throw double-counts when the client still
+		// shows the pre-throw stack a tick later.
+		if (chainEjectAwaitingRefresh) {
+			chainEjectRefreshTicks++;
+			if (resultSlot.hasItem() && chainEjectRefreshTicks <= 20) {
+				return;
+			}
+			if (!resultSlot.hasItem()) {
+				BulkChainCraftController.addEjectedOutput(chainEjectPendingStack, chainEjectPendingCount);
+				ChainCraftController.noteFinalOutputEjected(chainEjectPendingCount);
+			} else {
+				com.reachcrafting.ReachCraftingMod.LOGGER.info(
+					"[auto_move] chain eject refresh timeout; discarding uncredited pending count={}",
+					chainEjectPendingCount
+				);
+			}
+			chainEjectAwaitingRefresh = false;
+			chainEjectRefreshTicks = 0;
+			chainEjectPendingCount = 0;
+			chainEjectPendingStack = ItemStack.EMPTY;
+			if (!menu.getCarried().isEmpty()) {
+				tryResolveCarriedStack(client, menu);
+			}
+			if (ChainCraftController.restageFinalStepForRapidEject(client)) {
+				autoMoveWaitingTicks = 0;
+				return;
+			}
+			pendingAutoMove = false;
+			BulkAutoCraftController.onAutoMoveFinished(client, true);
+			ChainCraftController.onAutoMoveFinished(client, true);
+			return;
+		}
+
 		if (AutoCraftController.isBulkModeEnabled() && BulkAutoCraftController.isActive()) {
 			// com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] >> sweepAndEjectByProducts entry. {}", logBottleDistribution(menu));
 			sweepAndEjectByProducts(client, menu);
@@ -248,11 +291,22 @@ final class AutoMoveController {
 				boolean bulkProtectedKeep =
 					bulkDisposition == BulkAutoCraftController.BulkOutputDisposition.FINAL_BATCH_KEEP
 					|| bulkDisposition == BulkAutoCraftController.BulkOutputDisposition.PARTIAL_STACK_KEEP;
-				boolean shouldEject = bulkDirectEject;
+				// The mismatch check above already guarantees currentResult is
+				// the expected output when autoMoveExpectedStack is set.
+				boolean chainFinalResultEject = ChainCraftController.isRunningFinalStep()
+					&& !autoMoveExpectedStack.isEmpty()
+					&& ItemStack.isSameItemSameComponents(currentResult, autoMoveExpectedStack);
+				boolean chainFinalDirectEject = chainFinalResultEject && BulkChainCraftController.shouldDirectEjectCurrentResult();
+				boolean shouldEject = bulkDirectEject || chainFinalDirectEject;
+				boolean delayInventoryFullFallbackEject = BulkAutoCraftController.shouldDelayInventoryFullFallbackEject();
+				// A THROW on the result slot crafts-and-drops everything the
+				// grid has staged, so a staged chain final batch must credit
+				// the whole staged amount, not one craft's worth.
 				int totalEjected = bulkDirectEject
 					? BulkAutoCraftController.predictedDirectEjectOutputCount(client, currentResult)
-					: currentResult.getCount();
-				boolean delayInventoryFullFallbackEject = BulkAutoCraftController.shouldDelayInventoryFullFallbackEject();
+					: chainFinalResultEject
+						? Math.max(BulkAutoCraftController.getCurrentStagedCraftCopies(client), 1) * Math.max(currentResult.getCount(), 1)
+						: currentResult.getCount();
 				if (!shouldEject
 					&& !delayInventoryFullFallbackEject
 					&& !bulkProtectedKeep
@@ -298,6 +352,30 @@ final class AutoMoveController {
 					}
 				}
 
+				// Keep-mode rapid loop for the bulk chain final batch: bank
+				// each result and restage immediately instead of paying a
+				// full settlement round per craft. The batch finishes here
+				// too — handing the last craft to the legacy organize path
+				// times out on arrival baselines that are a whole batch
+				// stale.
+				if (!shouldEject
+					&& chainFinalResultEject
+					&& BulkChainCraftController.isActive()
+					&& canFitInInventory(menu, currentResult)) {
+					client.gameMode.handleContainerInput(menu.containerId, resultSlot.index, 0, ContainerInput.QUICK_MOVE, client.player);
+					if (ChainCraftController.restageFinalStepForRapidEject(client)) {
+						autoMoveWaitingTicks = 0;
+						return;
+					}
+					pendingAutoMove = false;
+					autoMoveOrganizing = false;
+					autoMoveTargetArrivalObserved = false;
+					autoMoveTargetStack = ItemStack.EMPTY;
+					BulkAutoCraftController.onAutoMoveFinished(client, true);
+					ChainCraftController.onAutoMoveFinished(client, true);
+					return;
+				}
+
 				if (shouldEject) {
 					com.reachcrafting.ReachCraftingMod.LOGGER.info(
 						"[auto_move] EJECT path: THROW result {} from slot {} predicted_ejected={} bulkDirectEject={} bulkProtectedKeep={}",
@@ -307,7 +385,18 @@ final class AutoMoveController {
 						bulkDirectEject,
 						bulkProtectedKeep
 					);
+					ItemStack thrownResult = currentResult.copy();
 					client.gameMode.handleInventoryMouseClick(menu.containerId, resultSlot.index, 1, ClickType.THROW, client.player);
+					if (chainFinalResultEject) {
+						// Credit deferred until the result slot is observed
+						// empty (see the chainEjectAwaitingRefresh block).
+						chainEjectAwaitingRefresh = true;
+						chainEjectRefreshTicks = 0;
+						chainEjectPendingCount = totalEjected;
+						chainEjectPendingStack = thrownResult;
+						autoMoveWaitingTicks = 0;
+						return;
+					}
 					if (bulkDirectEject) {
 						directEjectPendingCount = Math.max(totalEjected - 1, 0);
 						directEjectCreditedCount = totalEjected > 0 ? 1 : 0;
@@ -324,6 +413,8 @@ final class AutoMoveController {
 					}
 					if (AutoCraftController.isBulkModeEnabled() && totalEjected > 0) {
 						BulkAutoCraftController.addEjectedOutput(totalEjected);
+						BulkChainCraftController.addEjectedOutput(thrownResult, totalEjected);
+						ChainCraftController.noteFinalOutputEjected(totalEjected);
 					}
 
 					// Eject any by-products left in the grid
@@ -670,8 +761,36 @@ final class AutoMoveController {
 			}
 
 			if (resultSlot.hasItem() && ItemStack.isSameItemSameComponents(resultSlot.getItem(), autoMoveTargetStack)) {
-				com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] Result slot still has items after organizing. Restarting loop.");
-				autoMoveOrganizing = false;
+				if (ReachCraftingConfig.get().ejectItemsWhenFull()
+					&& AutoCraftController.isBulkModeEnabled()
+					&& !ChainCraftController.isRunningIntermediateStep()
+					&& !canFitInInventory(menu, resultSlot.getItem())) {
+					ItemStack ejectedStack = resultSlot.getItem().copy();
+					int ejectedCount = ChainCraftController.isRunningFinalStep()
+						? Math.max(BulkAutoCraftController.getCurrentStagedCraftCopies(client), 1) * Math.max(ejectedStack.getCount(), 1)
+						: ejectedStack.getCount();
+					com.reachcrafting.ReachCraftingMod.LOGGER.info(
+						"[auto_move] organize fallback eject: result still blocked after quick-move target={} count={}",
+						ContainerUtils.formatStack(ejectedStack),
+						ejectedCount
+					);
+					client.gameMode.handleInventoryMouseClick(menu.containerId, resultSlot.index, 1, ClickType.THROW, client.player);
+					if (ejectedCount > 0) {
+						BulkAutoCraftController.addEjectedOutput(ejectedCount);
+						BulkChainCraftController.addEjectedOutput(ejectedStack, ejectedCount);
+						ChainCraftController.noteFinalOutputEjected(ejectedCount);
+					}
+					pendingAutoMove = false;
+					autoMoveOrganizing = false;
+					autoMoveTargetArrivalObserved = false;
+					autoMoveTargetStack = ItemStack.EMPTY;
+					BulkAutoCraftController.onAutoMoveFinished(client, true);
+					ChainCraftController.onAutoMoveFinished(client, true);
+					return;
+				}
+				com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] Result slot still has items after organizing. Quick-moving next result.");
+				client.gameMode.handleInventoryMouseClick(menu.containerId, resultSlot.index, 0, ClickType.QUICK_MOVE, client.player);
+				autoMoveTargetArrivalObserved = true;
 				autoMoveWaitingTicks = 0;
 				return;
 			}
@@ -817,11 +936,14 @@ final class AutoMoveController {
 
 		if (ReachCraftingConfig.get().ejectItemsWhenFull()
 			&& AutoCraftController.isBulkModeEnabled()
+			&& !ChainCraftController.isRunningIntermediateStep()
 			&& ItemStack.isSameItemSameComponents(carried, autoMoveTargetStack)) {
 			int ejectedCount = carried.getCount();
 			client.gameMode.handleInventoryMouseClick(menu.containerId, -999, 0, ClickType.PICKUP, client.player);
 			if (client.player.containerMenu.getCarried().isEmpty()) {
 				BulkAutoCraftController.addEjectedOutput(ejectedCount);
+				BulkChainCraftController.addEjectedOutput(carried, ejectedCount);
+				ChainCraftController.noteFinalOutputEjected(ejectedCount);
 				com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] Ejected carried output {} while finalizing batch", ContainerUtils.formatStack(carried));
 				return true;
 			}
