@@ -390,13 +390,29 @@ final class CountStagingSession extends BaseCraftSession {
 			if (!itemId.equals(virtualItemId)) {
 				continue;
 			}
+			// The slot may be virtually filled while the real stack is still
+			// empty mid-planning; capping by the real stack then reads 64 and
+			// funnels every copy of an unstackable item (milk buckets) into
+			// one slot, where the move-count math zeroes out — withdrawing a
+			// single item per container. Cap by the item's own max stack.
 			ItemStack stack = slot.getItem();
-			int maxStackSize = stack.isEmpty() ? 64 : Math.min(slot.getMaxStackSize(), stack.getMaxStackSize());
+			int maxStackSize = stack.isEmpty()
+				? Math.min(slot.getMaxStackSize(), maxStackSizeForItem(itemId))
+				: Math.min(slot.getMaxStackSize(), stack.getMaxStackSize());
 			if (currentCount < maxStackSize) {
 				return slot;
 			}
 		}
 		return emptySlot;
+	}
+
+	private static int maxStackSizeForItem(String itemId) {
+		try {
+			var item = BuiltInRegistries.ITEM.getValue(net.minecraft.resources.Identifier.parse(itemId));
+			return item == null ? 64 : Math.max(item.getDefaultInstance().getMaxStackSize(), 1);
+		} catch (Exception ignored) {
+			return 64;
+		}
 	}
 
 	private enum StageState {
