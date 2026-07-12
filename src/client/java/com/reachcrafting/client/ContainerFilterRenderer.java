@@ -11,10 +11,36 @@ package com.reachcrafting.client;
  * this version, the outline overlay is a no-op here; the rest of the mod is unaffected.
  */
 public final class ContainerFilterRenderer {
+	private static boolean outlinesToggledOn;
+
 	private ContainerFilterRenderer() {
 	}
 
 	public static void init() {
-		// No world-render event API available on this MC version; outlines are unavailable.
+		// No world-render event API available on this MC version; outlines are
+		// unavailable, but the keybind toggle state and the sneak-click filter
+		// cycling latch still tick so behavior matches the other versions.
+		net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.END_CLIENT_TICK.register(client -> {
+			while (ReachCraftingModClient.showFilterOutlinesKey.consumeClick()) {
+				outlinesToggledOn = !outlinesToggledOn;
+			}
+			if (client.level == null) {
+				outlinesToggledOn = false;
+			}
+			InWorldFilterManager.tickSneakCycleLatch(client);
+		});
+	}
+
+	/** Whether the filter outlines are currently drawn (ON mode, or KEYBIND mode with the toggle latched on). */
+	static boolean areOutlinesVisible() {
+		ReachCraftingConfig config = ReachCraftingConfig.get();
+		if (!config.enabled()) {
+			return false;
+		}
+		return switch (config.showFilterOutlines()) {
+			case ON -> true;
+			case KEYBIND -> outlinesToggledOn;
+			default -> false;
+		};
 	}
 }
