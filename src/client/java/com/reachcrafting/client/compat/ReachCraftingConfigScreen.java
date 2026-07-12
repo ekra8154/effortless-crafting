@@ -414,6 +414,16 @@ public final class ReachCraftingConfigScreen {
 			.setSaveConsumer(config::setShowBulkCraftSummaryMessage)
 			.build());
 
+		messagesGroup.add(entries.startIntField(
+				Component.translatable("option.reachcrafting.bulk_despawn_warning_seconds"),
+				config.bulkDespawnWarningSeconds()
+			)
+			.setDefaultValue(240)
+			.setMin(-1)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.bulk_despawn_warning_seconds"))
+			.setSaveConsumer(config::setBulkDespawnWarningSeconds)
+			.build());
+
 		messagesGroup.add(entries.startBooleanToggle(
 				Component.translatable("option.reachcrafting.show_missing_ingredients_message"),
 				config.showMissingIngredientsMessage()
