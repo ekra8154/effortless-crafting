@@ -38,6 +38,7 @@ public final class ReachCraftingConfig {
 	private static final RecipeBookSortingMode DEFAULT_RECIPE_BOOK_SORTING_MODE = RecipeBookSortingMode.SMART;
 	private static final AutoFocusSearchMode DEFAULT_AUTO_FOCUS_SEARCH_MODE = AutoFocusSearchMode.DISABLED;
 	private static final OutlineDisplayMode DEFAULT_SHOW_FILTER_OUTLINES = OutlineDisplayMode.KEYBIND;
+	private static final boolean DEFAULT_SNEAK_CLICK_WHILE_HIGHLIGHTED = true;
 	private static final boolean DEFAULT_AUTO_CRAFT_ENABLED = false;
 	private static final AutoCraftMode DEFAULT_AUTO_CRAFT_ENABLED_MODE = AutoCraftMode.NORMAL;
 	private static final boolean DEFAULT_SHOW_TOTAL_OUTPUT_COUNTS = true;
@@ -94,6 +95,7 @@ public final class ReachCraftingConfig {
 	private RecipeBookSortingMode recipeBookSortingMode;
 	private AutoFocusSearchMode autoFocusSearchMode;
 	private OutlineDisplayMode showFilterOutlines;
+	private boolean sneakClickWhileHighlighted;
 	private boolean autoCraftEnabled;
 	private AutoCraftMode autoCraftEnabledMode;
 	private boolean showTotalOutputCounts;
@@ -169,6 +171,7 @@ public final class ReachCraftingConfig {
 			instance.recipeBookSortingMode = stored.recipeBookSortingMode != null ? stored.recipeBookSortingMode : DEFAULT_RECIPE_BOOK_SORTING_MODE;
 			instance.autoFocusSearchMode = stored.autoFocusSearchMode != null ? stored.autoFocusSearchMode : DEFAULT_AUTO_FOCUS_SEARCH_MODE;
 			instance.showFilterOutlines = stored.showFilterOutlines != null ? stored.showFilterOutlines : DEFAULT_SHOW_FILTER_OUTLINES;
+			instance.sneakClickWhileHighlighted = stored.sneakClickWhileHighlighted != null ? stored.sneakClickWhileHighlighted : DEFAULT_SNEAK_CLICK_WHILE_HIGHLIGHTED;
 			instance.showTotalOutputCounts = stored.showTotalOutputCounts != null ? stored.showTotalOutputCounts : DEFAULT_SHOW_TOTAL_OUTPUT_COUNTS;
 			instance.inputCounterVisibility = stored.inputCounterVisibility != null ? stored.inputCounterVisibility : DEFAULT_INPUT_COUNTER_VISIBILITY;
 			instance.inventory2x2OffhandConsolidation = stored.inventory2x2OffhandConsolidation != null ? stored.inventory2x2OffhandConsolidation : DEFAULT_INVENTORY_2X2_OFFHAND_CONSOLIDATION;
@@ -372,6 +375,14 @@ public final class ReachCraftingConfig {
 
 	public void setShowFilterOutlines(OutlineDisplayMode showFilterOutlines) {
 		this.showFilterOutlines = showFilterOutlines;
+	}
+
+	public boolean sneakClickWhileHighlighted() {
+		return sneakClickWhileHighlighted;
+	}
+
+	public void setSneakClickWhileHighlighted(boolean sneakClickWhileHighlighted) {
+		this.sneakClickWhileHighlighted = sneakClickWhileHighlighted;
 	}
 
 	public boolean autoCraftEnabled() {
@@ -756,6 +767,7 @@ public final class ReachCraftingConfig {
 		defaults.recipeBookSortingMode = DEFAULT_RECIPE_BOOK_SORTING_MODE;
 		defaults.autoFocusSearchMode = DEFAULT_AUTO_FOCUS_SEARCH_MODE;
 		defaults.showFilterOutlines = DEFAULT_SHOW_FILTER_OUTLINES;
+		defaults.sneakClickWhileHighlighted = DEFAULT_SNEAK_CLICK_WHILE_HIGHLIGHTED;
 		defaults.autoCraftEnabled = DEFAULT_AUTO_CRAFT_ENABLED;
 		defaults.autoCraftEnabledMode = DEFAULT_AUTO_CRAFT_ENABLED_MODE;
 		defaults.showTotalOutputCounts = DEFAULT_SHOW_TOTAL_OUTPUT_COUNTS;
@@ -965,6 +977,7 @@ public final class ReachCraftingConfig {
 		private RecipeBookSortingMode recipeBookSortingMode;
 		private AutoFocusSearchMode autoFocusSearchMode;
 		private OutlineDisplayMode showFilterOutlines;
+		private Boolean sneakClickWhileHighlighted;
 		private Boolean showTotalOutputCounts;
 		private InputCounterVisibility inputCounterVisibility;
 		private Boolean inventory2x2OffhandConsolidation;
@@ -1014,6 +1027,7 @@ public final class ReachCraftingConfig {
 			this.recipeBookSortingMode = config.recipeBookSortingMode;
 			this.autoFocusSearchMode = config.autoFocusSearchMode;
 			this.showFilterOutlines = config.showFilterOutlines;
+			this.sneakClickWhileHighlighted = config.sneakClickWhileHighlighted;
 			this.showTotalOutputCounts = config.showTotalOutputCounts;
 			this.inputCounterVisibility = config.inputCounterVisibility;
 			this.inventory2x2OffhandConsolidation = config.inventory2x2OffhandConsolidation;
