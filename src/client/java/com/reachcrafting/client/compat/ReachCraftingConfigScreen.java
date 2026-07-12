@@ -362,6 +362,15 @@ public final class ReachCraftingConfigScreen {
 			.setSaveConsumer(config::setShowFilterOutlines)
 			.build());
 
+		filterGroup.add(entries.startBooleanToggle(
+				Component.translatable("option.reachcrafting.sneak_click_while_highlighted"),
+				config.sneakClickWhileHighlighted()
+			)
+			.setDefaultValue(true)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.sneak_click_while_highlighted"))
+			.setSaveConsumer(config::setSneakClickWhileHighlighted)
+			.build());
+
 		filterGroup.add(entries.startStrList(
 				Component.translatable("option.reachcrafting.blacklisted_container_ids"),
 				new ArrayList<>(config.blacklistedContainerIds())

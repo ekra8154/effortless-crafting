@@ -551,7 +551,7 @@ final class AutoMoveController {
 				return;
 			}
 
-			int gridByproductMoves = ejectUnexpectedGridByproducts(client, menu, "[auto_move] RESERVED_SWEEP eject grid byproduct {} from grid slot {}");
+			int gridByproductMoves = ejectUnneededGridItems(client, menu);
 			if (gridByproductMoves > 0) {
 				com.reachcrafting.ReachCraftingMod.LOGGER.info(
 					"[auto_move] reserved sweep cleared {} grid byproducts; continuing with inventory sweep in same tick",

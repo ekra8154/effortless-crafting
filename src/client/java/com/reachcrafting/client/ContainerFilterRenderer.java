@@ -17,23 +17,30 @@ import java.util.Optional;
 import java.util.Set;
 
 public final class ContainerFilterRenderer {
+	private static boolean outlinesToggledOn;
+
 	private ContainerFilterRenderer() {
 	}
 
 	public static void init() {
+		// The keybind toggles the outlines rather than showing them only
+		// while held: each press flips the state until pressed again.
+		net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.END_CLIENT_TICK.register(client -> {
+			while (ReachCraftingModClient.showFilterOutlinesKey.consumeClick()) {
+				outlinesToggledOn = !outlinesToggledOn;
+			}
+			if (client.level == null) {
+				outlinesToggledOn = false;
+			}
+			InWorldFilterManager.tickSneakCycleLatch(client);
+		});
 		// Render after translucent world features so the outlines sit on top of normal world geometry.
 		WorldRenderEvents.BEFORE_DEBUG_RENDER.register(context -> {
 			ReachCraftingConfig config = ReachCraftingConfig.get();
 			if (!config.enabled()) {
 				return;
 			}
-			ReachCraftingConfig.OutlineDisplayMode mode = config.showFilterOutlines();
-			
-			if (mode == ReachCraftingConfig.OutlineDisplayMode.OFF) {
-				return;
-			}
-			
-			if (mode == ReachCraftingConfig.OutlineDisplayMode.KEYBIND && !ReachCraftingModClient.showFilterOutlinesKey.isDown()) {
+			if (!areOutlinesVisible()) {
 				return;
 			}
 
@@ -48,6 +55,19 @@ public final class ContainerFilterRenderer {
 			renderList(context, level, cameraPos, InWorldFilterManager.getBlacklistedKeys(), 0.0f, 0.0f, 0.0f); // Black
 			renderList(context, level, cameraPos, InWorldFilterManager.getWhitelistedKeys(), 1.0f, 1.0f, 1.0f); // White
 		});
+	}
+
+	/** Whether the filter outlines are currently drawn (ON mode, or KEYBIND mode with the toggle latched on). */
+	static boolean areOutlinesVisible() {
+		ReachCraftingConfig config = ReachCraftingConfig.get();
+		if (!config.enabled()) {
+			return false;
+		}
+		return switch (config.showFilterOutlines()) {
+			case ON -> true;
+			case KEYBIND -> outlinesToggledOn;
+			default -> false;
+		};
 	}
 
 	private static void renderList(WorldRenderContext context, Level level, Vec3 cameraPos, Set<String> keys, float r, float g, float b) {
