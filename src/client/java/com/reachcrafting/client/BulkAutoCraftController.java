@@ -90,6 +90,7 @@ public final class BulkAutoCraftController {
 				new java.util.LinkedHashMap<>()
 			);
 			performedDiscoveryThisSession = false;
+			BulkDespawnWarning.noteSessionStart();
 
 			// Trigger offhand swap immediately for 3x3 grids if needed
 			int slotsNeeded = estimatedRequiredSlotsForNextBatch();
@@ -151,6 +152,11 @@ public final class BulkAutoCraftController {
 		// tickCounter = 0;
 		performedDiscoveryThisSession = false;
 		sessionNearbyResourcesRequired = false;
+		// Bulk chain sessions outlive their flat bulk final-step batches;
+		// their own clear() resets the warning clock instead.
+		if (!BulkChainCraftController.isActive()) {
+			BulkDespawnWarning.clear();
+		}
 	}
 
 	static boolean needsNearbyStagingRoom() {
@@ -595,6 +601,7 @@ public final class BulkAutoCraftController {
 			return;
 		}
 
+		BulkDespawnWarning.tick();
 		if (!client.isWindowActive()) {
 			stop(true, "window_focus_lost");
 			postAutoMoveDelayTicks = 0;

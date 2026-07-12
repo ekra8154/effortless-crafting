@@ -37,6 +37,7 @@ public final class BulkChainCraftController {
 		}
 		activeSession = BulkChainSession.start(selection, allowNearby, requestedTotalCopies);
 		settleDelayTicks = 0;
+		BulkDespawnWarning.noteSessionStart();
 		// The user just confirmed a bulk session; if a stray hold-state wipe
 		// (popup screen swap, alt-release race) dropped the latch in the
 		// meantime, re-assert it rather than dying on the first tick. A real
@@ -136,6 +137,7 @@ public final class BulkChainCraftController {
 	static void clear() {
 		activeSession = null;
 		settleDelayTicks = 0;
+		BulkDespawnWarning.clear();
 	}
 
 	private static void tick(Minecraft client) {
@@ -146,6 +148,7 @@ public final class BulkChainCraftController {
 			clear();
 			return;
 		}
+		BulkDespawnWarning.tick();
 		if (!client.isWindowActive()) {
 			stop(true, "window_focus_lost");
 			return;

@@ -55,6 +55,7 @@ public final class ReachCraftingConfig {
 	private static final boolean DEFAULT_ENABLE_BULK_CHAIN_CRAFTING = true;
 	private static final boolean DEFAULT_SHOW_CRAFT_ABORTED_MESSAGE = true;
 	private static final boolean DEFAULT_SHOW_BULK_CRAFT_SUMMARY_MESSAGE = true;
+	private static final int DEFAULT_BULK_DESPAWN_WARNING_SECONDS = 240;
 	private static final boolean DEFAULT_SHOW_MISSING_INGREDIENTS_MESSAGE = true;
 	private static final boolean DEFAULT_SHOW_CHAIN_CRAFT_MESSAGES = true;
 	private static final boolean DEFAULT_ALT_AS_REQUEST_KEY = true;
@@ -110,6 +111,7 @@ public final class ReachCraftingConfig {
 	private boolean enableBulkChainCrafting;
 	private boolean showCraftAbortedMessage;
 	private boolean showBulkCraftSummaryMessage;
+	private int bulkDespawnWarningSeconds;
 	private boolean showMissingIngredientsMessage;
 	private boolean showChainCraftMessages;
 	private boolean altAsRequestKey;
@@ -184,6 +186,7 @@ public final class ReachCraftingConfig {
 			instance.enableBulkChainCrafting = stored.enableBulkChainCrafting != null ? stored.enableBulkChainCrafting : DEFAULT_ENABLE_BULK_CHAIN_CRAFTING;
 			instance.showCraftAbortedMessage = stored.showCraftAbortedMessage != null ? stored.showCraftAbortedMessage : DEFAULT_SHOW_CRAFT_ABORTED_MESSAGE;
 			instance.showBulkCraftSummaryMessage = stored.showBulkCraftSummaryMessage != null ? stored.showBulkCraftSummaryMessage : DEFAULT_SHOW_BULK_CRAFT_SUMMARY_MESSAGE;
+			instance.bulkDespawnWarningSeconds = stored.bulkDespawnWarningSeconds != null ? stored.bulkDespawnWarningSeconds : DEFAULT_BULK_DESPAWN_WARNING_SECONDS;
 			instance.showMissingIngredientsMessage = stored.showMissingIngredientsMessage != null ? stored.showMissingIngredientsMessage : DEFAULT_SHOW_MISSING_INGREDIENTS_MESSAGE;
 			instance.showChainCraftMessages = stored.showChainCraftMessages != null ? stored.showChainCraftMessages : DEFAULT_SHOW_CHAIN_CRAFT_MESSAGES;
 			instance.altAsRequestKey = stored.altAsRequestKey != null ? stored.altAsRequestKey : DEFAULT_ALT_AS_REQUEST_KEY;
@@ -532,6 +535,14 @@ public final class ReachCraftingConfig {
 		this.showBulkCraftSummaryMessage = showBulkCraftSummaryMessage;
 	}
 
+	public int bulkDespawnWarningSeconds() {
+		return bulkDespawnWarningSeconds;
+	}
+
+	public void setBulkDespawnWarningSeconds(int bulkDespawnWarningSeconds) {
+		this.bulkDespawnWarningSeconds = bulkDespawnWarningSeconds;
+	}
+
 	public boolean showMissingIngredientsMessage() {
 		return showMissingIngredientsMessage;
 	}
@@ -762,6 +773,7 @@ public final class ReachCraftingConfig {
 		defaults.enableBulkChainCrafting = DEFAULT_ENABLE_BULK_CHAIN_CRAFTING;
 		defaults.showCraftAbortedMessage = DEFAULT_SHOW_CRAFT_ABORTED_MESSAGE;
 		defaults.showBulkCraftSummaryMessage = DEFAULT_SHOW_BULK_CRAFT_SUMMARY_MESSAGE;
+		defaults.bulkDespawnWarningSeconds = DEFAULT_BULK_DESPAWN_WARNING_SECONDS;
 		defaults.showMissingIngredientsMessage = DEFAULT_SHOW_MISSING_INGREDIENTS_MESSAGE;
 		defaults.showChainCraftMessages = DEFAULT_SHOW_CHAIN_CRAFT_MESSAGES;
 		defaults.altAsRequestKey = DEFAULT_ALT_AS_REQUEST_KEY;
@@ -971,6 +983,7 @@ public final class ReachCraftingConfig {
 		private Boolean enableBulkChainCrafting;
 		private Boolean showCraftAbortedMessage;
 		private Boolean showBulkCraftSummaryMessage;
+		private Integer bulkDespawnWarningSeconds;
 		private Boolean showMissingIngredientsMessage;
 		private Boolean showChainCraftMessages;
 		private Boolean altAsRequestKey;
@@ -1018,6 +1031,7 @@ public final class ReachCraftingConfig {
 			this.enableBulkChainCrafting = config.enableBulkChainCrafting;
 			this.showCraftAbortedMessage = config.showCraftAbortedMessage;
 			this.showBulkCraftSummaryMessage = config.showBulkCraftSummaryMessage;
+			this.bulkDespawnWarningSeconds = config.bulkDespawnWarningSeconds;
 			this.showMissingIngredientsMessage = config.showMissingIngredientsMessage;
 			this.showChainCraftMessages = config.showChainCraftMessages;
 			this.altAsRequestKey = config.altAsRequestKey;
