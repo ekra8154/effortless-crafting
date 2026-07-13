@@ -547,54 +547,15 @@ public final class BulkAutoCraftController {
 				);
 			}
 			String status = aborted ? "terminated" : "complete";
-			java.util.Map<String, Integer> summaryForChat = activeSession.summary();
-			String expectedItemName = activeSession.expectedOutput().getHoverName().getString();
-			if (summaryForChat.size() <= 1 && (summaryForChat.isEmpty() || summaryForChat.containsKey(expectedItemName))) {
-				Minecraft client = Minecraft.getInstance();
-				int currentOutputCount = countAccessibleOutput(client, activeSession.expectedOutput());
-				int actualObservedOutputCount =
-					Math.max(0, currentOutputCount - activeSession.initialObservedOutputCount())
-						+ activeSession.totalEjectedOutputCount();
-				java.util.Map<String, Integer> adjustedSummary = new java.util.LinkedHashMap<>();
-				if (actualObservedOutputCount > 0) {
-					adjustedSummary.put(expectedItemName, actualObservedOutputCount);
-				}
-				com.reachcrafting.ReachCraftingMod.LOGGER.info(
-					"[bulk_craft] stop_summary_adjust expected_item={} summary_recorded={} current_output={} initial_output={} total_ejected_session={} actual_observed={}",
-					expectedItemName,
-					summaryForChat.getOrDefault(expectedItemName, 0),
-					currentOutputCount,
-					activeSession.initialObservedOutputCount(),
-					activeSession.totalEjectedOutputCount(),
-					actualObservedOutputCount
-				);
-				summaryForChat = adjustedSummary;
-			}
-			String elapsedSuffix = BulkDespawnWarning.elapsedSummarySuffix();
-			if (summaryForChat.isEmpty()) {
-				String itemName = activeSession.expectedOutput().getHoverName().getString();
-				ReachCraftingModClient.sendBulkSummaryChat("Bulk craft " + status + ": Crafted 0 " + itemName);
-			} else {
-				int totalItems = 0;
-				for (int count : summaryForChat.values()) {
-					totalItems += count;
-				}
-
-				if (summaryForChat.size() == 1) {
-					java.util.Map.Entry<String, Integer> entry = summaryForChat.entrySet().iterator().next();
-					ReachCraftingModClient.sendBulkSummaryChat("Bulk craft " + status + ": Crafted " + ContainerUtils.formatStackBreakdown(entry.getValue()) + " " + entry.getKey() + elapsedSuffix);
-				} else {
-					StringBuilder sb = new StringBuilder();
-					sb.append(ContainerUtils.formatStackBreakdown(totalItems)).append(" items: ");
-					boolean first = true;
-					for (java.util.Map.Entry<String, Integer> entry : summaryForChat.entrySet()) {
-						if (!first) sb.append(", ");
-						sb.append(ContainerUtils.formatStackBreakdown(entry.getValue())).append(" ").append(entry.getKey());
-						first = false;
-					}
-					ReachCraftingModClient.sendBulkSummaryChat("Bulk craft " + status + ": Crafted " + sb + elapsedSuffix);
-				}
-			}
+			// Degraded summary (1.20.1 lineage): mirrors main's end-of-session message but
+			// never states crafted amounts - output accounting has never been
+			// reliable on this version. Item names and elapsed time only.
+			String itemNames = activeSession.summary().isEmpty()
+				? activeSession.expectedOutput().getHoverName().getString()
+				: String.join(", ", activeSession.summary().keySet());
+			ReachCraftingModClient.sendBulkSummaryChat(
+				"Bulk craft " + status + ": " + itemNames + BulkDespawnWarning.elapsedSummarySuffix()
+			);
 		}
 		AutoCraftController.finishBulkSessionTeardown();
 		clear();

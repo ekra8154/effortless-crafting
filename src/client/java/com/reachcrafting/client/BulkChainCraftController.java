@@ -118,11 +118,10 @@ public final class BulkChainCraftController {
 			}
 			String status = aborted ? "terminated" : "complete";
 			String itemName = activeSession.selection().displayStack().getHoverName().getString();
-			int outputPerCraft = Math.max(activeSession.selection().displayStack().getCount(), 1);
-			int craftedItems = activeSession.completedCopies() * outputPerCraft;
+			// Degraded summary (1.20.1 lineage): no crafted amounts (accounting is not
+			// reliable on this version), just the item and elapsed time.
 			ReachCraftingModClient.sendBulkSummaryChat(
-				"Bulk chain craft " + status + ": Crafted " + ContainerUtils.formatStackBreakdown(craftedItems) + " " + itemName
-					+ BulkDespawnWarning.elapsedSummarySuffix()
+				"Bulk chain craft " + status + ": " + itemName + BulkDespawnWarning.elapsedSummarySuffix()
 			);
 		}
 		Minecraft client = Minecraft.getInstance();
