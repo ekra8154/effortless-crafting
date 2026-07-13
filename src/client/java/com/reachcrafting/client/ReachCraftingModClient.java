@@ -35,10 +35,14 @@ public class ReachCraftingModClient implements ClientModInitializer {
 	}
 
 	public static void sendBulkSummaryChat(String message) {
-		// Bulk summaries are disabled on 1.20.1: the output accounting here has never been reliable
-		// (see "failed attempts to make chat output accurate") and the counts it reports are wrong.
-		// The summary is still logged for debugging.
-		com.reachcrafting.ReachCraftingMod.LOGGER.info("[bulk_summary_suppressed] {}", message);
+		// Degraded support on 1.20.1: summaries are sent again (honoring the
+		// config toggle), but the compose sites never state item counts —
+		// output accounting has never been reliable on this version (see
+		// "failed attempts to make chat output accurate"). Elapsed time and
+		// item names are fine.
+		if (ReachCraftingConfig.get().showBulkCraftSummaryMessage()) {
+			sendChat(message);
+		}
 	}
 
 	public static void sendMissingIngredientsChat(String message) {
