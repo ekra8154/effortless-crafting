@@ -4,26 +4,27 @@
 	"compatibilityLevel": "JAVA_21",
 	"client": [
 		"AbstractContainerMenuMixin",
+		"AbstractContainerScreenAccessor",
 		"AbstractContainerScreenMixin",
 		"AbstractRecipeBookScreenAccessor",
 		"ClientRecipeBookAccessor",
+		"DebugRendererMixin",
 		"EditBoxAccessor",
 		"KeyMappingAccessor",
 		"MinecraftInteractionBlockMixin",
 		"MultiPlayerGameModeMixin",
-		"OverlayRecipeButtonMixin",
 		"OverlayRecipeButtonAccessor",
+		"OverlayRecipeButtonMixin",
 		"OverlayRecipeComponentAccessor",
 		"OverlayRecipeComponentMixin",
 		"PlayerSecondaryUseMixin",
 		"PopupScreenAccessor",
 		"PopupScreenMixin",
-		"RecipeButtonMixin",
 		"RecipeBookComponentAccessor",
+		"RecipeBookComponentMixin",
 		"RecipeBookPageAccessor",
 		"RecipeBookPageMixin",
-		"RecipeBookComponentMixin",
-		"AbstractContainerScreenAccessor"
+		"RecipeButtonMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1
