@@ -27,6 +27,16 @@ public final class ContainerFilterRenderer {
 		net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			while (ReachCraftingModClient.showFilterOutlinesKey.consumeClick()) {
 				outlinesToggledOn = !outlinesToggledOn;
+				// Brief action-bar flash so the current state is obvious; only
+				// meaningful in KEYBIND mode, where the toggle has an effect.
+				if (client.player != null
+					&& ReachCraftingConfig.get().showFilterOutlines() == ReachCraftingConfig.OutlineDisplayMode.KEYBIND) {
+					client.player.sendOverlayMessage(
+						net.minecraft.network.chat.Component.literal(
+							"Container highlights: " + (outlinesToggledOn ? "ON" : "OFF")
+						).withStyle(outlinesToggledOn ? net.minecraft.ChatFormatting.GREEN : net.minecraft.ChatFormatting.GRAY)
+					);
+				}
 			}
 			if (client.level == null) {
 				outlinesToggledOn = false;
