@@ -467,6 +467,7 @@ public final class BulkAutoCraftController {
 				);
 			}
 			String status = aborted ? "terminated" : "complete";
+			String elapsedSuffix = BulkDespawnWarning.elapsedSummarySuffix();
 			if (activeSession.summary().isEmpty()) {
 				String itemName = activeSession.expectedOutput().getHoverName().getString();
 				ReachCraftingModClient.sendBulkSummaryChat("Bulk craft " + status + ": Crafted 0 " + itemName);
@@ -478,7 +479,7 @@ public final class BulkAutoCraftController {
 
 				if (activeSession.summary().size() == 1) {
 					java.util.Map.Entry<String, Integer> entry = activeSession.summary().entrySet().iterator().next();
-					ReachCraftingModClient.sendBulkSummaryChat("Bulk craft " + status + ": Crafted " + ContainerUtils.formatStackBreakdown(entry.getValue()) + " " + entry.getKey());
+					ReachCraftingModClient.sendBulkSummaryChat("Bulk craft " + status + ": Crafted " + ContainerUtils.formatStackBreakdown(entry.getValue()) + " " + entry.getKey() + elapsedSuffix);
 				} else {
 					StringBuilder sb = new StringBuilder();
 					sb.append(ContainerUtils.formatStackBreakdown(totalItems)).append(" items: ");
@@ -488,7 +489,7 @@ public final class BulkAutoCraftController {
 						sb.append(ContainerUtils.formatStackBreakdown(entry.getValue())).append(" ").append(entry.getKey());
 						first = false;
 					}
-					ReachCraftingModClient.sendBulkSummaryChat("Bulk craft " + status + ": Crafted " + sb.toString());
+					ReachCraftingModClient.sendBulkSummaryChat("Bulk craft " + status + ": Crafted " + sb + elapsedSuffix);
 				}
 			}
 		}
