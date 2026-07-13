@@ -31,10 +31,11 @@ public final class ContainerFilterRenderer {
 				// meaningful in KEYBIND mode, where the toggle has an effect.
 				if (client.player != null
 					&& ReachCraftingConfig.get().showFilterOutlines() == ReachCraftingConfig.OutlineDisplayMode.KEYBIND) {
-					client.player.sendOverlayMessage(
+					client.player.displayClientMessage(
 						net.minecraft.network.chat.Component.literal(
 							"Container highlights: " + (outlinesToggledOn ? "ON" : "OFF")
-						).withStyle(outlinesToggledOn ? net.minecraft.ChatFormatting.GREEN : net.minecraft.ChatFormatting.GRAY)
+						).withStyle(outlinesToggledOn ? net.minecraft.ChatFormatting.GREEN : net.minecraft.ChatFormatting.GRAY),
+						true
 					);
 				}
 			}
