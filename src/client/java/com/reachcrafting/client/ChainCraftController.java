@@ -45,6 +45,16 @@ public final class ChainCraftController {
 		return activeRun != null || pendingWarmupRetry != null;
 	}
 
+	/**
+	 * True only while a chain run is actually executing steps. An armed
+	 * warmup retry counts as active for isActive() (queue guards must stay
+	 * conservative) but must not be mistaken for a running chain: it is a
+	 * fallback that fires only if nothing else handled the request.
+	 */
+	static boolean hasActiveRun() {
+		return activeRun != null;
+	}
+
 	static boolean isRunningIntermediateStep() {
 		return activeRun != null && activeRun.currentStepIndex() < activeRun.plan().steps().size() - 1;
 	}
@@ -195,6 +205,29 @@ public final class ChainCraftController {
 			ContainerUtils.formatStack(expectedOutput),
 			baselineOutputCount
 		);
+	}
+
+	/**
+	 * Called when a flat bulk session stops after crafting at least one copy:
+	 * the session owned the request, so the warmup retry must not replay it.
+	 * The output-count check at fire time cannot see this on its own — max
+	 * bulk ejects its output to the ground, so the accessible count can read
+	 * zero after a fully successful run.
+	 */
+	static void cancelPendingWarmupRetryAfterProgress(ItemStack sessionOutput, int completedCopies) {
+		if (pendingWarmupRetry == null || completedCopies <= 0 || sessionOutput == null || sessionOutput.isEmpty()) {
+			return;
+		}
+		if (!ItemStack.isSameItem(sessionOutput, pendingWarmupRetry.expectedOutput())) {
+			return;
+		}
+		ReachCraftingMod.LOGGER.info(
+			"[chain_retry] disarmed reason=flat_bulk_progress recipe={} output={} completed_copies={}",
+			pendingWarmupRetry.action().recipeId(),
+			ContainerUtils.formatStack(pendingWarmupRetry.expectedOutput()),
+			completedCopies
+		);
+		pendingWarmupRetry = null;
 	}
 
 	static void onAutoMoveFinished(Minecraft client, boolean success) {
@@ -375,6 +408,14 @@ public final class ChainCraftController {
 
 		PendingWarmupRetry retry = pendingWarmupRetry;
 		pendingWarmupRetry = null;
+		if (BulkAutoCraftController.isActive()) {
+			ReachCraftingMod.LOGGER.info(
+				"[chain_retry] skip_after_warmup reason=flat_bulk_session_active recipe={} output={}",
+				retry.action().recipeId(),
+				ContainerUtils.formatStack(retry.expectedOutput())
+			);
+			return;
+		}
 		int currentOutputCount = countAccessibleOutput(client, retry.expectedOutput());
 		if (currentOutputCount > retry.baselineOutputCount()) {
 			ReachCraftingMod.LOGGER.info(
