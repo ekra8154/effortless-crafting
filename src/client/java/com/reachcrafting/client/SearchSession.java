@@ -1940,7 +1940,9 @@ final class SearchSession extends BaseCraftSession {
 				summarizeRemainingItems(remainingItemIds),
 				updatedDeficit.compactMissingSummary()
 			);
-			gameMode.handlePlaceRecipe(player.containerMenu.containerId, recipe, craftAll);
+			if (!ChainCraftController.tryManualSelfReferentialPlacement(client, null)) {
+				gameMode.handlePlaceRecipe(player.containerMenu.containerId, recipe, craftAll);
+			}
 			autoMoveReady = true;
 			sendDebugChat("Placed recipe: " + outputLabel);
 		} else if (!remainingItemIds.isEmpty() || inventorySpaceBlocked || updatedDeficit.hasMissingIngredients()) {
@@ -2125,7 +2127,9 @@ final class SearchSession extends BaseCraftSession {
 		}
 
 		int queueLimit = RecipeClickExecutor.resolveRecipeQueueLimit(client, recipe, recipeCollection);
-		if (targetCopiesPerSlot >= queueLimit) {
+		if (ChainCraftController.tryManualSelfReferentialPlacement(client, null)) {
+			ReachCraftingMod.LOGGER.info("[recipe_place] manual self-referential placement from SearchSession.placePlannedGrid target={}", targetCopiesPerSlot);
+		} else if (targetCopiesPerSlot >= queueLimit) {
 			ReachCraftingMod.LOGGER.info("[recipe_place] handlePlaceRecipe(shift=true) from SearchSession.placePlannedGrid target={}", targetCopiesPerSlot);
 			gameMode.handlePlaceRecipe(player.containerMenu.containerId, recipe, true);
 		} else {
