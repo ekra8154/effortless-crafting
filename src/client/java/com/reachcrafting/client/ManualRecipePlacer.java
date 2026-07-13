@@ -8,7 +8,7 @@ import java.util.Map;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.inventory.CraftingMenu;
@@ -236,7 +236,7 @@ final class ManualRecipePlacer {
 
 	private static int maxStackSizeFor(String itemId) {
 		try {
-			Item item = BuiltInRegistries.ITEM.getValue(Identifier.parse(itemId));
+			Item item = BuiltInRegistries.ITEM.getValue(ResourceLocation.parse(itemId));
 			return item == null ? 1 : Math.max(item.getDefaultInstance().getMaxStackSize(), 1);
 		} catch (Exception ignored) {
 			return 1;
