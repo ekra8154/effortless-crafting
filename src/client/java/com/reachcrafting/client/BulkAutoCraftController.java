@@ -494,8 +494,11 @@ public final class BulkAutoCraftController {
 			craftedCopies, gainedOutputCount, activeSession.ejectedOutputCount(), completedRecipeCopies, activeSession.requestedRecipeCopies(), currentOutputCount);
 
 		resetCurrentBatchOutputDisposition();
-		// Reset discovery flag so the next batch can re-scan if the cache becomes stale
-		performedDiscoveryThisSession = false;
+		// The discovery flag deliberately survives the whole bulk session:
+		// resetting it per batch re-enabled fallback discovery every batch
+		// (a full chest re-scan per 16 crafts for stack-16 ingredients like
+		// honey bottles). Withdrawal planning reads the live cache, so
+		// staleness does not need a per-batch re-scan.
 		// Nearby stackable-output batches already reserve output room and fully sweep it,
 		// so they don't need the extra settle tick before replaying the next craft.
 		postAutoMoveDelayTicks = fastReservedOutputFollowup ? 0 : 1;

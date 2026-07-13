@@ -317,6 +317,44 @@ final class RecipeClickExecutor {
 
 		boolean nearbyResourcesRequired = allowNearbyChests
 			&& areNearbyResourcesRequired(craftAll, effectiveRequestedClicks, localDeficitReport.possibleCopies());
+		// Bulk on a cold cache: don't interleave crafting with need-targeted
+		// mini-discoveries (screen-flashing chest visits every few batches).
+		// Run ONE full discovery scan of the uncached containers, then the
+		// armed retry replays this exact request against the warm cache,
+		// where the session withdraws in big lumps and crafts continuously.
+		// Gated to the initial user click (never replays) so an unreachable
+		// container that keeps the cache incomplete cannot loop the warmup.
+		if (useDryRun
+			&& !autoCraftRequested
+			&& allowNearbyChests
+			&& nearbyCacheIncomplete
+			&& AutoCraftController.isBulkModeEnabled()
+			&& (refillableBulkMaxMode || effectiveCraftAll)) {
+			ReachCraftingMod.LOGGER.info(
+				"[bulk_warmup] cold_cache_full_scan_first recipe={} clicks={} craft_all={} refillable={}",
+				selectedRecipe.recipeId(),
+				effectiveRequestedClicks,
+				effectiveCraftAll,
+				refillableBulkMaxMode
+			);
+			ChainCraftController.armRetryAfterNearbyWarmup(
+				new RecipeBookClickCapture.HeldRecipeAction(
+					selectedRecipe.recipe(),
+					selectedRecipe.recipeId(),
+					collection,
+					selectedRecipe.displayStack().copy(),
+					mouseButton,
+					explicitVariantSelection
+				),
+				effectiveRequestedClicks,
+				allowNearbyChests,
+				effectiveCraftAll,
+				refillableBulkMaxMode,
+				selectedRecipe.displayStack()
+			);
+			NearbyContainerDryRun.startCacheWarmup("bulk_cold_cache");
+			return;
+		}
 		if (useDryRun) {
 			armBulkAutoCraft(
 				recipe,

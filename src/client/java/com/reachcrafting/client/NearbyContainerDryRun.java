@@ -82,6 +82,10 @@ public final class NearbyContainerDryRun {
 		COORDINATOR.startReturn(closingMenu, items, reopenScreen);
 	}
 
+	public static void startCacheWarmup(String reason) {
+		COORDINATOR.startCacheWarmup(new CacheWarmupRequest(reason));
+	}
+
 	public static void cancelCurrent() {
 		COORDINATOR.cancelCurrent();
 	}
