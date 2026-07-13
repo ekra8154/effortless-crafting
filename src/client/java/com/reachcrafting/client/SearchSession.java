@@ -1513,9 +1513,22 @@ final class SearchSession extends BaseCraftSession {
 			originalOrder.put(prioritized.get(i), i);
 		}
 
-		Comparator<BlockPos> comparator = Comparator
-			.comparingInt((BlockPos pos) -> cachedDistinctMatchesAt(pos, neededCounts)).reversed()
-			.thenComparingInt((BlockPos pos) -> cachedMatchUnitsAt(pos, neededCounts)).reversed();
+		// Drain-order policy: smallest-first empties the smallest stocks so
+		// containers free up quickly (and is naturally sticky — a partially
+		// drained container stays smallest until empty); largest-first boosts
+		// the recorded drain source so repeated pulls keep emptying the same
+		// container instead of depleting all stocks evenly.
+		Comparator<BlockPos> comparator;
+		if (ReachCraftingConfig.get().containerDrainOrder() == ReachCraftingConfig.ContainerDrainOrder.SMALLEST_FIRST) {
+			comparator = Comparator
+				.comparingInt((BlockPos pos) -> cachedMatchUnitsAt(pos, neededCounts))
+				.thenComparing(Comparator.comparingInt((BlockPos pos) -> cachedDistinctMatchesAt(pos, neededCounts)).reversed());
+		} else {
+			comparator = Comparator
+				.comparingInt((BlockPos pos) -> NearbyContainerCache.isRecentDrainSource(level, pos, neededCounts.keySet()) ? 0 : 1)
+				.thenComparing(Comparator.comparingInt((BlockPos pos) -> cachedDistinctMatchesAt(pos, neededCounts)).reversed())
+				.thenComparing(Comparator.comparingInt((BlockPos pos) -> cachedMatchUnitsAt(pos, neededCounts)).reversed());
+		}
 		if (ReachCraftingConfig.get().countPreference() == IngredientPlanning.CountPreference.HIGHEST_TOTAL) {
 			comparator = comparator.thenComparing(Comparator.comparingInt((BlockPos pos) -> cachedPreferenceTotalAt(pos, neededCounts)).reversed());
 		} else {
