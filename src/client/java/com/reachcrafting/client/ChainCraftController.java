@@ -79,11 +79,56 @@ public final class ChainCraftController {
 			|| !isRunningFinalStep()) {
 			return false;
 		}
-		if (activeRun.observedProducedRecipeCopies() >= activeRun.scheduledBatchCopies()) {
+		int remaining = activeRun.scheduledBatchCopies() - activeRun.observedProducedRecipeCopies();
+		if (remaining <= 0) {
 			return false;
+		}
+		if (isSelfReferentialStep(activeRun.currentStep())) {
+			return ManualRecipePlacer.placeStepCrafts(client, activeRun.currentStep(), remaining) > 0;
 		}
 		client.gameMode.handlePlaceRecipe(client.player.containerMenu.containerId, activeFinalStepRecipeId, true);
 		return true;
+	}
+
+	/**
+	 * Places the current chain step's planned inputs client-side when the
+	 * step's recipe accepts its own output as an ingredient (re-dye family).
+	 * Returns true when placement was handled here — callers must then skip
+	 * handlePlaceRecipe, which would let the server pick the freshly crafted
+	 * output or the player's intentionally dyed variants as inputs. Handled
+	 * with zero staged copies is still handled: falling back to the server
+	 * placement would be worse than an honest step failure.
+	 */
+	static boolean tryManualSelfReferentialPlacement(Minecraft client, String outputItemId) {
+		if (activeRun == null || client.player == null || client.gameMode == null || !activeRun.waitingForStep()) {
+			return false;
+		}
+		ChainCraftPlan.Step step = activeRun.currentStep();
+		if (!isSelfReferentialStep(step)) {
+			return false;
+		}
+		if (outputItemId != null && !outputItemId.equals(itemIdOf(step.displayStack()))) {
+			return false;
+		}
+		int remaining = Math.max(activeRun.scheduledBatchCopies() - activeRun.observedProducedRecipeCopies(), 1);
+		int staged = ManualRecipePlacer.placeStepCrafts(client, step, remaining);
+		ReachCraftingMod.LOGGER.info(
+			"[chain_execute] manual_self_ref_placement output={} staged={} remaining={}",
+			ContainerUtils.formatStack(step.displayStack()),
+			staged,
+			remaining
+		);
+		return true;
+	}
+
+	private static boolean isSelfReferentialStep(ChainCraftPlan.Step step) {
+		return step != null
+			&& !step.displayStack().isEmpty()
+			&& step.ingredientSummary().acceptedItemIds().contains(itemIdOf(step.displayStack()));
+	}
+
+	private static String itemIdOf(net.minecraft.world.item.ItemStack stack) {
+		return net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
 	}
 
 	static boolean isUsingPreStagedNearbyResources() {

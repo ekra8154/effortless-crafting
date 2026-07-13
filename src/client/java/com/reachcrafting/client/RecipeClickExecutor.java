@@ -106,6 +106,9 @@ final class RecipeClickExecutor {
 			chainAvailableCounts = AvailableItemSnapshot.mergeCounts(localAvailableCounts, reachableView.aggregateCounts());
 			nearbyCacheIncomplete = reachableView.snapshotsByKey().size() < reachableView.nearestAccessByKey().size();
 		}
+		// Lockstep with BulkChainCraftController.collectAvailableCounts:
+		// non-pristine local stacks are unusable as self-referential inputs.
+		chainAvailableCounts = ContainerUtils.subtractNonPristineLocalStacks(minecraft, chainAvailableCounts);
 		RecipeDeficitReport deficitReport = effectiveCraftAll
 			? RecipeDeficitReport.from(ingredientSummary, availableCounts, availableItems.gridStacks(), true)
 			: RecipeDeficitReport.from(ingredientSummary, availableCounts, availableItems.gridStacks(), desiredVariantCopies);
@@ -167,7 +170,16 @@ final class RecipeClickExecutor {
 		// Bulk mode implies autocraft semantics even when Alt is not physically
 		// held at click time, so bulk requests also qualify for chain offers.
 		// Active sessions are excluded so their replayed clicks never re-offer.
-		boolean canOfferChainCraft = deficitReport.hasMissingIngredients()
+		// Self-referential recipes (a dyed bundle's slot accepts all bundles,
+		// including the output) are ALWAYS routed through the chain path in
+		// bulk mode, even with nothing missing: flat bulk's server-side
+		// placement would happily re-dye its own output or the player's
+		// colored variants, while the chain executor places the planned base
+		// inputs manually. The single-step plan starts silently, so the UX
+		// matches flat bulk.
+		boolean selfReferentialRecipe = ingredientSummary.acceptedItemIds().contains(resolvedItemId);
+		boolean canOfferChainCraft = (deficitReport.hasMissingIngredients()
+				|| (selfReferentialRecipe && AutoCraftController.isBulkModeEnabled()))
 			&& (autoCraftRequested || AutoCraftController.isBulkModeEnabled())
 			&& chainMode != ReachCraftingConfig.ChainCraftingMode.DISABLED
 			&& !ChainCraftController.isActive()
@@ -319,8 +331,10 @@ final class RecipeClickExecutor {
 				// Calling handlePlaceRecipe(false) in a loop triggers N server-side
 				// grid clears, each of which consumes the previous result and injects
 				// byproducts into inventory via Inventory.add(), causing fragmentation.
-				ReachCraftingMod.LOGGER.info("[recipe_place] handlePlaceRecipe(shift=true) from RecipeClickExecutor NEARBY path");
-				minecraft.gameMode.handlePlaceRecipe(player.containerMenu.containerId, selectedRecipe.recipe(), true);
+				if (!ChainCraftController.tryManualSelfReferentialPlacement(minecraft, resolvedItemId)) {
+					ReachCraftingMod.LOGGER.info("[recipe_place] handlePlaceRecipe(shift=true) from RecipeClickExecutor NEARBY path");
+					minecraft.gameMode.handlePlaceRecipe(player.containerMenu.containerId, selectedRecipe.recipe(), true);
+				}
 				AvailableItemSnapshot postPlaceSnapshot = AvailableItemSnapshot.capture(player, screen);
 				ReachCraftingMod.LOGGER.info(
 					"[recipe_place] post_place nearby result={} staged_copies={} requestedClicks={} queueLimit={} grid_reserved={}",
@@ -403,7 +417,10 @@ final class RecipeClickExecutor {
 				|| (AutoCraftController.isBulkModeEnabled() && !ChainCraftController.isActive() && requestedClicks >= queueLimit);
 			boolean repeatDirectPlacement = AutoCraftController.isBulkModeEnabled() || directChainReplay;
 
-			if (useBulkPlace) {
+			if (ChainCraftController.tryManualSelfReferentialPlacement(minecraft, resolvedItemId)) {
+				// Self-referential chain step: inputs were placed client-side so
+				// the server cannot pick the step's own output as an ingredient.
+			} else if (useBulkPlace) {
 				gameMode.handlePlaceRecipe(player.containerMenu.containerId, selectedRecipe.recipe(), true);
 			} else {
 				int iterations = repeatDirectPlacement ? Math.max(effectiveRequestedClicks, 1) : 1;
