@@ -72,10 +72,32 @@ public final class InWorldFilterManager {
 
 	public static InclusionState getManualState(Level level, BlockPos pos) {
 		updateContext();
-		String key = getPosKey(level, pos);
-		if (INSTANCE_WHITELIST.contains(key)) return InclusionState.MANUAL_WHITELIST;
-		if (INSTANCE_BLACKLIST.contains(key)) return InclusionState.MANUAL_BLACKLIST;
+		for (String key : keysFor(level, pos)) {
+			if (INSTANCE_WHITELIST.contains(key)) return InclusionState.MANUAL_WHITELIST;
+		}
+		for (String key : keysFor(level, pos)) {
+			if (INSTANCE_BLACKLIST.contains(key)) return InclusionState.MANUAL_BLACKLIST;
+		}
 		return InclusionState.UNSET;
+	}
+
+	/**
+	 * The keys this block's filter state may live under: its own position
+	 * and, for a double chest, the partner half. States are written to ALL
+	 * of these so breaking either half leaves the survivor's state intact
+	 * (an anchored single key made the outcome depend on which half broke);
+	 * lookups accept any of them, which also reads old anchor-only saves.
+	 */
+	private static java.util.List<String> keysFor(Level level, BlockPos pos) {
+		java.util.List<String> keys = new java.util.ArrayList<>(2);
+		keys.add(rawPosKey(level, pos));
+		ContainerUtils.getOtherHalfOfLargeChest(level, pos)
+			.ifPresent(other -> keys.add(rawPosKey(level, other)));
+		return keys;
+	}
+
+	private static String rawPosKey(Level level, BlockPos pos) {
+		return level.dimension().toString() + ":" + pos.getX() + "," + pos.getY() + "," + pos.getZ();
 	}
 
 	/**
@@ -141,13 +163,11 @@ public final class InWorldFilterManager {
 	}
 
 	public static boolean isInstanceBlacklisted(Level level, BlockPos pos) {
-		updateContext();
-		return INSTANCE_BLACKLIST.contains(getPosKey(level, pos));
+		return getManualState(level, pos) == InclusionState.MANUAL_BLACKLIST;
 	}
 
 	public static boolean isInstanceWhitelisted(Level level, BlockPos pos) {
-		updateContext();
-		return INSTANCE_WHITELIST.contains(getPosKey(level, pos));
+		return getManualState(level, pos) == InclusionState.MANUAL_WHITELIST;
 	}
 
 	private static boolean sneakCycleConsumedPress;
@@ -208,20 +228,21 @@ public final class InWorldFilterManager {
 
 	public static void toggleInclusion(Level level, BlockPos pos, BlockState state) {
 		updateContext();
-		String key = getPosKey(level, pos, state);
+		java.util.List<String> keys = keysFor(level, pos);
 		InclusionState current = getManualState(level, pos);
-		
+		// Clear every key the state may live under (both halves, plus any
+		// stale anchor from an older save) before writing the next state.
+		INSTANCE_BLACKLIST.removeAll(keys);
+		INSTANCE_WHITELIST.removeAll(keys);
+
 		if (current == InclusionState.UNSET) {
-			INSTANCE_BLACKLIST.add(key);
+			INSTANCE_BLACKLIST.addAll(keys);
 		} else if (current == InclusionState.MANUAL_BLACKLIST) {
 			// Black -> White
-			INSTANCE_BLACKLIST.remove(key);
-			INSTANCE_WHITELIST.add(key);
-		} else if (current == InclusionState.MANUAL_WHITELIST) {
-			// White -> Reset
-			INSTANCE_WHITELIST.remove(key);
+			INSTANCE_WHITELIST.addAll(keys);
 		}
-		
+		// White -> Reset: everything already removed.
+
 		dirty = true;
 		saveIfDirty(); // Trigger a save check after toggle
 		NearbyContainerCache.bumpRevision();
