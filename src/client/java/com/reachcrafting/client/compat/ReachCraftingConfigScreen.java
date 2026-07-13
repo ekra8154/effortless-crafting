@@ -298,13 +298,15 @@ public final class ReachCraftingConfigScreen {
 		var nearbyGroup = entries.startSubCategory(Component.translatable("category.reachcrafting.sub.nearby_containers"));
 		nearbyGroup.setExpanded(true);
 
-		nearbyGroup.add(entries.startBooleanToggle(
+		nearbyGroup.add(entries.startEnumSelector(
 				Component.translatable("option.reachcrafting.enable_nearby_container_usage"),
-				config.enableNearbyContainerUsage()
+				ReachCraftingConfig.NearbyContainerUsageMode.class,
+				config.nearbyContainerUsageMode()
 			)
-			.setDefaultValue(true)
+			.setDefaultValue(ReachCraftingConfig.NearbyContainerUsageMode.CTRL_HELD)
 			.setTooltip(Component.translatable("tooltip.reachcrafting.enable_nearby_container_usage"))
-			.setSaveConsumer(config::setEnableNearbyContainerUsage)
+			.setSaveConsumer(config::setNearbyContainerUsageMode)
+			.setEnumNameProvider(value -> Component.translatable("enum.reachcrafting.enable_nearby_container_usage." + value.name().toLowerCase()))
 			.build());
 
 		nearbyGroup.add(entries.startBooleanToggle(
