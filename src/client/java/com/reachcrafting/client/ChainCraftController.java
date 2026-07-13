@@ -23,7 +23,7 @@ public final class ChainCraftController {
 	private static final int BATCH_SETTLE_QUIET_TICKS = 8;
 	private static ChainCraftRun activeRun;
 	private static PendingWarmupRetry pendingWarmupRetry;
-	private static RecipeDisplayId activeFinalStepRecipeId;
+	private static RecipeHolder<?> activeFinalStepRecipeId;
 
 	private ChainCraftController() {
 	}
@@ -505,7 +505,7 @@ public final class ChainCraftController {
 			step.finalStep()
 		);
 		AutoCraftController.armHoldSessionForCurrentRequest(true);
-		activeFinalStepRecipeId = step.finalStep() ? action.recipeId() : null;
+		activeFinalStepRecipeId = step.finalStep() ? action.recipe() : null;
 		RecipeBookClickCapture.scheduleReplay(
 			action,
 			batchCopies,

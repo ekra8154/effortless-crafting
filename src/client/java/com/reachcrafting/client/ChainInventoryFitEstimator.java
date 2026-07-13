@@ -85,7 +85,7 @@ final class ChainInventoryFitEstimator {
 			return ItemStack.EMPTY;
 		}
 		try {
-			var item = BuiltInRegistries.ITEM.getValue(ResourceLocation.parse(itemId));
+			var item = BuiltInRegistries.ITEM.get(ResourceLocation.parse(itemId));
 			return item == null ? ItemStack.EMPTY : item.getDefaultInstance();
 		} catch (Exception ignored) {
 			return ItemStack.EMPTY;
