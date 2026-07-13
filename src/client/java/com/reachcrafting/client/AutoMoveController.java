@@ -30,7 +30,9 @@ final class AutoMoveController {
 	private static boolean chainEjectAwaitingRefresh = false;
 	private static int chainEjectRefreshTicks = 0;
 	private static int chainEjectPendingCount = 0;
+	private static int chainEjectStagedBaseline = 0;
 	private static ItemStack chainEjectPendingStack = ItemStack.EMPTY;
+	private static int resultMismatchGraceTicks = 0;
 
 	private AutoMoveController() {
 	}
@@ -133,7 +135,9 @@ final class AutoMoveController {
 		chainEjectAwaitingRefresh = false;
 		chainEjectRefreshTicks = 0;
 		chainEjectPendingCount = 0;
+		chainEjectStagedBaseline = 0;
 		chainEjectPendingStack = ItemStack.EMPTY;
+		resultMismatchGraceTicks = 0;
 		autoMoveTargetStack = ItemStack.EMPTY;
 		autoMoveExpectedStack = ItemStack.EMPTY;
 		autoMoveSnapshotCounts.clear();
@@ -225,27 +229,48 @@ final class AutoMoveController {
 			return;
 		}
 
-		// Chain final eject settlement: a result-slot THROW is only counted
-		// once the slot is observed empty, proving the server crafted and
-		// dropped. Crediting per throw double-counts when the client still
-		// shows the pre-throw stack a tick later.
+		// Chain final eject settlement, tolerant of both vanilla THROW
+		// semantics. Older versions craft and drop ONE copy per result-slot
+		// THROW and refill the slot immediately, so the slot is never
+		// observed empty mid-batch: each craft is confirmed by the
+		// staged-copy count dropping, and the confirming tick credits the
+		// delta and fires the next throw. On versions where THROW drops the
+		// whole staged batch, the grid empties in one step and the same
+		// depletion delta credits the full batch.
 		if (chainEjectAwaitingRefresh) {
 			chainEjectRefreshTicks++;
-			if (resultSlot.hasItem() && chainEjectRefreshTicks <= 20) {
-				return;
-			}
+			int stagedNow = BulkAutoCraftController.getCurrentStagedCraftCopies(client);
+			int craftedCopies = Math.max(0, chainEjectStagedBaseline - stagedNow);
 			if (!resultSlot.hasItem()) {
-				BulkChainCraftController.addEjectedOutput(chainEjectPendingStack, chainEjectPendingCount);
-				ChainCraftController.noteFinalOutputEjected(chainEjectPendingCount);
+				// Batch done. Remainder recipes (milk buckets -> empty
+				// buckets) keep the grid occupied so the staged count never
+				// reaches zero — an empty result slot is the reliable
+				// end-of-batch signal, and the final throw is credited even
+				// when depletion could not observe it.
+				int credited = Math.max(craftedCopies, 1) * Math.max(chainEjectPendingStack.getCount(), 1);
+				BulkChainCraftController.addEjectedOutput(chainEjectPendingStack, credited);
+				ChainCraftController.noteFinalOutputEjected(credited);
+			} else if (craftedCopies > 0) {
+				int credited = craftedCopies * Math.max(chainEjectPendingStack.getCount(), 1);
+				BulkChainCraftController.addEjectedOutput(chainEjectPendingStack, credited);
+				ChainCraftController.noteFinalOutputEjected(credited);
+				chainEjectStagedBaseline = stagedNow;
+				chainEjectRefreshTicks = 0;
+				client.gameMode.handleInventoryMouseClick(menu.containerId, resultSlot.index, 1, ClickType.THROW, client.player);
+				return;
+			} else if (chainEjectRefreshTicks <= 20) {
+				// Waiting for the server to reflect the last throw.
+				return;
 			} else {
 				com.reachcrafting.ReachCraftingMod.LOGGER.info(
-					"[auto_move] chain eject refresh timeout; discarding uncredited pending count={}",
-					chainEjectPendingCount
+					"[auto_move] chain eject settlement timeout; no depletion or result refresh observed staged_copies={}",
+					stagedNow
 				);
 			}
 			chainEjectAwaitingRefresh = false;
 			chainEjectRefreshTicks = 0;
 			chainEjectPendingCount = 0;
+			chainEjectStagedBaseline = 0;
 			chainEjectPendingStack = ItemStack.EMPTY;
 			if (!menu.getCarried().isEmpty()) {
 				tryResolveCarriedStack(client, menu);
@@ -276,6 +301,16 @@ final class AutoMoveController {
 				ItemStack currentResult = resultSlot.getItem();
 
 				if (!autoMoveExpectedStack.isEmpty() && !ItemStack.isSameItemSameComponents(currentResult, autoMoveExpectedStack)) {
+					// Grid slots can sync one packet at a time, so while a
+					// batch is still landing the result slot can transiently
+					// match a different recipe (one gold ingot in an otherwise
+					// empty grid shows the nuggets recipe mid-staging of gold
+					// blocks). Only a persistent mismatch is a recipe change.
+					resultMismatchGraceTicks++;
+					if (resultMismatchGraceTicks <= BULK_RESULT_WAIT_TIMEOUT_TICKS) {
+						return;
+					}
+					resultMismatchGraceTicks = 0;
 					com.reachcrafting.ReachCraftingMod.LOGGER.info(
 						"[auto_move] Recipe changed! Expected: {}, Found: {}. Stopping.",
 						ContainerUtils.formatStack(autoMoveExpectedStack),
@@ -289,6 +324,7 @@ final class AutoMoveController {
 					ChainCraftController.onAutoMoveFinished(client, false);
 					return;
 				}
+				resultMismatchGraceTicks = 0;
 
 				BulkAutoCraftController.BulkOutputDisposition bulkDisposition =
 					BulkAutoCraftController.determineCurrentBatchOutputDisposition(client, currentResult);
@@ -410,13 +446,22 @@ final class AutoMoveController {
 						bulkProtectedKeep
 					);
 					ItemStack thrownResult = currentResult.copy();
+					// Read before the click: the client may predict the grid
+					// consumption the moment the throw fires.
+					int stagedBeforeThrow = chainFinalResultEject
+						? BulkAutoCraftController.getCurrentStagedCraftCopies(client) : 0;
 					client.gameMode.handleInventoryMouseClick(menu.containerId, resultSlot.index, 1, ClickType.THROW, client.player);
 					if (chainFinalResultEject) {
-						// Credit deferred until the result slot is observed
-						// empty (see the chainEjectAwaitingRefresh block).
+						// Depending on the version, THROW crafts-and-drops one
+						// copy (with an immediate refill, so the slot is never
+						// observed empty) or the whole staged batch. Credit is
+						// confirmed by staged-grid depletion either way in the
+						// chainEjectAwaitingRefresh block, which also fires
+						// the next throw when copies remain.
 						chainEjectAwaitingRefresh = true;
 						chainEjectRefreshTicks = 0;
-						chainEjectPendingCount = totalEjected;
+						chainEjectStagedBaseline = stagedBeforeThrow;
+						chainEjectPendingCount = Math.max(currentResult.getCount(), 1);
 						chainEjectPendingStack = thrownResult;
 						autoMoveWaitingTicks = 0;
 						return;
