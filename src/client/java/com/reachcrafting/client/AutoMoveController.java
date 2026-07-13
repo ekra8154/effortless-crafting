@@ -357,7 +357,7 @@ final class AutoMoveController {
 					&& chainFinalResultEject
 					&& BulkChainCraftController.isActive()
 					&& canFitInInventory(menu, currentResult)) {
-					client.gameMode.handleContainerInput(menu.containerId, resultSlot.index, 0, ContainerInput.QUICK_MOVE, client.player);
+					client.gameMode.handleInventoryMouseClick(menu.containerId, resultSlot.index, 0, ClickType.QUICK_MOVE, client.player);
 					if (ChainCraftController.restageFinalStepForRapidEject(client)) {
 						autoMoveWaitingTicks = 0;
 						return;
@@ -859,7 +859,7 @@ final class AutoMoveController {
 			String itemId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(gridSlot.getItem().getItem()).toString();
 			if (!acceptedIds.contains(itemId)) {
 				com.reachcrafting.ReachCraftingMod.LOGGER.debug("[auto_move] EJECT grid byproduct {} from grid slot {}", itemId, i);
-				client.gameMode.handleContainerInput(menu.containerId, gridSlot.index, 1, ContainerInput.THROW, client.player);
+				client.gameMode.handleInventoryMouseClick(menu.containerId, gridSlot.index, 1, ClickType.THROW, client.player);
 				ejectedSlots++;
 			}
 		}

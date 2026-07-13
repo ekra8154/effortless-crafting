@@ -10,7 +10,7 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.inventory.AbstractContainerMenu;
-import net.minecraft.world.inventory.ContainerInput;
+import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.inventory.CraftingMenu;
 import net.minecraft.world.inventory.InventoryMenu;
 import net.minecraft.world.item.Item;
@@ -158,7 +158,7 @@ final class ManualRecipePlacer {
 			if (sourceIndex == -1) {
 				return false;
 			}
-			client.gameMode.handleContainerInput(menu.containerId, sourceIndex, 0, ContainerInput.PICKUP, client.player);
+			client.gameMode.handleInventoryMouseClick(menu.containerId, sourceIndex, 0, ClickType.PICKUP, client.player);
 			ItemStack carried = menu.getCarried();
 			if (carried.isEmpty()) {
 				return false;
@@ -169,16 +169,16 @@ final class ManualRecipePlacer {
 				// ONLY safe gesture for items with special container behavior:
 				// right-clicking with a bundle on the cursor is the bundle
 				// dump/insert gesture and silently no-ops on an empty slot.
-				client.gameMode.handleContainerInput(menu.containerId, gridSlotIndex, 0, ContainerInput.PICKUP, client.player);
+				client.gameMode.handleInventoryMouseClick(menu.containerId, gridSlotIndex, 0, ClickType.PICKUP, client.player);
 			} else {
 				// Oversized normal stack (e.g. a stack of dye when one is
 				// needed): right-click drops one item per click, then the
 				// remainder goes back to its source slot.
 				for (int i = 0; i < needed; i++) {
-					client.gameMode.handleContainerInput(menu.containerId, gridSlotIndex, 1, ContainerInput.PICKUP, client.player);
+					client.gameMode.handleInventoryMouseClick(menu.containerId, gridSlotIndex, 1, ClickType.PICKUP, client.player);
 				}
 				if (!menu.getCarried().isEmpty()) {
-					client.gameMode.handleContainerInput(menu.containerId, sourceIndex, 0, ContainerInput.PICKUP, client.player);
+					client.gameMode.handleInventoryMouseClick(menu.containerId, sourceIndex, 0, ClickType.PICKUP, client.player);
 				}
 			}
 			// The client applies the same vanilla click logic the server
