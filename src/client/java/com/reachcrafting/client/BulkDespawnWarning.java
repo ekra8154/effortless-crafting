@@ -25,6 +25,19 @@ final class BulkDespawnWarning {
 		warned = false;
 	}
 
+	/**
+	 * Approximate session duration for the end-of-run summary chat, e.g.
+	 * " in ~4m 10s". Empty when no session clock is armed. Must be read
+	 * before clear() in the stop paths.
+	 */
+	static String elapsedSummarySuffix() {
+		if (sessionStartMillis == 0L) {
+			return "";
+		}
+		int seconds = (int) Math.max(1, Math.round((System.currentTimeMillis() - sessionStartMillis) / 1000.0));
+		return " in ~" + formatDuration(seconds);
+	}
+
 	static void tick() {
 		if (warned || sessionStartMillis == 0L) {
 			return;
