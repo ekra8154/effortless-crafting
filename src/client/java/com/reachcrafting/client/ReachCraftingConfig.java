@@ -22,7 +22,7 @@ public final class ReachCraftingConfig {
 	private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 	private static final Path CONFIG_PATH = FabricLoader.getInstance().getConfigDir().resolve("effortless-crafting.json");
 	private static final boolean DEFAULT_ENABLED = true;
-	private static final boolean DEFAULT_ENABLE_NEARBY_CONTAINER_USAGE = true;
+	private static final NearbyContainerUsageMode DEFAULT_ENABLE_NEARBY_CONTAINER_USAGE = NearbyContainerUsageMode.CTRL_HELD;
 	private static final boolean DEFAULT_REDISTRIBUTE_TO_CRAFT_WHEN_NEEDED = true;
 	private static final InWorldFilterMode DEFAULT_IN_WORLD_FILTER_MODE = InWorldFilterMode.NONE;
 	private static final RevolvingCraftHandling DEFAULT_REVOLVING_CRAFT_HANDLING = RevolvingCraftHandling.SPECIFIC_VARIANT_ONLY;
@@ -82,7 +82,7 @@ public final class ReachCraftingConfig {
 	private static final int MAX_SEARCH_HISTORY = 20;
 
 	private boolean enabled;
-	private boolean enableNearbyContainerUsage;
+	private NearbyContainerUsageMode enableNearbyContainerUsage;
 	private boolean redistributeToCraftWhenNeeded;
 	private InWorldFilterMode inWorldFilterMode;
 	private RevolvingCraftHandling revolvingCraftHandling;
@@ -151,7 +151,7 @@ public final class ReachCraftingConfig {
 				return;
 			}
 			instance.enabled = stored.enabled != null ? stored.enabled : DEFAULT_ENABLED;
-			instance.enableNearbyContainerUsage = stored.enableNearbyContainerUsage != null ? stored.enableNearbyContainerUsage : DEFAULT_ENABLE_NEARBY_CONTAINER_USAGE;
+			instance.enableNearbyContainerUsage = parseNearbyContainerUsage(stored.enableNearbyContainerUsage);
 			instance.redistributeToCraftWhenNeeded = stored.redistributeToCraftWhenNeeded != null ? stored.redistributeToCraftWhenNeeded : DEFAULT_REDISTRIBUTE_TO_CRAFT_WHEN_NEEDED;
 			instance.inWorldFilterMode = stored.inWorldFilterMode != null ? stored.inWorldFilterMode : DEFAULT_IN_WORLD_FILTER_MODE;
 			instance.revolvingCraftHandling = stored.revolvingCraftHandling != null
@@ -257,12 +257,21 @@ public final class ReachCraftingConfig {
 	}
 
 	public boolean enableNearbyContainerUsage() {
+		return enableNearbyContainerUsage != NearbyContainerUsageMode.DISABLED;
+	}
+
+	public NearbyContainerUsageMode nearbyContainerUsageMode() {
 		return enableNearbyContainerUsage;
 	}
 
-	public void setEnableNearbyContainerUsage(boolean enableNearbyContainerUsage) {
-		this.enableNearbyContainerUsage = enableNearbyContainerUsage;
-		if (!enableNearbyContainerUsage) {
+	/** ALWAYS mode grants every craft nearby-chest access without Ctrl. */
+	public boolean nearbyAlwaysAllowed() {
+		return enableNearbyContainerUsage == NearbyContainerUsageMode.ALWAYS;
+	}
+
+	public void setNearbyContainerUsageMode(NearbyContainerUsageMode mode) {
+		this.enableNearbyContainerUsage = mode != null ? mode : DEFAULT_ENABLE_NEARBY_CONTAINER_USAGE;
+		if (this.enableNearbyContainerUsage == NearbyContainerUsageMode.DISABLED) {
 			NearbyContainerCache.clear();
 		}
 		RecipeButtonNearbyIndicator.clearCaches();
@@ -913,6 +922,27 @@ public final class ReachCraftingConfig {
 		return raw == null ? "unknown" : raw.replaceAll("[^a-zA-Z0-9_-]", "_");
 	}
 
+	private static NearbyContainerUsageMode parseNearbyContainerUsage(JsonElement rawValue) {
+		if (rawValue == null || rawValue.isJsonNull()) {
+			return DEFAULT_ENABLE_NEARBY_CONTAINER_USAGE;
+		}
+		if (rawValue.isJsonPrimitive()) {
+			JsonPrimitive primitive = rawValue.getAsJsonPrimitive();
+			if (primitive.isBoolean()) {
+				// Migrated from the old boolean toggle.
+				return primitive.getAsBoolean() ? NearbyContainerUsageMode.CTRL_HELD : NearbyContainerUsageMode.DISABLED;
+			}
+			if (primitive.isString()) {
+				try {
+					return NearbyContainerUsageMode.valueOf(primitive.getAsString());
+				} catch (IllegalArgumentException exception) {
+					ReachCraftingMod.LOGGER.warn("Unknown nearby container usage value in config: {}", primitive.getAsString());
+				}
+			}
+		}
+		return DEFAULT_ENABLE_NEARBY_CONTAINER_USAGE;
+	}
+
 	private static ScrollToPullMode parseScrollToPullMode(JsonElement rawValue) {
 		if (rawValue == null || rawValue.isJsonNull()) {
 			return DEFAULT_SCROLL_TO_PULL_MODE;
@@ -935,6 +965,12 @@ public final class ReachCraftingConfig {
 		return DEFAULT_SCROLL_TO_PULL_MODE;
 	}
 
+
+	public enum NearbyContainerUsageMode {
+		DISABLED,
+		CTRL_HELD,
+		ALWAYS
+	}
 
 	public enum InWorldFilterMode {
 		NONE,
@@ -1006,7 +1042,7 @@ public final class ReachCraftingConfig {
 
 	private static final class StoredConfig {
 		private Boolean enabled;
-		private Boolean enableNearbyContainerUsage;
+		private JsonElement enableNearbyContainerUsage;
 		private Boolean redistributeToCraftWhenNeeded;
 		private InWorldFilterMode inWorldFilterMode;
 		private RevolvingCraftHandling revolvingCraftHandling;
@@ -1060,7 +1096,7 @@ public final class ReachCraftingConfig {
 
 		private StoredConfig(ReachCraftingConfig config) {
 			this.enabled = config.enabled;
-			this.enableNearbyContainerUsage = config.enableNearbyContainerUsage;
+			this.enableNearbyContainerUsage = new JsonPrimitive(config.enableNearbyContainerUsage.name());
 			this.redistributeToCraftWhenNeeded = config.redistributeToCraftWhenNeeded;
 			this.inWorldFilterMode = config.inWorldFilterMode;
 			this.revolvingCraftHandling = config.revolvingCraftHandling;
