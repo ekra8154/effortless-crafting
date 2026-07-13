@@ -33,6 +33,10 @@ import net.minecraft.util.Mth;
 public final class NearbyContainerCache {
 	private static final int PERIODIC_PRUNE_INTERVAL_TICKS = 60;
 	private static final Map<ContainerKey, ContainerSnapshot> SNAPSHOTS = new LinkedHashMap<>();
+	// Last container each item id was withdrawn from; the LARGEST_FIRST drain
+	// order keeps pulling from it until empty instead of re-targeting the
+	// currently fullest container every pull (which depletes stocks evenly).
+	private static final Map<String, ContainerKey> LAST_DRAIN_SOURCE_BY_ITEM = new HashMap<>();
 	private static long revision;
 	private static ViewCacheKey lastViewKey;
 	private static ReachableView lastView;
@@ -58,6 +62,7 @@ public final class NearbyContainerCache {
 
 	public static void clear() {
 		SNAPSHOTS.clear();
+		LAST_DRAIN_SOURCE_BY_ITEM.clear();
 		revision++;
 		lastViewKey = null;
 		lastView = null;
@@ -227,11 +232,23 @@ public final class NearbyContainerCache {
 		}
 
 		List<BlockPos> prioritized = new ArrayList<>(candidates);
-		prioritized.sort(
-			Comparator.comparingInt((BlockPos pos) -> reachableView.relevantCountAt(pos, acceptedItemIds))
-				.reversed()
-				.thenComparingInt(pos -> originalOrder.getOrDefault(pos, Integer.MAX_VALUE))
-		);
+		// Containers actually holding the needed items always come first;
+		// among them the drain-order policy decides which stock to attack.
+		// Smallest-first is naturally sticky (a partially drained container
+		// stays the smallest until empty); largest-first needs the recorded
+		// drain source boosted or every pull re-targets whichever container
+		// is currently fullest and all stocks deplete evenly.
+		Comparator<BlockPos> comparator = Comparator.comparingInt(
+			(BlockPos pos) -> reachableView.relevantCountAt(pos, acceptedItemIds) > 0 ? 0 : 1);
+		if (ReachCraftingConfig.get().containerDrainOrder() == ReachCraftingConfig.ContainerDrainOrder.SMALLEST_FIRST) {
+			comparator = comparator.thenComparingInt(pos -> reachableView.relevantCountAt(pos, acceptedItemIds));
+		} else {
+			comparator = comparator
+				.thenComparingInt(pos -> reachableView.isRecentDrainSourceAt(pos, acceptedItemIds) ? 0 : 1)
+				.thenComparing(Comparator.comparingInt(
+					(BlockPos pos) -> reachableView.relevantCountAt(pos, acceptedItemIds)).reversed());
+		}
+		prioritized.sort(comparator.thenComparingInt(pos -> originalOrder.getOrDefault(pos, Integer.MAX_VALUE)));
 		return List.copyOf(prioritized);
 	}
 
@@ -269,6 +286,10 @@ public final class NearbyContainerCache {
 		ContainerKey key = resolveContainerKey(level, observedPos);
 		if (key == null) {
 			return;
+		}
+
+		for (String itemId : withdrawnCounts.keySet()) {
+			LAST_DRAIN_SOURCE_BY_ITEM.put(itemId, key);
 		}
 
 		ContainerSnapshot snapshot = SNAPSHOTS.get(key);
@@ -411,6 +432,20 @@ public final class NearbyContainerCache {
 	}
 
 
+	/** Level-based variant for callers without a ReachableView (SearchSession). */
+	static boolean isRecentDrainSource(Level level, BlockPos pos, Set<String> itemIds) {
+		ContainerKey key = resolveContainerKey(level, pos);
+		if (key == null) {
+			return false;
+		}
+		for (String itemId : itemIds) {
+			if (key.equals(LAST_DRAIN_SOURCE_BY_ITEM.get(itemId))) {
+				return true;
+			}
+		}
+		return false;
+	}
+
 	private static ContainerKey resolveContainerKey(Level level, BlockPos pos) {
 		if (level == null || pos == null) {
 			return null;
@@ -464,6 +499,19 @@ public final class NearbyContainerCache {
 				}
 			}
 			return Map.copyOf(filteredCounts);
+		}
+
+		public boolean isRecentDrainSourceAt(BlockPos pos, Set<String> acceptedItemIds) {
+			ContainerKey key = accessKeyByPos.get(pos);
+			if (key == null) {
+				return false;
+			}
+			for (String itemId : acceptedItemIds) {
+				if (key.equals(LAST_DRAIN_SOURCE_BY_ITEM.get(itemId))) {
+					return true;
+				}
+			}
+			return false;
 		}
 
 		public int relevantCountAt(BlockPos pos, Set<String> acceptedItemIds) {

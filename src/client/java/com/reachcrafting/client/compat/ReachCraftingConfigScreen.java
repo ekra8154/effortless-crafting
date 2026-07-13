@@ -352,6 +352,17 @@ public final class ReachCraftingConfigScreen {
 			.setSaveConsumer(config::setCacheContainersForFasterSearch)
 			.build());
 
+		nearbyGroup.add(entries.startEnumSelector(
+				Component.translatable("option.reachcrafting.container_drain_order"),
+				ReachCraftingConfig.ContainerDrainOrder.class,
+				config.containerDrainOrder()
+			)
+			.setDefaultValue(ReachCraftingConfig.ContainerDrainOrder.SMALLEST_FIRST)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.container_drain_order"))
+			.setSaveConsumer(config::setContainerDrainOrder)
+			.setEnumNameProvider(value -> Component.translatable("enum.reachcrafting.container_drain_order." + value.name().toLowerCase()))
+			.build());
+
 		containers.addEntry(nearbyGroup.build());
 
 		// Blacklists and Filtering
