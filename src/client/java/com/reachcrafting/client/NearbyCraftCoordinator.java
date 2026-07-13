@@ -99,6 +99,27 @@ final class NearbyCraftCoordinator {
 		session.start();
 	}
 
+	void startCacheWarmup(CacheWarmupRequest request) {
+		Minecraft client = Minecraft.getInstance();
+		LocalPlayer player = client.player;
+		Level level = client.level;
+		MultiPlayerGameMode gameMode = client.gameMode;
+		Entity cameraEntity = client.getCameraEntity();
+		if (player == null || level == null || gameMode == null || cameraEntity == null) {
+			return;
+		}
+
+		cancelCurrent();
+		CacheWarmupSession session = new CacheWarmupSession(this, client, player, level, gameMode, cameraEntity, request);
+		if (!session.canStart()) {
+			RecipeBookChunkedScheduler.forceVisibleRecipeBookRefresh();
+			return;
+		}
+
+		activeSession = session;
+		session.start();
+	}
+
 	boolean tryExpandReservedGrid(SearchRequest request) {
 		Minecraft client = Minecraft.getInstance();
 		LocalPlayer player = client.player;
