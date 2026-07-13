@@ -300,7 +300,7 @@ final class AutoMoveController {
 				// the expected output when autoMoveExpectedStack is set.
 				boolean chainFinalResultEject = ChainCraftController.isRunningFinalStep()
 					&& !autoMoveExpectedStack.isEmpty()
-					&& ItemStack.isSameItemSameComponents(currentResult, autoMoveExpectedStack);
+					&& ItemStack.isSameItemSameTags(currentResult, autoMoveExpectedStack);
 				boolean chainFinalDirectEject = chainFinalResultEject && BulkChainCraftController.shouldDirectEjectCurrentResult();
 				boolean shouldEject = bulkDirectEject || chainFinalDirectEject;
 				boolean delayInventoryFullFallbackEject = BulkAutoCraftController.shouldDelayInventoryFullFallbackEject();
@@ -770,7 +770,7 @@ final class AutoMoveController {
 				}
 			}
 
-			if (resultSlot.hasItem() && ItemStack.isSameItemSameComponents(resultSlot.getItem(), autoMoveTargetStack)) {
+			if (resultSlot.hasItem() && ItemStack.isSameItemSameTags(resultSlot.getItem(), autoMoveTargetStack)) {
 				if (ReachCraftingConfig.get().ejectItemsWhenFull()
 					&& AutoCraftController.isBulkModeEnabled()
 					&& !ChainCraftController.isRunningIntermediateStep()
@@ -952,7 +952,7 @@ final class AutoMoveController {
 		if (ReachCraftingConfig.get().ejectItemsWhenFull()
 			&& AutoCraftController.isBulkModeEnabled()
 			&& !ChainCraftController.isRunningIntermediateStep()
-			&& ItemStack.isSameItemSameComponents(carried, autoMoveTargetStack)) {
+			&& ItemStack.isSameItemSameTags(carried, autoMoveTargetStack)) {
 			int ejectedCount = carried.getCount();
 			client.gameMode.handleInventoryMouseClick(menu.containerId, -999, 0, ClickType.PICKUP, client.player);
 			if (client.player.containerMenu.getCarried().isEmpty()) {

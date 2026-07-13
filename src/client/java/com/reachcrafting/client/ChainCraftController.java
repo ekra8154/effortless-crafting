@@ -22,7 +22,7 @@ public final class ChainCraftController {
 	private static final int BATCH_SETTLE_QUIET_TICKS = 8;
 	private static ChainCraftRun activeRun;
 	private static PendingWarmupRetry pendingWarmupRetry;
-	private static RecipeHolder<?> activeFinalStepRecipeId;
+	private static Recipe<?> activeFinalStepRecipeId;
 
 	private ChainCraftController() {
 	}
@@ -626,7 +626,7 @@ public final class ChainCraftController {
 		// still produced, and missing it makes settlement re-craft a copy
 		// whose ingredients were already consumed.
 		ItemStack carried = client.player.containerMenu.getCarried();
-		if (!carried.isEmpty() && ItemStack.isSameItemSameComponents(carried, expectedOutput)) {
+		if (!carried.isEmpty() && ItemStack.isSameItemSameTags(carried, expectedOutput)) {
 			count += carried.getCount();
 		}
 		return count;
@@ -649,7 +649,7 @@ public final class ChainCraftController {
 		int batchEjectedItems
 	) {
 		private static ChainCraftRun start(ChainCraftPlan plan) {
-			return new ChainCraftRun(plan, 0, false, false, false, false, 0, plan.steps().getFirst().recipeCopies(), 0, 0, false, 0, 0, 0);
+			return new ChainCraftRun(plan, 0, false, false, false, false, 0, plan.steps().get(0).recipeCopies(), 0, 0, false, 0, 0, 0);
 		}
 
 		ChainCraftPlan.Step currentStep() {

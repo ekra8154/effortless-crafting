@@ -85,7 +85,7 @@ final class ChainInventoryFitEstimator {
 			return ItemStack.EMPTY;
 		}
 		try {
-			var item = BuiltInRegistries.ITEM.get(ResourceLocation.parse(itemId));
+			var item = BuiltInRegistries.ITEM.get(new net.minecraft.resources.ResourceLocation(itemId));
 			return item == null ? ItemStack.EMPTY : item.getDefaultInstance();
 		} catch (Exception ignored) {
 			return ItemStack.EMPTY;
@@ -107,7 +107,7 @@ final class ChainInventoryFitEstimator {
 			if (remaining <= 0) {
 				break;
 			}
-			if (slot.isEmpty() || !ItemStack.isSameItemSameComponents(slot, prototype)) {
+			if (slot.isEmpty() || !ItemStack.isSameItemSameTags(slot, prototype)) {
 				continue;
 			}
 			int room = maxStackSize - slot.getCount();
@@ -144,7 +144,7 @@ final class ChainInventoryFitEstimator {
 		int remaining = count;
 		for (int i = 0; i < slots.size() && remaining > 0; i++) {
 			ItemStack slot = slots.get(i);
-			if (slot.isEmpty() || !ItemStack.isSameItemSameComponents(slot, prototype)) {
+			if (slot.isEmpty() || !ItemStack.isSameItemSameTags(slot, prototype)) {
 				continue;
 			}
 			int taken = Math.min(slot.getCount(), remaining);

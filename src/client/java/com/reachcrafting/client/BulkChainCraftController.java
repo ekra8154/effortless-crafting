@@ -72,7 +72,7 @@ public final class BulkChainCraftController {
 		// Only the final output counts toward session progress; ejected
 		// intermediates are replanned from live counts on the next iteration.
 		if (ejectedStack == null
-			|| !ItemStack.isSameItemSameComponents(ejectedStack, activeSession.selection().displayStack())) {
+			|| !ItemStack.isSameItemSameTags(ejectedStack, activeSession.selection().displayStack())) {
 			return;
 		}
 		activeSession = activeSession.withEjected(activeSession.iterationEjectedOutputCount() + count);
@@ -328,7 +328,7 @@ public final class BulkChainCraftController {
 			NearbyContainerCache.ReachableView reachableView = NearbyContainerCache.getReachableView(
 				client.level,
 				client.getCameraEntity(),
-				client.player.blockInteractionRange()
+				client.gameMode != null ? client.gameMode.getPickRange() : 4.5D
 			);
 			counts = AvailableItemSnapshot.mergeCounts(counts, reachableView.aggregateCounts());
 		}
