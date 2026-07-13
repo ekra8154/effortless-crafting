@@ -248,5 +248,4 @@ public final class ChainCraftPopupController {
 
 	private record BulkChainRequest(RecipeVariantResolver.Selection selection, boolean allowNearby, int targetCopies) {
 	}
->>>>>>> 9f7bf3e (Add bulk chain crafting)
 }

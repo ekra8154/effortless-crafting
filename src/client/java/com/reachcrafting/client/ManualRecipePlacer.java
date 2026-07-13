@@ -236,7 +236,7 @@ final class ManualRecipePlacer {
 
 	private static int maxStackSizeFor(String itemId) {
 		try {
-			Item item = BuiltInRegistries.ITEM.getValue(ResourceLocation.parse(itemId));
+			Item item = BuiltInRegistries.ITEM.get(ResourceLocation.parse(itemId));
 			return item == null ? 1 : Math.max(item.getDefaultInstance().getMaxStackSize(), 1);
 		} catch (Exception ignored) {
 			return 1;
