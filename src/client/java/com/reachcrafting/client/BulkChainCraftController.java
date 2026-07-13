@@ -122,6 +122,7 @@ public final class BulkChainCraftController {
 			int craftedItems = activeSession.completedCopies() * outputPerCraft;
 			ReachCraftingModClient.sendBulkSummaryChat(
 				"Bulk chain craft " + status + ": Crafted " + ContainerUtils.formatStackBreakdown(craftedItems) + " " + itemName
+					+ BulkDespawnWarning.elapsedSummarySuffix()
 			);
 		}
 		Minecraft client = Minecraft.getInstance();
