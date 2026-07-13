@@ -720,12 +720,18 @@ final class SearchSession extends BaseCraftSession {
 
 		boolean missingEssential = targetCopiesPerSlot <= 0 || plannedResult.hasMissingIngredients();
 		boolean underServed = !craftAll && targetCopiesPerSlot < desiredTargetCopies;
-		boolean cacheExhaustedForRecipe = useCachedSearch && discoveredNearby.isEmpty();
+		// An empty discovery result only means the cache is exhausted when we
+		// actually asked it for something. A bulk batch that is fully covered
+		// locally (nothing to fetch) discovers nothing by design; treating
+		// that as exhaustion defeats alreadyScannedInBulk and re-runs full
+		// discovery every batch (stack-16 items batch at 16 copies, so
+		// underServed stays true for the whole session).
+		boolean cacheExhaustedForRecipe = useCachedSearch && discoveredNearby.isEmpty() && !remainingItemIds.isEmpty();
 		boolean alreadyScannedInBulk = BulkAutoCraftController.isActive()
 			&& BulkAutoCraftController.hasPerformedDiscovery()
 			&& !cacheExhaustedForRecipe;
-		boolean startFallbackDiscovery = (missingEssential || underServed || hasUnscanned) 
-			&& useCachedSearch 
+		boolean startFallbackDiscovery = (missingEssential || underServed || hasUnscanned)
+			&& useCachedSearch
 			&& !discoveryFallbackStarted
 			&& !alreadyScannedInBulk;
 		boolean resumeOriginalContext = !startFallbackDiscovery && (remainingItemIds.isEmpty() || missingEssential);
@@ -959,6 +965,37 @@ final class SearchSession extends BaseCraftSession {
 				requestedStageCopies,
 				stageableFutureCopies,
 				AvailableItemSnapshot.formatCounts(perCraftCounts),
+				AvailableItemSnapshot.formatCounts(desiredCounts),
+				AvailableItemSnapshot.formatCounts(alreadyCovered)
+			);
+			return;
+		}
+
+		// Refill hysteresis: the staging buffer must not top the inventory
+		// off every batch. Each craft frees a slot, so sizing the buffer to
+		// "all empty slots full" re-triggers a small fetch (plus a chest
+		// visit that swaps the screen) every batch or two. Drain the loose
+		// surplus until only two batches of headroom remain, then let one
+		// lump refill top the inventory back up. The threshold is a fixed
+		// batch multiple, NOT a fraction of empty-slot capacity — that
+		// capacity grows as the inventory drains, which made the refill
+		// trigger while the inventory was still two-thirds full.
+		int surplusFutureCopies = Integer.MAX_VALUE;
+		for (Map.Entry<String, Integer> entry : perCraftCounts.entrySet()) {
+			int covered = alreadyCovered.getOrDefault(entry.getKey(), 0);
+			int desired = desiredCounts.getOrDefault(entry.getKey(), 0);
+			surplusFutureCopies = Math.min(
+				surplusFutureCopies,
+				Math.max(0, covered - desired) / Math.max(entry.getValue(), 1)
+			);
+		}
+		if (surplusFutureCopies >= Math.max(2 * Math.max(targetCopiesPerSlot, 1), 8)) {
+			ReachCraftingMod.LOGGER.info(
+				"[bulk_stage] idx={} skipped reason=surplus_covers_buffer surplus_future={} stageable_future={} remaining={} desired_now={} covered_now={}",
+				recipeIndex,
+				surplusFutureCopies,
+				stageableFutureCopies,
+				remainingCopies,
 				AvailableItemSnapshot.formatCounts(desiredCounts),
 				AvailableItemSnapshot.formatCounts(alreadyCovered)
 			);
@@ -1284,17 +1321,20 @@ final class SearchSession extends BaseCraftSession {
 			: requestedSingleClicks;
 		boolean underServed = !craftAll && targetCopiesPerSlot < desiredTargetCopies;
 		boolean hasUnscanned = reachableView.snapshotsByKey().size() < reachableView.nearestAccessByKey().size();
-		boolean cacheExhaustedForRecipe = useCachedSearch && discoveredNearby.isEmpty();
+		// See buildSearchPlanDecision: an empty discovery result only counts
+		// as exhaustion when the plan actually had something left to fetch.
+		boolean cacheExhaustedForRecipe = useCachedSearch && discoveredNearby.isEmpty() && !remainingItemIds.isEmpty();
 		boolean alreadyScannedInBulk = BulkAutoCraftController.isActive()
 			&& BulkAutoCraftController.hasPerformedDiscovery()
 			&& !cacheExhaustedForRecipe;
 
-		return useCachedSearch
+		boolean start = useCachedSearch
 			&& allowNearby
 			&& (phase == SearchPhase.WITHDRAW || phase == SearchPhase.DISCOVERY)
 			&& (!remainingItemIds.isEmpty() || targetCopiesPerSlot <= 0 || underServed || hasUnscanned)
 			&& !discoveryFallbackStarted
 			&& !alreadyScannedInBulk;
+		return start;
 	}
 
 	private void beginFallbackDiscovery() {
