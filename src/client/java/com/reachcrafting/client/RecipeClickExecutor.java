@@ -178,8 +178,21 @@ final class RecipeClickExecutor {
 		// inputs manually. The single-step plan starts silently, so the UX
 		// matches flat bulk.
 		boolean selfReferentialRecipe = ingredientSummary.acceptedItemIds().contains(resolvedItemId);
+		// Yellow-icon contract: yellow means "this click crafts directly", so a
+		// max bulk request on a recipe that is directly craftable right now
+		// (counting nearby stock) drains that direct supply with flat bulk
+		// first — no chain offer. Only once direct crafting is exhausted does
+		// the indicator turn orange and a chain offer become legitimate.
+		// Exact-count requests still chain (the user asked for a number that
+		// direct crafting alone may not reach), and self-referential recipes
+		// always route through the chain path in bulk regardless.
+		boolean directBulkTakesPriority = (refillableBulkMaxMode
+				|| (effectiveCraftAll && AutoCraftController.isBulkModeEnabled()))
+			&& !selfReferentialRecipe
+			&& !immediateCraftDeficit.hasMissingIngredients();
 		boolean canOfferChainCraft = (deficitReport.hasMissingIngredients()
 				|| (selfReferentialRecipe && AutoCraftController.isBulkModeEnabled()))
+			&& !directBulkTakesPriority
 			&& (autoCraftRequested || AutoCraftController.isBulkModeEnabled())
 			&& chainMode != ReachCraftingConfig.ChainCraftingMode.DISABLED
 			&& !ChainCraftController.isActive()
@@ -200,9 +213,10 @@ final class RecipeClickExecutor {
 		if (deficitReport.hasMissingIngredients()) {
 			ReachCraftingMod.LOGGER.debug("[chain_gate_hold_state] {}", AutoCraftController.describeHoldState());
 			ReachCraftingMod.LOGGER.info(
-				"[chain_gate] recipe={} missing={} auto_requested={} mode={} use_dry_run={} force_dry_run={} allow_nearby={} bulk_mode={} craft_all={} effective_craft_all={} requested_clicks={} desired_copies={} available={} chain_available={} local_available={}",
+				"[chain_gate] recipe={} missing={} direct_priority={} auto_requested={} mode={} use_dry_run={} force_dry_run={} allow_nearby={} bulk_mode={} craft_all={} effective_craft_all={} requested_clicks={} desired_copies={} available={} chain_available={} local_available={}",
 				selectedRecipe.recipeId(),
 				deficitReport.compactMissingSummary(),
+				directBulkTakesPriority,
 				autoCraftRequested,
 				chainMode,
 				useDryRun,
