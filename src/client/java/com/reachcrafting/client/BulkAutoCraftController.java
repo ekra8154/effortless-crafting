@@ -39,8 +39,12 @@ public final class BulkAutoCraftController {
 			return;
 		}
 		// Chain step replays run with bulk mode latched during a bulk chain
-		// session; they must never arm a competing flat bulk session.
-		if (ChainCraftController.isActive() || BulkChainCraftController.isActive()) {
+		// session; they must never arm a competing flat bulk session. An armed
+		// warmup retry alone must NOT block here: on a cold cache the retry is
+		// armed before the flat path stages its first craft, and refusing the
+		// session would orphan the request after one batch (the retry then
+		// cancels itself because that batch already produced output).
+		if (ChainCraftController.hasActiveRun() || BulkChainCraftController.isActive()) {
 			return;
 		}
 
@@ -537,6 +541,10 @@ public final class BulkAutoCraftController {
 		if (activeSession != null) {
 			if (activeSession.completedRecipeCopies() > 0) {
 				ReachCraftingConfig.get().noteRecentRecipe(activeSession.action().recipeId());
+				ChainCraftController.cancelPendingWarmupRetryAfterProgress(
+					activeSession.expectedOutput(),
+					activeSession.completedRecipeCopies()
+				);
 			}
 			String status = aborted ? "terminated" : "complete";
 			java.util.Map<String, Integer> summaryForChat = activeSession.summary();
