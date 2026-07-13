@@ -1,5 +1,9 @@
 {
+<<<<<<< HEAD
   "key.categories.reachcrafting": "Effortless Crafting",
+=======
+  "key.category.reachcrafting.debug": "Effortless Crafting",
+>>>>>>> 887b341 (Make nearby container usage a three-way mode with Always On)
   "title.reachcrafting.config": "Effortless Crafting Settings",
   "category.reachcrafting.crafting": "Crafting",
   "option.reachcrafting.enabled": "Mod Enabled",
@@ -11,7 +15,11 @@
   "category.reachcrafting.sub.nearby_containers": "Nearby Containers",
   "category.reachcrafting.sub.blacklists_filtering": "Blacklists and Filtering",
   "option.reachcrafting.enable_nearby_container_usage": "Nearby Container Usage",
+<<<<<<< HEAD
   "tooltip.reachcrafting.enable_nearby_container_usage": "Controls all ability to pull from and put back items to nearby containers. If disabled, the mod will only use items from the player inventory during crafting.",
+=======
+  "tooltip.reachcrafting.enable_nearby_container_usage": "Controls when crafting may pull from and return items to nearby containers. While Ctrl Held: only requests made with Ctrl held use nearby chests (default). Always On: every craft can access nearby chests even if Ctrl is not held. Disabled: only the player inventory is used.",
+>>>>>>> 887b341 (Make nearby container usage a three-way mode with Always On)
   "option.reachcrafting.count_preference": "Count Preference",
   "tooltip.reachcrafting.count_preference": "Controls whether craft queuing prioritizes higher-count or lower-count variants when multiple valid choices exist.",
   "enum.reachcrafting.count_preference.highest_total": "Prefer Highest Counts",
@@ -149,8 +157,15 @@
   "popup.reachcrafting.chain_crafting.bulk_max_message": "Craft up to %s %s with bulk chain crafting?",
   "popup.reachcrafting.chain_crafting.bulk_partial_message": "Not enough resources for %s %s. Bulk chain craft %s instead?",
   "message.reachcrafting.chain_crafting.bulk_partial_always": "Not enough resources for %s %s. Bulk chain crafting %s instead.",
+<<<<<<< HEAD
   "key.category.reachcrafting.debug": "Effortless Crafting",
   "enum.reachcrafting.auto_focus_search.none": "Disabled",
   "option.reachcrafting.remember_previous_search": "Search Query Persistence",
   "tooltip.reachcrafting.remember_previous_search": "Restore the last used search query when opening the recipe book."
+=======
+  "enum.reachcrafting.enable_nearby_container_usage.disabled": "Disabled",
+  "enum.reachcrafting.enable_nearby_container_usage.ctrl_held": "While Ctrl Held",
+  "enum.reachcrafting.enable_nearby_container_usage.always": "Always On",
+  "key.categories.reachcrafting": "Effortless Crafting"
+>>>>>>> 887b341 (Make nearby container usage a three-way mode with Always On)
 }
