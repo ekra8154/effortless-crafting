@@ -19,7 +19,13 @@ import net.minecraft.world.item.ItemStack;
  * requested total is reached, materials run out, or progress stalls.
  */
 public final class BulkChainCraftController {
-	private static final int MAX_BATCH_FINAL_COPIES = 64;
+	// Ceiling for per-iteration copies; the inventory-fit bisect in
+	// startNextIteration finds the real batch size below it. Keeping this
+	// near the fit limit matters for throughput: each iteration pays a full
+	// replan + withdrawal round, so a low ceiling (previously 64) made big
+	// runs withdraw a trickle of materials per round no matter how much
+	// inventory space was free.
+	private static final int MAX_BATCH_FINAL_COPIES = 512;
 	private static final int MAX_CONSECUTIVE_STALLED_ITERATIONS = 2;
 	private static BulkChainSession activeSession;
 	private static int settleDelayTicks;

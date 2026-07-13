@@ -305,26 +305,45 @@ final class AutoMoveController {
 				}
 
 				if (shouldEject) {
-					if (bulkDirectEject && totalEjected <= 0) {
+					// A visible result with an empty local grid is an unsynced
+					// snapshot: the server has staged the batch but its slot
+					// updates have not arrived. Throwing now would credit one
+					// craft while the server crafts-and-drops the whole staged
+					// batch, so the settlement waits for a result refresh that
+					// can never come and fails the step (observed: 64-copy
+					// trapdoor batches credited as 1). Wait for consistency.
+					int chainStagedCopies = chainFinalResultEject
+						? BulkAutoCraftController.getCurrentStagedCraftCopies(client)
+						: 1;
+					if ((bulkDirectEject && totalEjected <= 0) || (chainFinalResultEject && chainStagedCopies <= 0)) {
 						directEjectAwaitingStagedCopiesTicks++;
 						com.reachcrafting.ReachCraftingMod.LOGGER.info(
-							"[auto_move] direct eject waiting for staged copies: waitTicks={} result={} expected={} carried={}",
+							"[auto_move] direct eject waiting for staged copies: waitTicks={} chain_final={} result={} expected={} carried={}",
 							directEjectAwaitingStagedCopiesTicks,
+							chainFinalResultEject,
 							ContainerUtils.formatStack(currentResult),
 							ContainerUtils.formatStack(autoMoveExpectedStack),
 							ContainerUtils.formatStack(menu.getCarried())
 						);
-						if (directEjectAwaitingStagedCopiesTicks <= 2) {
+						if (directEjectAwaitingStagedCopiesTicks <= 5) {
 							return;
 						}
 						com.reachcrafting.ReachCraftingMod.LOGGER.info(
-							"[auto_move] direct eject staged-copy mismatch persisted; falling back to keep path for result {}",
+							"[auto_move] direct eject staged-copy mismatch persisted; result {}",
 							ContainerUtils.formatStack(currentResult)
 						);
-						shouldEject = false;
+						if (bulkDirectEject) {
+							// Bulk falls back to the keep path; the chain final
+							// eject proceeds with the single-craft credit
+							// (pre-fix behavior) rather than stalling the run.
+							shouldEject = false;
+						}
 						directEjectAwaitingStagedCopiesTicks = 0;
 					} else {
 						directEjectAwaitingStagedCopiesTicks = 0;
+					}
+					if (chainFinalResultEject) {
+						totalEjected = Math.max(chainStagedCopies, 1) * Math.max(currentResult.getCount(), 1);
 					}
 				}
 
