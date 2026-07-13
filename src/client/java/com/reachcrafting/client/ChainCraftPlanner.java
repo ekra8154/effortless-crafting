@@ -3,6 +3,7 @@ package com.reachcrafting.client;
 import com.reachcrafting.ReachCraftingMod;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -25,6 +26,23 @@ import net.minecraft.world.item.crafting.RecipeHolder;
 
 final class ChainCraftPlanner {
 	private static final int UNCRAFTABLE_COST = 1_000_000;
+	// Hard cap on nodes explored per heuristic scoring pass. The recursive
+	// score/cost estimators walk the recipe graph with only a path cycle
+	// guard; on densely connected families (any-wool-color dyeing, the dye
+	// recipes themselves) the walk is exponential without memoization and a
+	// budget — a purple harness request in a well-stocked storage system
+	// froze the render thread indefinitely. Scores only order choices, so
+	// truncated values are harmless.
+	private static final int SCORING_NODE_BUDGET = 4096;
+	// Hard cap on ensure attempts per plan() probe. The planning search
+	// backtracks over flexible ingredient slots; on self-referential variant
+	// families (a dyed bundle's slot accepts all 17 bundles, each of whose
+	// recipes accepts all 17 bundles again) the FAILURE space is factorial —
+	// a cyan bundle request wrote 924 MB of backtracking logs while the
+	// render thread was frozen. The failure memo below makes each item fail
+	// once instead of once per path; the budget is the backstop that turns
+	// any remaining pathology into an honest plan failure.
+	private static final int PLAN_ATTEMPT_BUDGET = 10_000;
 	private final Minecraft minecraft;
 	private final LocalPlayer player;
 	private final boolean allowNearby;
@@ -32,6 +50,20 @@ final class ChainCraftPlanner {
 	private final RegistryAccess registryAccess;
 	private final boolean allowSingleStepPlan;
 	private final Map<String, List<Candidate>> recipesByOutput;
+	// Per-plan() search state (the planner instance is reused across the
+	// planMax binary search; these reset at the start of each probe).
+	private int planAttemptsRemaining;
+	private boolean planBudgetExhaustedLogged;
+	private final Map<String, FailedEnsure> failedEnsureMemo = new HashMap<>();
+
+	// An ensure that failed for requiredCount copies while availableAtFailure
+	// were on hand also fails for any sibling path asking for at least as
+	// many with no more on hand. (A later path could in principle succeed if
+	// an intermediate step produced one of the item's INGREDIENTS in the
+	// meantime — accepted imprecision: the plan then fails honestly instead
+	// of the search re-proving the same dead ends factorially many times.)
+	private record FailedEnsure(int requiredCount, int availableAtFailure) {
+	}
 
 	private ChainCraftPlanner(Minecraft minecraft, LocalPlayer player, boolean allowNearby, int gridSlotCount, boolean allowSingleStepPlan) {
 		long startNanos = PerformanceProfiler.start();
@@ -168,6 +200,9 @@ final class ChainCraftPlanner {
 		int requestedRecipeCopies
 	) {
 		long startNanos = PerformanceProfiler.start();
+		planAttemptsRemaining = PLAN_ATTEMPT_BUDGET;
+		planBudgetExhaustedLogged = false;
+		failedEnsureMemo.clear();
 		PlanningState state = new PlanningState(new LinkedHashMap<>(availableCounts), new LinkedHashMap<>());
 		Candidate finalCandidate = new Candidate(
 			finalSelection.recipeId(),
@@ -246,13 +281,15 @@ final class ChainCraftPlanner {
 
 		for (Map.Entry<String, Integer> entry : required.entrySet()) {
 			if (!ensureItem(entry.getKey(), entry.getValue(), state, resolvingItemIds)) {
+				// Failure-path logs deliberately omit the counts map: formatting
+				// a storage system's full inventory per backtracking step wrote
+				// hundreds of MB during a single pathological search.
 				ReachCraftingMod.LOGGER.info(
-					"[chain_debug] recipe_fail reason=ensure_exact_failed recipe={} output={} ingredient={} required={} counts={}",
+					"[chain_debug] recipe_fail reason=ensure_exact_failed recipe={} output={} ingredient={} required={}",
 					candidate.recipeId(),
 					ContainerUtils.formatStack(candidate.displayStack()),
 					entry.getKey(),
-					entry.getValue(),
-					AvailableItemSnapshot.formatCounts(state.counts)
+					entry.getValue()
 				);
 				return false;
 			}
@@ -260,10 +297,9 @@ final class ChainCraftPlanner {
 
 		if (!planIngredientSlots(candidate, recipeCopies, flexibleSlots, 0, state, resolvingItemIds, required)) {
 			ReachCraftingMod.LOGGER.info(
-				"[chain_debug] recipe_fail reason=ingredient_slots_failed recipe={} output={} counts={} resolving={}",
+				"[chain_debug] recipe_fail reason=ingredient_slots_failed recipe={} output={} resolving={}",
 				candidate.recipeId(),
 				ContainerUtils.formatStack(candidate.displayStack()),
-				AvailableItemSnapshot.formatCounts(state.counts),
 				resolvingItemIds
 			);
 			return false;
@@ -312,13 +348,12 @@ final class ChainCraftPlanner {
 			trialRequired.put(itemId, totalRequired);
 			if (!ensureItem(itemId, totalRequired, trialState, resolvingItemIds)) {
 				ReachCraftingMod.LOGGER.info(
-					"[chain_debug] ingredient_choice_failed recipe={} output={} slot={} item={} required={} counts={}",
+					"[chain_debug] ingredient_choice_failed recipe={} output={} slot={} item={} required={}",
 					candidate.recipeId(),
 					ContainerUtils.formatStack(candidate.displayStack()),
 					slotIndex,
 					itemId,
-					totalRequired,
-					AvailableItemSnapshot.formatCounts(trialState.counts)
+					totalRequired
 				);
 				continue;
 			}
@@ -331,12 +366,11 @@ final class ChainCraftPlanner {
 		}
 
 		ReachCraftingMod.LOGGER.info(
-			"[chain_debug] recipe_fail reason=no_ingredient_choice recipe={} output={} slot={} slot_items={} counts={} resolving={}",
+			"[chain_debug] recipe_fail reason=no_ingredient_choice recipe={} output={} slot={} slot_items={} resolving={}",
 			candidate.recipeId(),
 			ContainerUtils.formatStack(candidate.displayStack()),
 			slotIndex,
 			slot.itemIds(),
-			AvailableItemSnapshot.formatCounts(state.counts),
 			resolvingItemIds
 		);
 		return false;
@@ -361,8 +395,20 @@ final class ChainCraftPlanner {
 		if (available >= requiredCount) {
 			return true;
 		}
+		FailedEnsure knownFailure = failedEnsureMemo.get(itemId);
+		if (knownFailure != null && requiredCount >= knownFailure.requiredCount() && available <= knownFailure.availableAtFailure()) {
+			return false;
+		}
 		if (!resolvingItemIds.add(itemId)) {
 			ReachCraftingMod.LOGGER.info("[chain_debug] ensure_fail reason=cycle item={} resolving={}", itemId, resolvingItemIds);
+			return false;
+		}
+		if (--planAttemptsRemaining < 0) {
+			if (!planBudgetExhaustedLogged) {
+				planBudgetExhaustedLogged = true;
+				ReachCraftingMod.LOGGER.warn("[chain_debug] plan_budget_exhausted item={} budget={}", itemId, PLAN_ATTEMPT_BUDGET);
+			}
+			resolvingItemIds.remove(itemId);
 			return false;
 		}
 		try {
@@ -401,6 +447,10 @@ final class ChainCraftPlanner {
 				);
 			}
 			ReachCraftingMod.LOGGER.info("[chain_debug] ensure_fail reason=no_candidate_succeeded item={} candidates={}", itemId, formatCandidates(candidates));
+			FailedEnsure existing = failedEnsureMemo.get(itemId);
+			if (existing == null || requiredCount < existing.requiredCount()) {
+				failedEnsureMemo.put(itemId, new FailedEnsure(requiredCount, available));
+			}
 			return false;
 		} finally {
 			resolvingItemIds.remove(itemId);
@@ -421,10 +471,21 @@ final class ChainCraftPlanner {
 		Map<String, Integer> virtualCounts,
 		Set<String> resolvingItemIds
 	) {
-		List<String> ordered = slot.itemIds().stream()
+		List<String> eligible = slot.itemIds().stream()
 			.filter(itemId -> !resolvingItemIds.contains(itemId))
 			.filter(itemId -> virtualCounts.getOrDefault(itemId, 0) > 0 || recipesByOutput.containsKey(itemId))
-			.sorted(compareIngredientChoices(virtualCounts))
+			.toList();
+		// Score each choice once up front (shared memo + budget) instead of
+		// inside the sort comparator, which would recompute the recursive
+		// score per comparison.
+		Map<String, Integer> scores = new HashMap<>();
+		Map<String, Integer> scoreMemo = new HashMap<>();
+		int[] scoringBudget = {SCORING_NODE_BUDGET};
+		for (String itemId : eligible) {
+			scores.put(itemId, bestCandidateScore(itemId, virtualCounts, new HashSet<>(), scoreMemo, scoringBudget));
+		}
+		List<String> ordered = eligible.stream()
+			.sorted(compareIngredientChoices(virtualCounts, scores))
 			.toList();
 		Optional<String> resolverChoice = resolveIngredientChoiceWithExistingPlanner(ordered, virtualCounts);
 		if (resolverChoice.isEmpty()) {
@@ -482,9 +543,9 @@ final class ChainCraftPlanner {
 		return Optional.empty();
 	}
 
-	private Comparator<String> compareIngredientChoices(Map<String, Integer> virtualCounts) {
+	private Comparator<String> compareIngredientChoices(Map<String, Integer> virtualCounts, Map<String, Integer> scores) {
 		Comparator<String> byAvailableNow = Comparator.comparingInt((String itemId) -> virtualCounts.getOrDefault(itemId, 0) > 0 ? 0 : 1);
-		Comparator<String> byRecipeInputAvailability = Comparator.comparingInt((String itemId) -> bestCandidateScore(itemId, virtualCounts, new HashSet<>())).reversed();
+		Comparator<String> byRecipeInputAvailability = Comparator.comparingInt((String itemId) -> scores.getOrDefault(itemId, 0)).reversed();
 		Comparator<String> byCount = Comparator.comparingInt(itemId -> virtualCounts.getOrDefault(itemId, 0));
 		if (ReachCraftingConfig.get().countPreference() == IngredientPlanning.CountPreference.HIGHEST_TOTAL) {
 			byCount = byCount.reversed();
@@ -492,32 +553,58 @@ final class ChainCraftPlanner {
 		return byAvailableNow.thenComparing(byRecipeInputAvailability).thenComparing(byCount).thenComparing(Comparator.naturalOrder());
 	}
 
-	private int bestCandidateScore(String itemId, Map<String, Integer> virtualCounts, Set<String> scoringItemIds) {
+	private int bestCandidateScore(
+		String itemId,
+		Map<String, Integer> virtualCounts,
+		Set<String> scoringItemIds,
+		Map<String, Integer> memo,
+		int[] budget
+	) {
 		int available = virtualCounts.getOrDefault(itemId, 0);
 		if (available > 0) {
 			return 1_000_000 + available;
 		}
+		// Memoized values may have been computed on a path where an ancestor
+		// truncated a cycle branch to 0; the score is only an ordering
+		// heuristic, so that imprecision is an acceptable price for turning
+		// an exponential graph walk into a linear one.
+		Integer cached = memo.get(itemId);
+		if (cached != null) {
+			return cached;
+		}
 		if (!scoringItemIds.add(itemId)) {
 			return 0;
 		}
+		if (--budget[0] < 0) {
+			scoringItemIds.remove(itemId);
+			return 0;
+		}
 		try {
-			return recipesByOutput.getOrDefault(itemId, List.of()).stream()
-				.mapToInt(candidate -> candidateScore(candidate, virtualCounts, scoringItemIds))
+			int score = recipesByOutput.getOrDefault(itemId, List.of()).stream()
+				.mapToInt(candidate -> candidateScore(candidate, virtualCounts, scoringItemIds, memo, budget))
 				.max()
 				.orElse(0);
+			memo.put(itemId, score);
+			return score;
 		} finally {
 			scoringItemIds.remove(itemId);
 		}
 	}
 
-	private int candidateScore(Candidate candidate, Map<String, Integer> virtualCounts, Set<String> scoringItemIds) {
+	private int candidateScore(
+		Candidate candidate,
+		Map<String, Integer> virtualCounts,
+		Set<String> scoringItemIds,
+		Map<String, Integer> memo,
+		int[] budget
+	) {
 		int score = 0;
 		for (RecipeIngredientSummary.IngredientSlot slot : candidate.ingredientSummary().slots()) {
 			if (slot.isEmpty()) {
 				continue;
 			}
 			int bestSlotScore = slot.itemIds().stream()
-				.mapToInt(itemId -> bestCandidateScore(itemId, virtualCounts, scoringItemIds))
+				.mapToInt(itemId -> bestCandidateScore(itemId, virtualCounts, scoringItemIds, memo, budget))
 				.max()
 				.orElse(0);
 			if (bestSlotScore <= 0) {
@@ -538,21 +625,35 @@ final class ChainCraftPlanner {
 	}
 
 	private List<Candidate> orderedCandidates(List<Candidate> candidates, Map<String, Integer> virtualCounts) {
+		// Estimate each candidate once up front (shared memo + budget); see
+		// SCORING_NODE_BUDGET for why the recursion must be bounded.
+		Map<Candidate, Integer> costs = new HashMap<>();
+		Map<String, Integer> costMemo = new HashMap<>();
+		int[] costingBudget = {SCORING_NODE_BUDGET};
+		for (Candidate candidate : candidates) {
+			costs.put(candidate, estimateCandidateCost(candidate, virtualCounts, new HashSet<>(), costMemo, costingBudget));
+		}
 		return candidates.stream()
 			.sorted(Comparator
-				.comparingInt((Candidate candidate) -> estimateCandidateCost(candidate, virtualCounts, new HashSet<>()))
+				.comparingInt((Candidate candidate) -> costs.getOrDefault(candidate, UNCRAFTABLE_COST))
 				.thenComparing(candidate -> itemId(candidate.displayStack())))
 			.toList();
 	}
 
-	private int estimateCandidateCost(Candidate candidate, Map<String, Integer> virtualCounts, Set<String> costingItemIds) {
+	private int estimateCandidateCost(
+		Candidate candidate,
+		Map<String, Integer> virtualCounts,
+		Set<String> costingItemIds,
+		Map<String, Integer> memo,
+		int[] budget
+	) {
 		int cost = 1;
 		for (RecipeIngredientSummary.IngredientSlot slot : candidate.ingredientSummary().slots()) {
 			if (slot.isEmpty()) {
 				continue;
 			}
 			int bestSlotCost = slot.itemIds().stream()
-				.mapToInt(itemId -> estimateItemCost(itemId, virtualCounts, costingItemIds))
+				.mapToInt(itemId -> estimateItemCost(itemId, virtualCounts, costingItemIds, memo, budget))
 				.min()
 				.orElse(UNCRAFTABLE_COST);
 			if (bestSlotCost >= UNCRAFTABLE_COST) {
@@ -563,18 +664,34 @@ final class ChainCraftPlanner {
 		return cost;
 	}
 
-	private int estimateItemCost(String itemId, Map<String, Integer> virtualCounts, Set<String> costingItemIds) {
+	private int estimateItemCost(
+		String itemId,
+		Map<String, Integer> virtualCounts,
+		Set<String> costingItemIds,
+		Map<String, Integer> memo,
+		int[] budget
+	) {
 		if (virtualCounts.getOrDefault(itemId, 0) > 0) {
 			return 0;
+		}
+		Integer cached = memo.get(itemId);
+		if (cached != null) {
+			return cached;
 		}
 		if (!costingItemIds.add(itemId)) {
 			return UNCRAFTABLE_COST;
 		}
+		if (--budget[0] < 0) {
+			costingItemIds.remove(itemId);
+			return UNCRAFTABLE_COST;
+		}
 		try {
-			return recipesByOutput.getOrDefault(itemId, List.of()).stream()
-				.mapToInt(candidate -> estimateCandidateCost(candidate, virtualCounts, costingItemIds))
+			int cost = recipesByOutput.getOrDefault(itemId, List.of()).stream()
+				.mapToInt(candidate -> estimateCandidateCost(candidate, virtualCounts, costingItemIds, memo, budget))
 				.min()
 				.orElse(UNCRAFTABLE_COST);
+			memo.put(itemId, cost);
+			return cost;
 		} finally {
 			costingItemIds.remove(itemId);
 		}
