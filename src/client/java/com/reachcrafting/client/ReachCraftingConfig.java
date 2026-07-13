@@ -30,6 +30,7 @@ public final class ReachCraftingConfig {
 	private static final boolean DEFAULT_SHOW_NEARBY_CRAFTABLE_INDICATOR = true;
 	private static final boolean DEFAULT_ENABLE_EXISTING_OUTPUT_RETRIEVAL = true;
 	private static final boolean DEFAULT_CACHE_CONTAINERS_FOR_FASTER_SEARCH = true;
+	private static final ContainerDrainOrder DEFAULT_CONTAINER_DRAIN_ORDER = ContainerDrainOrder.SMALLEST_FIRST;
 	private static final boolean DEFAULT_REACH_CRAFT_HOLD_AND_RELEASE = true;
 	private static final boolean DEFAULT_REACH_CRAFT_CLOSE_OVERLAY_AFTER_RELEASE = true;
 	private static final boolean DEFAULT_REACH_CRAFT_PREFER_INVENTORY = true;
@@ -89,6 +90,7 @@ public final class ReachCraftingConfig {
 	private boolean showNearbyCraftableIndicator;
 	private boolean enableExistingOutputRetrieval;
 	private boolean cacheContainersForFasterSearch;
+	private ContainerDrainOrder containerDrainOrder;
 	private boolean reachCraftHoldAndRelease;
 	private boolean reachCraftCloseOverlayAfterRelease;
 	private boolean reachCraftPreferInventory;
@@ -163,6 +165,7 @@ public final class ReachCraftingConfig {
 			instance.cacheContainersForFasterSearch = stored.cacheContainersForFasterSearch != null
 				? stored.cacheContainersForFasterSearch
 				: DEFAULT_CACHE_CONTAINERS_FOR_FASTER_SEARCH;
+			instance.containerDrainOrder = stored.containerDrainOrder != null ? stored.containerDrainOrder : DEFAULT_CONTAINER_DRAIN_ORDER;
 			instance.reachCraftHoldAndRelease = stored.reachCraftHoldAndRelease != null ? stored.reachCraftHoldAndRelease : DEFAULT_REACH_CRAFT_HOLD_AND_RELEASE;
 			instance.reachCraftCloseOverlayAfterRelease = stored.reachCraftCloseOverlayAfterRelease != null ? stored.reachCraftCloseOverlayAfterRelease : DEFAULT_REACH_CRAFT_CLOSE_OVERLAY_AFTER_RELEASE;
 			instance.reachCraftPreferInventory = stored.reachCraftPreferInventory != null ? stored.reachCraftPreferInventory : DEFAULT_REACH_CRAFT_PREFER_INVENTORY;
@@ -334,6 +337,14 @@ public final class ReachCraftingConfig {
 		}
 		RecipeButtonNearbyIndicator.clearCaches();
 		ChainCraftabilityCache.clearCache();
+	}
+
+	public ContainerDrainOrder containerDrainOrder() {
+		return containerDrainOrder;
+	}
+
+	public void setContainerDrainOrder(ContainerDrainOrder containerDrainOrder) {
+		this.containerDrainOrder = containerDrainOrder != null ? containerDrainOrder : DEFAULT_CONTAINER_DRAIN_ORDER;
 	}
 
 	public boolean reachCraftHoldAndRelease() {
@@ -785,6 +796,7 @@ public final class ReachCraftingConfig {
 		defaults.showNearbyCraftableIndicator = DEFAULT_SHOW_NEARBY_CRAFTABLE_INDICATOR;
 		defaults.enableExistingOutputRetrieval = DEFAULT_ENABLE_EXISTING_OUTPUT_RETRIEVAL;
 		defaults.cacheContainersForFasterSearch = DEFAULT_CACHE_CONTAINERS_FOR_FASTER_SEARCH;
+		defaults.containerDrainOrder = DEFAULT_CONTAINER_DRAIN_ORDER;
 		defaults.reachCraftHoldAndRelease = DEFAULT_REACH_CRAFT_HOLD_AND_RELEASE;
 		defaults.reachCraftCloseOverlayAfterRelease = DEFAULT_REACH_CRAFT_CLOSE_OVERLAY_AFTER_RELEASE;
 		defaults.reachCraftPreferInventory = DEFAULT_REACH_CRAFT_PREFER_INVENTORY;
@@ -948,6 +960,11 @@ public final class ReachCraftingConfig {
 		WHILE_RESULT_OR_INVENTORY_SLOT_HOVERED
 	}
 
+	public enum ContainerDrainOrder {
+		SMALLEST_FIRST,
+		LARGEST_FIRST
+	}
+
 	public enum SearchHistoryMode {
 		OFF,
 		ON,
@@ -997,6 +1014,7 @@ public final class ReachCraftingConfig {
 		private Boolean showNearbyCraftableIndicator;
 		private Boolean enableExistingOutputRetrieval;
 		private Boolean cacheContainersForFasterSearch;
+		private ContainerDrainOrder containerDrainOrder;
 		private Boolean reachCraftHoldAndRelease;
 		private Boolean reachCraftCloseOverlayAfterRelease;
 		private Boolean reachCraftPreferInventory;
@@ -1050,6 +1068,7 @@ public final class ReachCraftingConfig {
 			this.showNearbyCraftableIndicator = config.showNearbyCraftableIndicator;
 			this.enableExistingOutputRetrieval = config.enableExistingOutputRetrieval;
 			this.cacheContainersForFasterSearch = config.cacheContainersForFasterSearch;
+			this.containerDrainOrder = config.containerDrainOrder;
 			this.reachCraftHoldAndRelease = config.reachCraftHoldAndRelease;
 			this.reachCraftCloseOverlayAfterRelease = config.reachCraftCloseOverlayAfterRelease;
 			this.reachCraftPreferInventory = config.reachCraftPreferInventory;
