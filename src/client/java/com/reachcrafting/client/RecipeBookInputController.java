@@ -177,7 +177,7 @@ final class RecipeBookInputController {
 		boolean maxCraftRequested = shiftModifierDown;
 		boolean craftAll = maxCraftRequested;
 		boolean allowNearbyChests = ReachCraftingConfig.get().enableNearbyContainerUsage()
-			&& (ctrlModifierDown || retrievalRequested);
+			&& (ctrlModifierDown || retrievalRequested || ReachCraftingConfig.get().nearbyAlwaysAllowed());
 		boolean refillableBulkMaxMode = maxCraftRequested && AutoCraftController.isBulkModeEnabled();
 		int requestedClicks = maxCraftRequested
 			? resolveMaxCraftRequestCount(minecraft, player, recipeId, collection, displayStack, explicitVariantSelection, allowNearbyChests)
@@ -502,7 +502,13 @@ final class RecipeBookInputController {
 	}
 
 	private boolean shouldQueueHeldRecipe(Minecraft minecraft, boolean maxCraftRequested, boolean autoCraftRequested) {
-		if (autoCraftRequested && ReachCraftingConfig.get().altClickInstantCraft()) {
+		// The Alt quick-craft yields to an active click queue: insta-crafting
+		// mid-queue crafted x+1 immediately, left the queued count dangling,
+		// and the release then replayed the leftovers as a phantom max craft.
+		// With any recipe queued, an Alt+click is just another +1 on the queue.
+		if (autoCraftRequested
+			&& ReachCraftingConfig.get().altClickInstantCraft()
+			&& state.pendingHeldRecipe() == null) {
 			return false;
 		}
 		return ReachCraftingConfig.get().reachCraftHoldAndRelease()
@@ -959,7 +965,8 @@ final class RecipeBookInputController {
 	}
 
 	private ResolvedRequest resolveRequest(ModifierState modifierState) {
-		boolean allowNearby = modifierState.controlRequested() && ReachCraftingConfig.get().enableNearbyContainerUsage();
+		boolean allowNearby = (modifierState.controlRequested() || ReachCraftingConfig.get().nearbyAlwaysAllowed())
+			&& ReachCraftingConfig.get().enableNearbyContainerUsage();
 		boolean maxCraftRequested = modifierState.shiftRequested();
 		boolean autoCraftRequested = modifierState.altRequested();
 		return new ResolvedRequest(allowNearby, maxCraftRequested, autoCraftRequested);
