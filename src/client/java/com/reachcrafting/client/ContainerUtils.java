@@ -303,6 +303,37 @@ public final class ContainerUtils {
 		return null;
 	}
 
+	/**
+	 * Chain planning counts are id-keyed, but non-pristine stacks (filled
+	 * bundles or shulker boxes, renamed items) are refused as crafting
+	 * inputs by the manual self-referential placer. Subtracting the player's
+	 * non-pristine stacks keeps replans from perpetually counting an
+	 * unusable item as available. Chest snapshots carry no component data,
+	 * so a non-pristine chest item is only excluded after staging pulls it
+	 * into the inventory — one wasted pull cycle, then the replan corrects.
+	 */
+	static Map<String, Integer> subtractNonPristineLocalStacks(net.minecraft.client.Minecraft client, Map<String, Integer> counts) {
+		if (client.player == null || client.player.containerMenu == null) {
+			return counts;
+		}
+		Map<String, Integer> adjusted = new java.util.LinkedHashMap<>(counts);
+		for (net.minecraft.world.inventory.Slot slot : client.player.containerMenu.slots) {
+			if (!(slot.container instanceof net.minecraft.world.entity.player.Inventory) || !slot.hasItem()) {
+				continue;
+			}
+			net.minecraft.world.item.ItemStack stack = slot.getItem();
+			if (ManualRecipePlacer.isPristine(stack)) {
+				continue;
+			}
+			String itemId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+			adjusted.computeIfPresent(itemId, (id, current) -> {
+				int updated = current - stack.getCount();
+				return updated > 0 ? updated : null;
+			});
+		}
+		return adjusted;
+	}
+
 	public static boolean isAnySessionActive() {
 		return RecipeBookInputController.getInstance().isInputQueueActive()
 			|| AutoMoveController.isAutomatedInteractionRunning()

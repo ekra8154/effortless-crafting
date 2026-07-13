@@ -346,7 +346,7 @@ final class ChainCraftPlanner {
 		}
 
 		RecipeIngredientSummary.IngredientSlot slot = slots.get(slotIndex);
-		for (String itemId : orderedIngredientItems(slot, state.counts, resolvingItemIds)) {
+		for (String itemId : orderedIngredientItems(slot, state.counts, resolvingItemIds, itemId(candidate.displayStack()))) {
 			PlanningState trialState = state.copy();
 			Map<String, Integer> trialRequired = new LinkedHashMap<>(required);
 			int totalRequired = trialRequired.getOrDefault(itemId, 0) + recipeCopies;
@@ -462,23 +462,24 @@ final class ChainCraftPlanner {
 		}
 	}
 
-	private Optional<String> chooseIngredientItem(
-		RecipeIngredientSummary.IngredientSlot slot,
-		Map<String, Integer> virtualCounts,
-		Set<String> resolvingItemIds
-	) {
-		return orderedIngredientItems(slot, virtualCounts, resolvingItemIds).stream()
-			.findFirst();
-	}
-
 	private List<String> orderedIngredientItems(
 		RecipeIngredientSummary.IngredientSlot slot,
 		Map<String, Integer> virtualCounts,
-		Set<String> resolvingItemIds
+		Set<String> resolvingItemIds,
+		String recipeOutputItemId
 	) {
+		// A slot that accepts the recipe's own output is a re-dye family
+		// (dye + any bundle/wool/bed/shulker). Only the family's BASE members
+		// may be consumed — the ones with at least one recipe using nothing
+		// from the family (plain bundle from leather+string, white wool from
+		// string) or no recipes at all. Colored variants are intentionally
+		// dyed player property; automation must never eat them, and asking
+		// players to quarantine them is not acceptable.
+		boolean selfReferentialSlot = recipeOutputItemId != null && slot.itemIds().contains(recipeOutputItemId);
 		List<String> eligible = slot.itemIds().stream()
 			.filter(itemId -> !resolvingItemIds.contains(itemId))
 			.filter(itemId -> virtualCounts.getOrDefault(itemId, 0) > 0 || recipesByOutput.containsKey(itemId))
+			.filter(itemId -> !selfReferentialSlot || isFamilyBaseMember(itemId, slot.itemIds()))
 			.toList();
 		// Score each choice once up front (shared memo + budget) instead of
 		// inside the sort comparator, which would recompute the recursive
@@ -546,6 +547,27 @@ final class ChainCraftPlanner {
 			}
 		}
 		return Optional.empty();
+	}
+
+	/** A family member that can be produced without consuming the family. */
+	private boolean isFamilyBaseMember(String itemId, List<String> familyItemIds) {
+		List<Candidate> recipes = recipesByOutput.getOrDefault(itemId, List.of());
+		if (recipes.isEmpty()) {
+			return true;
+		}
+		for (Candidate recipe : recipes) {
+			boolean usesFamily = false;
+			for (String inputId : recipe.ingredientSummary().acceptedItemIds()) {
+				if (familyItemIds.contains(inputId)) {
+					usesFamily = true;
+					break;
+				}
+			}
+			if (!usesFamily) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private Comparator<String> compareIngredientChoices(Map<String, Integer> virtualCounts, Map<String, Integer> scores) {
