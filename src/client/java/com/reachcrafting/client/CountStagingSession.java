@@ -403,7 +403,7 @@ final class CountStagingSession extends BaseCraftSession {
 
 	private static int maxStackSizeForItem(String itemId) {
 		try {
-			var item = BuiltInRegistries.ITEM.getValue(net.minecraft.resources.Identifier.parse(itemId));
+			var item = BuiltInRegistries.ITEM.getValue(net.minecraft.resources.ResourceLocation.parse(itemId));
 			return item == null ? 64 : Math.max(item.getDefaultInstance().getMaxStackSize(), 1);
 		} catch (Exception ignored) {
 			return 64;
