@@ -12,7 +12,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.context.ContextMap;
 import net.minecraft.world.entity.player.Inventory;
-import net.minecraft.world.inventory.ContainerInput;
+import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.display.RecipeDisplayEntry;
@@ -463,7 +463,7 @@ public final class ChainCraftController {
 			carried.getCount(),
 			destination.index
 		);
-		client.gameMode.handleContainerInput(client.player.containerMenu.containerId, destination.index, 0, ContainerInput.PICKUP, client.player);
+		client.gameMode.handleInventoryMouseClick(client.player.containerMenu.containerId, destination.index, 0, ClickType.PICKUP, client.player);
 		return true;
 	}
 
