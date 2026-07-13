@@ -325,7 +325,7 @@ public final class BulkChainCraftController {
 			);
 			counts = AvailableItemSnapshot.mergeCounts(counts, reachableView.aggregateCounts());
 		}
-		return counts;
+		return ContainerUtils.subtractNonPristineLocalStacks(client, counts);
 	}
 
 	private record BulkChainSession(
