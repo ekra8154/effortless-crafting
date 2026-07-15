@@ -1982,6 +1982,8 @@ final class SearchSession extends BaseCraftSession {
 		int queueLimit = RecipeClickExecutor.resolveRecipeQueueLimit(client, recipeId, recipeCollection);
 		if (ChainCraftController.tryManualSelfReferentialPlacement(client, null)) {
 			ReachCraftingMod.LOGGER.info("[recipe_place] manual self-referential placement from SearchSession.placePlannedGrid target={}", targetCopiesPerSlot);
+		} else if (GridTopUp.tryStageInsteadOfPlace(client, player, recipeId, recipeCollection)) {
+			ReachCraftingMod.LOGGER.info("[recipe_place] grid_topup staged from SearchSession.placePlannedGrid target={}", targetCopiesPerSlot);
 		} else if (targetCopiesPerSlot >= queueLimit) {
 			ReachCraftingMod.LOGGER.info("[recipe_place] handlePlaceRecipe(shift=true) from SearchSession.placePlannedGrid target={}", targetCopiesPerSlot);
 			gameMode.handlePlaceRecipe(player.containerMenu.containerId, recipeId, true);

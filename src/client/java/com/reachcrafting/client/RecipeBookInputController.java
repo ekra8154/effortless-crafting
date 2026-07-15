@@ -434,7 +434,8 @@ final class RecipeBookInputController {
 			return;
 		}
 
-		if (!ContainerUtils.isGridEmpty(minecraft.player.containerMenu)) {
+		if (!ContainerUtils.isGridEmpty(minecraft.player.containerMenu)
+			&& !GridTopUp.isRingForRecipe(minecraft, minecraft.player, action.recipeId(), action.collection())) {
 			com.reachcrafting.ReachCraftingMod.LOGGER.info(
 				"[recipe_replay] flushing grid before replay remainingClicks={} allowNearby={} craftAll={} refillable={} bulkActive={}",
 				remainingClicks,

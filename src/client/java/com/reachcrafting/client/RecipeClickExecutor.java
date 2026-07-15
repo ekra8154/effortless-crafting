@@ -412,8 +412,13 @@ final class RecipeClickExecutor {
 				// grid clears, each of which consumes the previous result and injects
 				// byproducts into inventory via Inventory.add(), causing fragmentation.
 				if (!ChainCraftController.tryManualSelfReferentialPlacement(minecraft, resolvedItemId)) {
-					ReachCraftingMod.LOGGER.info("[recipe_place] handlePlaceRecipe(shift=true) from RecipeClickExecutor NEARBY path");
-					minecraft.gameMode.handlePlaceRecipe(player.containerMenu.containerId, selectedRecipe.recipeId(), true);
+					if (GridTopUp.tryStageInsteadOfPlace(minecraft, player, ingredientSummary)) {
+						// Ring built/maintained via clicks, rationed place
+						// packet skipped.
+					} else {
+						ReachCraftingMod.LOGGER.info("[recipe_place] handlePlaceRecipe(shift=true) from RecipeClickExecutor NEARBY path");
+						minecraft.gameMode.handlePlaceRecipe(player.containerMenu.containerId, selectedRecipe.recipeId(), true);
+					}
 				}
 				AvailableItemSnapshot postPlaceSnapshot = AvailableItemSnapshot.capture(player, screen);
 				ReachCraftingMod.LOGGER.info(
@@ -445,6 +450,20 @@ final class RecipeClickExecutor {
 					immediateLocalCraftDeficit.compactMissingSummary(),
 					immediateCraftDeficit.compactMissingSummary()
 				);
+			}
+
+			if (GridTopUp.tryStageInsteadOfPlace(minecraft, player, ingredientSummary)) {
+				// Ring cycle: unstackable slot(s) refilled via clicks. Bypass
+				// the dry-run/search-session machinery entirely — its restore
+				// bookkeeping treats a persistent ring as foreign grid content
+				// and aborts the session (observed as skip_schedule
+				// no_craft_staged). The bulk session is already armed here;
+				// scheduling the auto-move is all that remains.
+				ReachCraftingMod.LOGGER.info("[recipe_place] grid_topup ring cycle, dry-run bypassed");
+				if (AutoCraftController.isEnabled()) {
+					ContainerUtils.scheduleAutoMove(selectedRecipe.displayStack());
+				}
+				return;
 			}
 
 			if (!deficitReport.hasMissingIngredients() && availableItems.hasReservedGrid()) {
@@ -498,6 +517,10 @@ final class RecipeClickExecutor {
 			if (ChainCraftController.tryManualSelfReferentialPlacement(minecraft, resolvedItemId)) {
 				// Self-referential chain step: inputs were placed client-side so
 				// the server cannot pick the step's own output as an ingredient.
+			} else if (GridTopUp.tryStageInsteadOfPlace(minecraft, player, ingredientSummary)) {
+				// Unstackable-ingredient bulk: the ingredient ring was built or
+				// maintained with ordinary clicks, saving the rationed place
+				// packet (see PlaceRecipeBudget / GridTopUp).
 			} else if (useBulkPlace) {
 				gameMode.handlePlaceRecipe(player.containerMenu.containerId, selectedRecipe.recipeId(), true);
 			} else {
