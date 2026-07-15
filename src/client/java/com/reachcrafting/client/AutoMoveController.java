@@ -479,6 +479,13 @@ final class AutoMoveController {
 					logHotbarState(menu)
 				);
 			} else {
+				if (PlaceRecipeBudget.hasPendingFor(menu.containerId)) {
+					// Our own budget queue still holds the placement packet —
+					// the server hasn't been asked yet, so no result can
+					// exist. Don't run down the wait timeout while the send
+					// is deferred client-side.
+					return;
+				}
 				autoMoveWaitingTicks++;
 				int stagedCraftCopies = 0;
 				if (BulkAutoCraftController.isActive() && client.screen != null) {
@@ -501,6 +508,7 @@ final class AutoMoveController {
 					autoMoveTargetArrivalObserved = false;
 					autoMoveTargetStack = ItemStack.EMPTY;
 					com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] waiting_for_result timeout in non-bulk mode");
+					PlaceRecipeBudget.onSuspectedDrop();
 					BulkAutoCraftController.onAutoMoveFinished(client, false);
 					ChainCraftController.onAutoMoveFinished(client, false);
 				} else if (autoMoveWaitingTicks > BULK_RESULT_WAIT_TIMEOUT_TICKS
@@ -519,6 +527,7 @@ final class AutoMoveController {
 						ContainerUtils.formatStack(menu.getCarried()),
 						resultSlot.hasItem() ? ContainerUtils.formatStack(resultSlot.getItem()) : "<empty>"
 					);
+					PlaceRecipeBudget.onSuspectedDrop();
 					BulkAutoCraftController.onAutoMoveFinished(client, false);
 					ChainCraftController.onAutoMoveFinished(client, false);
 				}

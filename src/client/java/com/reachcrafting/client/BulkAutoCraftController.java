@@ -362,6 +362,37 @@ public final class BulkAutoCraftController {
 	}
 
 	private static int postAutoMoveDelayTicks = 0;
+	// Retries after a suspected server-side place-packet drop. The budget
+	// keeps sends under the assumed limit, but a stricter server can still
+	// silently drop one; backing off and replaying beats killing the session.
+	private static final int MAX_BUDGET_RETRIES = 10;
+	private static int budgetRetryCount = 0;
+
+	/**
+	 * On a multiplayer server, a zero-progress batch most likely means the
+	 * server dropped our place packet (budget exhausted). Instead of
+	 * terminating, wait for the budget to refill and replay the batch via the
+	 * existing postAutoMoveDelayTicks scheduler. Returns true when a retry
+	 * was armed.
+	 */
+	private static boolean tryBudgetRetry(Minecraft client) {
+		if (activeSession == null || PlaceRecipeBudget.isUnlimited(client)) {
+			return false;
+		}
+		if (budgetRetryCount >= MAX_BUDGET_RETRIES) {
+			com.reachcrafting.ReachCraftingMod.LOGGER.warn(
+				"[bulk_craft] budget_backoff exhausted after {} retries", budgetRetryCount);
+			return false;
+		}
+		budgetRetryCount++;
+		resetCurrentBatchOutputDisposition();
+		postAutoMoveDelayTicks = PlaceRecipeBudget.suggestedBackoffTicks();
+		com.reachcrafting.ReachCraftingMod.LOGGER.info(
+			"[bulk_craft] budget_backoff retry={}/{} delay_ticks={} completed={}/{}",
+			budgetRetryCount, MAX_BUDGET_RETRIES, postAutoMoveDelayTicks,
+			activeSession.completedRecipeCopies(), activeSession.requestedRecipeCopies());
+		return true;
+	}
 
 	static void onAutoMoveFinished(Minecraft client, boolean success) {
 		if (activeSession == null) {
@@ -393,6 +424,11 @@ public final class BulkAutoCraftController {
 		);
 
 		if ((!success || !bulkEnabled || !supportedScreen) && craftedCopies <= 0) {
+			// Only the auto-move failure itself is retryable; a closed screen
+			// or disarmed bulk mode is a real abort.
+			if (!success && bulkEnabled && supportedScreen && tryBudgetRetry(client)) {
+				return;
+			}
 			resetCurrentBatchOutputDisposition();
 			stop(true, "auto_move_failed_without_progress success=" + success + " bulkEnabled=" + bulkEnabled + " supportedScreen=" + supportedScreen);
 			return;
@@ -414,6 +450,9 @@ public final class BulkAutoCraftController {
 				activeSession.lastObservedOutputCount(),
 				outputPerCraft
 			);
+			if (tryBudgetRetry(client)) {
+				return;
+			}
 			resetCurrentBatchOutputDisposition();
 			stop(true, "no_progress_detected");
 			return;
@@ -439,6 +478,10 @@ public final class BulkAutoCraftController {
 		// staleness does not need a per-batch re-scan.
 		// Set a delay to allow inventory to settle before the next batch starts.
 		postAutoMoveDelayTicks = 1;
+		// Real progress: clear the drop-retry streak and let the assumed
+		// server budget probe back up.
+		budgetRetryCount = 0;
+		PlaceRecipeBudget.onSessionProgress();
 	}
 
 	public static void stop(boolean aborted) {
@@ -446,6 +489,7 @@ public final class BulkAutoCraftController {
 	}
 
 	public static void stop(boolean aborted, String reason) {
+		budgetRetryCount = 0;
 		if (activeSession != null) {
 			// com.reachcrafting.ReachCraftingMod.LOGGER.info(
 			// 	"[bulk_craft] STOP aborted={} reason={} completed={}/{} expected_output={} disposition={} refillable={} allow_nearby={}",

@@ -26,7 +26,10 @@ public final class BulkChainCraftController {
 	// runs withdraw a trickle of materials per round no matter how much
 	// inventory space was free.
 	private static final int MAX_BATCH_FINAL_COPIES = 512;
-	private static final int MAX_CONSECUTIVE_STALLED_ITERATIONS = 2;
+	// A stalled iteration on a server is usually a place-packet budget hit,
+	// which needs several seconds of backoff to clear (see PlaceRecipeBudget)
+	// — so allow more consecutive stalls than the old 1-tick retry did.
+	private static final int MAX_CONSECUTIVE_STALLED_ITERATIONS = 4;
 	private static BulkChainSession activeSession;
 	private static int settleDelayTicks;
 
@@ -212,10 +215,15 @@ public final class BulkChainCraftController {
 				stop(true, "no_progress_detected");
 				return;
 			}
-			// Retry with a smaller batch: a stalled chain is most often an
-			// inventory-fit failure, which a smaller batch can clear.
+			// Retry with a smaller batch after a backoff: on a server a stall
+			// usually means the place-packet budget was exhausted and needs
+			// seconds to refill; in singleplayer it's an inventory-fit issue
+			// and the backoff collapses to a single tick.
 			activeSession = session.withIterationAccounted(0, stalled, Math.max(1, session.batchCap() / 2));
-			settleDelayTicks = 1;
+			settleDelayTicks = PlaceRecipeBudget.stallBackoffTicks(client);
+			ReachCraftingMod.LOGGER.info(
+				"[bulk_chain] stall_backoff stalled={}/{} settle_delay_ticks={}",
+				stalled, MAX_CONSECUTIVE_STALLED_ITERATIONS, settleDelayTicks);
 			return;
 		}
 
@@ -236,6 +244,15 @@ public final class BulkChainCraftController {
 		BulkChainSession session = activeSession;
 		int remaining = session.requestedTotalCopies() - session.completedCopies();
 		int batchTarget = Math.min(Math.max(remaining, 1), session.batchCap());
+		// Size the iteration to what the place-packet budget can afford so
+		// progress stays continuous instead of exhausting the server's window
+		// mid-iteration and stalling (no-op in singleplayer).
+		int affordable = PlaceRecipeBudget.affordableChainCopies(client);
+		if (batchTarget > affordable) {
+			ReachCraftingMod.LOGGER.info(
+				"[bulk_chain] budget_clamp batch_target={} -> {}", batchTarget, affordable);
+			batchTarget = affordable;
+		}
 		Map<String, Integer> availableCounts = collectAvailableCounts(client, session.allowNearby());
 		Optional<ChainCraftPlan> plan = ChainCraftPlanner.planMax(
 			client,
