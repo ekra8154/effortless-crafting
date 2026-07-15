@@ -574,7 +574,7 @@ public final class BulkAutoCraftController {
 		}
 
 		BulkDespawnWarning.tick();
-		if (!client.isWindowActive()) {
+		if (!client.isWindowActive() && !ReproHarness.suppressFocusGuard()) {
 			stop(true, "window_focus_lost");
 			postAutoMoveDelayTicks = 0;
 			previousSnapshot.clear();

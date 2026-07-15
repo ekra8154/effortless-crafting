@@ -304,7 +304,7 @@ final class AutoCraftController {
 			holdReleaseGraceTicks--;
 		}
 
-		if (!Minecraft.getInstance().isWindowActive()) {
+		if (!Minecraft.getInstance().isWindowActive() && !ReproHarness.suppressFocusGuard()) {
 			logLatchWipe("tick_window_inactive");
 			holdReleaseGraceTicks = 0;
 			holdStickyNormalLatched = false;

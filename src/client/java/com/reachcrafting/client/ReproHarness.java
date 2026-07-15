@@ -39,6 +39,17 @@ public final class ReproHarness {
 	private static boolean pendingCtrl;
 	private static int pendingTimeoutTicks;
 	private static int autoConfirmTicks;
+	// While a scripted run is in flight, suppress the window-focus guard so a
+	// backgrounded dev client (the normal case for automated tests) does not
+	// abort bulk-chain automation. Dev-only; armed per command, self-expiring.
+	private static int focusBypassTicks;
+
+	/** Dev-only: true while the harness is driving a run, so focus guards
+	 * (which abort automation when the window is backgrounded) should be
+	 * skipped. Always false outside a development environment. */
+	public static boolean suppressFocusGuard() {
+		return focusBypassTicks > 0;
+	}
 
 	private ReproHarness() {
 	}
@@ -56,6 +67,9 @@ public final class ReproHarness {
 		if (client.player == null || client.level == null) {
 			return;
 		}
+		if (focusBypassTicks > 0) {
+			focusBypassTicks--;
+		}
 		drivePending(client);
 		if (++pollCounter < 10) {
 			return;
@@ -69,6 +83,14 @@ public final class ReproHarness {
 		String[] parts = command.trim().split("\\s+");
 		switch (parts[0]) {
 			case "open" -> openNearestCraftingTable(client);
+			case "close" -> {
+				// Close the crafting screen so grid contents return to the
+				// inventory where the external ledger audit can see them.
+				if (client.screen != null) {
+					client.player.closeContainer();
+				}
+				ReachCraftingMod.LOGGER.info("[repro_harness] closed container");
+			}
 			case "bulk" -> {
 				if (parts.length < 2) {
 					ReachCraftingMod.LOGGER.warn("[repro_harness] bulk requires an item id");
@@ -77,6 +99,9 @@ public final class ReproHarness {
 				pendingBulkItem = parts[1];
 				pendingCtrl = parts.length > 2 && parts[2].equals("ctrl");
 				pendingTimeoutTicks = 100;
+				// Keep automation alive while the window is backgrounded for
+				// the duration of this run (dev-only focus-guard bypass).
+				focusBypassTicks = 6000;
 				// Always start from a fresh container session so leftover
 				// screens/grids from a previous run can't contaminate the test.
 				if (client.screen != null) {

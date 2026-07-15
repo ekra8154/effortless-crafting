@@ -159,7 +159,7 @@ public final class BulkChainCraftController {
 			return;
 		}
 		BulkDespawnWarning.tick();
-		if (!client.isWindowActive()) {
+		if (!client.isWindowActive() && !ReproHarness.suppressFocusGuard()) {
 			stop(true, "window_focus_lost");
 			return;
 		}

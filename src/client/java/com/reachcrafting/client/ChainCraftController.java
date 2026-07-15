@@ -267,7 +267,7 @@ public final class ChainCraftController {
 			activeRun = null;
 			return;
 		}
-		if (!client.isWindowActive()) {
+		if (!client.isWindowActive() && !ReproHarness.suppressFocusGuard()) {
 			abort(true);
 			return;
 		}
