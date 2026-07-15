@@ -489,9 +489,7 @@ final class AutoMoveController {
 				autoMoveWaitingTicks++;
 				int stagedCraftCopies = 0;
 				if (BulkAutoCraftController.isActive() && client.screen != null) {
-					stagedCraftCopies = ContainerUtils.currentReservedCraftCopies(
-						AvailableItemSnapshot.capture(client.player, client.screen).gridStacks()
-					);
+					stagedCraftCopies = BulkAutoCraftController.getCurrentStagedCraftCopies(client);
 				}
 				com.reachcrafting.ReachCraftingMod.LOGGER.info(
 					"[auto_move] waiting_for_result waitTicks={} bulk_active={} expected={} carried={} staged_copies={} result_now={}",

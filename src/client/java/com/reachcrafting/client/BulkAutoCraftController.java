@@ -19,6 +19,10 @@ public final class BulkAutoCraftController {
 	private BulkAutoCraftController() {
 	}
 
+	// The active session's per-slot ingredient layout, kept for recipe-aware
+	// staged-copies counting (see GridTopUp.recipeAwareStagedCopies).
+	private static RecipeIngredientSummary activeSessionIngredientSummary = null;
+
 	static void startOrUpdate(
 		RecipeBookClickCapture.HeldRecipeAction action,
 		int requestedRecipeCopies,
@@ -31,6 +35,9 @@ public final class BulkAutoCraftController {
 	) {
 		if (!AutoCraftController.isBulkModeEnabled() || action == null || requestedRecipeCopies <= 1 || expectedOutput == null || expectedOutput.isEmpty()) {
 			return;
+		}
+		if (ingredientSummary != null) {
+			activeSessionIngredientSummary = ingredientSummary;
 		}
 		// Chain step replays run with bulk mode latched during a bulk chain
 		// session; they must never arm a competing flat bulk session. An armed
@@ -489,7 +496,19 @@ public final class BulkAutoCraftController {
 	}
 
 	public static void stop(boolean aborted, String reason) {
+		if (activeSession != null) {
+			com.reachcrafting.ReachCraftingMod.LOGGER.info(
+				"[bulk_craft] STOP aborted={} reason={} completed={}/{} caller={}",
+				aborted, reason,
+				activeSession.completedRecipeCopies(), activeSession.requestedRecipeCopies(),
+				java.util.Arrays.stream(new Throwable().getStackTrace())
+					.skip(1).limit(3)
+					.map(f -> f.getClassName().substring(f.getClassName().lastIndexOf('.') + 1) + "." + f.getMethodName() + ":" + f.getLineNumber())
+					.reduce((a, b) -> a + " <- " + b).orElse("?")
+			);
+		}
 		budgetRetryCount = 0;
+		activeSessionIngredientSummary = null;
 		if (activeSession != null) {
 			// com.reachcrafting.ReachCraftingMod.LOGGER.info(
 			// 	"[bulk_craft] STOP aborted={} reason={} completed={}/{} expected_output={} disposition={} refillable={} allow_nearby={}",
@@ -685,7 +704,11 @@ public final class BulkAutoCraftController {
 			return 0;
 		}
 		AvailableItemSnapshot snapshot = AvailableItemSnapshot.capture(client.player, client.screen);
-		return ContainerUtils.currentReservedCraftCopies(snapshot.gridStacks());
+		return GridTopUp.recipeAwareStagedCopies(
+			client.player != null ? client.player.containerMenu : null,
+			activeSessionIngredientSummary,
+			ContainerUtils.currentReservedCraftCopies(snapshot.gridStacks())
+		);
 	}
 
 	static int countAccessibleOutput(Minecraft client, ItemStack expectedOutput) {

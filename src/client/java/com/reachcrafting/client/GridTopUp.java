@@ -50,6 +50,39 @@ final class GridTopUp {
 	private GridTopUp() {
 	}
 
+	/**
+	 * Recipe-aware staged-copies count. The generic heuristic (min count
+	 * across NON-EMPTY grid slots) wildly overcounts an unbalanced ring: with
+	 * the bow slot empty it reads the cobblestone stacks (62+) as "62 crafts
+	 * staged" and credits phantom output. Counted against the recipe's actual
+	 * slot requirements, an empty REQUIRED slot means ZERO crafts staged.
+	 * For balanced grids this computes the same value as the raw heuristic,
+	 * so it is safe to apply to every bulk session.
+	 */
+	static int recipeAwareStagedCopies(AbstractContainerMenu menu, RecipeIngredientSummary summary, int rawCopies) {
+		if (summary == null || menu == null) {
+			return rawCopies;
+		}
+		List<RecipeIngredientSummary.IngredientSlot> slots = summary.slots();
+		int gridCount = gridSlotCount(menu);
+		if (slots.isEmpty() || gridCount == 0 || slots.size() > gridCount) {
+			return rawCopies;
+		}
+		int staged = Integer.MAX_VALUE;
+		for (int i = 0; i < slots.size(); i++) {
+			RecipeIngredientSummary.IngredientSlot slot = slots.get(i);
+			if (slot.isEmpty()) {
+				continue;
+			}
+			ItemStack inGrid = menu.getSlot(1 + i).getItem();
+			if (inGrid.isEmpty()) {
+				return 0;
+			}
+			staged = Math.min(staged, inGrid.getCount());
+		}
+		return staged == Integer.MAX_VALUE ? 0 : staged;
+	}
+
 	private static boolean clickBudgetAllows(int estimatedClicks) {
 		long now = System.currentTimeMillis();
 		while (!recentClicks.isEmpty() && now - recentClicks.peekFirst() > CLICK_WINDOW_MS) {
