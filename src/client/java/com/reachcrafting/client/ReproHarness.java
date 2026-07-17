@@ -91,6 +91,14 @@ public final class ReproHarness {
 				}
 				ReachCraftingMod.LOGGER.info("[repro_harness] closed container");
 			}
+			case "clearcache" -> {
+				// The repro reuses the same chest positions every run with
+				// different contents; setblock does not invalidate the mod's
+				// nearby-container cache, so it would withdraw against stale
+				// data. Clear it so the next craft rescans the real contents.
+				NearbyContainerCache.clear();
+				ReachCraftingMod.LOGGER.info("[repro_harness] cleared nearby container cache");
+			}
 			case "bulk" -> {
 				if (parts.length < 2) {
 					ReachCraftingMod.LOGGER.warn("[repro_harness] bulk requires an item id");

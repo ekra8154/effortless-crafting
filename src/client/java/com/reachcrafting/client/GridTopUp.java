@@ -125,6 +125,11 @@ final class GridTopUp {
 		if (gridCount == 0 || slots.isEmpty() || slots.size() > gridCount) {
 			return false;
 		}
+		// Only single-unstackable-slot recipes use the ring (see
+		// tryStageInsteadOfPlace); don't preserve grids for anything else.
+		if (slots.stream().filter(s -> !s.isEmpty() && s.maxStackSize() <= 1).count() != 1) {
+			return false;
+		}
 		boolean sawStack = false;
 		for (int i = 0; i < gridCount; i++) {
 			ItemStack inGrid = menu.getSlot(1 + i).getItem();
@@ -200,21 +205,29 @@ final class GridTopUp {
 		if (slots.isEmpty() || slots.size() > gridCount) {
 			return false;
 		}
-		boolean hasUnstackable = false;
+		int unstackableSlots = 0;
 		boolean hasStackable = false;
 		for (RecipeIngredientSummary.IngredientSlot slot : slots) {
 			if (slot.isEmpty()) {
 				continue;
 			}
 			if (slot.maxStackSize() <= 1) {
-				hasUnstackable = true;
+				unstackableSlots++;
 			} else {
 				hasStackable = true;
 			}
 		}
-		if (!hasUnstackable || !hasStackable) {
+		if (unstackableSlots == 0 || !hasStackable) {
 			// All-stackable recipes are already efficient via one balanced
 			// shift-placement; all-unstackable ones have no ring to keep.
+			return false;
+		}
+		if (unstackableSlots > 1) {
+			// The ring model cycles ONE unstackable slot per craft (dispenser's
+			// bow). Recipes with several unstackable slots (cake: 3 milk
+			// buckets) need a different staging strategy; falling back to the
+			// normal placement path here matches pre-ring (release) behavior
+			// and avoids leaving an incomplete grid.
 			return false;
 		}
 		if (!clickBudgetAllows(24)) {
