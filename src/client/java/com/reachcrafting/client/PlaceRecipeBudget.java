@@ -179,19 +179,18 @@ public final class PlaceRecipeBudget {
 	}
 
 	/**
-	 * How many final-recipe copies a chain iteration can afford right now.
-	 * Chain steps place once per copy per step; ~4 placements per final copy
-	 * is a conservative estimate for typical chains. Sizing iterations to the
-	 * budget keeps progress continuous instead of exhausting the window
-	 * mid-iteration and stalling.
+	 * Place packets affordable over the next ~5 seconds (current tokens plus
+	 * refill). Callers price their own work against this — chain iterations
+	 * compute the actual per-plan packet cost (T1 steps cost one packet per
+	 * batch, legacy steps one per copy) instead of assuming a fixed
+	 * placements-per-copy ratio.
 	 */
-	public static int affordableChainCopies(Minecraft client) {
+	public static double affordablePlaces(Minecraft client) {
 		if (isUnlimited(client)) {
-			return Integer.MAX_VALUE;
+			return Double.MAX_VALUE;
 		}
 		refill();
-		double affordablePlaces = tokens + ratePerSecond * 5.0;
-		return Math.max(1, (int) (affordablePlaces / 4.0));
+		return tokens + ratePerSecond * 5.0;
 	}
 
 	private static void refill() {

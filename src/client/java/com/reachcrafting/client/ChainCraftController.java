@@ -55,6 +55,20 @@ public final class ChainCraftController {
 		return activeRun != null;
 	}
 
+	/**
+	 * True when the currently scheduled batch's output is already fully
+	 * observable (inventory + cursor + eject credits). A shift-place final
+	 * step can craft the whole batch in one server action; the result-wait
+	 * must recognize that as done instead of waiting for a result slot that
+	 * will never repopulate (that wait timed out and fed a phantom drop into
+	 * the place budget's AIMD).
+	 */
+	static boolean isCurrentBatchObservedComplete() {
+		return activeRun != null
+			&& activeRun.scheduledBatchCopies() > 0
+			&& activeRun.observedProducedRecipeCopies() >= activeRun.scheduledBatchCopies();
+	}
+
 	static boolean isRunningIntermediateStep() {
 		return activeRun != null && activeRun.currentStepIndex() < activeRun.plan().steps().size() - 1;
 	}

@@ -244,15 +244,6 @@ public final class BulkChainCraftController {
 		BulkChainSession session = activeSession;
 		int remaining = session.requestedTotalCopies() - session.completedCopies();
 		int batchTarget = Math.min(Math.max(remaining, 1), session.batchCap());
-		// Size the iteration to what the place-packet budget can afford so
-		// progress stays continuous instead of exhausting the server's window
-		// mid-iteration and stalling (no-op in singleplayer).
-		int affordable = PlaceRecipeBudget.affordableChainCopies(client);
-		if (batchTarget > affordable) {
-			ReachCraftingMod.LOGGER.info(
-				"[bulk_chain] budget_clamp batch_target={} -> {}", batchTarget, affordable);
-			batchTarget = affordable;
-		}
 		Map<String, Integer> availableCounts = collectAvailableCounts(client, session.allowNearby());
 		Optional<ChainCraftPlan> plan = ChainCraftPlanner.planMax(
 			client,
@@ -266,6 +257,38 @@ public final class BulkChainCraftController {
 		if (plan.isEmpty()) {
 			stop(false, "materials_exhausted");
 			return;
+		}
+		// Size the iteration to what the place-packet budget can afford so
+		// progress stays continuous instead of exhausting the server's window
+		// mid-iteration and stalling (no-op in singleplayer). Priced against
+		// the PLAN's real packet cost: a T1 step (all-stackable, counted
+		// extraction) spends ONE place per batch regardless of copies, so a
+		// full-T1 chain like lectern costs ~steps packets per iteration and
+		// must not be clamped as if every copy cost a placement — the old
+		// per-copy pricing throttled post-T1 iterations to 1-2 copies each.
+		double affordablePlaces = PlaceRecipeBudget.affordablePlaces(client);
+		int planCost = planPlacePacketCost(plan.get());
+		if (planCost > affordablePlaces) {
+			int clamped = Math.max(1, (int) (batchTarget * affordablePlaces / planCost));
+			if (clamped < batchTarget) {
+				ReachCraftingMod.LOGGER.info(
+					"[bulk_chain] budget_clamp batch_target={} -> {} plan_cost={} affordable={}",
+					batchTarget, clamped, planCost, String.format("%.1f", affordablePlaces));
+				batchTarget = clamped;
+				plan = ChainCraftPlanner.planMax(
+					client,
+					client.player,
+					session.selection(),
+					availableCounts,
+					session.allowNearby(),
+					batchTarget,
+					true
+				);
+				if (plan.isEmpty()) {
+					stop(false, "materials_exhausted");
+					return;
+				}
+			}
 		}
 
 		// Size the batch so staged materials, in-flight intermediates, and
@@ -327,6 +350,22 @@ public final class BulkChainCraftController {
 		if (!ChainCraftController.isActive()) {
 			stop(true, "chain_start_failed");
 		}
+	}
+
+	/**
+	 * Rationed place packets a plan iteration will actually spend: one per
+	 * T1-eligible step (single max place + counted extraction, copies come
+	 * from ordinary clicks), one per copy for everything else (per-copy
+	 * placement / rapid-eject restage).
+	 */
+	private static int planPlacePacketCost(ChainCraftPlan plan) {
+		int cost = 0;
+		for (ChainCraftPlan.Step step : plan.steps()) {
+			cost += GridExtractor.isEligibleSummary(step.ingredientSummary())
+				? 1
+				: Math.max(step.recipeCopies(), 1);
+		}
+		return cost;
 	}
 
 	private static boolean willEjectFinalOutputs(BulkChainSession session, ChainCraftPlan plan) {

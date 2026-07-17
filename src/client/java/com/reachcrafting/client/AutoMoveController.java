@@ -59,11 +59,13 @@ final class AutoMoveController {
 	}
 
 	static boolean isAutoMovePending() {
-		return pendingAutoMove;
+		// A GridExtractor batch is in-flight result work: every guard that
+		// waits on a pending auto-move must wait on it the same way.
+		return pendingAutoMove || GridExtractor.isActive();
 	}
 
 	static boolean isAutomatedInteractionRunning() {
-		return pendingAutoMove || autoMoveOrganizing || NearbyContainerDryRun.isActiveSessionRunning() || InventoryGridRestoreTracker.isRestoring() || BulkAutoCraftController.isActive() || ChainCraftController.isActive();
+		return pendingAutoMove || autoMoveOrganizing || GridExtractor.isActive() || NearbyContainerDryRun.isActiveSessionRunning() || InventoryGridRestoreTracker.isRestoring() || BulkAutoCraftController.isActive() || ChainCraftController.isActive();
 	}
 
 	static void settleCompletedWork(Minecraft client) {
@@ -142,6 +144,11 @@ final class AutoMoveController {
 	}
 
 	static void autoMoveResult(Minecraft client) {
+		if (GridExtractor.isActive()) {
+			// A T1 counted extraction owns the result slot and the cursor;
+			// running auto-move concurrently would fight it over both.
+			return;
+		}
 		if (client.player == null || client.player.containerMenu == null) {
 			com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] autoMoveResult exiting: player_or_menu_missing");
 			pendingAutoMove = false;
@@ -527,6 +534,21 @@ final class AutoMoveController {
 					// is deferred client-side.
 					return;
 				}
+				if (ChainCraftController.isCurrentBatchObservedComplete()) {
+					// A shift-place final step crafts its whole batch in one
+					// server action: output is already banked and the grid is
+					// spent, so an empty result slot means DONE, not pending.
+					com.reachcrafting.ReachCraftingMod.LOGGER.info(
+						"[auto_move] chain batch output already complete; finishing without result wait"
+					);
+					pendingAutoMove = false;
+					autoMoveOrganizing = false;
+					autoMoveTargetArrivalObserved = false;
+					autoMoveTargetStack = ItemStack.EMPTY;
+					BulkAutoCraftController.onAutoMoveFinished(client, true);
+					ChainCraftController.onAutoMoveFinished(client, true);
+					return;
+				}
 				autoMoveWaitingTicks++;
 				int stagedCraftCopies = 0;
 				if (BulkAutoCraftController.isActive() && client.screen != null) {
@@ -541,7 +563,15 @@ final class AutoMoveController {
 					stagedCraftCopies,
 					resultSlot.hasItem() ? ContainerUtils.formatStack(resultSlot.getItem()) : "<empty>"
 				);
-				if (autoMoveWaitingTicks > 10 && !BulkAutoCraftController.isActive()) {
+				// A chain step is a bulk-paced context even though no flat bulk
+				// session is active (chain runs block flat-session arming): the
+				// interactive 10-tick timeout is far too tight for a multi-copy
+				// final-step place on a busy server tick. Measured: the "failed"
+				// lectern place produced its result ~1s later, so the short
+				// timeout both wasted the iteration AND fed a phantom drop into
+				// the AIMD budget (rate halved 4->2->1/s for nothing).
+				int nonBulkTimeoutTicks = ChainCraftController.hasActiveRun() ? 40 : 10;
+				if (autoMoveWaitingTicks > nonBulkTimeoutTicks && !BulkAutoCraftController.isActive()) {
 					pendingAutoMove = false;
 					autoMoveOrganizing = false;
 					autoMoveTargetArrivalObserved = false;

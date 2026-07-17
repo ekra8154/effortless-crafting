@@ -83,7 +83,8 @@ final class GridTopUp {
 		return staged == Integer.MAX_VALUE ? 0 : staged;
 	}
 
-	private static boolean clickBudgetAllows(int estimatedClicks) {
+	/** Shared with GridExtractor: automation clicks draw from one governor. */
+	static boolean clickBudgetAllows(int estimatedClicks) {
 		long now = System.currentTimeMillis();
 		while (!recentClicks.isEmpty() && now - recentClicks.peekFirst() > CLICK_WINDOW_MS) {
 			recentClicks.pollFirst();
@@ -97,7 +98,7 @@ final class GridTopUp {
 		return true;
 	}
 
-	private static void recordClick() {
+	static void recordClick() {
 		recentClicks.addLast(System.currentTimeMillis());
 	}
 
