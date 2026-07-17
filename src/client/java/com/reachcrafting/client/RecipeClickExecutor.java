@@ -412,9 +412,25 @@ final class RecipeClickExecutor {
 				// grid clears, each of which consumes the previous result and injects
 				// byproducts into inventory via Inventory.add(), causing fragmentation.
 				if (!ChainCraftController.tryManualSelfReferentialPlacement(minecraft, resolvedItemId)) {
+					// M3 (T2): bulk-chain finals with a single unstackable
+					// ingredient run the whole batch as a GridExtractor
+					// key-cycle over the ring — zero place packets and no
+					// per-copy settlement rounds (see the direct-path twin).
+					boolean nearbyChainFinalT2 = ChainCraftController.isRunningFinalStep()
+						&& BulkChainCraftController.isActive()
+						&& !PlaceRecipeBudget.isUnlimited(minecraft)
+						&& GridTopUp.isKeyCycleEligible(ingredientSummary);
 					if (GridTopUp.tryStageInsteadOfPlace(minecraft, player, ingredientSummary)) {
 						// Ring built/maintained via clicks, rationed place
 						// packet skipped.
+						if (nearbyChainFinalT2) {
+							GridExtractor.begin(selectedRecipe.displayStack(), effectiveRequestedClicks, ingredientSummary, true);
+							ReachCraftingMod.LOGGER.info(
+								"[recipe_place] chain_t2 key-cycle batch copies={} recipe={} (nearby path)",
+								effectiveRequestedClicks,
+								selectedRecipe.recipeId()
+							);
+						}
 					} else {
 						ReachCraftingMod.LOGGER.info("[recipe_place] handlePlaceRecipe(shift=true) from RecipeClickExecutor NEARBY path");
 						minecraft.gameMode.handlePlaceRecipe(player.containerMenu.containerId, selectedRecipe.recipeId(), true);
@@ -429,7 +445,9 @@ final class RecipeClickExecutor {
 					resolveRecipeQueueLimit(minecraft, selectedRecipe.recipeId(), collection),
 					postPlaceSnapshot.hasReservedGrid()
 				);
-				ContainerUtils.scheduleAutoMove(selectedRecipe.displayStack());
+				if (!GridExtractor.isActive()) {
+					ContainerUtils.scheduleAutoMove(selectedRecipe.displayStack());
+				}
 				if (!ChainCraftController.isActive()) {
 					ReachCraftingConfig.get().noteRecentRecipe(selectedRecipe.recipeId());
 					RecipeBookChunkedScheduler.onRecentRecipesChanged();
@@ -518,6 +536,16 @@ final class RecipeClickExecutor {
 				&& !PlaceRecipeBudget.isUnlimited(minecraft)
 				&& effectiveRequestedClicks > 1
 				&& GridExtractor.isEligibleSummary(ingredientSummary);
+			// M3 (T2): a bulk-chain FINAL step with a single unstackable
+			// ingredient (dispenser's bow) used to pay one rationed packet per
+			// copy — schedule, shift-place one balanced copy, settle, repeat.
+			// Instead run the whole batch as a GridExtractor key-cycle: the
+			// ring stages the stackable slots, each craft is "insert next key
+			// + pick result" in ordinary clicks, zero place packets.
+			boolean chainFinalT2 = chainFinalBulkPlace
+				&& BulkChainCraftController.isActive()
+				&& !PlaceRecipeBudget.isUnlimited(minecraft)
+				&& GridTopUp.isKeyCycleEligible(ingredientSummary);
 			boolean useBulkPlace = effectiveCraftAll
 				|| chainFinalBulkPlace
 				|| (AutoCraftController.isBulkModeEnabled() && !ChainCraftController.isActive() && requestedClicks >= queueLimit);
@@ -528,9 +556,16 @@ final class RecipeClickExecutor {
 				// the server cannot pick the step's own output as an ingredient.
 			} else if (chainIntermediateT1) {
 				gameMode.handlePlaceRecipe(player.containerMenu.containerId, selectedRecipe.recipeId(), true);
-				GridExtractor.begin(selectedRecipe.displayStack(), effectiveRequestedClicks);
+				GridExtractor.begin(selectedRecipe.displayStack(), effectiveRequestedClicks, ingredientSummary);
 				ReachCraftingMod.LOGGER.info(
 					"[recipe_place] chain_t1 single max place + counted extraction copies={} recipe={}",
+					effectiveRequestedClicks,
+					selectedRecipe.recipeId()
+				);
+			} else if (chainFinalT2 && GridTopUp.tryStageInsteadOfPlace(minecraft, player, ingredientSummary)) {
+				GridExtractor.begin(selectedRecipe.displayStack(), effectiveRequestedClicks, ingredientSummary, true);
+				ReachCraftingMod.LOGGER.info(
+					"[recipe_place] chain_t2 key-cycle batch copies={} recipe={}",
 					effectiveRequestedClicks,
 					selectedRecipe.recipeId()
 				);

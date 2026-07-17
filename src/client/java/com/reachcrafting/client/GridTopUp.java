@@ -40,11 +40,16 @@ final class GridTopUp {
 	/** Refill a stackable ring slot once it drains below this count. */
 	private static final int RING_LOW_WATER = 4;
 
-	// Safety governor: automation clicks in a trailing window, kept far below
+	// Safety governor: automation clicks in a trailing window, kept below
 	// Paper's all-packets KICK limit (500 per 7s). If staging would push past
 	// this, decline and let the (budgeted) place-packet path carry the cycle.
+	// 180 throttled M3's full T2 chain pace (ring upkeep + key inserts +
+	// throws sustained ~23 clicks/s) and the resulting stall cascaded into a
+	// session abort; 280 (56% of the kick limit, >200 packets of headroom
+	// for movement/other traffic) clears it. The suite's kicks==0 assertion
+	// is the regression guard for this margin.
 	private static final int CLICK_WINDOW_MS = 7000;
-	private static final int CLICK_WINDOW_CAP = 180;
+	private static final int CLICK_WINDOW_CAP = 280;
 	private static final java.util.ArrayDeque<Long> recentClicks = new java.util.ArrayDeque<>();
 
 	private GridTopUp() {
@@ -83,6 +88,41 @@ final class GridTopUp {
 		return staged == Integer.MAX_VALUE ? 0 : staged;
 	}
 
+	/**
+	 * Sessions the ring may serve: flat bulk (M1), and the FINAL step of a
+	 * bulk chain (M3) — the dispenser step there paid one rationed packet per
+	 * copy, exactly the pattern the ring exists to break. Plain single-craft
+	 * chains stay excluded: no one wants stacks dumped into a one-off grid.
+	 */
+	private static boolean ringSessionActive() {
+		return BulkAutoCraftController.isActive()
+			|| (BulkChainCraftController.isActive() && ChainCraftController.isRunningFinalStep());
+	}
+
+	/**
+	 * Key-cycle (T2) eligibility for GridExtractor: exactly one unstackable
+	 * ingredient slot (the "key" cycled per craft) plus at least one
+	 * stackable slot the ring can stage in bulk.
+	 */
+	static boolean isKeyCycleEligible(RecipeIngredientSummary summary) {
+		if (summary == null || summary.slots().isEmpty()) {
+			return false;
+		}
+		int unstackable = 0;
+		boolean stackable = false;
+		for (RecipeIngredientSummary.IngredientSlot slot : summary.slots()) {
+			if (slot.isEmpty()) {
+				continue;
+			}
+			if (slot.maxStackSize() <= 1) {
+				unstackable++;
+			} else {
+				stackable = true;
+			}
+		}
+		return unstackable == 1 && stackable;
+	}
+
 	/** Shared with GridExtractor: automation clicks draw from one governor. */
 	static boolean clickBudgetAllows(int estimatedClicks) {
 		long now = System.currentTimeMillis();
@@ -113,7 +153,7 @@ final class GridTopUp {
 		if (client == null || player == null || client.level == null || recipeId == null || collection == null) {
 			return false;
 		}
-		if (PlaceRecipeBudget.isUnlimited(client) || !BulkAutoCraftController.isActive()) {
+		if (PlaceRecipeBudget.isUnlimited(client) || !ringSessionActive()) {
 			return false;
 		}
 		RecipeIngredientSummary summary = resolveSummary(client, recipeId, collection);
@@ -248,7 +288,7 @@ final class GridTopUp {
 		if (PlaceRecipeBudget.isUnlimited(client)) {
 			return false; // silent: SP / unlimited servers never use the ring
 		}
-		if (!BulkAutoCraftController.isActive()) {
+		if (!ringSessionActive()) {
 			// Only bulk sessions benefit; a manual single craft should not get
 			// stacks dumped into its grid.
 			return declined("bulk_inactive");
@@ -287,7 +327,17 @@ final class GridTopUp {
 			// and avoids leaving an incomplete grid.
 			return declined("multi_unstackable");
 		}
-		if (!clickBudgetAllows(24)) {
+		// Estimate honestly: a cold build costs ~24 clicks, but per-cycle ring
+		// upkeep (one key insert + occasional refill) costs ~8. Overstating
+		// the cost made the governor decline healthy mid-batch cycles.
+		boolean gridHoldsRingStacks = false;
+		for (int i = 1; i <= gridCount; i++) {
+			if (menu.getSlot(i).getItem().getCount() >= 2) {
+				gridHoldsRingStacks = true;
+				break;
+			}
+		}
+		if (!clickBudgetAllows(gridHoldsRingStacks ? 8 : 24)) {
 			return false; // clickBudgetAllows already logged the governor warn
 		}
 
@@ -315,10 +365,23 @@ final class GridTopUp {
 					singleInserts++;
 				}
 			} else {
-				if (inGrid.isEmpty() || inGrid.getCount() < RING_LOW_WATER) {
-					if (depositStack(client, menu, slot, gridSlotIndex)) {
+				// A spread for an earlier slot of the same ingredient may have
+				// already filled this one — re-read before deciding.
+				ItemStack current = menu.getSlot(gridSlotIndex).getItem();
+				if (current.isEmpty() || current.getCount() < RING_LOW_WATER) {
+					// Allocation matters: with fewer source stacks than needy
+					// group slots (typical under nearby-withdrawal, which
+					// stocks batch-sized amounts), one-whole-stack-per-slot
+					// deposits exhaust the sources on the first slots and
+					// strand the rest. Decide UP FRONT: scarce -> drag-split
+					// a stack evenly across the whole group; plentiful ->
+					// whole-stack deposits as before.
+					boolean staged = groupSourcesScarce(menu, slots, i)
+						? spreadIntoGroupSlots(client, menu, slots, i) || depositStack(client, menu, slot, gridSlotIndex)
+						: depositStack(client, menu, slot, gridSlotIndex) || spreadIntoGroupSlots(client, menu, slots, i);
+					if (staged) {
 						ringDeposits++;
-					} else if (inGrid.isEmpty()) {
+					} else if (menu.getSlot(gridSlotIndex).getItem().isEmpty()) {
 						// Ring slot empty and nothing to fill it with: the
 						// craft cannot proceed via clicks.
 						return declined("deposit_failed_slot_" + gridSlotIndex);
@@ -366,6 +429,100 @@ final class GridTopUp {
 			return false;
 		}
 		return !menu.getSlot(gridSlotIndex).getItem().isEmpty();
+	}
+
+	/** Fewer matching inventory stacks than empty-or-low slots in the group? */
+	private static boolean groupSourcesScarce(
+		AbstractContainerMenu menu,
+		List<RecipeIngredientSummary.IngredientSlot> slots,
+		int slotOrdinal
+	) {
+		RecipeIngredientSummary.IngredientSlot reference = slots.get(slotOrdinal);
+		int needySlots = 0;
+		for (int j = 0; j < slots.size(); j++) {
+			RecipeIngredientSummary.IngredientSlot other = slots.get(j);
+			if (other.isEmpty() || other.maxStackSize() <= 1) {
+				continue;
+			}
+			if (!java.util.Collections.disjoint(other.itemIds(), reference.itemIds())) {
+				ItemStack inGrid = menu.getSlot(1 + j).getItem();
+				if (inGrid.isEmpty() || inGrid.getCount() < RING_LOW_WATER) {
+					needySlots++;
+				}
+			}
+		}
+		int sources = 0;
+		for (int i = firstSourceIndex(menu); i <= lastSourceIndex(menu); i++) {
+			ItemStack stack = menu.getSlot(i).getItem();
+			if (!stack.isEmpty() && reference.itemIds().contains(itemIdOf(stack))) {
+				sources++;
+			}
+		}
+		return sources < needySlots;
+	}
+
+	/**
+	 * Drag-split (vanilla QUICK_CRAFT) one source stack evenly across every
+	 * empty-or-low grid slot in the same ingredient group. This is the ring's
+	 * answer to a withdrawal-sized inventory: 2-3 cobble stacks cannot fill
+	 * seven slots one-whole-stack-each, but ONE stack spread across all seven
+	 * (9 apiece) stages 9 crafts. ~4 + targets clicks.
+	 */
+	private static boolean spreadIntoGroupSlots(
+		Minecraft client,
+		AbstractContainerMenu menu,
+		List<RecipeIngredientSummary.IngredientSlot> slots,
+		int slotOrdinal
+	) {
+		RecipeIngredientSummary.IngredientSlot reference = slots.get(slotOrdinal);
+		java.util.List<Integer> targets = new java.util.ArrayList<>();
+		for (int j = 0; j < slots.size(); j++) {
+			RecipeIngredientSummary.IngredientSlot other = slots.get(j);
+			if (other.isEmpty() || other.maxStackSize() <= 1) {
+				continue;
+			}
+			if (!java.util.Collections.disjoint(other.itemIds(), reference.itemIds())) {
+				ItemStack inGrid = menu.getSlot(1 + j).getItem();
+				if (inGrid.isEmpty() || inGrid.getCount() < RING_LOW_WATER) {
+					targets.add(1 + j);
+				}
+			}
+		}
+		if (targets.isEmpty()) {
+			return false;
+		}
+		int source = findSourceSlot(menu, reference.itemIds(), false);
+		if (source < 0) {
+			return false;
+		}
+		click(client, menu, source);
+		if (menu.getCarried().isEmpty()) {
+			return false;
+		}
+		int containerId = menu.containerId;
+		// QUICK_CRAFT protocol: header 0 = start, 1 = add slot, 2 = end;
+		// type 0 (left drag) splits the carried stack evenly.
+		client.gameMode.handleInventoryMouseClick(containerId, -999, 0, ClickType.QUICK_CRAFT, client.player);
+		recordClick();
+		for (int target : targets) {
+			client.gameMode.handleInventoryMouseClick(containerId, target, 1, ClickType.QUICK_CRAFT, client.player);
+			recordClick();
+		}
+		client.gameMode.handleInventoryMouseClick(containerId, -999, 2, ClickType.QUICK_CRAFT, client.player);
+		recordClick();
+		if (!menu.getCarried().isEmpty()) {
+			// Remainder (count % targets) goes back where it came from.
+			click(client, menu, source);
+			if (!menu.getCarried().isEmpty()) {
+				return false;
+			}
+		}
+		ReachCraftingMod.LOGGER.info(
+			"[grid_topup] spread source_slot={} across {} ring slots",
+			source,
+			targets.size()
+		);
+		return !menu.getSlot(1 + slotOrdinal).getItem().isEmpty();
 	}
 
 	/** Merge the largest matching inventory stack into a ring slot (2-3 clicks). */

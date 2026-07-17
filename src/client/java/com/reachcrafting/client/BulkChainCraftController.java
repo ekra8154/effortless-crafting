@@ -129,8 +129,11 @@ public final class BulkChainCraftController {
 			);
 		}
 		Minecraft client = Minecraft.getInstance();
-		AutoCraftController.finishBulkSessionTeardown();
+		// clear() first: teardown skips itself while a chain session is
+		// active (flat sub-sessions ending mid-chain must not reset the
+		// latch), so our own flag must drop before we call it.
 		clear();
+		AutoCraftController.finishBulkSessionTeardown();
 		// Return accumulated leftover pulled materials to their chests when
 		// the player is still present at the screen. Skipped for the screen
 		// close path (its own flush runs right after abortAllSessions and

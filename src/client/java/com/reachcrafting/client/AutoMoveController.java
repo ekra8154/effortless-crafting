@@ -183,7 +183,24 @@ final class AutoMoveController {
 
 		if (directEjectAwaitingSettlement) {
 			directEjectSettlementTicks++;
-			if (resultSlot.hasItem() || !menu.getCarried().isEmpty()) {
+			// A staged ring never leaves the result slot empty: with the key
+			// (bow) consumed by the throw, the remaining ring completes a
+			// FOREIGN recipe (dropper) and previews it indefinitely. Waiting
+			// for an empty slot here hung the whole session (observed: 1200+
+			// ticks). The throw is settled once the expected output is gone —
+			// either the slot is empty OR it shows the ring's foreign preview.
+			boolean directEjectForeignPreview = resultSlot.hasItem()
+				&& !autoMoveExpectedStack.isEmpty()
+				&& !ItemStack.isSameItemSameComponents(resultSlot.getItem(), autoMoveExpectedStack);
+			boolean expectedOutputGone = !resultSlot.hasItem()
+				|| (directEjectForeignPreview
+					&& (GridTopUp.isRingAwaitingKeyItem(client, menu)
+						// Summary-free fallback: a FOREIGN item holding the
+						// result slot for 10+ ticks cannot be our pending
+						// output — it is the ring preview even when the
+						// session summary is unavailable to prove it.
+						|| directEjectSettlementTicks > 10));
+			if (!expectedOutputGone || !menu.getCarried().isEmpty()) {
 				com.reachcrafting.ReachCraftingMod.LOGGER.info(
 					"[auto_move] direct eject awaiting settlement: ticks={} result_now={} carried={}",
 					directEjectSettlementTicks,
@@ -219,10 +236,22 @@ final class AutoMoveController {
 		// shows the pre-throw stack a tick later.
 		if (chainEjectAwaitingRefresh) {
 			chainEjectRefreshTicks++;
-			if (resultSlot.hasItem() && chainEjectRefreshTicks <= 20) {
+			// Same ring rule as direct-eject settlement: the throw is proven
+			// once the EXPECTED output left the slot — a ring's foreign
+			// preview (dropper over a bow-less ring) counts as gone, else the
+			// 20-tick timeout would discard a legitimate credit every craft.
+			boolean thrownOutputGone = !resultSlot.hasItem()
+				|| (!ItemStack.isSameItemSameComponents(resultSlot.getItem(), chainEjectPendingStack)
+					&& (GridTopUp.isRingAwaitingKeyItem(client, menu)
+						// Same summary-free fallback as direct-eject: a foreign
+						// item persisting in the result slot is the ring
+						// preview, not the thrown output — credit, don't
+						// discard (a discarded credit read as 63/64).
+						|| chainEjectRefreshTicks > 10));
+			if (!thrownOutputGone && chainEjectRefreshTicks <= 20) {
 				return;
 			}
-			if (!resultSlot.hasItem()) {
+			if (thrownOutputGone) {
 				BulkChainCraftController.addEjectedOutput(chainEjectPendingStack, chainEjectPendingCount);
 				ChainCraftController.noteFinalOutputEjected(chainEjectPendingCount);
 			} else {
