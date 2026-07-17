@@ -15,6 +15,15 @@ import net.minecraft.world.item.ItemStack;
 final class AutoMoveController {
 	private static final int BULK_RESULT_WAIT_TIMEOUT_TICKS = 20;
 	private static final int ORGANIZE_TARGET_ARRIVAL_WAIT_TICKS = 10;
+	// A foreign result must PERSIST this many consecutive ticks before it
+	// counts as a recipe change. While a placement stages the grid slot by
+	// slot, the partial grid transiently completes other recipes (3 cobble in
+	// a row previews cobblestone_slab mid-dispenser-place) and the preview
+	// settles to the real output within a tick or two of the last slot
+	// arriving. Insta-failing on that window cost a backoff + a phantom drop
+	// fed into the place budget's AIMD (9 times per 108-craft soak).
+	private static final int FOREIGN_RESULT_DEBOUNCE_TICKS = 5;
+	private static int foreignResultTicks = 0;
 	private static int autoMoveWaitingTicks = 0;
 	private static boolean pendingAutoMove = false;
 	private static ItemStack autoMoveTargetStack = ItemStack.EMPTY;
@@ -37,6 +46,7 @@ final class AutoMoveController {
 	static void scheduleAutoMove(ItemStack expectedStack) {
 		pendingAutoMove = true;
 		autoMoveWaitingTicks = 0;
+		foreignResultTicks = 0;
 		autoMoveTargetArrivalObserved = false;
 		directEjectAwaitingStagedCopiesTicks = 0;
 		autoMoveExpectedStack = expectedStack != null ? expectedStack.copy() : ItemStack.EMPTY;
@@ -247,6 +257,35 @@ final class AutoMoveController {
 				ItemStack currentResult = resultSlot.getItem();
 
 				if (!autoMoveExpectedStack.isEmpty() && !ItemStack.isSameItemSameComponents(currentResult, autoMoveExpectedStack)) {
+					if (GridTopUp.isRingAwaitingKeyItem(client, menu)) {
+						// The bulk ring's key (unstackable) slot is empty between
+						// cycles and the remaining ring previews a foreign recipe
+						// (bow-less dispenser ring -> dropper). Expected transient,
+						// not a recipe change: keep waiting for the next key insert.
+						// Failing here costs a backoff, a ring rebuild, and a
+						// phantom drop fed into the place budget's AIMD.
+						autoMoveWaitingTicks++;
+						if (autoMoveWaitingTicks % 20 == 1) {
+							com.reachcrafting.ReachCraftingMod.LOGGER.info(
+								"[auto_move] foreign preview over key-empty ring (expected={}, preview={}); waiting",
+								ContainerUtils.formatStack(autoMoveExpectedStack),
+								ContainerUtils.formatStack(currentResult)
+							);
+						}
+						return;
+					}
+					foreignResultTicks++;
+					if (foreignResultTicks <= FOREIGN_RESULT_DEBOUNCE_TICKS) {
+						if (foreignResultTicks == 1) {
+							com.reachcrafting.ReachCraftingMod.LOGGER.info(
+								"[auto_move] foreign result preview (expected={}, found={}); debouncing",
+								ContainerUtils.formatStack(autoMoveExpectedStack),
+								ContainerUtils.formatStack(currentResult)
+							);
+						}
+						return;
+					}
+					foreignResultTicks = 0;
 					com.reachcrafting.ReachCraftingMod.LOGGER.info(
 						"[auto_move] Recipe changed! Expected: {}, Found: {}. Stopping.",
 						ContainerUtils.formatStack(autoMoveExpectedStack),
@@ -260,6 +299,8 @@ final class AutoMoveController {
 					ChainCraftController.onAutoMoveFinished(client, false);
 					return;
 				}
+
+				foreignResultTicks = 0;
 
 				BulkAutoCraftController.BulkOutputDisposition bulkDisposition =
 					BulkAutoCraftController.determineCurrentBatchOutputDisposition(client, currentResult);

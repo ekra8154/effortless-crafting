@@ -23,6 +23,11 @@ public final class BulkAutoCraftController {
 	// staged-copies counting (see GridTopUp.recipeAwareStagedCopies).
 	private static RecipeIngredientSummary activeSessionIngredientSummary = null;
 
+	/** The active session's ingredient layout, or null when no session/summary. */
+	static RecipeIngredientSummary activeSessionSummary() {
+		return isActive() ? activeSessionIngredientSummary : null;
+	}
+
 	static void startOrUpdate(
 		RecipeBookClickCapture.HeldRecipeAction action,
 		int requestedRecipeCopies,

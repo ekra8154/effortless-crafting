@@ -217,7 +217,11 @@ final class RecipeBookInputController {
 			retrievalRequested
 		);
 
-		if (!ContainerUtils.isGridEmpty(player.containerMenu)) {
+		// Same ring exemption as scheduleReplay: a fresh click over this
+		// recipe's staged ring (e.g. a session restart) must reuse it, not
+		// dump it to inventory and rebuild (~20 wasted clicks + grid churn).
+		if (!ContainerUtils.isGridEmpty(player.containerMenu)
+			&& !GridTopUp.isRingForRecipe(minecraft, player, recipeId, collection)) {
 			ContainerUtils.flushCraftingGrid(minecraft, allowNearbyChests, true);
 			state.setReplayDelayTicks(1);
 			RecipeBookClickCapture.HeldRecipeAction action = new RecipeBookClickCapture.HeldRecipeAction(
