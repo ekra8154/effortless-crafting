@@ -56,6 +56,24 @@ final class GridExtractor {
 	/** Ticks spent waiting for grid slots to sync after the result matched. */
 	private static int gridSyncWaitTicks = 0;
 	/**
+	 * Craft pacing watchdog: totalTicks value of the previous craft. A gap
+	 * beyond SLOW_CRAFT_GAP_TICKS logs a warning with diagnostic state —
+	 * silent at normal pace, loud exactly when the user-visible "slow mode"
+	 * (a couple crafts per second) appears.
+	 */
+	private static int lastCraftTick = -1;
+	private static final int SLOW_CRAFT_GAP_TICKS = 15;
+
+	private static void noteCraftPace(String mode) {
+		if (lastCraftTick >= 0 && totalTicks - lastCraftTick >= SLOW_CRAFT_GAP_TICKS) {
+			ReachCraftingMod.LOGGER.warn(
+				"[grid_extract] slow_craft gap_ticks={} mode={} crafted={}/{} governor_clicks={} quiet_ticks={} key_cycle={}",
+				totalTicks - lastCraftTick, mode, craftedCopies, targetCopies,
+				GridTopUp.clickWindowCount(), quietTicks, keyCycleSummary != null);
+		}
+		lastCraftTick = totalTicks;
+	}
+	/**
 	 * T2 key-cycle mode (chain finals with one unstackable ingredient, e.g.
 	 * the dispenser's bow): when the result slot empties because the key was
 	 * consumed, ask GridTopUp to restage (ring upkeep + next key insert, all
@@ -133,6 +151,7 @@ final class GridExtractor {
 		quickMoves = 0;
 		pickups = 0;
 		gridSyncWaitTicks = 0;
+		lastCraftTick = -1;
 		recipeSummary = summary;
 		keyCycleSummary = keyCycle ? summary : null;
 		allowOvershoot = !keyCycle && !ChainCraftController.currentStepSharesIngredientsWithLaterSteps();
@@ -250,6 +269,7 @@ final class GridExtractor {
 				BulkChainCraftController.addEjectedOutput(thrown, thrownItems);
 				ChainCraftController.noteFinalOutputEjected(thrownItems);
 				craftedCopies++;
+				noteCraftPace("throw");
 				clicksThisTick++;
 				continue;
 			}
@@ -306,6 +326,7 @@ final class GridExtractor {
 					"[grid_extract] quick_move staged={} credited={} overshoot={}",
 					staged, Math.min(staged, remaining), allowOvershoot);
 				craftedCopies += Math.min(staged, remaining);
+				noteCraftPace("quick_move");
 				clicksThisTick++;
 				continue;
 			}
@@ -332,6 +353,7 @@ final class GridExtractor {
 			GridTopUp.recordClick();
 			pickups++;
 			craftedCopies++;
+			noteCraftPace("pickup");
 			clicksThisTick++;
 		}
 	}

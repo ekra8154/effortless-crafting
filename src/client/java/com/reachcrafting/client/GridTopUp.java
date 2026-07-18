@@ -138,6 +138,15 @@ final class GridTopUp {
 		return true;
 	}
 
+	/** Current trailing-window click count (diagnostics for slow-craft logs). */
+	static int clickWindowCount() {
+		long now = System.currentTimeMillis();
+		while (!recentClicks.isEmpty() && now - recentClicks.peekFirst() > CLICK_WINDOW_MS) {
+			recentClicks.pollFirst();
+		}
+		return recentClicks.size();
+	}
+
 	static void recordClick() {
 		recentClicks.addLast(System.currentTimeMillis());
 	}
