@@ -52,6 +52,14 @@ final class GridTopUp {
 	private static final int CLICK_WINDOW_CAP = 280;
 	private static final java.util.ArrayDeque<Long> recentClicks = new java.util.ArrayDeque<>();
 
+	// Whether the most recent tryStageInsteadOfPlace returned false ONLY
+	// because the click governor declined. The extractor must tell this apart
+	// from a genuinely dead ring: a saturated window drains at ~40 clicks/s,
+	// so waiting a few ticks resumes the ring at 3 clicks/craft — while
+	// treating it as "grid spent" flushes the ring and falls back to one
+	// place packet + ~20 clicks per craft.
+	private static boolean lastStageDeclineWasBudget = false;
+
 	private GridTopUp() {
 	}
 
@@ -149,6 +157,11 @@ final class GridTopUp {
 
 	static void recordClick() {
 		recentClicks.addLast(System.currentTimeMillis());
+	}
+
+	/** Did the last staging attempt fail purely on the click governor? */
+	static boolean lastStageDeclineWasBudget() {
+		return lastStageDeclineWasBudget;
 	}
 
 	/**
@@ -291,6 +304,7 @@ final class GridTopUp {
 	 * path (partial click work is safe — the placement packet reconciles).
 	 */
 	static boolean tryStageInsteadOfPlace(Minecraft client, LocalPlayer player, RecipeIngredientSummary summary) {
+		lastStageDeclineWasBudget = false;
 		if (client == null || player == null || summary == null || client.gameMode == null) {
 			return declined("null_input");
 		}
@@ -336,9 +350,10 @@ final class GridTopUp {
 			// and avoids leaving an incomplete grid.
 			return declined("multi_unstackable");
 		}
-		// Estimate honestly: a cold build costs ~24 clicks, but per-cycle ring
-		// upkeep (one key insert + occasional refill) costs ~8. Overstating
-		// the cost made the governor decline healthy mid-batch cycles.
+		// Estimate what THIS cycle will actually click: cold build ~24, ring
+		// refill (spread/deposits) ~12, steady-state key insert 2. The old
+		// flat 8-per-cycle estimate made the governor refuse steady cycles
+		// that cost 2, stranding an intact ring at a saturated window.
 		boolean gridHoldsRingStacks = false;
 		for (int i = 1; i <= gridCount; i++) {
 			if (menu.getSlot(i).getItem().getCount() >= 2) {
@@ -346,7 +361,28 @@ final class GridTopUp {
 				break;
 			}
 		}
-		if (!clickBudgetAllows(gridHoldsRingStacks ? 8 : 24)) {
+		boolean refillNeeded = false;
+		for (int i = 0; i < slots.size(); i++) {
+			RecipeIngredientSummary.IngredientSlot slot = slots.get(i);
+			if (slot.isEmpty() || slot.maxStackSize() <= 1) {
+				continue;
+			}
+			ItemStack inGrid = menu.getSlot(1 + i).getItem();
+			if (inGrid.isEmpty() || inGrid.getCount() < RING_LOW_WATER) {
+				refillNeeded = true;
+				break;
+			}
+		}
+		// NOTE: refills are NOT deferrable under a tight budget. Skipping
+		// low-water refills to keep crafting on remainders was tried and let
+		// slots drain to empty mid-batch — an empty stackable slot breaks the
+		// ring invariant (isRingForRecipe / isRingAwaitingKeyItem require all
+		// stackable slots non-empty), sending settlement into foreign-preview
+		// retries and leaving the grid visibly uneven. A ~2s clean plateau
+		// wait beats that.
+		int estimatedClicks = !gridHoldsRingStacks ? 24 : refillNeeded ? 12 : 2;
+		if (!clickBudgetAllows(estimatedClicks)) {
+			lastStageDeclineWasBudget = true;
 			return false; // clickBudgetAllows already logged the governor warn
 		}
 

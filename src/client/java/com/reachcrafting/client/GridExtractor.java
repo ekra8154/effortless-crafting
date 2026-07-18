@@ -55,6 +55,8 @@ final class GridExtractor {
 	private static int pickups = 0;
 	/** Ticks spent waiting for grid slots to sync after the result matched. */
 	private static int gridSyncWaitTicks = 0;
+	/** Ticks spent idling on a governor-declined ring restage (slow ring mode). */
+	private static int budgetWaitTicks = 0;
 	/**
 	 * Craft pacing watchdog: totalTicks value of the previous craft. A gap
 	 * beyond SLOW_CRAFT_GAP_TICKS logs a warning with diagnostic state —
@@ -158,6 +160,7 @@ final class GridExtractor {
 		quickMoves = 0;
 		pickups = 0;
 		gridSyncWaitTicks = 0;
+		budgetWaitTicks = 0;
 		lastCraftTick = -1;
 		recipeSummary = summary;
 		keyCycleSummary = keyCycle ? summary : null;
@@ -245,6 +248,22 @@ final class GridExtractor {
 						clicksThisTick++; // staging spent clicks; recount next loop
 						continue;
 					}
+					if (GridTopUp.lastStageDeclineWasBudget()) {
+						// Ring intact, click window saturated. The window drains
+						// at ~40 clicks/s and the next cycle costs ~2 clicks, so
+						// this resolves in a few ticks of idling ("slow ring
+						// mode"). It must NOT count as quiet: the grid_spent
+						// finish flushes a healthy ring and falls back to one
+						// place packet + ~20 clicks per craft.
+						quietTicks = 0;
+						budgetWaitTicks++;
+						if (budgetWaitTicks == 1 || budgetWaitTicks % 40 == 0) {
+							ReachCraftingMod.LOGGER.info(
+								"[grid_extract] budget_wait ticks={} crafted={}/{} governor_clicks={}",
+								budgetWaitTicks, craftedCopies, targetCopies, GridTopUp.clickWindowCount());
+						}
+						return;
+					}
 				}
 				// T1 with progress and a verifiably empty grid: spent, done —
 				// no need to burn the quiet-tick window (client prediction
@@ -264,6 +283,7 @@ final class GridExtractor {
 				return;
 			}
 			quietTicks = 0;
+			budgetWaitTicks = 0;
 			int remaining = targetCopies - craftedCopies;
 			if (ejectOutputs) {
 				// T2 eject: the ring holds exactly ONE key item (bow), so a
@@ -422,6 +442,7 @@ final class GridExtractor {
 		quickMoves = 0;
 		pickups = 0;
 		gridSyncWaitTicks = 0;
+		budgetWaitTicks = 0;
 		active = false;
 		expectedOutput = ItemStack.EMPTY;
 		targetCopies = 0;
