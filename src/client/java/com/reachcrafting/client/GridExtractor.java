@@ -62,7 +62,8 @@ final class GridExtractor {
 	 * (a couple crafts per second) appears.
 	 */
 	private static int lastCraftTick = -1;
-	private static final int SLOW_CRAFT_GAP_TICKS = 15;
+	private static long lastFinishMillis = 0;
+	private static final int SLOW_CRAFT_GAP_TICKS = 10;
 
 	private static void noteCraftPace(String mode) {
 		if (lastCraftTick >= 0 && totalTicks - lastCraftTick >= SLOW_CRAFT_GAP_TICKS) {
@@ -141,6 +142,12 @@ final class GridExtractor {
 	 * unstackable slot between crafts (T2 chain finals).
 	 */
 	static void begin(ItemStack output, int copies, RecipeIngredientSummary summary, boolean keyCycle) {
+		if (lastFinishMillis > 0 && System.currentTimeMillis() - lastFinishMillis > 600) {
+			// The freeze BETWEEN batches: settle/replan/withdrawal seam.
+			ReachCraftingMod.LOGGER.warn(
+				"[grid_extract] batch_seam_gap ms={} governor_clicks={}",
+				System.currentTimeMillis() - lastFinishMillis, GridTopUp.clickWindowCount());
+		}
 		active = true;
 		expectedOutput = output != null ? output.copy() : ItemStack.EMPTY;
 		targetCopies = Math.max(copies, 1);
@@ -426,6 +433,7 @@ final class GridExtractor {
 		recipeSummary = null;
 		ejectOutputs = false;
 		allowOvershoot = false;
+		lastFinishMillis = System.currentTimeMillis();
 		ChainCraftController.onAutoMoveFinished(client, success);
 	}
 }
