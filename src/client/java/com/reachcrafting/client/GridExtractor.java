@@ -48,6 +48,8 @@ final class GridExtractor {
 	private static int craftedCopies = 0;
 	private static int totalTicks = 0;
 	private static int quietTicks = 0;
+	/** Consecutive ticks the result slot has matched the expected output. */
+	private static int resultStableTicks = 0;
 	/**
 	 * T2 key-cycle mode (chain finals with one unstackable ingredient, e.g.
 	 * the dispenser's bow): when the result slot empties because the key was
@@ -116,6 +118,7 @@ final class GridExtractor {
 		craftedCopies = 0;
 		totalTicks = 0;
 		quietTicks = 0;
+		resultStableTicks = 0;
 		recipeSummary = summary;
 		keyCycleSummary = keyCycle ? summary : null;
 		// Honor the session's output policy: an eject-mode bulk chain throws
@@ -171,6 +174,7 @@ final class GridExtractor {
 			}
 			ItemStack result = resultSlot.getItem();
 			if (result.isEmpty() || !ItemStack.isSameItemSameComponents(result, expectedOutput)) {
+				resultStableTicks = 0;
 				// Key-cycle: an empty/foreign result usually just means the
 				// key item (bow) was consumed by the last craft — restage via
 				// clicks (ring upkeep + next key insert) and the predicted
@@ -191,6 +195,13 @@ final class GridExtractor {
 						continue;
 					}
 				}
+				// T1 with progress and a verifiably empty grid: spent, done —
+				// no need to burn the quiet-tick window (client prediction
+				// empties the grid synchronously with the last quick-move).
+				if (keyCycleSummary == null && craftedCopies > 0 && rawStagedCopies(menu) == 0 && carried.isEmpty()) {
+					finish(client, true, "grid_spent");
+					return;
+				}
 				// Either the budget-deferred placement has not landed yet, a
 				// transient preview is settling, or the staged grid is spent.
 				quietTicks++;
@@ -202,40 +213,46 @@ final class GridExtractor {
 				return;
 			}
 			quietTicks = 0;
-			// Fast path: when everything staged fits inside the remaining
-			// target, ONE click consumes it exactly — QUICK_MOVE (vanilla
-			// shift-click, the release-jar behavior: server crafts the whole
-			// staged amount in one action) or, for eject-mode chain finals, a
-			// THROW that crafts-and-drops it. Chain batches stage exactly the
-			// withdrawn materials, so this is the common case; the counted
-			// per-copy PICKUP below only remains for staged > remaining,
-			// where consumption must be capped click by click.
-			int staged = Math.max(GridTopUp.recipeAwareStagedCopies(menu, recipeSummary, 1), 1);
+			resultStableTicks++;
 			int remaining = targetCopies - craftedCopies;
-			// Anti-clog rule (the reason blind craft-all was rejected in the
-			// first place): a QUICK_MOVE crafts everything staged, and
-			// UNSTACKABLE outputs land one per inventory slot — 16 bows into
-			// a materials-laden inventory overflow, and crediting crafts that
-			// never happened kills the step. The one-click path is safe for
-			// throws (never touch the inventory), stackable outputs, and
-			// unstackable outputs with VERIFIED room (empty slots >= staged —
-			// the chest-fed case, where the inventory is mostly free);
-			// otherwise the counted pickup+deposit below self-regulates.
-			boolean fastPathSafe = ejectOutputs
-				|| expectedOutput.getMaxStackSize() > 1
+			if (ejectOutputs) {
+				// T2 eject: the ring holds exactly ONE key item (bow), so a
+				// THROW crafts-and-drops exactly one copy — no staged-count
+				// estimate needed, and the inventory is never touched.
+				ItemStack thrown = result.copy();
+				client.gameMode.handleInventoryMouseClick(menu.containerId, resultSlot.index, 1, ClickType.THROW, client.player);
+				GridTopUp.recordClick();
+				int thrownItems = Math.max(thrown.getCount(), 1);
+				BulkChainCraftController.addEjectedOutput(thrown, thrownItems);
+				ChainCraftController.noteFinalOutputEjected(thrownItems);
+				craftedCopies++;
+				clicksThisTick++;
+				continue;
+			}
+			// Fast path: ONE QUICK_MOVE (vanilla shift-click) consumes the
+			// whole staged batch when it fits the remaining target. The craft
+			// count must be RELIABLE first, and both estimators lie in a
+			// window each:
+			// - the recipe-aware map misreads shaped rows the server placed
+			//   at an offset (returned 0 -> "1" -> craft-all overshot 36/9);
+			// - the raw min over non-empty slots reads an EMPTY grid in the
+			//   tick where the server's result update lands before the grid
+			//   slot updates (also "1" -> craft-all).
+			// So: skip the first matching tick entirely (grid still syncing;
+			// the counted pickup below crafts a safe single copy), then take
+			// the MAX of both estimators — overestimating skips the fast
+			// path, which only costs clicks, never materials — and require a
+			// genuine >=2 reading.
+			int staged = Math.max(
+				GridTopUp.recipeAwareStagedCopies(menu, recipeSummary, 0),
+				rawStagedCopies(menu));
+			// Anti-clog: unstackable outputs land one per inventory slot, so
+			// craft-all needs VERIFIED room; stackable outputs merge freely.
+			boolean fastPathSafe = expectedOutput.getMaxStackSize() > 1
 				|| emptyInventorySlots(menu) >= staged;
-			if (staged <= remaining && fastPathSafe) {
-				if (ejectOutputs) {
-					ItemStack thrown = result.copy();
-					client.gameMode.handleInventoryMouseClick(menu.containerId, resultSlot.index, 1, ClickType.THROW, client.player);
-					GridTopUp.recordClick();
-					int thrownItems = staged * Math.max(thrown.getCount(), 1);
-					BulkChainCraftController.addEjectedOutput(thrown, thrownItems);
-					ChainCraftController.noteFinalOutputEjected(thrownItems);
-				} else {
-					client.gameMode.handleInventoryMouseClick(menu.containerId, resultSlot.index, 0, ClickType.QUICK_MOVE, client.player);
-					GridTopUp.recordClick();
-				}
+			if (resultStableTicks >= 2 && staged >= 2 && staged <= remaining && fastPathSafe) {
+				client.gameMode.handleInventoryMouseClick(menu.containerId, resultSlot.index, 0, ClickType.QUICK_MOVE, client.player);
+				GridTopUp.recordClick();
 				craftedCopies += staged;
 				clicksThisTick++;
 				continue;
@@ -256,6 +273,24 @@ final class GridExtractor {
 			craftedCopies++;
 			clicksThisTick++;
 		}
+	}
+
+	/**
+	 * Copies staged right now = the smallest stack among occupied grid slots.
+	 * Valid whenever the result slot shows the expected output (grid complete);
+	 * position-agnostic, unlike the summary-index mapping.
+	 */
+	private static int rawStagedCopies(AbstractContainerMenu menu) {
+		int gridCount = menu instanceof net.minecraft.world.inventory.CraftingMenu ? 9
+			: menu instanceof net.minecraft.world.inventory.InventoryMenu ? 4 : 0;
+		int staged = Integer.MAX_VALUE;
+		for (int i = 1; i <= gridCount; i++) {
+			ItemStack inGrid = menu.getSlot(i).getItem();
+			if (!inGrid.isEmpty()) {
+				staged = Math.min(staged, inGrid.getCount());
+			}
+		}
+		return staged == Integer.MAX_VALUE ? 0 : staged;
 	}
 
 	private static int emptyInventorySlots(AbstractContainerMenu menu) {
@@ -298,6 +333,7 @@ final class GridExtractor {
 		craftedCopies = 0;
 		totalTicks = 0;
 		quietTicks = 0;
+		resultStableTicks = 0;
 		keyCycleSummary = null;
 		recipeSummary = null;
 		ejectOutputs = false;
