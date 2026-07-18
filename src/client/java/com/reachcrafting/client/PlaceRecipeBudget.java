@@ -53,6 +53,10 @@ public final class PlaceRecipeBudget {
 	private static long lastSendTick = Long.MIN_VALUE;
 	private static long lastDeferralLogTick = Long.MIN_VALUE;
 	private static final int DROP_ATTRIBUTION_WINDOW_TICKS = 45;
+	// A cursor rescue near a timeout means the timeout was (most likely) the
+	// occupied cursor no-oping our place packet, not the server's limiter.
+	private static long lastCursorRescueTick = Long.MIN_VALUE;
+	private static final int CURSOR_RESCUE_ATTRIBUTION_WINDOW_TICKS = 30;
 
 	private PlaceRecipeBudget() {
 	}
@@ -75,6 +79,7 @@ public final class PlaceRecipeBudget {
 		}
 		refill();
 		if (deferred.isEmpty() && tokens >= 1.0) {
+			ensureCursorClear(client);
 			tokens -= 1.0;
 			lastSendTick = clientTicks;
 			return true;
@@ -109,6 +114,7 @@ public final class PlaceRecipeBudget {
 				);
 				continue;
 			}
+			ensureCursorClear(client);
 			tokens -= 1.0;
 			lastSendTick = clientTicks;
 			flushingDeferred = true;
@@ -131,11 +137,60 @@ public final class PlaceRecipeBudget {
 		return false;
 	}
 
+	/**
+	 * The server refuses recipe placement while the player's cursor holds an
+	 * item (vanilla ServerPlaceRecipe bails on a non-empty carried stack), and
+	 * the refusal is SILENT — indistinguishable from a limiter drop. Observed
+	 * on a large server whose anti-cheat rewrites automation clicks: the
+	 * resync lands a flushed crafting remainder (cake's empty buckets) back
+	 * on the cursor after the flush already reported success client-side.
+	 * Deposit the stray stack before every place send.
+	 */
+	private static void ensureCursorClear(Minecraft client) {
+		var player = client.player;
+		if (player == null || client.gameMode == null) {
+			return;
+		}
+		var menu = player.containerMenu;
+		net.minecraft.world.item.ItemStack carried = menu.getCarried();
+		if (carried.isEmpty()) {
+			return;
+		}
+		String itemId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(carried.getItem()).toString();
+		net.minecraft.world.inventory.Slot destination = MenuTransferHelper.findPlayerDestinationSlot(player, menu, itemId);
+		if (destination == null) {
+			ReachCraftingMod.LOGGER.warn(
+				"[place_budget] cursor_occupied no deposit slot for {} - place may no-op",
+				ContainerUtils.formatStack(carried));
+			return;
+		}
+		ReachCraftingMod.LOGGER.warn(
+			"[place_budget] cursor_rescue depositing {} before place send",
+			ContainerUtils.formatStack(carried));
+		client.gameMode.handleInventoryMouseClick(
+			menu.containerId, destination.index, 0,
+			net.minecraft.world.inventory.ClickType.PICKUP, player);
+		GridTopUp.recordClick();
+		noteCursorRescue();
+	}
+
+	/** A stray carried stack was just deposited: a result timeout inside the
+	 * attribution window is explained by the occupied cursor, not the limiter. */
+	public static void noteCursorRescue() {
+		lastCursorRescueTick = clientTicks;
+	}
+
 	/** A result-slot wait timed out after a sent placement: the server most
 	 * likely dropped the packet. Halve the assumed budget (AIMD decrease) and
 	 * treat the window as saturated. */
 	public static void onSuspectedDrop() {
 		if (isUnlimited(Minecraft.getInstance())) {
+			return;
+		}
+		if (clientTicks - lastCursorRescueTick <= CURSOR_RESCUE_ATTRIBUTION_WINDOW_TICKS) {
+			ReachCraftingMod.LOGGER.info(
+				"[place_budget] timeout after cursor rescue ({} ticks ago) - occupied cursor, not a limiter drop; budget unchanged",
+				clientTicks - lastCursorRescueTick);
 			return;
 		}
 		if (clientTicks - lastSendTick > DROP_ATTRIBUTION_WINDOW_TICKS) {

@@ -592,6 +592,33 @@ final class AutoMoveController {
 					stagedCraftCopies,
 					resultSlot.hasItem() ? ContainerUtils.formatStack(resultSlot.getItem()) : "<empty>"
 				);
+				// A server resync can land a foreign stack on the cursor
+				// mid-wait (anti-cheat rejecting a flush click returns cake's
+				// bucket remainders there). The server then refuses every
+				// place packet, no result can ever arrive, and the bulk
+				// timeout below requires an EMPTY cursor — an unbreakable
+				// stall without this rescue.
+				ItemStack carriedNow = menu.getCarried();
+				if (!carriedNow.isEmpty()
+					&& autoMoveWaitingTicks >= 10 && autoMoveWaitingTicks % 10 == 0
+					&& !ItemStack.isSameItemSameComponents(carriedNow, autoMoveExpectedStack)) {
+					String carriedId = net.minecraft.core.registries.BuiltInRegistries.ITEM
+						.getKey(carriedNow.getItem()).toString();
+					Slot rescueSlot = MenuTransferHelper.findPlayerDestinationSlot(client.player, menu, carriedId);
+					if (rescueSlot != null) {
+						com.reachcrafting.ReachCraftingMod.LOGGER.warn(
+							"[auto_move] cursor_rescue depositing stray {} during result wait (waitTicks={})",
+							ContainerUtils.formatStack(carriedNow), autoMoveWaitingTicks);
+						client.gameMode.handleInventoryMouseClick(
+							menu.containerId, rescueSlot.index, 0, ClickType.PICKUP, client.player);
+						GridTopUp.recordClick();
+						PlaceRecipeBudget.noteCursorRescue();
+					} else {
+						com.reachcrafting.ReachCraftingMod.LOGGER.warn(
+							"[auto_move] cursor_rescue no deposit slot for stray {} (waitTicks={})",
+							ContainerUtils.formatStack(carriedNow), autoMoveWaitingTicks);
+					}
+				}
 				// A chain step is a bulk-paced context even though no flat bulk
 				// session is active (chain runs block flat-session arming): the
 				// interactive 10-tick timeout is far too tight for a multi-copy
@@ -611,9 +638,12 @@ final class AutoMoveController {
 					ChainCraftController.onAutoMoveFinished(client, false);
 				} else if (autoMoveWaitingTicks > BULK_RESULT_WAIT_TIMEOUT_TICKS
 					&& BulkAutoCraftController.isActive()
-					&& stagedCraftCopies <= 0
-					&& !resultSlot.hasItem()
-					&& menu.getCarried().isEmpty()) {
+					&& ((stagedCraftCopies <= 0 && !resultSlot.hasItem() && menu.getCarried().isEmpty())
+						// Hard cap: if the gentle conditions (cursor empty etc.)
+						// never come true — e.g. a stray carried stack with no
+						// deposit slot — the wait must still end rather than
+						// spin forever.
+						|| autoMoveWaitingTicks > BULK_RESULT_WAIT_TIMEOUT_TICKS + 60)) {
 					pendingAutoMove = false;
 					autoMoveOrganizing = false;
 					autoMoveTargetArrivalObserved = false;
