@@ -70,6 +70,16 @@ public final class ChainCraftController {
 	}
 
 	/**
+	 * Has the current batch produced ANY observable output? A result-wait
+	 * timeout with partial production is an accounting shortfall (e.g. the
+	 * materials ran out one copy early), NOT a dropped place packet — a real
+	 * drop leaves the batch at zero. Used to spare the AIMD budget.
+	 */
+	static boolean hasCurrentBatchObservedAnyCopies() {
+		return activeRun != null && activeRun.observedProducedRecipeCopies() > 0;
+	}
+
+	/**
 	 * Does the CURRENT step consume any item a LATER step also consumes?
 	 * When it does not, overcrafting the step is harmless surplus (the
 	 * planner recounts availability every iteration) and extraction may
@@ -739,7 +749,15 @@ public final class ChainCraftController {
 		ChainCraftRun withCompletedBatch() {
 			int producedCopies = observedProducedRecipeCopies();
 			int completedCopies = Math.max(1, Math.min(Math.max(scheduledBatchCopies, 1), producedCopies));
-			int remaining = remainingStepCopies - completedCopies;
+			// Copies observed BEYOND the scheduled batch are real output of
+			// this step (an arrival can slide across a batch boundary, and
+			// craft-all overshoot lands here too). Discarding the surplus
+			// made the step's LAST batch schedule one more copy than the
+			// materials could produce; its result wait then timed out and
+			// fed a phantom drop into the place budget's AIMD — once per
+			// iteration, compounding across runs until the budget pinned at
+			// its floor (field: "first run much faster than subsequent").
+			int remaining = remainingStepCopies - Math.max(completedCopies, producedCopies);
 			ReachCraftingMod.LOGGER.info(
 				"[chain_execute] batch_finished index={} scheduled_copies={} observed_copies={} completed_copies={} remaining_before={}",
 				currentStepIndex,

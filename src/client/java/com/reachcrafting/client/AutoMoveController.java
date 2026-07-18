@@ -722,7 +722,15 @@ final class AutoMoveController {
 					autoMoveTargetArrivalObserved = false;
 					autoMoveTargetStack = ItemStack.EMPTY;
 					com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] waiting_for_result timeout in non-bulk mode");
-					PlaceRecipeBudget.onSuspectedDrop();
+					if (ChainCraftController.hasCurrentBatchObservedAnyCopies()) {
+						// Partial batch production proves the place packet
+						// landed; the missing tail is accounting (materials
+						// ran out a copy early), not a limiter drop.
+						com.reachcrafting.ReachCraftingMod.LOGGER.info(
+							"[auto_move] timeout with partial batch production - budget unchanged");
+					} else {
+						PlaceRecipeBudget.onSuspectedDrop();
+					}
 					BulkAutoCraftController.onAutoMoveFinished(client, false);
 					ChainCraftController.onAutoMoveFinished(client, false);
 				} else if (autoMoveWaitingTicks > BULK_RESULT_WAIT_TIMEOUT_TICKS
