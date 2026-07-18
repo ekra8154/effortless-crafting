@@ -39,6 +39,18 @@ final class AutoMoveController {
 	private static int chainEjectRefreshTicks = 0;
 	private static int chainEjectPendingCount = 0;
 	private static ItemStack chainEjectPendingStack = ItemStack.EMPTY;
+	// Grid snapshots taken at the moment of a result-slot THROW. A THROW with
+	// a staged grid is vanilla craft-all-drop: how many copies it ACTUALLY
+	// crafts is whatever the server honors (all staged on vanilla/Paper; ~1
+	// under click-rewriting anti-cheat plugins). Predicted counts lied in
+	// both directions in the field — copper grate credited 64 copies per
+	// throw the server executed once; sticky piston credited 1 for throws
+	// that crafted 60+ (recipe-aware estimator can't read offset-placed
+	// shapes). The settlement blocks credit the OBSERVED grid drain instead.
+	private static ItemStack[] chainEjectGridBefore = null;
+	private static int chainEjectPerCraftCount = 1;
+	private static ItemStack[] directEjectGridBefore = null;
+	private static int directEjectPerCraftCount = 1;
 
 	private AutoMoveController() {
 	}
@@ -56,6 +68,63 @@ final class AutoMoveController {
 			BulkAutoCraftController.isActive(),
 			AutoCraftController.isBulkModeEnabled()
 		);
+	}
+
+	private static ItemStack[] snapshotGridSlots(AbstractContainerMenu menu) {
+		int gridCount = menu instanceof net.minecraft.world.inventory.CraftingMenu ? 9
+			: menu instanceof InventoryMenu ? 4 : 0;
+		ItemStack[] snapshot = new ItemStack[gridCount];
+		for (int i = 0; i < gridCount; i++) {
+			snapshot[i] = menu.getSlot(1 + i).getItem().copy();
+		}
+		return snapshot;
+	}
+
+	/**
+	 * Crafts the server actually executed since {@code before}: the minimum
+	 * per-slot drain across every slot that was staged at throw time. An
+	 * emptied slot or a slot now holding a different item (crafting
+	 * remainder, e.g. cake's buckets) counts as fully drained. Returns -1
+	 * when the snapshot is unusable (no occupied slots recorded).
+	 */
+	private static int observedGridDrainCrafts(AbstractContainerMenu menu, ItemStack[] before) {
+		if (before == null || before.length == 0 || menu.slots.size() <= before.length) {
+			return -1;
+		}
+		int drain = Integer.MAX_VALUE;
+		boolean sawOccupied = false;
+		for (int i = 0; i < before.length; i++) {
+			ItemStack was = before[i];
+			if (was.isEmpty()) {
+				continue;
+			}
+			sawOccupied = true;
+			ItemStack now = menu.getSlot(1 + i).getItem();
+			int slotDrain;
+			if (now.isEmpty() || !ItemStack.isSameItemSameComponents(now, was)) {
+				slotDrain = was.getCount();
+			} else {
+				slotDrain = Math.max(0, was.getCount() - now.getCount());
+			}
+			drain = Math.min(drain, slotDrain);
+		}
+		return sawOccupied ? drain : -1;
+	}
+
+	/** Observed-vs-predicted eject credit: prefer what the grid actually
+	 * drained; fall back to the prediction only when no snapshot exists. */
+	private static int resolveEjectCredit(AbstractContainerMenu menu, ItemStack[] before, int perCraftCount, int predicted, String tag) {
+		int observedCrafts = observedGridDrainCrafts(menu, before);
+		if (observedCrafts < 0) {
+			return predicted;
+		}
+		int observed = observedCrafts * Math.max(perCraftCount, 1);
+		if (observed != predicted) {
+			com.reachcrafting.ReachCraftingMod.LOGGER.info(
+				"[auto_move] {} credit corrected: predicted={} observed={} (crafts={} x{})",
+				tag, predicted, observed, observedCrafts, perCraftCount);
+		}
+		return observed;
 	}
 
 	static boolean isAutoMovePending() {
@@ -97,7 +166,11 @@ final class AutoMoveController {
 		);
 
 		if (directEjectAwaitingSettlement && AutoCraftController.isBulkModeEnabled() && directEjectPendingCount > 0) {
-			BulkAutoCraftController.addEjectedOutput(directEjectPendingCount);
+			int settleCredit = resolveEjectCredit(
+				menu, directEjectGridBefore, directEjectPerCraftCount, directEjectPendingCount, "direct eject (early settle)");
+			if (settleCredit > 0) {
+				BulkAutoCraftController.addEjectedOutput(settleCredit);
+			}
 		}
 
 		pendingAutoMove = false;
@@ -137,6 +210,8 @@ final class AutoMoveController {
 		chainEjectRefreshTicks = 0;
 		chainEjectPendingCount = 0;
 		chainEjectPendingStack = ItemStack.EMPTY;
+		chainEjectGridBefore = null;
+		directEjectGridBefore = null;
 		autoMoveTargetStack = ItemStack.EMPTY;
 		autoMoveExpectedStack = ItemStack.EMPTY;
 		autoMoveSnapshotCounts.clear();
@@ -209,9 +284,12 @@ final class AutoMoveController {
 				);
 				return;
 			}
+			int directCredit = resolveEjectCredit(
+				menu, directEjectGridBefore, directEjectPerCraftCount, directEjectPendingCount, "direct eject");
 			com.reachcrafting.ReachCraftingMod.LOGGER.info(
-				"[auto_move] direct eject settled: ticks={} crediting predicted count={}",
+				"[auto_move] direct eject settled: ticks={} crediting count={} (predicted={})",
 				directEjectSettlementTicks,
+				directCredit,
 				directEjectPendingCount
 			);
 			directEjectAwaitingSettlement = false;
@@ -221,10 +299,11 @@ final class AutoMoveController {
 			autoMoveOrganizing = false;
 			autoMoveTargetArrivalObserved = false;
 			autoMoveTargetStack = ItemStack.EMPTY;
-			if (AutoCraftController.isBulkModeEnabled() && directEjectPendingCount > 0) {
-				BulkAutoCraftController.addEjectedOutput(directEjectPendingCount);
+			if (AutoCraftController.isBulkModeEnabled() && directCredit > 0) {
+				BulkAutoCraftController.addEjectedOutput(directCredit);
 			}
 			directEjectPendingCount = 0;
+			directEjectGridBefore = null;
 			BulkAutoCraftController.onAutoMoveFinished(client, true);
 			ChainCraftController.onAutoMoveFinished(client, true);
 			return;
@@ -252,8 +331,12 @@ final class AutoMoveController {
 				return;
 			}
 			if (thrownOutputGone) {
-				BulkChainCraftController.addEjectedOutput(chainEjectPendingStack, chainEjectPendingCount);
-				ChainCraftController.noteFinalOutputEjected(chainEjectPendingCount);
+				int chainCredit = resolveEjectCredit(
+					menu, chainEjectGridBefore, chainEjectPerCraftCount, chainEjectPendingCount, "chain eject");
+				if (chainCredit > 0) {
+					BulkChainCraftController.addEjectedOutput(chainEjectPendingStack, chainCredit);
+					ChainCraftController.noteFinalOutputEjected(chainCredit);
+				}
 			} else {
 				com.reachcrafting.ReachCraftingMod.LOGGER.info(
 					"[auto_move] chain eject refresh timeout; discarding uncredited pending count={}",
@@ -264,6 +347,7 @@ final class AutoMoveController {
 			chainEjectRefreshTicks = 0;
 			chainEjectPendingCount = 0;
 			chainEjectPendingStack = ItemStack.EMPTY;
+			chainEjectGridBefore = null;
 			if (!menu.getCarried().isEmpty()) {
 				tryResolveCarriedStack(client, menu);
 			}
@@ -458,6 +542,7 @@ final class AutoMoveController {
 						bulkProtectedKeep
 					);
 					ItemStack thrownResult = currentResult.copy();
+					ItemStack[] gridBeforeThrow = snapshotGridSlots(menu);
 					client.gameMode.handleInventoryMouseClick(menu.containerId, resultSlot.index, 1, ClickType.THROW, client.player);
 					if (chainFinalResultEject) {
 						// Credit deferred until the result slot is observed
@@ -466,6 +551,8 @@ final class AutoMoveController {
 						chainEjectRefreshTicks = 0;
 						chainEjectPendingCount = totalEjected;
 						chainEjectPendingStack = thrownResult;
+						chainEjectGridBefore = gridBeforeThrow;
+						chainEjectPerCraftCount = Math.max(currentResult.getCount(), 1);
 						autoMoveWaitingTicks = 0;
 						return;
 					}
@@ -473,6 +560,8 @@ final class AutoMoveController {
 						directEjectPendingCount = totalEjected;
 						directEjectAwaitingSettlement = true;
 						directEjectSettlementTicks = 0;
+						directEjectGridBefore = gridBeforeThrow;
+						directEjectPerCraftCount = Math.max(currentResult.getCount(), 1);
 						autoMoveWaitingTicks = 0;
 						com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] direct eject queued awaiting settlement: predicted_ejected={}", totalEjected);
 						return;
