@@ -50,6 +50,11 @@ final class GridExtractor {
 	private static int quietTicks = 0;
 	/** Consecutive ticks the result slot has matched the expected output. */
 	private static int resultStableTicks = 0;
+	// Extraction mode telemetry: how the batch's crafts actually happened.
+	private static int quickMoves = 0;
+	private static int pickups = 0;
+	/** Ticks spent waiting for grid slots to sync after the result matched. */
+	private static int gridSyncWaitTicks = 0;
 	/**
 	 * T2 key-cycle mode (chain finals with one unstackable ingredient, e.g.
 	 * the dispenser's bow): when the result slot empties because the key was
@@ -61,6 +66,12 @@ final class GridExtractor {
 	private static RecipeIngredientSummary recipeSummary = null;
 	/** Eject-mode chain final: THROW outputs instead of banking them. */
 	private static boolean ejectOutputs = false;
+	/**
+	 * Craft-all allowed past the target: set when no LATER chain step
+	 * consumes this step's ingredients, so surplus output is harmless and
+	 * one shift-click can take the whole staged grid (release behavior).
+	 */
+	private static boolean allowOvershoot = false;
 
 	private GridExtractor() {
 	}
@@ -119,8 +130,12 @@ final class GridExtractor {
 		totalTicks = 0;
 		quietTicks = 0;
 		resultStableTicks = 0;
+		quickMoves = 0;
+		pickups = 0;
+		gridSyncWaitTicks = 0;
 		recipeSummary = summary;
 		keyCycleSummary = keyCycle ? summary : null;
+		allowOvershoot = !keyCycle && !ChainCraftController.currentStepSharesIngredientsWithLaterSteps();
 		// Honor the session's output policy: an eject-mode bulk chain throws
 		// final outputs to keep the inventory fluid; banking them instead
 		// (observed: 4 stacks of dispensers accumulating) starves later
@@ -151,6 +166,17 @@ final class GridExtractor {
 		}
 		AbstractContainerMenu menu = client.player.containerMenu;
 		Slot resultSlot = menu.getSlot(0);
+		// Stability is measured ONCE per tick, before any clicking: a pickup
+		// makes the result flicker empty for one loop iteration, and a
+		// per-iteration counter reset there could never reach the fast-path
+		// threshold — batches stayed stuck in one-at-a-time mode until a
+		// cursor deposit happened to leave the result untouched for a loop.
+		ItemStack resultAtTickStart = resultSlot.getItem();
+		if (!resultAtTickStart.isEmpty() && ItemStack.isSameItemSameComponents(resultAtTickStart, expectedOutput)) {
+			resultStableTicks++;
+		} else {
+			resultStableTicks = 0;
+		}
 		int clicksThisTick = 0;
 		while (clicksThisTick < MAX_CLICKS_PER_TICK) {
 			if (!GridTopUp.clickBudgetAllows(2)) {
@@ -174,7 +200,6 @@ final class GridExtractor {
 			}
 			ItemStack result = resultSlot.getItem();
 			if (result.isEmpty() || !ItemStack.isSameItemSameComponents(result, expectedOutput)) {
-				resultStableTicks = 0;
 				// Key-cycle: an empty/foreign result usually just means the
 				// key item (bow) was consumed by the last craft — restage via
 				// clicks (ring upkeep + next key insert) and the predicted
@@ -213,7 +238,6 @@ final class GridExtractor {
 				return;
 			}
 			quietTicks = 0;
-			resultStableTicks++;
 			int remaining = targetCopies - craftedCopies;
 			if (ejectOutputs) {
 				// T2 eject: the ring holds exactly ONE key item (bow), so a
@@ -246,16 +270,52 @@ final class GridExtractor {
 			int staged = Math.max(
 				GridTopUp.recipeAwareStagedCopies(menu, recipeSummary, 0),
 				rawStagedCopies(menu));
+			if (staged == 0) {
+				// The server's result update landed before the grid slot
+				// updates: the menu is mid-sync. Clicking NOW acts on a
+				// desynced state and triggers server resync churn that kept
+				// whole batches stuck in one-at-a-time mode (paper: 21
+				// pickups before the count ever read true). Wait the sync
+				// out; the quick-move then takes the batch in one click.
+				// Fallback to counted pickups only if the grid never shows.
+				gridSyncWaitTicks++;
+				if (gridSyncWaitTicks <= 20) {
+					return;
+				}
+			} else {
+				gridSyncWaitTicks = 0;
+			}
 			// Anti-clog: unstackable outputs land one per inventory slot, so
 			// craft-all needs VERIFIED room; stackable outputs merge freely.
 			boolean fastPathSafe = expectedOutput.getMaxStackSize() > 1
 				|| emptyInventorySlots(menu) >= staged;
-			if (resultStableTicks >= 2 && staged >= 2 && staged <= remaining && fastPathSafe) {
+			// staged > remaining is a problem when a LATER step needs this
+			// step's ingredients — and, even for unshared leaf ingredients,
+			// when the overshoot is wholesale: converting ALL 64 redstone
+			// blocks (1 slot) into 576 dust (9 slots) inflated slot usage
+			// until the inventory-fit planner could not seat a single batch
+			// (dispenser-chain died at 0/64, reason=inventory_full). So
+			// unshared steps may overshoot by ~25% (skips one-at-a-time over
+			// a spare copy or two), never by conversion-of-everything.
+			int overshootAllowance = allowOvershoot ? Math.max(2, remaining / 4) : 0;
+			if (resultStableTicks >= 2 && staged >= 2 && staged <= remaining + overshootAllowance && fastPathSafe) {
 				client.gameMode.handleInventoryMouseClick(menu.containerId, resultSlot.index, 0, ClickType.QUICK_MOVE, client.player);
 				GridTopUp.recordClick();
-				craftedCopies += staged;
+				quickMoves++;
+				ReachCraftingMod.LOGGER.info(
+					"[grid_extract] quick_move staged={} credited={} overshoot={}",
+					staged, Math.min(staged, remaining), allowOvershoot);
+				craftedCopies += Math.min(staged, remaining);
 				clicksThisTick++;
 				continue;
+			}
+			if (resultStableTicks >= 2 && pickups == 0 && quickMoves == 0) {
+				// One-time note when a batch settles into counted mode: which
+				// gate blocked the shift-click (observability for "why is
+				// this crafting one at a time?").
+				ReachCraftingMod.LOGGER.info(
+					"[grid_extract] counted_mode staged={} remaining={} overshoot={} room_ok={} stable={}",
+					staged, remaining, allowOvershoot, fastPathSafe, resultStableTicks);
 			}
 			if (!carried.isEmpty()
 				&& (!ItemStack.isSameItemSameComponents(carried, result)
@@ -270,6 +330,7 @@ final class GridExtractor {
 			}
 			client.gameMode.handleInventoryMouseClick(menu.containerId, resultSlot.index, 0, ClickType.PICKUP, client.player);
 			GridTopUp.recordClick();
+			pickups++;
 			craftedCopies++;
 			clicksThisTick++;
 		}
@@ -320,13 +381,18 @@ final class GridExtractor {
 
 	private static void finish(Minecraft client, boolean success, String reason) {
 		ReachCraftingMod.LOGGER.info(
-			"[grid_extract] finished success={} reason={} crafted={}/{} ticks={}",
+			"[grid_extract] finished success={} reason={} crafted={}/{} ticks={} quick_moves={} pickups={}",
 			success,
 			reason,
 			craftedCopies,
 			targetCopies,
-			totalTicks
+			totalTicks,
+			quickMoves,
+			pickups
 		);
+		quickMoves = 0;
+		pickups = 0;
+		gridSyncWaitTicks = 0;
 		active = false;
 		expectedOutput = ItemStack.EMPTY;
 		targetCopies = 0;
@@ -337,6 +403,7 @@ final class GridExtractor {
 		keyCycleSummary = null;
 		recipeSummary = null;
 		ejectOutputs = false;
+		allowOvershoot = false;
 		ChainCraftController.onAutoMoveFinished(client, success);
 	}
 }

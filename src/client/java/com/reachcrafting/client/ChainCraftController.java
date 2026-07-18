@@ -69,6 +69,35 @@ public final class ChainCraftController {
 			&& activeRun.observedProducedRecipeCopies() >= activeRun.scheduledBatchCopies();
 	}
 
+	/**
+	 * Does the CURRENT step consume any item a LATER step also consumes?
+	 * When it does not, overcrafting the step is harmless surplus (the
+	 * planner recounts availability every iteration) and extraction may
+	 * craft-all in one shift-click, release-style. When it does (lectern:
+	 * planks feed both slabs and bookshelves), extraction must stay
+	 * copy-exact or the surplus starves the sibling step.
+	 */
+	static boolean currentStepSharesIngredientsWithLaterSteps() {
+		ChainCraftRun run = activeRun;
+		if (run == null) {
+			return true; // unknown -> conservative
+		}
+		java.util.List<ChainCraftPlan.Step> steps = run.plan().steps();
+		int index = run.currentStepIndex();
+		if (index >= steps.size() - 1) {
+			return false; // final step has no later consumers
+		}
+		java.util.Set<String> current = new java.util.HashSet<>(steps.get(index).ingredientSummary().acceptedItemIds());
+		for (int later = index + 1; later < steps.size(); later++) {
+			for (String itemId : steps.get(later).ingredientSummary().acceptedItemIds()) {
+				if (current.contains(itemId)) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
 	static boolean isRunningIntermediateStep() {
 		return activeRun != null && activeRun.currentStepIndex() < activeRun.plan().steps().size() - 1;
 	}

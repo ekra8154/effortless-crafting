@@ -116,6 +116,13 @@ public final class BulkChainCraftController {
 				activeSession.requestedTotalCopies(),
 				ContainerUtils.formatStack(activeSession.selection().displayStack())
 			);
+			if ("abort_all_sessions".equals(reason) || "window_focus_lost".equals(reason)) {
+				// Make user-initiated stops unmistakable in postmortems: this
+				// reason means the screen was closed / focus dropped, i.e. a
+				// deliberate interrupt — NOT a mod failure.
+				ReachCraftingMod.LOGGER.info(
+					"[bulk_chain] session_stop was USER-INITIATED (screen closed or focus lost), not a crafting failure");
+			}
 			if (activeSession.completedCopies() > 0) {
 				ReachCraftingConfig.get().noteRecentRecipe(activeSession.selection().recipeId());
 			}
