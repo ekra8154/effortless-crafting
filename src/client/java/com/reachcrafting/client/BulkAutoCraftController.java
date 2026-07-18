@@ -568,6 +568,76 @@ public final class BulkAutoCraftController {
 		clear();
 	}
 
+	/**
+	 * Can ONE more copy of the active session's recipe be crafted from what
+	 * is on hand (inventory + staged grid + nearby containers when the
+	 * session may withdraw)? Answering "unknown" or any ambiguity returns
+	 * TRUE — the replay then discovers the end the old (slow but exact) way.
+	 * Multi-variant ingredient slots (any-planks) are only counted greedily,
+	 * so a greedy failure also falls back to TRUE rather than ending a run
+	 * that a smarter allocation could continue.
+	 */
+	private static boolean oneMoreCopyAffordable(Minecraft client) {
+		RecipeIngredientSummary summary = activeSessionIngredientSummary;
+		if (summary == null || summary.slots().isEmpty() || client.player == null) {
+			return true;
+		}
+		java.util.Map<String, Integer> available = new java.util.HashMap<>();
+		for (ItemStack stack : client.player.getInventory().getNonEquipmentItems()) {
+			if (!stack.isEmpty()) {
+				available.merge(itemIdOf(stack), stack.getCount(), Integer::sum);
+			}
+		}
+		// Staged ring/grid stacks are live crafting supply, not yet "spent".
+		net.minecraft.world.inventory.AbstractContainerMenu menu = client.player.containerMenu;
+		int gridCount = menu instanceof net.minecraft.world.inventory.CraftingMenu ? 9
+			: menu instanceof net.minecraft.world.inventory.InventoryMenu ? 4 : 0;
+		for (int i = 1; i <= gridCount && i < menu.slots.size(); i++) {
+			ItemStack inGrid = menu.getSlot(i).getItem();
+			if (!inGrid.isEmpty()) {
+				available.merge(itemIdOf(inGrid), inGrid.getCount(), Integer::sum);
+			}
+		}
+		if (activeSession.allowNearby()
+			&& ReachCraftingConfig.get().enableNearbyContainerUsage()
+			&& client.getCameraEntity() != null
+			&& client.level != null) {
+			NearbyContainerCache.ReachableView view = NearbyContainerCache.getReachableView(
+				client.level, client.getCameraEntity(), client.player.blockInteractionRange());
+			for (java.util.Map.Entry<String, Integer> entry : view.aggregateCounts().entrySet()) {
+				available.merge(entry.getKey(), entry.getValue(), Integer::sum);
+			}
+		}
+		boolean sawMultiVariantSlot = false;
+		for (RecipeIngredientSummary.IngredientSlot slot : summary.slots()) {
+			if (slot.isEmpty()) {
+				continue;
+			}
+			if (slot.itemIds().size() > 1) {
+				sawMultiVariantSlot = true;
+			}
+			boolean satisfied = false;
+			for (String itemId : slot.itemIds()) {
+				int have = available.getOrDefault(itemId, 0);
+				if (have > 0) {
+					available.put(itemId, have - 1);
+					satisfied = true;
+					break;
+				}
+			}
+			if (!satisfied) {
+				// Greedy allocation may have starved a multi-variant slot a
+				// smarter assignment could satisfy; never end a run on it.
+				return sawMultiVariantSlot;
+			}
+		}
+		return true;
+	}
+
+	private static String itemIdOf(ItemStack stack) {
+		return net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+	}
+
 	private static java.util.Map<Integer, String> previousSnapshot = new java.util.LinkedHashMap<>();
 
 	public static void tick(Minecraft client) {
@@ -590,6 +660,22 @@ public final class BulkAutoCraftController {
 			postAutoMoveDelayTicks--;
 			if (postAutoMoveDelayTicks == 0) {
 				topUpRequestedCopiesIfNeeded("pre_replay");
+				if (activeSession.completedRecipeCopies() > 0 && !oneMoreCopyAffordable(client)) {
+					// Eager end-of-materials: the counts already prove the next
+					// craft cannot happen. Discovering that by scheduling the
+					// replay anyway cost a failed placement cascade and a ~2s
+					// tail after the visibly-last craft — during which ESC
+					// reported a COMPLETED run as aborted.
+					com.reachcrafting.ReachCraftingMod.LOGGER.info(
+						"[bulk_craft] eager_finish reason=materials_exhausted completed={}/{}",
+						activeSession.completedRecipeCopies(),
+						activeSession.requestedRecipeCopies()
+					);
+					stop(false, "materials_exhausted");
+					postAutoMoveDelayTicks = 0;
+					previousSnapshot.clear();
+					return;
+				}
 				com.reachcrafting.ReachCraftingMod.LOGGER.info(
 					"[bulk_craft] Delay finished. Triggering next batch. remaining={} action_recipe={} allow_nearby={} refillable={}",
 					activeSession.requestedRecipeCopies() - activeSession.completedRecipeCopies(),
