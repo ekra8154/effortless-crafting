@@ -187,7 +187,8 @@ public final class PlaceRecipeBudget {
 		if (isUnlimited(Minecraft.getInstance())) {
 			return;
 		}
-		if (clientTicks - lastCursorRescueTick <= CURSOR_RESCUE_ATTRIBUTION_WINDOW_TICKS) {
+		if (lastCursorRescueTick != Long.MIN_VALUE
+			&& clientTicks - lastCursorRescueTick <= CURSOR_RESCUE_ATTRIBUTION_WINDOW_TICKS) {
 			ReachCraftingMod.LOGGER.info(
 				"[place_budget] timeout after cursor rescue ({} ticks ago) - occupied cursor, not a limiter drop; budget unchanged",
 				clientTicks - lastCursorRescueTick);

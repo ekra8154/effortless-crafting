@@ -65,6 +65,7 @@ public class ReachCraftingModClient implements ClientModInitializer {
 		ChainCraftController.init();
 		BulkChainCraftController.init();
 		GridExtractor.init();
+		CursorRescueWatchdog.init();
 		ContainerFilterRenderer.init();
 		PlaceRecipeBudget.init();
 		ReproHarness.init();

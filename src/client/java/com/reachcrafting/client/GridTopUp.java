@@ -156,7 +156,20 @@ final class GridTopUp {
 	}
 
 	static void recordClick() {
-		recentClicks.addLast(System.currentTimeMillis());
+		long now = System.currentTimeMillis();
+		recentClicks.addLast(now);
+		lastAutomationClickMillis = now;
+	}
+
+	private static long lastAutomationClickMillis = 0;
+
+	/** Millis since ANY automation click (governor-recorded). The cursor
+	 * watchdog uses this to tell a stray carried stack (server resync landed
+	 * it while we idle) from a click sequence currently in flight. */
+	static long millisSinceLastAutomationClick() {
+		return lastAutomationClickMillis == 0
+			? Long.MAX_VALUE
+			: System.currentTimeMillis() - lastAutomationClickMillis;
 	}
 
 	/** Did the last staging attempt fail purely on the click governor? */
