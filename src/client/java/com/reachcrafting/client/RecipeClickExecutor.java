@@ -218,10 +218,21 @@ final class RecipeClickExecutor {
 		// Exact-count requests still chain (the user asked for a number that
 		// direct crafting alone may not reach), and self-referential recipes
 		// always route through the chain path in bulk regardless.
+		// Yellow-indicator contract: if the recipe is directly craftable right
+		// now (counting nearby stock -- exactly what the yellow icon means),
+		// there is no reason to look for a chain alternative until that direct
+		// supply is exhausted. The immediate deficit is computed from
+		// availableCounts, which lags behind the (nearby-aware) craftability
+		// cache on a cold nearby scan -- the first click after opening a table
+		// then wrongly concluded "direct unsatisfiable -> chain", launching an
+		// expensive cyclic planner search AND dropping into tiny eject batches.
+		// Trust the same signal the indicator shows.
+		boolean directlyCraftableNow = !immediateCraftDeficit.hasMissingIngredients()
+			|| ChainCraftabilityCache.isReachable(selectedRecipe.recipeId());
 		boolean directBulkTakesPriority = (refillableBulkMaxMode
 				|| (effectiveCraftAll && AutoCraftController.isBulkModeEnabled()))
 			&& !selfReferentialRecipe
-			&& !immediateCraftDeficit.hasMissingIngredients();
+			&& directlyCraftableNow;
 		boolean canOfferChainCraft = (deficitReport.hasMissingIngredients()
 				|| (selfReferentialRecipe && AutoCraftController.isBulkModeEnabled()))
 			&& !directBulkTakesPriority
