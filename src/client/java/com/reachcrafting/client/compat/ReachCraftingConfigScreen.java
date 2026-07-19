@@ -290,67 +290,6 @@ public final class ReachCraftingConfigScreen {
 
 		crafting.addEntry(autoGroup.build());
 
-		var serverLimitsGroup = entries.startSubCategory(Component.translatable("category.reachcrafting.sub.server_limits"));
-		serverLimitsGroup.setExpanded(false);
-
-		// Current server's learned budget, captured when the screen opens.
-		String budgetSummary = com.reachcrafting.client.PlaceRecipeBudget.currentServerBudgetSummary();
-		serverLimitsGroup.add(entries.startTextDescription(
-			budgetSummary != null
-				? Component.literal(budgetSummary)
-				: Component.translatable("text.reachcrafting.packet_budget_no_server")
-		).build());
-
-		serverLimitsGroup.add(entries.startBooleanToggle(
-				Component.translatable("option.reachcrafting.packet_budget_adaptive"),
-				config.packetBudgetAdaptive()
-			)
-			.setDefaultValue(true)
-			.setTooltip(Component.translatable("tooltip.reachcrafting.packet_budget_adaptive"))
-			.setSaveConsumer(config::setPacketBudgetAdaptive)
-			.build());
-
-		serverLimitsGroup.add(entries.startDoubleField(
-				Component.translatable("option.reachcrafting.packet_budget_initial_rate"),
-				config.packetBudgetInitialRate()
-			)
-			.setDefaultValue(4.0)
-			.setMin(0.5)
-			.setMax(50.0)
-			.setTooltip(Component.translatable("tooltip.reachcrafting.packet_budget_initial_rate"))
-			.setSaveConsumer(config::setPacketBudgetInitialRate)
-			.build());
-
-		serverLimitsGroup.add(entries.startDoubleField(
-				Component.translatable("option.reachcrafting.packet_budget_max_rate"),
-				config.packetBudgetMaxRate()
-			)
-			.setDefaultValue(30.0)
-			.setMin(0.5)
-			.setMax(100.0)
-			.setTooltip(Component.translatable("tooltip.reachcrafting.packet_budget_max_rate"))
-			.setSaveConsumer(config::setPacketBudgetMaxRate)
-			.build());
-
-		// Action toggle: an actual button entry does not exist in this
-		// cloth-config version, so a self-clearing toggle carries the reset.
-		// Value is never persisted (always rebuilt false), so it reads as a
-		// one-shot "do this on save".
-		serverLimitsGroup.add(entries.startBooleanToggle(
-				Component.translatable("option.reachcrafting.packet_budget_reset"),
-				false
-			)
-			.setDefaultValue(false)
-			.setTooltip(Component.translatable("tooltip.reachcrafting.packet_budget_reset"))
-			.setSaveConsumer(doReset -> {
-				if (Boolean.TRUE.equals(doReset)) {
-					com.reachcrafting.client.PlaceRecipeBudget.resetLearnedBudgets();
-				}
-			})
-			.build());
-
-		crafting.addEntry(serverLimitsGroup.build());
-
 
 		// TAB 2: Nearby Chests & Advanced
 		ConfigCategory containers = builder.getOrCreateCategory(Component.translatable("category.reachcrafting.nearby_chests_advanced"));
@@ -544,6 +483,60 @@ public final class ReachCraftingConfigScreen {
 			.build());
 
 		containers.addEntry(messagesGroup.build());
+
+		// Server rate limits, at the bottom of the advanced tab.
+		var serverLimitsGroup = entries.startSubCategory(Component.translatable("category.reachcrafting.sub.server_limits"));
+		serverLimitsGroup.setExpanded(false);
+
+		// Current server's learned budget, captured when the screen opens.
+		String budgetSummary = com.reachcrafting.client.PlaceRecipeBudget.currentServerBudgetSummary();
+		serverLimitsGroup.add(entries.startTextDescription(
+			budgetSummary != null
+				? Component.literal(budgetSummary)
+				: Component.translatable("text.reachcrafting.packet_budget_no_server")
+		).build());
+
+		boolean adaptiveWasOn = config.packetBudgetAdaptive();
+		serverLimitsGroup.add(entries.startBooleanToggle(
+				Component.translatable("option.reachcrafting.packet_budget_adaptive"),
+				config.packetBudgetAdaptive()
+			)
+			.setDefaultValue(true)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.packet_budget_adaptive"))
+			.setSaveConsumer(adaptiveNow -> {
+				config.setPacketBudgetAdaptive(adaptiveNow);
+				// Turning learning off forgets what was learned for the
+				// current server, so a later re-enable probes fresh rather
+				// than resuming a possibly-stale learned rate.
+				if (adaptiveWasOn && !Boolean.TRUE.equals(adaptiveNow)) {
+					com.reachcrafting.client.PlaceRecipeBudget.forgetCurrentServerBudget();
+				}
+			})
+			.build());
+
+		serverLimitsGroup.add(entries.startDoubleField(
+				Component.translatable("option.reachcrafting.packet_budget_initial_rate"),
+				config.packetBudgetInitialRate()
+			)
+			.setDefaultValue(4.0)
+			.setMin(0.5)
+			.setMax(50.0)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.packet_budget_initial_rate"))
+			.setSaveConsumer(config::setPacketBudgetInitialRate)
+			.build());
+
+		serverLimitsGroup.add(entries.startDoubleField(
+				Component.translatable("option.reachcrafting.packet_budget_max_rate"),
+				config.packetBudgetMaxRate()
+			)
+			.setDefaultValue(30.0)
+			.setMin(0.5)
+			.setMax(100.0)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.packet_budget_max_rate"))
+			.setSaveConsumer(config::setPacketBudgetMaxRate)
+			.build());
+
+		containers.addEntry(serverLimitsGroup.build());
 
 		builder.setSavingRunnable(ReachCraftingConfig::save);
 		return builder.build();

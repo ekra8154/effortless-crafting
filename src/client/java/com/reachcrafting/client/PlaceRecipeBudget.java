@@ -368,13 +368,19 @@ public final class PlaceRecipeBudget {
 		}
 	}
 
-	/** Forget every learned per-server budget and re-derive the current
-	 * server's from config on next contact (config-screen "reset" action). */
-	public static void resetLearnedBudgets() {
-		PlaceBudgetStore.clearAll();
-		currentServerKey = null;
+	/** Forget the current server's learned budget so it re-probes from the
+	 * configured initial rate on next contact. Invoked when the user turns
+	 * adaptive learning off (no separate reset control). */
+	public static void forgetCurrentServerBudget() {
+		Minecraft client = Minecraft.getInstance();
+		if (client == null || client.getCurrentServer() == null) {
+			return;
+		}
+		String key = client.getCurrentServer().ip;
+		PlaceBudgetStore.remove(key);
+		currentServerKey = null; // force a fresh load on next contact
 		budgetDirty = false;
-		ReachCraftingMod.LOGGER.info("[place_budget] learned server budgets reset by user");
+		ReachCraftingMod.LOGGER.info("[place_budget] forgot learned budget for server={} (adaptive turned off)", key);
 	}
 
 	/** Human-readable current-server budget for the config screen, or null

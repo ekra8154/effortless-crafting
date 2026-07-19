@@ -48,13 +48,16 @@ final class PlaceBudgetStore {
 		}
 	}
 
-	/** Forget every learned server budget (delete the file + clear cache). */
-	static void clearAll() {
-		budgets = new HashMap<>();
+	/** Forget one server's learned budget and persist the removal. */
+	static void remove(String serverKey) {
+		ensureLoaded();
+		if (budgets.remove(serverKey) == null) {
+			return;
+		}
 		try {
-			Files.deleteIfExists(PATH);
+			Files.writeString(PATH, GSON.toJson(budgets));
 		} catch (Exception e) {
-			ReachCraftingMod.LOGGER.warn("[place_budget] failed to delete server budgets file: {}", e.toString());
+			ReachCraftingMod.LOGGER.warn("[place_budget] failed to persist server-budget removal: {}", e.toString());
 		}
 	}
 

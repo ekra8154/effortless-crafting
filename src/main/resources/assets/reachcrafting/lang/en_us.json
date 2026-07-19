@@ -159,7 +159,5 @@
   "tooltip.reachcrafting.packet_budget_max_rate": "Upper bound for probing on servers that turn out not to limit recipe placements. Learned rates are stored per server in effortless-crafting-server-budgets.json.",
   "option.reachcrafting.packet_budget_adaptive": "Adaptive Rate Learning",
   "tooltip.reachcrafting.packet_budget_adaptive": "When on, the mod probes each server's real placement-packet limit and remembers it per server. Turn off to pin the rate to the Initial value above (no probing, no learning, nothing saved) - useful if you already know your server's limit.",
-  "option.reachcrafting.packet_budget_reset": "Reset Learned Server Budgets (on save)",
-  "tooltip.reachcrafting.packet_budget_reset": "Enable and save to forget every learned per-server rate. Each server is re-probed from the Initial rate on next contact. Resets itself to off.",
   "text.reachcrafting.packet_budget_no_server": "Not connected to a rate-limited server (learned rates are stored per server in effortless-crafting-server-budgets.json)."
 }
