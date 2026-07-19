@@ -48,6 +48,16 @@ final class PlaceBudgetStore {
 		}
 	}
 
+	/** Forget every learned server budget (delete the file + clear cache). */
+	static void clearAll() {
+		budgets = new HashMap<>();
+		try {
+			Files.deleteIfExists(PATH);
+		} catch (Exception e) {
+			ReachCraftingMod.LOGGER.warn("[place_budget] failed to delete server budgets file: {}", e.toString());
+		}
+	}
+
 	private static void ensureLoaded() {
 		if (budgets != null) {
 			return;

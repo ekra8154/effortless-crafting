@@ -293,6 +293,23 @@ public final class ReachCraftingConfigScreen {
 		var serverLimitsGroup = entries.startSubCategory(Component.translatable("category.reachcrafting.sub.server_limits"));
 		serverLimitsGroup.setExpanded(false);
 
+		// Current server's learned budget, captured when the screen opens.
+		String budgetSummary = com.reachcrafting.client.PlaceRecipeBudget.currentServerBudgetSummary();
+		serverLimitsGroup.add(entries.startTextDescription(
+			budgetSummary != null
+				? Component.literal(budgetSummary)
+				: Component.translatable("text.reachcrafting.packet_budget_no_server")
+		).build());
+
+		serverLimitsGroup.add(entries.startBooleanToggle(
+				Component.translatable("option.reachcrafting.packet_budget_adaptive"),
+				config.packetBudgetAdaptive()
+			)
+			.setDefaultValue(true)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.packet_budget_adaptive"))
+			.setSaveConsumer(config::setPacketBudgetAdaptive)
+			.build());
+
 		serverLimitsGroup.add(entries.startDoubleField(
 				Component.translatable("option.reachcrafting.packet_budget_initial_rate"),
 				config.packetBudgetInitialRate()
@@ -313,6 +330,23 @@ public final class ReachCraftingConfigScreen {
 			.setMax(100.0)
 			.setTooltip(Component.translatable("tooltip.reachcrafting.packet_budget_max_rate"))
 			.setSaveConsumer(config::setPacketBudgetMaxRate)
+			.build());
+
+		// Action toggle: an actual button entry does not exist in this
+		// cloth-config version, so a self-clearing toggle carries the reset.
+		// Value is never persisted (always rebuilt false), so it reads as a
+		// one-shot "do this on save".
+		serverLimitsGroup.add(entries.startBooleanToggle(
+				Component.translatable("option.reachcrafting.packet_budget_reset"),
+				false
+			)
+			.setDefaultValue(false)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.packet_budget_reset"))
+			.setSaveConsumer(doReset -> {
+				if (Boolean.TRUE.equals(doReset)) {
+					com.reachcrafting.client.PlaceRecipeBudget.resetLearnedBudgets();
+				}
+			})
 			.build());
 
 		crafting.addEntry(serverLimitsGroup.build());

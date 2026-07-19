@@ -64,6 +64,7 @@ public final class ReachCraftingConfig {
 	// servers that turn out not to limit at all.
 	private static final double DEFAULT_PACKET_BUDGET_INITIAL_RATE = 4.0;
 	private static final double DEFAULT_PACKET_BUDGET_MAX_RATE = 30.0;
+	private static final boolean DEFAULT_PACKET_BUDGET_ADAPTIVE = true;
 	private static final boolean DEFAULT_SHOW_MISSING_INGREDIENTS_MESSAGE = true;
 	private static final boolean DEFAULT_SHOW_CHAIN_CRAFT_MESSAGES = true;
 	private static final boolean DEFAULT_ALT_AS_REQUEST_KEY = true;
@@ -126,6 +127,7 @@ public final class ReachCraftingConfig {
 	private int bulkDespawnWarningSeconds;
 	private double packetBudgetInitialRate;
 	private double packetBudgetMaxRate;
+	private boolean packetBudgetAdaptive;
 	private boolean showMissingIngredientsMessage;
 	private boolean showChainCraftMessages;
 	private boolean altAsRequestKey;
@@ -207,6 +209,7 @@ public final class ReachCraftingConfig {
 			instance.bulkDespawnWarningSeconds = stored.bulkDespawnWarningSeconds != null ? stored.bulkDespawnWarningSeconds : DEFAULT_BULK_DESPAWN_WARNING_SECONDS;
 			instance.packetBudgetInitialRate = stored.packetBudgetInitialRate != null ? stored.packetBudgetInitialRate : DEFAULT_PACKET_BUDGET_INITIAL_RATE;
 			instance.packetBudgetMaxRate = stored.packetBudgetMaxRate != null ? stored.packetBudgetMaxRate : DEFAULT_PACKET_BUDGET_MAX_RATE;
+			instance.packetBudgetAdaptive = stored.packetBudgetAdaptive != null ? stored.packetBudgetAdaptive : DEFAULT_PACKET_BUDGET_ADAPTIVE;
 			instance.showMissingIngredientsMessage = stored.showMissingIngredientsMessage != null ? stored.showMissingIngredientsMessage : DEFAULT_SHOW_MISSING_INGREDIENTS_MESSAGE;
 			instance.showChainCraftMessages = stored.showChainCraftMessages != null ? stored.showChainCraftMessages : DEFAULT_SHOW_CHAIN_CRAFT_MESSAGES;
 			instance.altAsRequestKey = stored.altAsRequestKey != null ? stored.altAsRequestKey : DEFAULT_ALT_AS_REQUEST_KEY;
@@ -615,6 +618,16 @@ public final class ReachCraftingConfig {
 		this.packetBudgetMaxRate = packetBudgetMaxRate;
 	}
 
+	/** When off, the place-packet rate is pinned to the initial rate: no
+	 * upward probing, no per-server learning or persistence. */
+	public boolean packetBudgetAdaptive() {
+		return packetBudgetAdaptive;
+	}
+
+	public void setPacketBudgetAdaptive(boolean packetBudgetAdaptive) {
+		this.packetBudgetAdaptive = packetBudgetAdaptive;
+	}
+
 	public void setBulkDespawnWarningSeconds(int bulkDespawnWarningSeconds) {
 		this.bulkDespawnWarningSeconds = bulkDespawnWarningSeconds;
 	}
@@ -863,6 +876,7 @@ public final class ReachCraftingConfig {
 		defaults.bulkDespawnWarningSeconds = DEFAULT_BULK_DESPAWN_WARNING_SECONDS;
 		defaults.packetBudgetInitialRate = DEFAULT_PACKET_BUDGET_INITIAL_RATE;
 		defaults.packetBudgetMaxRate = DEFAULT_PACKET_BUDGET_MAX_RATE;
+		defaults.packetBudgetAdaptive = DEFAULT_PACKET_BUDGET_ADAPTIVE;
 		defaults.showMissingIngredientsMessage = DEFAULT_SHOW_MISSING_INGREDIENTS_MESSAGE;
 		defaults.showChainCraftMessages = DEFAULT_SHOW_CHAIN_CRAFT_MESSAGES;
 		defaults.altAsRequestKey = DEFAULT_ALT_AS_REQUEST_KEY;
@@ -1112,6 +1126,7 @@ public final class ReachCraftingConfig {
 		private Integer bulkDespawnWarningSeconds;
 		private Double packetBudgetInitialRate;
 		private Double packetBudgetMaxRate;
+		private Boolean packetBudgetAdaptive;
 		private Boolean showMissingIngredientsMessage;
 		private Boolean showChainCraftMessages;
 		private Boolean altAsRequestKey;
@@ -1166,6 +1181,7 @@ public final class ReachCraftingConfig {
 			this.bulkDespawnWarningSeconds = config.bulkDespawnWarningSeconds;
 			this.packetBudgetInitialRate = config.packetBudgetInitialRate;
 			this.packetBudgetMaxRate = config.packetBudgetMaxRate;
+			this.packetBudgetAdaptive = config.packetBudgetAdaptive;
 			this.showMissingIngredientsMessage = config.showMissingIngredientsMessage;
 			this.showChainCraftMessages = config.showChainCraftMessages;
 			this.altAsRequestKey = config.altAsRequestKey;

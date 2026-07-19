@@ -112,6 +112,20 @@ public final class PlaceRecipeBudget {
 		currentServerKey = key;
 		cleanProgressSinceDrop = 0;
 		ReachCraftingConfig config = ReachCraftingConfig.get();
+		if (!config.packetBudgetAdaptive()) {
+			// Learning disabled: pin to the configured initial rate, never
+			// load or persist. In-session drops may still lower it (safety),
+			// but nothing is remembered across servers or restarts.
+			ratePerSecond = config.packetBudgetInitialRate();
+			burstCapacity = DEFAULT_BURST_CAPACITY;
+			ceilingRate = config.packetBudgetInitialRate();
+			tokens = Math.min(tokens, burstCapacity);
+			budgetDirty = false;
+			ReachCraftingMod.LOGGER.info(
+				"[place_budget] adaptive OFF; pinned server={} rate={}/s", key,
+				String.format("%.2f", ratePerSecond));
+			return;
+		}
 		PlaceBudgetStore.ServerBudget stored = PlaceBudgetStore.load(key);
 		if (stored != null) {
 			ratePerSecond = clamp(stored.rate(), MIN_RATE_PER_SECOND, config.packetBudgetMaxRate());
@@ -138,7 +152,7 @@ public final class PlaceRecipeBudget {
 	}
 
 	private static void persistIfDirty(boolean force) {
-		if (!budgetDirty || currentServerKey == null) {
+		if (!budgetDirty || currentServerKey == null || !ReachCraftingConfig.get().packetBudgetAdaptive()) {
 			return;
 		}
 		long now = System.currentTimeMillis();
@@ -319,6 +333,9 @@ public final class PlaceRecipeBudget {
 			return;
 		}
 		ensureServerBudgetLoaded(client);
+		if (!ReachCraftingConfig.get().packetBudgetAdaptive()) {
+			return; // learning disabled: never probe up
+		}
 		if (recentSendRate() < ratePerSecond * UTILIZATION_THRESHOLD) {
 			// The current budget was not even used; a "clean batch" at idle
 			// proves nothing about the server's limit. Do not raise, do not
@@ -349,6 +366,33 @@ public final class PlaceRecipeBudget {
 				String.format("%.2f", ratePerSecond), String.format("%.1f", burstCapacity),
 				String.format("%.2f", recentSendRate()));
 		}
+	}
+
+	/** Forget every learned per-server budget and re-derive the current
+	 * server's from config on next contact (config-screen "reset" action). */
+	public static void resetLearnedBudgets() {
+		PlaceBudgetStore.clearAll();
+		currentServerKey = null;
+		budgetDirty = false;
+		ReachCraftingMod.LOGGER.info("[place_budget] learned server budgets reset by user");
+	}
+
+	/** Human-readable current-server budget for the config screen, or null
+	 * when not connected to a rate-limited server. */
+	public static String currentServerBudgetSummary() {
+		Minecraft client = Minecraft.getInstance();
+		if (client == null || client.getCurrentServer() == null || isUnlimited(client)) {
+			return null;
+		}
+		String key = client.getCurrentServer().ip;
+		if (!ReachCraftingConfig.get().packetBudgetAdaptive()) {
+			return String.format("%s: pinned %.1f/s (adaptive off)", key, ratePerSecond);
+		}
+		PlaceBudgetStore.ServerBudget stored = PlaceBudgetStore.load(key);
+		if (stored != null) {
+			return String.format("%s: learned %.1f/s (ceiling %.1f/s)", key, stored.rate(), stored.ceiling());
+		}
+		return key + ": not yet learned";
 	}
 
 	private static void noteSend() {
