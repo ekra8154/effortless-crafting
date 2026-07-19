@@ -385,14 +385,19 @@ public final class PlaceRecipeBudget {
 			return null;
 		}
 		String key = client.getCurrentServer().ip;
-		if (!ReachCraftingConfig.get().packetBudgetAdaptive()) {
-			return String.format("%s: pinned %.1f/s (adaptive off)", key, ratePerSecond);
+		ReachCraftingConfig config = ReachCraftingConfig.get();
+		if (!config.packetBudgetAdaptive()) {
+			return String.format("%s: pinned at %.1f/s (adaptive learning off)", key, config.packetBudgetInitialRate());
 		}
 		PlaceBudgetStore.ServerBudget stored = PlaceBudgetStore.load(key);
 		if (stored != null) {
-			return String.format("%s: learned %.1f/s (ceiling %.1f/s)", key, stored.rate(), stored.ceiling());
+			return String.format("%s: learned %.1f/s (probe ceiling %.1f/s)", key, stored.rate(), stored.ceiling());
 		}
-		return key + ": not yet learned";
+		// No stored entry does NOT mean "unknown speed" -- it means the budget
+		// has never had to change on this server, so it is simply running at
+		// the default. Show that, not a bare "not learned".
+		return String.format("%s: %.1f/s (default; only adjusts if the server limits recipe placement)",
+			key, config.packetBudgetInitialRate());
 	}
 
 	private static void noteSend() {
