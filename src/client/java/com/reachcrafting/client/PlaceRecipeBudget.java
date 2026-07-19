@@ -30,17 +30,46 @@ import java.util.ArrayDeque;
  */
 public final class PlaceRecipeBudget {
 	// Paper's stock limiter admits 20 place packets per 4s window. A token
-	// bucket admits burst + rate*window per window, so keep
-	// DEFAULT_BURST_CAPACITY + DEFAULT_RATE_PER_SECOND*4 <= ~19 for margin.
-	private static final double DEFAULT_RATE_PER_SECOND = 4.0;
+	// bucket admits burst + rate*window per window, so the configurable
+	// initial rate (default 4.0) + DEFAULT_BURST_CAPACITY sits under that.
 	private static final double DEFAULT_BURST_CAPACITY = 3.0;
 	private static final double MIN_RATE_PER_SECOND = 0.5;
 	private static final double MIN_BURST_CAPACITY = 2.0;
+	// Bursts stay small while the rate is in stock-Paper territory (the 4s
+	// window tolerates little), and may grow once the server has proven
+	// permissive.
+	private static final double MAX_BURST_CAPACITY = 10.0;
+	// Probing pattern (M4): while the ceiling is untouched (this server has
+	// never dropped us) each clean batch multiplies the rate — a permissive
+	// server reaches full speed within one session. The first drop records
+	// WHERE the wall is (ceiling = 0.9x the failing rate) and probing turns
+	// additive below it. After enough consecutive clean batches the ceiling
+	// relaxes, so a server whose config was loosened gets re-probed.
+	private static final double SLOW_START_MULTIPLIER = 1.25;
+	private static final double ADDITIVE_INCREASE_PER_PROGRESS = 0.1;
+	private static final int CEILING_RELAX_CLEAN_BATCHES = 300;
+	private static final double CEILING_RELAX_MULTIPLIER = 1.5;
+	private static final long PERSIST_DEBOUNCE_MS = 10_000;
 
-	private static double ratePerSecond = DEFAULT_RATE_PER_SECOND;
+	private static double ratePerSecond = 4.0;
 	private static double burstCapacity = DEFAULT_BURST_CAPACITY;
+	private static double ceilingRate = 30.0;
 	private static double tokens = DEFAULT_BURST_CAPACITY;
 	private static long lastRefillNanos = System.nanoTime();
+	// Per-server persistence (PlaceBudgetStore): which server the current
+	// in-memory budget belongs to, and whether it has unsaved changes.
+	private static String currentServerKey = null;
+	private static int cleanProgressSinceDrop = 0;
+	private static boolean budgetDirty = false;
+	private static long lastPersistMillis = 0;
+	// Timestamps of actual place-packet sends. Probing only raises the rate
+	// when recent demand UTILIZED most of the current budget: our optimized
+	// workloads often send far below the allowance (one packet per T1
+	// batch), and climbing on such idle "clean batches" learned a fantasy
+	// rate (30/s on stock Paper) that later bursty sessions crashed into.
+	private static final ArrayDeque<Long> sendTimes = new ArrayDeque<>();
+	private static final long UTILIZATION_WINDOW_MS = 5_000;
+	private static final double UTILIZATION_THRESHOLD = 0.7;
 
 	private record PendingPlace(int containerId, RecipeDisplayId recipeId, boolean useMaxItems) {
 	}
@@ -70,6 +99,59 @@ public final class PlaceRecipeBudget {
 	}
 
 	/**
+	 * Point the in-memory budget at the current server, loading its persisted
+	 * values on first contact (or falling back to config defaults). Cheap
+	 * when the server hasn't changed; called from every public entry point.
+	 */
+	private static void ensureServerBudgetLoaded(Minecraft client) {
+		String key = client.getCurrentServer() != null ? client.getCurrentServer().ip : null;
+		if (key == null || key.equals(currentServerKey)) {
+			return;
+		}
+		persistIfDirty(true);
+		currentServerKey = key;
+		cleanProgressSinceDrop = 0;
+		ReachCraftingConfig config = ReachCraftingConfig.get();
+		PlaceBudgetStore.ServerBudget stored = PlaceBudgetStore.load(key);
+		if (stored != null) {
+			ratePerSecond = clamp(stored.rate(), MIN_RATE_PER_SECOND, config.packetBudgetMaxRate());
+			burstCapacity = clamp(stored.burst(), MIN_BURST_CAPACITY, MAX_BURST_CAPACITY);
+			ceilingRate = clamp(stored.ceiling(), MIN_RATE_PER_SECOND, config.packetBudgetMaxRate());
+			ReachCraftingMod.LOGGER.info(
+				"[place_budget] loaded persisted budget server={} rate={}/s burst={} ceiling={}/s",
+				key, String.format("%.2f", ratePerSecond), String.format("%.1f", burstCapacity),
+				String.format("%.2f", ceilingRate));
+		} else {
+			ratePerSecond = config.packetBudgetInitialRate();
+			burstCapacity = DEFAULT_BURST_CAPACITY;
+			ceilingRate = config.packetBudgetMaxRate();
+			ReachCraftingMod.LOGGER.info(
+				"[place_budget] new server={} starting budget rate={}/s ceiling={}/s",
+				key, String.format("%.2f", ratePerSecond), String.format("%.2f", ceilingRate));
+		}
+		tokens = Math.min(tokens, burstCapacity);
+		budgetDirty = false;
+	}
+
+	private static double clamp(double value, double min, double max) {
+		return Math.max(min, Math.min(max, value));
+	}
+
+	private static void persistIfDirty(boolean force) {
+		if (!budgetDirty || currentServerKey == null) {
+			return;
+		}
+		long now = System.currentTimeMillis();
+		if (!force && now - lastPersistMillis < PERSIST_DEBOUNCE_MS) {
+			return;
+		}
+		lastPersistMillis = now;
+		budgetDirty = false;
+		PlaceBudgetStore.save(currentServerKey,
+			new PlaceBudgetStore.ServerBudget(ratePerSecond, burstCapacity, ceilingRate, now));
+	}
+
+	/**
 	 * Mixin gate. Returns true when the send may proceed now; false means the
 	 * placement was queued and the caller's packet must be cancelled.
 	 */
@@ -77,11 +159,13 @@ public final class PlaceRecipeBudget {
 		if (flushingDeferred || isUnlimited(client)) {
 			return true;
 		}
+		ensureServerBudgetLoaded(client);
 		refill();
 		if (deferred.isEmpty() && tokens >= 1.0) {
 			ensureCursorClear(client);
 			tokens -= 1.0;
 			lastSendTick = clientTicks;
+			noteSend();
 			return true;
 		}
 		deferred.addLast(new PendingPlace(containerId, recipeId, useMaxItems));
@@ -97,6 +181,7 @@ public final class PlaceRecipeBudget {
 
 	private static void tick(Minecraft client) {
 		clientTicks++;
+		persistIfDirty(false);
 		if (deferred.isEmpty()) {
 			return;
 		}
@@ -117,6 +202,7 @@ public final class PlaceRecipeBudget {
 			ensureCursorClear(client);
 			tokens -= 1.0;
 			lastSendTick = clientTicks;
+			noteSend();
 			flushingDeferred = true;
 			try {
 				client.gameMode.handlePlaceRecipe(pending.containerId(), pending.recipeId(), pending.useMaxItems());
@@ -203,19 +289,79 @@ public final class PlaceRecipeBudget {
 				clientTicks - lastSendTick);
 			return;
 		}
+		ensureServerBudgetLoaded(Minecraft.getInstance());
+		// Remember WHERE the wall is: probing turns additive below it, so
+		// this server costs at most an occasional drop instead of a sawtooth.
+		ceilingRate = Math.max(MIN_RATE_PER_SECOND, ratePerSecond * 0.9);
 		ratePerSecond = Math.max(MIN_RATE_PER_SECOND, ratePerSecond * 0.5);
 		burstCapacity = Math.max(MIN_BURST_CAPACITY, burstCapacity * 0.75);
 		tokens = 0.0;
+		cleanProgressSinceDrop = 0;
+		budgetDirty = true;
+		persistIfDirty(true);
 		ReachCraftingMod.LOGGER.warn(
-			"[place_budget] suspected server drop - assumed budget lowered to rate={}/s burst={}",
-			String.format("%.2f", ratePerSecond), String.format("%.1f", burstCapacity)
+			"[place_budget] suspected server drop - assumed budget lowered to rate={}/s burst={} ceiling={}/s",
+			String.format("%.2f", ratePerSecond), String.format("%.1f", burstCapacity),
+			String.format("%.2f", ceilingRate)
 		);
 	}
 
-	/** A batch made real progress: probe the budget back up gently (AIMD increase). */
+	/**
+	 * A batch made real progress: probe the budget upward. Slow-start
+	 * (multiplicative) while this server has never dropped us — a permissive
+	 * server reaches the max rate within a session; additive once a ceiling
+	 * is known. Long droughts of clean batches relax the ceiling so a
+	 * reconfigured server eventually gets re-probed.
+	 */
 	public static void onSessionProgress() {
-		ratePerSecond = Math.min(DEFAULT_RATE_PER_SECOND, ratePerSecond + 0.1);
-		burstCapacity = Math.min(DEFAULT_BURST_CAPACITY, burstCapacity + 0.2);
+		Minecraft client = Minecraft.getInstance();
+		if (isUnlimited(client)) {
+			return;
+		}
+		ensureServerBudgetLoaded(client);
+		if (recentSendRate() < ratePerSecond * UTILIZATION_THRESHOLD) {
+			// The current budget was not even used; a "clean batch" at idle
+			// proves nothing about the server's limit. Do not raise, do not
+			// count toward relaxing the ceiling.
+			return;
+		}
+		double maxRate = ReachCraftingConfig.get().packetBudgetMaxRate();
+		double before = ratePerSecond;
+		if (ceilingRate >= maxRate) {
+			ratePerSecond = Math.min(maxRate, ratePerSecond * SLOW_START_MULTIPLIER);
+		} else {
+			ratePerSecond = Math.min(ceilingRate, ratePerSecond + ADDITIVE_INCREASE_PER_PROGRESS);
+		}
+		double burstCap = ratePerSecond <= 5.0 ? DEFAULT_BURST_CAPACITY : Math.min(MAX_BURST_CAPACITY, ratePerSecond);
+		burstCapacity = Math.min(burstCap, burstCapacity + 0.2);
+		cleanProgressSinceDrop++;
+		if (cleanProgressSinceDrop >= CEILING_RELAX_CLEAN_BATCHES && ceilingRate < maxRate) {
+			ceilingRate = Math.min(maxRate, ceilingRate * CEILING_RELAX_MULTIPLIER);
+			cleanProgressSinceDrop = 0;
+			ReachCraftingMod.LOGGER.info(
+				"[place_budget] ceiling relaxed to {}/s after {} utilized clean batches",
+				String.format("%.2f", ceilingRate), CEILING_RELAX_CLEAN_BATCHES);
+		}
+		if (ratePerSecond != before) {
+			budgetDirty = true;
+			ReachCraftingMod.LOGGER.info(
+				"[place_budget] probed up rate={}/s burst={} (utilized {}/s)",
+				String.format("%.2f", ratePerSecond), String.format("%.1f", burstCapacity),
+				String.format("%.2f", recentSendRate()));
+		}
+	}
+
+	private static void noteSend() {
+		sendTimes.addLast(System.currentTimeMillis());
+	}
+
+	/** Actual place-packet sends per second over the trailing window. */
+	private static double recentSendRate() {
+		long now = System.currentTimeMillis();
+		while (!sendTimes.isEmpty() && now - sendTimes.peekFirst() > UTILIZATION_WINDOW_MS) {
+			sendTimes.pollFirst();
+		}
+		return sendTimes.size() * 1000.0 / UTILIZATION_WINDOW_MS;
 	}
 
 	/** Ticks to wait before retrying after a suspected drop: long enough to
@@ -245,6 +391,7 @@ public final class PlaceRecipeBudget {
 		if (isUnlimited(client)) {
 			return Double.MAX_VALUE;
 		}
+		ensureServerBudgetLoaded(client);
 		refill();
 		return tokens + ratePerSecond * 5.0;
 	}

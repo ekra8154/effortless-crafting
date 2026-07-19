@@ -290,6 +290,33 @@ public final class ReachCraftingConfigScreen {
 
 		crafting.addEntry(autoGroup.build());
 
+		var serverLimitsGroup = entries.startSubCategory(Component.translatable("category.reachcrafting.sub.server_limits"));
+		serverLimitsGroup.setExpanded(false);
+
+		serverLimitsGroup.add(entries.startDoubleField(
+				Component.translatable("option.reachcrafting.packet_budget_initial_rate"),
+				config.packetBudgetInitialRate()
+			)
+			.setDefaultValue(4.0)
+			.setMin(0.5)
+			.setMax(50.0)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.packet_budget_initial_rate"))
+			.setSaveConsumer(config::setPacketBudgetInitialRate)
+			.build());
+
+		serverLimitsGroup.add(entries.startDoubleField(
+				Component.translatable("option.reachcrafting.packet_budget_max_rate"),
+				config.packetBudgetMaxRate()
+			)
+			.setDefaultValue(30.0)
+			.setMin(0.5)
+			.setMax(100.0)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.packet_budget_max_rate"))
+			.setSaveConsumer(config::setPacketBudgetMaxRate)
+			.build());
+
+		crafting.addEntry(serverLimitsGroup.build());
+
 
 		// TAB 2: Nearby Chests & Advanced
 		ConfigCategory containers = builder.getOrCreateCategory(Component.translatable("category.reachcrafting.nearby_chests_advanced"));
