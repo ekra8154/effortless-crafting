@@ -23,6 +23,11 @@ public final class BulkAutoCraftController {
 	// staged-copies counting (see GridTopUp.recipeAwareStagedCopies).
 	private static RecipeIngredientSummary activeSessionIngredientSummary = null;
 
+	// Per-session record of how many copies each grid-load actually crafted,
+	// so "did this finish in one max-loaded craft or dribble one-at-a-time?"
+	// is a single log line instead of an inference from placement counts.
+	private static final java.util.List<Integer> sessionBatchSizes = new java.util.ArrayList<>();
+
 	/** The active session's ingredient layout, or null when no session/summary. */
 	static RecipeIngredientSummary activeSessionSummary() {
 		return isActive() ? activeSessionIngredientSummary : null;
@@ -479,7 +484,10 @@ public final class BulkAutoCraftController {
 			return;
 		}
 		
-		com.reachcrafting.ReachCraftingMod.LOGGER.info("[bulk_craft] SUCCESS: crafted_this_batch={} (gained={} ejected={}) total_completed={}/{} inv_count={}", 
+		if (craftedCopies > 0) {
+			sessionBatchSizes.add(craftedCopies);
+		}
+		com.reachcrafting.ReachCraftingMod.LOGGER.info("[bulk_craft] SUCCESS: crafted_this_batch={} (gained={} ejected={}) total_completed={}/{} inv_count={}",
 			craftedCopies, gainedOutputCount, activeSession.ejectedOutputCount(), completedRecipeCopies, activeSession.requestedRecipeCopies(), currentOutputCount);
 
 		resetCurrentBatchOutputDisposition();
@@ -502,6 +510,15 @@ public final class BulkAutoCraftController {
 
 	public static void stop(boolean aborted, String reason) {
 		if (activeSession != null) {
+			int loads = sessionBatchSizes.size();
+			int total = sessionBatchSizes.stream().mapToInt(Integer::intValue).sum();
+			int largest = sessionBatchSizes.stream().mapToInt(Integer::intValue).max().orElse(0);
+			com.reachcrafting.ReachCraftingMod.LOGGER.info(
+				"[bulk_craft] staging_summary grid_loads={} total_crafted={} largest_load={} avg_per_load={} sizes={}",
+				loads, total, largest,
+				loads > 0 ? String.format("%.1f", (double) total / loads) : "0",
+				sessionBatchSizes
+			);
 			com.reachcrafting.ReachCraftingMod.LOGGER.info(
 				"[bulk_craft] STOP aborted={} reason={} completed={}/{} caller={}",
 				aborted, reason,
@@ -512,6 +529,7 @@ public final class BulkAutoCraftController {
 					.reduce((a, b) -> a + " <- " + b).orElse("?")
 			);
 		}
+		sessionBatchSizes.clear();
 		budgetRetryCount = 0;
 		activeSessionIngredientSummary = null;
 		if (activeSession != null) {
