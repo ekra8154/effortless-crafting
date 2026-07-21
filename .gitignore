@@ -38,3 +38,5 @@ hs_err_*.log
 replay_*.log
 *.hprof
 *.jfr
+run-repro-launch.log
+run-repro-launch.err
