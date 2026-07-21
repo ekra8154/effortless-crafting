@@ -15,6 +15,15 @@ import net.minecraft.world.item.ItemStack;
 final class AutoMoveController {
 	private static final int BULK_RESULT_WAIT_TIMEOUT_TICKS = 20;
 	private static final int ORGANIZE_TARGET_ARRIVAL_WAIT_TICKS = 10;
+	// A foreign result must PERSIST this many consecutive ticks before it
+	// counts as a recipe change. While a placement stages the grid slot by
+	// slot, the partial grid transiently completes other recipes (3 cobble in
+	// a row previews cobblestone_slab mid-dispenser-place) and the preview
+	// settles to the real output within a tick or two of the last slot
+	// arriving. Insta-failing on that window cost a backoff + a phantom drop
+	// fed into the place budget's AIMD (9 times per 108-craft soak).
+	private static final int FOREIGN_RESULT_DEBOUNCE_TICKS = 5;
+	private static int foreignResultTicks = 0;
 	private static int autoMoveWaitingTicks = 0;
 	private static boolean pendingAutoMove = false;
 	private static ItemStack autoMoveTargetStack = ItemStack.EMPTY;
@@ -30,6 +39,18 @@ final class AutoMoveController {
 	private static int chainEjectRefreshTicks = 0;
 	private static int chainEjectPendingCount = 0;
 	private static ItemStack chainEjectPendingStack = ItemStack.EMPTY;
+	// Grid snapshots taken at the moment of a result-slot THROW. A THROW with
+	// a staged grid is vanilla craft-all-drop: how many copies it ACTUALLY
+	// crafts is whatever the server honors (all staged on vanilla/Paper; ~1
+	// under click-rewriting anti-cheat plugins). Predicted counts lied in
+	// both directions in the field — copper grate credited 64 copies per
+	// throw the server executed once; sticky piston credited 1 for throws
+	// that crafted 60+ (recipe-aware estimator can't read offset-placed
+	// shapes). The settlement blocks credit the OBSERVED grid drain instead.
+	private static ItemStack[] chainEjectGridBefore = null;
+	private static int chainEjectPerCraftCount = 1;
+	private static ItemStack[] directEjectGridBefore = null;
+	private static int directEjectPerCraftCount = 1;
 
 	private AutoMoveController() {
 	}
@@ -37,6 +58,7 @@ final class AutoMoveController {
 	static void scheduleAutoMove(ItemStack expectedStack) {
 		pendingAutoMove = true;
 		autoMoveWaitingTicks = 0;
+		foreignResultTicks = 0;
 		autoMoveTargetArrivalObserved = false;
 		directEjectAwaitingStagedCopiesTicks = 0;
 		autoMoveExpectedStack = expectedStack != null ? expectedStack.copy() : ItemStack.EMPTY;
@@ -48,12 +70,71 @@ final class AutoMoveController {
 		);
 	}
 
+	private static ItemStack[] snapshotGridSlots(AbstractContainerMenu menu) {
+		int gridCount = menu instanceof net.minecraft.world.inventory.CraftingMenu ? 9
+			: menu instanceof InventoryMenu ? 4 : 0;
+		ItemStack[] snapshot = new ItemStack[gridCount];
+		for (int i = 0; i < gridCount; i++) {
+			snapshot[i] = menu.getSlot(1 + i).getItem().copy();
+		}
+		return snapshot;
+	}
+
+	/**
+	 * Crafts the server actually executed since {@code before}: the minimum
+	 * per-slot drain across every slot that was staged at throw time. An
+	 * emptied slot or a slot now holding a different item (crafting
+	 * remainder, e.g. cake's buckets) counts as fully drained. Returns -1
+	 * when the snapshot is unusable (no occupied slots recorded).
+	 */
+	private static int observedGridDrainCrafts(AbstractContainerMenu menu, ItemStack[] before) {
+		if (before == null || before.length == 0 || menu.slots.size() <= before.length) {
+			return -1;
+		}
+		int drain = Integer.MAX_VALUE;
+		boolean sawOccupied = false;
+		for (int i = 0; i < before.length; i++) {
+			ItemStack was = before[i];
+			if (was.isEmpty()) {
+				continue;
+			}
+			sawOccupied = true;
+			ItemStack now = menu.getSlot(1 + i).getItem();
+			int slotDrain;
+			if (now.isEmpty() || !ItemStack.isSameItemSameComponents(now, was)) {
+				slotDrain = was.getCount();
+			} else {
+				slotDrain = Math.max(0, was.getCount() - now.getCount());
+			}
+			drain = Math.min(drain, slotDrain);
+		}
+		return sawOccupied ? drain : -1;
+	}
+
+	/** Observed-vs-predicted eject credit: prefer what the grid actually
+	 * drained; fall back to the prediction only when no snapshot exists. */
+	private static int resolveEjectCredit(AbstractContainerMenu menu, ItemStack[] before, int perCraftCount, int predicted, String tag) {
+		int observedCrafts = observedGridDrainCrafts(menu, before);
+		if (observedCrafts < 0) {
+			return predicted;
+		}
+		int observed = observedCrafts * Math.max(perCraftCount, 1);
+		if (observed != predicted) {
+			com.reachcrafting.ReachCraftingMod.LOGGER.info(
+				"[auto_move] {} credit corrected: predicted={} observed={} (crafts={} x{})",
+				tag, predicted, observed, observedCrafts, perCraftCount);
+		}
+		return observed;
+	}
+
 	static boolean isAutoMovePending() {
-		return pendingAutoMove;
+		// A GridExtractor batch is in-flight result work: every guard that
+		// waits on a pending auto-move must wait on it the same way.
+		return pendingAutoMove || GridExtractor.isActive();
 	}
 
 	static boolean isAutomatedInteractionRunning() {
-		return pendingAutoMove || autoMoveOrganizing || NearbyContainerDryRun.isActiveSessionRunning() || InventoryGridRestoreTracker.isRestoring() || BulkAutoCraftController.isActive() || ChainCraftController.isActive();
+		return pendingAutoMove || autoMoveOrganizing || GridExtractor.isActive() || NearbyContainerDryRun.isActiveSessionRunning() || InventoryGridRestoreTracker.isRestoring() || BulkAutoCraftController.isActive() || ChainCraftController.isActive();
 	}
 
 	static void settleCompletedWork(Minecraft client) {
@@ -85,7 +166,11 @@ final class AutoMoveController {
 		);
 
 		if (directEjectAwaitingSettlement && AutoCraftController.isBulkModeEnabled() && directEjectPendingCount > 0) {
-			BulkAutoCraftController.addEjectedOutput(directEjectPendingCount);
+			int settleCredit = resolveEjectCredit(
+				menu, directEjectGridBefore, directEjectPerCraftCount, directEjectPendingCount, "direct eject (early settle)");
+			if (settleCredit > 0) {
+				BulkAutoCraftController.addEjectedOutput(settleCredit);
+			}
 		}
 
 		pendingAutoMove = false;
@@ -125,6 +210,8 @@ final class AutoMoveController {
 		chainEjectRefreshTicks = 0;
 		chainEjectPendingCount = 0;
 		chainEjectPendingStack = ItemStack.EMPTY;
+		chainEjectGridBefore = null;
+		directEjectGridBefore = null;
 		autoMoveTargetStack = ItemStack.EMPTY;
 		autoMoveExpectedStack = ItemStack.EMPTY;
 		autoMoveSnapshotCounts.clear();
@@ -132,6 +219,11 @@ final class AutoMoveController {
 	}
 
 	static void autoMoveResult(Minecraft client) {
+		if (GridExtractor.isActive()) {
+			// A T1 counted extraction owns the result slot and the cursor;
+			// running auto-move concurrently would fight it over both.
+			return;
+		}
 		if (client.player == null || client.player.containerMenu == null) {
 			com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] autoMoveResult exiting: player_or_menu_missing");
 			pendingAutoMove = false;
@@ -166,7 +258,24 @@ final class AutoMoveController {
 
 		if (directEjectAwaitingSettlement) {
 			directEjectSettlementTicks++;
-			if (resultSlot.hasItem() || !menu.getCarried().isEmpty()) {
+			// A staged ring never leaves the result slot empty: with the key
+			// (bow) consumed by the throw, the remaining ring completes a
+			// FOREIGN recipe (dropper) and previews it indefinitely. Waiting
+			// for an empty slot here hung the whole session (observed: 1200+
+			// ticks). The throw is settled once the expected output is gone —
+			// either the slot is empty OR it shows the ring's foreign preview.
+			boolean directEjectForeignPreview = resultSlot.hasItem()
+				&& !autoMoveExpectedStack.isEmpty()
+				&& !ItemStack.isSameItemSameComponents(resultSlot.getItem(), autoMoveExpectedStack);
+			boolean expectedOutputGone = !resultSlot.hasItem()
+				|| (directEjectForeignPreview
+					&& (GridTopUp.isRingAwaitingKeyItem(client, menu)
+						// Summary-free fallback: a FOREIGN item holding the
+						// result slot for 10+ ticks cannot be our pending
+						// output — it is the ring preview even when the
+						// session summary is unavailable to prove it.
+						|| directEjectSettlementTicks > 10));
+			if (!expectedOutputGone || !menu.getCarried().isEmpty()) {
 				com.reachcrafting.ReachCraftingMod.LOGGER.info(
 					"[auto_move] direct eject awaiting settlement: ticks={} result_now={} carried={}",
 					directEjectSettlementTicks,
@@ -175,9 +284,12 @@ final class AutoMoveController {
 				);
 				return;
 			}
+			int directCredit = resolveEjectCredit(
+				menu, directEjectGridBefore, directEjectPerCraftCount, directEjectPendingCount, "direct eject");
 			com.reachcrafting.ReachCraftingMod.LOGGER.info(
-				"[auto_move] direct eject settled: ticks={} crediting predicted count={}",
+				"[auto_move] direct eject settled: ticks={} crediting count={} (predicted={})",
 				directEjectSettlementTicks,
+				directCredit,
 				directEjectPendingCount
 			);
 			directEjectAwaitingSettlement = false;
@@ -187,10 +299,11 @@ final class AutoMoveController {
 			autoMoveOrganizing = false;
 			autoMoveTargetArrivalObserved = false;
 			autoMoveTargetStack = ItemStack.EMPTY;
-			if (AutoCraftController.isBulkModeEnabled() && directEjectPendingCount > 0) {
-				BulkAutoCraftController.addEjectedOutput(directEjectPendingCount);
+			if (AutoCraftController.isBulkModeEnabled() && directCredit > 0) {
+				BulkAutoCraftController.addEjectedOutput(directCredit);
 			}
 			directEjectPendingCount = 0;
+			directEjectGridBefore = null;
 			BulkAutoCraftController.onAutoMoveFinished(client, true);
 			ChainCraftController.onAutoMoveFinished(client, true);
 			return;
@@ -202,12 +315,28 @@ final class AutoMoveController {
 		// shows the pre-throw stack a tick later.
 		if (chainEjectAwaitingRefresh) {
 			chainEjectRefreshTicks++;
-			if (resultSlot.hasItem() && chainEjectRefreshTicks <= 20) {
+			// Same ring rule as direct-eject settlement: the throw is proven
+			// once the EXPECTED output left the slot — a ring's foreign
+			// preview (dropper over a bow-less ring) counts as gone, else the
+			// 20-tick timeout would discard a legitimate credit every craft.
+			boolean thrownOutputGone = !resultSlot.hasItem()
+				|| (!ItemStack.isSameItemSameComponents(resultSlot.getItem(), chainEjectPendingStack)
+					&& (GridTopUp.isRingAwaitingKeyItem(client, menu)
+						// Same summary-free fallback as direct-eject: a foreign
+						// item persisting in the result slot is the ring
+						// preview, not the thrown output — credit, don't
+						// discard (a discarded credit read as 63/64).
+						|| chainEjectRefreshTicks > 10));
+			if (!thrownOutputGone && chainEjectRefreshTicks <= 20) {
 				return;
 			}
-			if (!resultSlot.hasItem()) {
-				BulkChainCraftController.addEjectedOutput(chainEjectPendingStack, chainEjectPendingCount);
-				ChainCraftController.noteFinalOutputEjected(chainEjectPendingCount);
+			if (thrownOutputGone) {
+				int chainCredit = resolveEjectCredit(
+					menu, chainEjectGridBefore, chainEjectPerCraftCount, chainEjectPendingCount, "chain eject");
+				if (chainCredit > 0) {
+					BulkChainCraftController.addEjectedOutput(chainEjectPendingStack, chainCredit);
+					ChainCraftController.noteFinalOutputEjected(chainCredit);
+				}
 			} else {
 				com.reachcrafting.ReachCraftingMod.LOGGER.info(
 					"[auto_move] chain eject refresh timeout; discarding uncredited pending count={}",
@@ -218,6 +347,7 @@ final class AutoMoveController {
 			chainEjectRefreshTicks = 0;
 			chainEjectPendingCount = 0;
 			chainEjectPendingStack = ItemStack.EMPTY;
+			chainEjectGridBefore = null;
 			if (!menu.getCarried().isEmpty()) {
 				tryResolveCarriedStack(client, menu);
 			}
@@ -247,6 +377,35 @@ final class AutoMoveController {
 				ItemStack currentResult = resultSlot.getItem();
 
 				if (!autoMoveExpectedStack.isEmpty() && !ItemStack.isSameItemSameComponents(currentResult, autoMoveExpectedStack)) {
+					if (GridTopUp.isRingAwaitingKeyItem(client, menu)) {
+						// The bulk ring's key (unstackable) slot is empty between
+						// cycles and the remaining ring previews a foreign recipe
+						// (bow-less dispenser ring -> dropper). Expected transient,
+						// not a recipe change: keep waiting for the next key insert.
+						// Failing here costs a backoff, a ring rebuild, and a
+						// phantom drop fed into the place budget's AIMD.
+						autoMoveWaitingTicks++;
+						if (autoMoveWaitingTicks % 20 == 1) {
+							com.reachcrafting.ReachCraftingMod.LOGGER.info(
+								"[auto_move] foreign preview over key-empty ring (expected={}, preview={}); waiting",
+								ContainerUtils.formatStack(autoMoveExpectedStack),
+								ContainerUtils.formatStack(currentResult)
+							);
+						}
+						return;
+					}
+					foreignResultTicks++;
+					if (foreignResultTicks <= FOREIGN_RESULT_DEBOUNCE_TICKS) {
+						if (foreignResultTicks == 1) {
+							com.reachcrafting.ReachCraftingMod.LOGGER.info(
+								"[auto_move] foreign result preview (expected={}, found={}); debouncing",
+								ContainerUtils.formatStack(autoMoveExpectedStack),
+								ContainerUtils.formatStack(currentResult)
+							);
+						}
+						return;
+					}
+					foreignResultTicks = 0;
 					com.reachcrafting.ReachCraftingMod.LOGGER.info(
 						"[auto_move] Recipe changed! Expected: {}, Found: {}. Stopping.",
 						ContainerUtils.formatStack(autoMoveExpectedStack),
@@ -260,6 +419,8 @@ final class AutoMoveController {
 					ChainCraftController.onAutoMoveFinished(client, false);
 					return;
 				}
+
+				foreignResultTicks = 0;
 
 				BulkAutoCraftController.BulkOutputDisposition bulkDisposition =
 					BulkAutoCraftController.determineCurrentBatchOutputDisposition(client, currentResult);
@@ -381,6 +542,7 @@ final class AutoMoveController {
 						bulkProtectedKeep
 					);
 					ItemStack thrownResult = currentResult.copy();
+					ItemStack[] gridBeforeThrow = snapshotGridSlots(menu);
 					client.gameMode.handleContainerInput(menu.containerId, resultSlot.index, 1, ContainerInput.THROW, client.player);
 					if (chainFinalResultEject) {
 						// Credit deferred until the result slot is observed
@@ -389,6 +551,8 @@ final class AutoMoveController {
 						chainEjectRefreshTicks = 0;
 						chainEjectPendingCount = totalEjected;
 						chainEjectPendingStack = thrownResult;
+						chainEjectGridBefore = gridBeforeThrow;
+						chainEjectPerCraftCount = Math.max(currentResult.getCount(), 1);
 						autoMoveWaitingTicks = 0;
 						return;
 					}
@@ -396,6 +560,8 @@ final class AutoMoveController {
 						directEjectPendingCount = totalEjected;
 						directEjectAwaitingSettlement = true;
 						directEjectSettlementTicks = 0;
+						directEjectGridBefore = gridBeforeThrow;
+						directEjectPerCraftCount = Math.max(currentResult.getCount(), 1);
 						autoMoveWaitingTicks = 0;
 						com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] direct eject queued awaiting settlement: predicted_ejected={}", totalEjected);
 						return;
@@ -479,12 +645,32 @@ final class AutoMoveController {
 					logHotbarState(menu)
 				);
 			} else {
+				if (PlaceRecipeBudget.hasPendingFor(menu.containerId)) {
+					// Our own budget queue still holds the placement packet —
+					// the server hasn't been asked yet, so no result can
+					// exist. Don't run down the wait timeout while the send
+					// is deferred client-side.
+					return;
+				}
+				if (ChainCraftController.isCurrentBatchObservedComplete()) {
+					// A shift-place final step crafts its whole batch in one
+					// server action: output is already banked and the grid is
+					// spent, so an empty result slot means DONE, not pending.
+					com.reachcrafting.ReachCraftingMod.LOGGER.info(
+						"[auto_move] chain batch output already complete; finishing without result wait"
+					);
+					pendingAutoMove = false;
+					autoMoveOrganizing = false;
+					autoMoveTargetArrivalObserved = false;
+					autoMoveTargetStack = ItemStack.EMPTY;
+					BulkAutoCraftController.onAutoMoveFinished(client, true);
+					ChainCraftController.onAutoMoveFinished(client, true);
+					return;
+				}
 				autoMoveWaitingTicks++;
 				int stagedCraftCopies = 0;
 				if (BulkAutoCraftController.isActive() && client.screen != null) {
-					stagedCraftCopies = ContainerUtils.currentReservedCraftCopies(
-						AvailableItemSnapshot.capture(client.player, client.screen).gridStacks()
-					);
+					stagedCraftCopies = BulkAutoCraftController.getCurrentStagedCraftCopies(client);
 				}
 				com.reachcrafting.ReachCraftingMod.LOGGER.info(
 					"[auto_move] waiting_for_result waitTicks={} bulk_active={} expected={} carried={} staged_copies={} result_now={}",
@@ -495,19 +681,66 @@ final class AutoMoveController {
 					stagedCraftCopies,
 					resultSlot.hasItem() ? ContainerUtils.formatStack(resultSlot.getItem()) : "<empty>"
 				);
-				if (autoMoveWaitingTicks > 10 && !BulkAutoCraftController.isActive()) {
+				// A server resync can land a foreign stack on the cursor
+				// mid-wait (anti-cheat rejecting a flush click returns cake's
+				// bucket remainders there). The server then refuses every
+				// place packet, no result can ever arrive, and the bulk
+				// timeout below requires an EMPTY cursor — an unbreakable
+				// stall without this rescue.
+				ItemStack carriedNow = menu.getCarried();
+				if (!carriedNow.isEmpty()
+					&& autoMoveWaitingTicks >= 10 && autoMoveWaitingTicks % 10 == 0
+					&& !ItemStack.isSameItemSameComponents(carriedNow, autoMoveExpectedStack)) {
+					String carriedId = net.minecraft.core.registries.BuiltInRegistries.ITEM
+						.getKey(carriedNow.getItem()).toString();
+					Slot rescueSlot = MenuTransferHelper.findPlayerDestinationSlot(client.player, menu, carriedId);
+					if (rescueSlot != null) {
+						com.reachcrafting.ReachCraftingMod.LOGGER.warn(
+							"[auto_move] cursor_rescue depositing stray {} during result wait (waitTicks={})",
+							ContainerUtils.formatStack(carriedNow), autoMoveWaitingTicks);
+						client.gameMode.handleContainerInput(
+							menu.containerId, rescueSlot.index, 0, ContainerInput.PICKUP, client.player);
+						GridTopUp.recordClick();
+						PlaceRecipeBudget.noteCursorRescue();
+					} else {
+						com.reachcrafting.ReachCraftingMod.LOGGER.warn(
+							"[auto_move] cursor_rescue no deposit slot for stray {} (waitTicks={})",
+							ContainerUtils.formatStack(carriedNow), autoMoveWaitingTicks);
+					}
+				}
+				// A chain step is a bulk-paced context even though no flat bulk
+				// session is active (chain runs block flat-session arming): the
+				// interactive 10-tick timeout is far too tight for a multi-copy
+				// final-step place on a busy server tick. Measured: the "failed"
+				// lectern place produced its result ~1s later, so the short
+				// timeout both wasted the iteration AND fed a phantom drop into
+				// the AIMD budget (rate halved 4->2->1/s for nothing).
+				int nonBulkTimeoutTicks = ChainCraftController.hasActiveRun() ? 40 : 10;
+				if (autoMoveWaitingTicks > nonBulkTimeoutTicks && !BulkAutoCraftController.isActive()) {
 					pendingAutoMove = false;
 					autoMoveOrganizing = false;
 					autoMoveTargetArrivalObserved = false;
 					autoMoveTargetStack = ItemStack.EMPTY;
 					com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] waiting_for_result timeout in non-bulk mode");
+					if (ChainCraftController.hasCurrentBatchObservedAnyCopies()) {
+						// Partial batch production proves the place packet
+						// landed; the missing tail is accounting (materials
+						// ran out a copy early), not a limiter drop.
+						com.reachcrafting.ReachCraftingMod.LOGGER.info(
+							"[auto_move] timeout with partial batch production - budget unchanged");
+					} else {
+						PlaceRecipeBudget.onSuspectedDrop();
+					}
 					BulkAutoCraftController.onAutoMoveFinished(client, false);
 					ChainCraftController.onAutoMoveFinished(client, false);
 				} else if (autoMoveWaitingTicks > BULK_RESULT_WAIT_TIMEOUT_TICKS
 					&& BulkAutoCraftController.isActive()
-					&& stagedCraftCopies <= 0
-					&& !resultSlot.hasItem()
-					&& menu.getCarried().isEmpty()) {
+					&& ((stagedCraftCopies <= 0 && !resultSlot.hasItem() && menu.getCarried().isEmpty())
+						// Hard cap: if the gentle conditions (cursor empty etc.)
+						// never come true — e.g. a stray carried stack with no
+						// deposit slot — the wait must still end rather than
+						// spin forever.
+						|| autoMoveWaitingTicks > BULK_RESULT_WAIT_TIMEOUT_TICKS + 60)) {
 					pendingAutoMove = false;
 					autoMoveOrganizing = false;
 					autoMoveTargetArrivalObserved = false;
@@ -519,6 +752,7 @@ final class AutoMoveController {
 						ContainerUtils.formatStack(menu.getCarried()),
 						resultSlot.hasItem() ? ContainerUtils.formatStack(resultSlot.getItem()) : "<empty>"
 					);
+					PlaceRecipeBudget.onSuspectedDrop();
 					BulkAutoCraftController.onAutoMoveFinished(client, false);
 					ChainCraftController.onAutoMoveFinished(client, false);
 				}

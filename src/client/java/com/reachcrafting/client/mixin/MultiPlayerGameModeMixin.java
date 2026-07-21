@@ -35,6 +35,27 @@ public abstract class MultiPlayerGameModeMixin {
 		NearbyContainerCache.notePotentialContainerInteraction(player.level(), hitResult.getBlockPos());
 	}
 
+	// Single choke point for every ServerboundPlaceRecipePacket the mod (or
+	// vanilla recipe book) sends. Dedicated servers ration this packet and
+	// silently drop the excess; PlaceRecipeBudget defers over-budget sends
+	// and flushes them as the budget refills.
+	@Inject(
+		method = "handlePlaceRecipe(ILnet/minecraft/world/item/crafting/display/RecipeDisplayId;Z)V",
+		at = @At("HEAD"),
+		cancellable = true
+	)
+	private void reachcrafting$budgetPlaceRecipe(
+		int containerId,
+		net.minecraft.world.item.crafting.display.RecipeDisplayId recipeId,
+		boolean useMaxItems,
+		CallbackInfo ci
+	) {
+		if (!ReachCraftingConfig.get().enabled()) return;
+		if (!com.reachcrafting.client.PlaceRecipeBudget.permitOrDefer(Minecraft.getInstance(), containerId, recipeId, useMaxItems)) {
+			ci.cancel();
+		}
+	}
+
 	@Inject(method = "handleContainerInput", at = @At("HEAD"))
 	private void reachcrafting$onHandleInventoryMouseClick(int containerId, int slotId, int button, ContainerInput clickType, net.minecraft.world.entity.player.Player player, CallbackInfo ci) {
 		if (!ReachCraftingConfig.get().enabled()) return;

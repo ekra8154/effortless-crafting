@@ -71,6 +71,24 @@ final class ChainCraftPlanner {
 	private record FailedEnsure(int requiredCount, int availableAtFailure) {
 	}
 
+	// The recipe index (output -> candidate recipes) is a pure function of
+	// the recipe book + synced recipes + grid size — NOT of inventory or
+	// chest contents (availability is consulted at plan() time). Rebuilding
+	// it costs 40-75ms, and an iteration seam rebuilt it up to TEN times
+	// back-to-back (chain_offer, iteration replan, budget clamp, fit
+	// shrinking), stacking ~400ms into one tick — the field-reported
+	// "game freeze at the end of every batch" (tick_stall gap_ms=813).
+	// Recipe unlocks change the known-map size, which invalidates; the TTL
+	// only bounds unnoticed staleness (e.g. a datapack reload replacing a
+	// recipe without changing the count), so it can be generous — a 10s TTL
+	// expired mid-benchmark and put a cold 95ms rebuild back into a seam.
+	private static final long INDEX_CACHE_TTL_MS = 120_000;
+	private static Map<String, List<Candidate>> cachedIndex = null;
+	private static int cachedIndexKnownSize = -1;
+	private static int cachedIndexGridSlots = -1;
+	private static java.lang.ref.WeakReference<Object> cachedIndexLevel = new java.lang.ref.WeakReference<>(null);
+	private static long cachedIndexBuiltMillis = 0;
+
 	private ChainCraftPlanner(Minecraft minecraft, LocalPlayer player, boolean allowNearby, int gridSlotCount, boolean allowSingleStepPlan) {
 		long startNanos = PerformanceProfiler.start();
 		this.minecraft = minecraft;
@@ -79,20 +97,33 @@ final class ChainCraftPlanner {
 		this.gridSlotCount = gridSlotCount;
 		this.allowSingleStepPlan = allowSingleStepPlan;
 		this.context = SlotDisplayContext.fromLevel(minecraft.level);
-		this.recipesByOutput = buildRecipeIndex();
-		int candidateCount = this.recipesByOutput.values().stream().mapToInt(List::size).sum();
-		ReachCraftingMod.LOGGER.info(
-			"[chain_debug] index outputs={} candidates={} grid_slots={} allow_nearby={}",
-			this.recipesByOutput.size(),
-			candidateCount,
-			gridSlotCount,
-			allowNearby
-		);
-		PerformanceProfiler.record(
-			"chain.planner_construct",
-			startNanos,
-			"outputs=" + this.recipesByOutput.size() + " candidates=" + candidateCount + " allow_nearby=" + allowNearby
-		);
+		int knownSize = ((ClientRecipeBookAccessor) player.getRecipeBook()).getKnown().size();
+		boolean reused = cachedIndex != null
+			&& cachedIndexKnownSize == knownSize
+			&& cachedIndexGridSlots == gridSlotCount
+			&& cachedIndexLevel.get() == minecraft.level
+			&& System.currentTimeMillis() - cachedIndexBuiltMillis < INDEX_CACHE_TTL_MS;
+		this.recipesByOutput = reused ? cachedIndex : buildRecipeIndex();
+		if (!reused) {
+			cachedIndex = this.recipesByOutput;
+			cachedIndexKnownSize = knownSize;
+			cachedIndexGridSlots = gridSlotCount;
+			cachedIndexLevel = new java.lang.ref.WeakReference<>(minecraft.level);
+			cachedIndexBuiltMillis = System.currentTimeMillis();
+			int candidateCount = this.recipesByOutput.values().stream().mapToInt(List::size).sum();
+			ReachCraftingMod.LOGGER.info(
+				"[chain_debug] index outputs={} candidates={} grid_slots={} allow_nearby={}",
+				this.recipesByOutput.size(),
+				candidateCount,
+				gridSlotCount,
+				allowNearby
+			);
+			PerformanceProfiler.record(
+				"chain.planner_construct",
+				startNanos,
+				"outputs=" + this.recipesByOutput.size() + " candidates=" + candidateCount + " allow_nearby=" + allowNearby
+			);
+		}
 	}
 
 	static Optional<ChainCraftPlan> plan(
@@ -218,7 +249,7 @@ final class ChainCraftPlanner {
 			true
 		);
 
-		ReachCraftingMod.LOGGER.info(
+		ReachCraftingMod.LOGGER.debug(
 			"[chain_debug] start final_recipe={} output={} requested_copies={} initial_counts={}",
 			finalCandidate.recipeId(),
 			ContainerUtils.formatStack(finalCandidate.displayStack()),
@@ -242,7 +273,7 @@ final class ChainCraftPlanner {
 			);
 			return Optional.empty();
 		}
-		ReachCraftingMod.LOGGER.info(
+		ReachCraftingMod.LOGGER.debug(
 			"[chain_debug] planned final_recipe={} steps={} final_counts={}",
 			finalCandidate.recipeId(),
 			formatSteps(steps),
@@ -263,7 +294,7 @@ final class ChainCraftPlanner {
 		Set<String> resolvingItemIds,
 		boolean finalStep
 	) {
-		ReachCraftingMod.LOGGER.info(
+		ReachCraftingMod.LOGGER.debug(
 			"[chain_debug] recipe_enter recipe={} output={} copies={} final_step={} resolving={}",
 			candidate.recipeId(),
 			ContainerUtils.formatStack(candidate.displayStack()),
@@ -309,7 +340,7 @@ final class ChainCraftPlanner {
 			);
 			return false;
 		}
-		ReachCraftingMod.LOGGER.info(
+		ReachCraftingMod.LOGGER.debug(
 			"[chain_debug] recipe_required recipe={} output={} required={}",
 			candidate.recipeId(),
 			ContainerUtils.formatStack(candidate.displayStack()),
@@ -322,7 +353,7 @@ final class ChainCraftPlanner {
 		String outputId = itemId(candidate.displayStack());
 		state.counts.merge(outputId, Math.max(candidate.displayStack().getCount(), 1) * recipeCopies, Integer::sum);
 		state.schedule(candidate, recipeCopies, finalStep, required);
-		ReachCraftingMod.LOGGER.info(
+		ReachCraftingMod.LOGGER.debug(
 			"[chain_debug] recipe_planned recipe={} output={} copies={} counts={}",
 			candidate.recipeId(),
 			ContainerUtils.formatStack(candidate.displayStack()),
@@ -389,7 +420,7 @@ final class ChainCraftPlanner {
 	) {
 		int available = state.counts.getOrDefault(itemId, 0);
 		List<Candidate> candidates = recipesByOutput.getOrDefault(itemId, List.of());
-		ReachCraftingMod.LOGGER.info(
+		ReachCraftingMod.LOGGER.debug(
 			"[chain_debug] ensure item={} required={} available={} candidates={} resolving={}",
 			itemId,
 			requiredCount,
@@ -425,7 +456,7 @@ final class ChainCraftPlanner {
 					return true;
 				}
 				PlanningState trialState = state.copy();
-				ReachCraftingMod.LOGGER.info(
+				ReachCraftingMod.LOGGER.debug(
 					"[chain_debug] ensure_try item={} recipe={} output={} missing={} copies={}",
 					itemId,
 					candidate.recipeId(),
@@ -436,7 +467,7 @@ final class ChainCraftPlanner {
 				if (planRecipe(candidate, copies, trialState, resolvingItemIds, false)
 					&& trialState.counts.getOrDefault(itemId, 0) >= requiredCount) {
 					state.replaceWith(trialState);
-					ReachCraftingMod.LOGGER.info(
+					ReachCraftingMod.LOGGER.debug(
 						"[chain_debug] ensure_success item={} recipe={} available_after={}",
 						itemId,
 						candidate.recipeId(),
@@ -444,7 +475,7 @@ final class ChainCraftPlanner {
 					);
 					return true;
 				}
-				ReachCraftingMod.LOGGER.info(
+				ReachCraftingMod.LOGGER.debug(
 					"[chain_debug] ensure_try_failed item={} recipe={} available_after_trial={}",
 					itemId,
 					candidate.recipeId(),
@@ -534,7 +565,7 @@ final class ChainCraftPlanner {
 					1
 				);
 				if (selection != null && itemIds.contains(selection.outputItemId()) && selection.copiesAvailable() > 0) {
-					ReachCraftingMod.LOGGER.info(
+					ReachCraftingMod.LOGGER.debug(
 						"[chain_debug] resolver_choice requested_items={} clicked_recipe={} selected_recipe={} selected_output={} counts={}",
 						itemIds,
 						candidate.recipeId(),
