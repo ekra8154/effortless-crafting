@@ -41,7 +41,10 @@ loom {
 		clientRepro {
 			client()
 			configName = "Repro Client (localhost Paper)"
-			programArgs("--username", "ReproBot", "--quickPlayMultiplayer", "localhost:25565")
+			// -PecServerPort=25566 joins the native 1.21.4 repro server; default
+			// 25565 is the 26.2 rig. Project property so a reused daemon honors it.
+			def reproPort = project.hasProperty("ecServerPort") ? project.property("ecServerPort") : "25565"
+			programArgs("--username", "ReproBot", "--quickPlayMultiplayer", "localhost:${reproPort}")
 			if (project.hasProperty("ecReproQuiet") || System.getenv("EC_REPRO_QUIET") != null) {
 				vmArgs("-Dreachcrafting.repro.quiet=true")
 			}
