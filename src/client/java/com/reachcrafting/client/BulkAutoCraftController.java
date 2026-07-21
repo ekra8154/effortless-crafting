@@ -19,6 +19,20 @@ public final class BulkAutoCraftController {
 	private BulkAutoCraftController() {
 	}
 
+	// The active session's per-slot ingredient layout, kept for recipe-aware
+	// staged-copies counting (see GridTopUp.recipeAwareStagedCopies).
+	private static RecipeIngredientSummary activeSessionIngredientSummary = null;
+
+	// Per-session record of how many copies each grid-load actually crafted,
+	// so "did this finish in one max-loaded craft or dribble one-at-a-time?"
+	// is a single log line instead of an inference from placement counts.
+	private static final java.util.List<Integer> sessionBatchSizes = new java.util.ArrayList<>();
+
+	/** The active session's ingredient layout, or null when no session/summary. */
+	static RecipeIngredientSummary activeSessionSummary() {
+		return isActive() ? activeSessionIngredientSummary : null;
+	}
+
 	static void startOrUpdate(
 		RecipeBookClickCapture.HeldRecipeAction action,
 		int requestedRecipeCopies,
@@ -31,6 +45,9 @@ public final class BulkAutoCraftController {
 	) {
 		if (!AutoCraftController.isBulkModeEnabled() || action == null || requestedRecipeCopies <= 1 || expectedOutput == null || expectedOutput.isEmpty()) {
 			return;
+		}
+		if (ingredientSummary != null) {
+			activeSessionIngredientSummary = ingredientSummary;
 		}
 		// Chain step replays run with bulk mode latched during a bulk chain
 		// session; they must never arm a competing flat bulk session. An armed
@@ -362,6 +379,37 @@ public final class BulkAutoCraftController {
 	}
 
 	private static int postAutoMoveDelayTicks = 0;
+	// Retries after a suspected server-side place-packet drop. The budget
+	// keeps sends under the assumed limit, but a stricter server can still
+	// silently drop one; backing off and replaying beats killing the session.
+	private static final int MAX_BUDGET_RETRIES = 10;
+	private static int budgetRetryCount = 0;
+
+	/**
+	 * On a multiplayer server, a zero-progress batch most likely means the
+	 * server dropped our place packet (budget exhausted). Instead of
+	 * terminating, wait for the budget to refill and replay the batch via the
+	 * existing postAutoMoveDelayTicks scheduler. Returns true when a retry
+	 * was armed.
+	 */
+	private static boolean tryBudgetRetry(Minecraft client) {
+		if (activeSession == null || PlaceRecipeBudget.isUnlimited(client)) {
+			return false;
+		}
+		if (budgetRetryCount >= MAX_BUDGET_RETRIES) {
+			com.reachcrafting.ReachCraftingMod.LOGGER.warn(
+				"[bulk_craft] budget_backoff exhausted after {} retries", budgetRetryCount);
+			return false;
+		}
+		budgetRetryCount++;
+		resetCurrentBatchOutputDisposition();
+		postAutoMoveDelayTicks = PlaceRecipeBudget.suggestedBackoffTicks();
+		com.reachcrafting.ReachCraftingMod.LOGGER.info(
+			"[bulk_craft] budget_backoff retry={}/{} delay_ticks={} completed={}/{}",
+			budgetRetryCount, MAX_BUDGET_RETRIES, postAutoMoveDelayTicks,
+			activeSession.completedRecipeCopies(), activeSession.requestedRecipeCopies());
+		return true;
+	}
 
 	static void onAutoMoveFinished(Minecraft client, boolean success) {
 		if (activeSession == null) {
@@ -393,6 +441,11 @@ public final class BulkAutoCraftController {
 		);
 
 		if ((!success || !bulkEnabled || !supportedScreen) && craftedCopies <= 0) {
+			// Only the auto-move failure itself is retryable; a closed screen
+			// or disarmed bulk mode is a real abort.
+			if (!success && bulkEnabled && supportedScreen && tryBudgetRetry(client)) {
+				return;
+			}
 			resetCurrentBatchOutputDisposition();
 			stop(true, "auto_move_failed_without_progress success=" + success + " bulkEnabled=" + bulkEnabled + " supportedScreen=" + supportedScreen);
 			return;
@@ -414,6 +467,9 @@ public final class BulkAutoCraftController {
 				activeSession.lastObservedOutputCount(),
 				outputPerCraft
 			);
+			if (tryBudgetRetry(client)) {
+				return;
+			}
 			resetCurrentBatchOutputDisposition();
 			stop(true, "no_progress_detected");
 			return;
@@ -428,7 +484,10 @@ public final class BulkAutoCraftController {
 			return;
 		}
 		
-		com.reachcrafting.ReachCraftingMod.LOGGER.info("[bulk_craft] SUCCESS: crafted_this_batch={} (gained={} ejected={}) total_completed={}/{} inv_count={}", 
+		if (craftedCopies > 0) {
+			sessionBatchSizes.add(craftedCopies);
+		}
+		com.reachcrafting.ReachCraftingMod.LOGGER.info("[bulk_craft] SUCCESS: crafted_this_batch={} (gained={} ejected={}) total_completed={}/{} inv_count={}",
 			craftedCopies, gainedOutputCount, activeSession.ejectedOutputCount(), completedRecipeCopies, activeSession.requestedRecipeCopies(), currentOutputCount);
 
 		resetCurrentBatchOutputDisposition();
@@ -439,6 +498,10 @@ public final class BulkAutoCraftController {
 		// staleness does not need a per-batch re-scan.
 		// Set a delay to allow inventory to settle before the next batch starts.
 		postAutoMoveDelayTicks = 1;
+		// Real progress: clear the drop-retry streak and let the assumed
+		// server budget probe back up.
+		budgetRetryCount = 0;
+		PlaceRecipeBudget.onSessionProgress();
 	}
 
 	public static void stop(boolean aborted) {
@@ -446,6 +509,29 @@ public final class BulkAutoCraftController {
 	}
 
 	public static void stop(boolean aborted, String reason) {
+		if (activeSession != null) {
+			int loads = sessionBatchSizes.size();
+			int total = sessionBatchSizes.stream().mapToInt(Integer::intValue).sum();
+			int largest = sessionBatchSizes.stream().mapToInt(Integer::intValue).max().orElse(0);
+			com.reachcrafting.ReachCraftingMod.LOGGER.info(
+				"[bulk_craft] staging_summary grid_loads={} total_crafted={} largest_load={} avg_per_load={} sizes={}",
+				loads, total, largest,
+				loads > 0 ? String.format("%.1f", (double) total / loads) : "0",
+				sessionBatchSizes
+			);
+			com.reachcrafting.ReachCraftingMod.LOGGER.info(
+				"[bulk_craft] STOP aborted={} reason={} completed={}/{} caller={}",
+				aborted, reason,
+				activeSession.completedRecipeCopies(), activeSession.requestedRecipeCopies(),
+				java.util.Arrays.stream(new Throwable().getStackTrace())
+					.skip(1).limit(3)
+					.map(f -> f.getClassName().substring(f.getClassName().lastIndexOf('.') + 1) + "." + f.getMethodName() + ":" + f.getLineNumber())
+					.reduce((a, b) -> a + " <- " + b).orElse("?")
+			);
+		}
+		sessionBatchSizes.clear();
+		budgetRetryCount = 0;
+		activeSessionIngredientSummary = null;
 		if (activeSession != null) {
 			// com.reachcrafting.ReachCraftingMod.LOGGER.info(
 			// 	"[bulk_craft] STOP aborted={} reason={} completed={}/{} expected_output={} disposition={} refillable={} allow_nearby={}",
@@ -500,6 +586,76 @@ public final class BulkAutoCraftController {
 		clear();
 	}
 
+	/**
+	 * Can ONE more copy of the active session's recipe be crafted from what
+	 * is on hand (inventory + staged grid + nearby containers when the
+	 * session may withdraw)? Answering "unknown" or any ambiguity returns
+	 * TRUE — the replay then discovers the end the old (slow but exact) way.
+	 * Multi-variant ingredient slots (any-planks) are only counted greedily,
+	 * so a greedy failure also falls back to TRUE rather than ending a run
+	 * that a smarter allocation could continue.
+	 */
+	private static boolean oneMoreCopyAffordable(Minecraft client) {
+		RecipeIngredientSummary summary = activeSessionIngredientSummary;
+		if (summary == null || summary.slots().isEmpty() || client.player == null) {
+			return true;
+		}
+		java.util.Map<String, Integer> available = new java.util.HashMap<>();
+		for (ItemStack stack : client.player.getInventory().getNonEquipmentItems()) {
+			if (!stack.isEmpty()) {
+				available.merge(itemIdOf(stack), stack.getCount(), Integer::sum);
+			}
+		}
+		// Staged ring/grid stacks are live crafting supply, not yet "spent".
+		net.minecraft.world.inventory.AbstractContainerMenu menu = client.player.containerMenu;
+		int gridCount = menu instanceof net.minecraft.world.inventory.CraftingMenu ? 9
+			: menu instanceof net.minecraft.world.inventory.InventoryMenu ? 4 : 0;
+		for (int i = 1; i <= gridCount && i < menu.slots.size(); i++) {
+			ItemStack inGrid = menu.getSlot(i).getItem();
+			if (!inGrid.isEmpty()) {
+				available.merge(itemIdOf(inGrid), inGrid.getCount(), Integer::sum);
+			}
+		}
+		if (activeSession.allowNearby()
+			&& ReachCraftingConfig.get().enableNearbyContainerUsage()
+			&& client.getCameraEntity() != null
+			&& client.level != null) {
+			NearbyContainerCache.ReachableView view = NearbyContainerCache.getReachableView(
+				client.level, client.getCameraEntity(), client.player.blockInteractionRange());
+			for (java.util.Map.Entry<String, Integer> entry : view.aggregateCounts().entrySet()) {
+				available.merge(entry.getKey(), entry.getValue(), Integer::sum);
+			}
+		}
+		boolean sawMultiVariantSlot = false;
+		for (RecipeIngredientSummary.IngredientSlot slot : summary.slots()) {
+			if (slot.isEmpty()) {
+				continue;
+			}
+			if (slot.itemIds().size() > 1) {
+				sawMultiVariantSlot = true;
+			}
+			boolean satisfied = false;
+			for (String itemId : slot.itemIds()) {
+				int have = available.getOrDefault(itemId, 0);
+				if (have > 0) {
+					available.put(itemId, have - 1);
+					satisfied = true;
+					break;
+				}
+			}
+			if (!satisfied) {
+				// Greedy allocation may have starved a multi-variant slot a
+				// smarter assignment could satisfy; never end a run on it.
+				return sawMultiVariantSlot;
+			}
+		}
+		return true;
+	}
+
+	private static String itemIdOf(ItemStack stack) {
+		return net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+	}
+
 	private static java.util.Map<Integer, String> previousSnapshot = new java.util.LinkedHashMap<>();
 
 	public static void tick(Minecraft client) {
@@ -511,7 +667,7 @@ public final class BulkAutoCraftController {
 		}
 
 		BulkDespawnWarning.tick();
-		if (!client.isWindowActive()) {
+		if (!client.isWindowActive() && !ReproHarness.suppressFocusGuard()) {
 			stop(true, "window_focus_lost");
 			postAutoMoveDelayTicks = 0;
 			previousSnapshot.clear();
@@ -522,6 +678,22 @@ public final class BulkAutoCraftController {
 			postAutoMoveDelayTicks--;
 			if (postAutoMoveDelayTicks == 0) {
 				topUpRequestedCopiesIfNeeded("pre_replay");
+				if (activeSession.completedRecipeCopies() > 0 && !oneMoreCopyAffordable(client)) {
+					// Eager end-of-materials: the counts already prove the next
+					// craft cannot happen. Discovering that by scheduling the
+					// replay anyway cost a failed placement cascade and a ~2s
+					// tail after the visibly-last craft — during which ESC
+					// reported a COMPLETED run as aborted.
+					com.reachcrafting.ReachCraftingMod.LOGGER.info(
+						"[bulk_craft] eager_finish reason=materials_exhausted completed={}/{}",
+						activeSession.completedRecipeCopies(),
+						activeSession.requestedRecipeCopies()
+					);
+					stop(false, "materials_exhausted");
+					postAutoMoveDelayTicks = 0;
+					previousSnapshot.clear();
+					return;
+				}
 				com.reachcrafting.ReachCraftingMod.LOGGER.info(
 					"[bulk_craft] Delay finished. Triggering next batch. remaining={} action_recipe={} allow_nearby={} refillable={}",
 					activeSession.requestedRecipeCopies() - activeSession.completedRecipeCopies(),
@@ -641,7 +813,11 @@ public final class BulkAutoCraftController {
 			return 0;
 		}
 		AvailableItemSnapshot snapshot = AvailableItemSnapshot.capture(client.player, client.screen);
-		return ContainerUtils.currentReservedCraftCopies(snapshot.gridStacks());
+		return GridTopUp.recipeAwareStagedCopies(
+			client.player != null ? client.player.containerMenu : null,
+			activeSessionIngredientSummary,
+			ContainerUtils.currentReservedCraftCopies(snapshot.gridStacks())
+		);
 	}
 
 	static int countAccessibleOutput(Minecraft client, ItemStack expectedOutput) {
