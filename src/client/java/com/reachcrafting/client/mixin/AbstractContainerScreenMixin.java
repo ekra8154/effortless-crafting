@@ -273,7 +273,7 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 		com.reachcrafting.client.ContainerUtils.tickExistingOutputRetrievalController(Minecraft.getInstance());
 		com.reachcrafting.client.ContainerUtils.tickAutoCraftController();
 		
-		if (!Minecraft.getInstance().isWindowActive()) {
+		if (!Minecraft.getInstance().isWindowActive() && !com.reachcrafting.client.ReproHarness.suppressFocusGuard()) {
 			if (com.reachcrafting.client.ContainerUtils.isAutoCraftTogglePending()) {
 				com.reachcrafting.client.ContainerUtils.cancelAutoCraftToggle();
 			}
