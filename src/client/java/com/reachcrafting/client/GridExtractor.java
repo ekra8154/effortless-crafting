@@ -125,7 +125,7 @@ final class GridExtractor {
 			}
 			for (String itemId : slot.itemIds()) {
 				var item = BuiltInRegistries.ITEM.getValue(net.minecraft.resources.Identifier.parse(itemId));
-				if (item != null && !item.getCraftingRemainder().create().isEmpty()) {
+				if (item != null && item.getCraftingRemainder() != null) {
 					return false;
 				}
 			}
