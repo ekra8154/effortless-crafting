@@ -51,6 +51,22 @@ public final class ReproHarness {
 		return focusBypassTicks > 0;
 	}
 
+	// Dev-only client QoL: -Dreachcrafting.repro.quiet=true (set by the launch
+	// scripts via -PecReproQuiet) makes the from-source client non-intrusive
+	// (no focus steal / taskbar flash, free cursor). F6 toggles the cursor live.
+	private static final boolean QUIET_LAUNCH =
+		"true".equalsIgnoreCase(System.getProperty("reachcrafting.repro.quiet", ""));
+	private static boolean freeMouse = QUIET_LAUNCH;
+	private static boolean freeMouseKeyWasDown;
+
+	public static boolean suppressWindowFocus() {
+		return QUIET_LAUNCH;
+	}
+
+	public static boolean freeMouseActive() {
+		return freeMouse;
+	}
+
 	private ReproHarness() {
 	}
 
@@ -59,11 +75,27 @@ public final class ReproHarness {
 			return;
 		}
 		cmdFile = FabricLoader.getInstance().getGameDir().resolve("repro-cmd.txt");
-		ReachCraftingMod.LOGGER.info("[repro_harness] armed cmd_file={}", cmdFile);
+		ReachCraftingMod.LOGGER.info("[repro_harness] armed cmd_file={} quiet_launch={} free_mouse={} (F6 toggles)", cmdFile, QUIET_LAUNCH, freeMouse);
 		ClientTickEvents.END_CLIENT_TICK.register(ReproHarness::tick);
 	}
 
+	private static void pollFreeMouseToggle(Minecraft client) {
+		boolean down = com.mojang.blaze3d.platform.InputConstants.isKeyDown(
+			client.getWindow().getWindow(), org.lwjgl.glfw.GLFW.GLFW_KEY_F6);
+		if (down && !freeMouseKeyWasDown) {
+			freeMouse = !freeMouse;
+			if (freeMouse) {
+				client.mouseHandler.releaseMouse();
+			} else {
+				client.mouseHandler.grabMouse();
+			}
+			ReachCraftingMod.LOGGER.info("[repro_harness] free-mouse {} (F6)", freeMouse ? "ON" : "OFF");
+		}
+		freeMouseKeyWasDown = down;
+	}
+
 	private static void tick(Minecraft client) {
+		pollFreeMouseToggle(client);
 		if (client.player == null || client.level == null) {
 			return;
 		}
