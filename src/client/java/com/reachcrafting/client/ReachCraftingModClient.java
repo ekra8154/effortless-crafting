@@ -68,11 +68,16 @@ public class ReachCraftingModClient implements ClientModInitializer {
 		ChainCraftPopupController.init();
 		ChainCraftController.init();
 		BulkChainCraftController.init();
+		GridExtractor.init();
+		CursorRescueWatchdog.init();
+		TickStallWatchdog.init();
 		ContainerFilterRenderer.init();
 		ChainCraftabilityCache.init();
 		RecipeBookChunkedScheduler.init();
 		ChainCraftController.init();
 		RecipeBookScrollController.init();
+		PlaceRecipeBudget.init();
+		ReproHarness.init();
 		String reachCraftingCategory = "key.categories." + ReachCraftingMod.MOD_ID;
 
 		showFilterOutlinesKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(

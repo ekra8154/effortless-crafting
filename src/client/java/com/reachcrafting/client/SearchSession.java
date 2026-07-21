@@ -2169,8 +2169,20 @@ final class SearchSession extends BaseCraftSession {
 		int queueLimit = RecipeClickExecutor.resolveRecipeQueueLimit(client, recipe, recipeCollection);
 		if (ChainCraftController.tryManualSelfReferentialPlacement(client, null)) {
 			ReachCraftingMod.LOGGER.info("[recipe_place] manual self-referential placement from SearchSession.placePlannedGrid target={}", targetCopiesPerSlot);
-		} else if (targetCopiesPerSlot >= queueLimit) {
-			ReachCraftingMod.LOGGER.info("[recipe_place] handlePlaceRecipe(shift=true) from SearchSession.placePlannedGrid target={}", targetCopiesPerSlot);
+		} else if (GridTopUp.tryStageInsteadOfPlace(client, player, recipeId, recipeCollection)) {
+			ReachCraftingMod.LOGGER.info("[recipe_place] grid_topup staged from SearchSession.placePlannedGrid target={}", targetCopiesPerSlot);
+		} else if (craftAll || requestedSingleClicks > targetCopiesPerSlot || targetCopiesPerSlot >= queueLimit) {
+			// Max/refillable request: ONE vanilla max place stages the whole grid
+			// (min of 64 and the ingredient-limited biggest craftable, which
+			// targetCopiesPerSlot already reflects). The per-copy shift=false
+			// branch below floods the place-packet budget queue with N single
+			// placements; on a rationed server that FIFO backlog then starves
+			// every later (correct) max place behind it, so the session drips
+			// one copy per batch (see PlaceRecipeBudget). A direct craft has no
+			// leaf-node ordering to protect, so staging the grid maximally in a
+			// single packet is always correct here. The per-copy loop is kept
+			// ONLY for exact sub-grid counts, where a max place would overstage.
+			ReachCraftingMod.LOGGER.info("[recipe_place] handlePlaceRecipe(shift=true) from SearchSession.placePlannedGrid target={} requested={}", targetCopiesPerSlot, requestedSingleClicks);
 			gameMode.handlePlaceRecipe(player.containerMenu.containerId, recipe, true);
 		} else {
 			ReachCraftingMod.LOGGER.info("[recipe_place] handlePlaceRecipe(shift=false) x{} from SearchSession.placePlannedGrid", targetCopiesPerSlot);

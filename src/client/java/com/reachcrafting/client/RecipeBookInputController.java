@@ -196,7 +196,11 @@ final class RecipeBookInputController {
 		}
 		AutoCraftController.armHoldSessionForCurrentRequest(autoCraftRequested);
 
-		if (!ContainerUtils.isGridEmpty(player.containerMenu)) {
+		// Same ring exemption as scheduleReplay: a fresh click over this
+		// recipe's staged ring (e.g. a session restart) must reuse it, not
+		// dump it to inventory and rebuild (~20 wasted clicks + grid churn).
+		if (!ContainerUtils.isGridEmpty(player.containerMenu)
+			&& !GridTopUp.isRingForRecipe(minecraft, player, recipe.id(), collection)) {
 			ContainerUtils.flushCraftingGrid(minecraft, allowNearbyChests, true);
 			state.setReplayDelayTicks(1);
 			RecipeBookClickCapture.HeldRecipeAction action = new RecipeBookClickCapture.HeldRecipeAction(
@@ -409,7 +413,8 @@ final class RecipeBookInputController {
 			return;
 		}
 
-		if (!ContainerUtils.isGridEmpty(minecraft.player.containerMenu)) {
+		if (!ContainerUtils.isGridEmpty(minecraft.player.containerMenu)
+			&& !GridTopUp.isRingForRecipe(minecraft, minecraft.player, action.recipeId(), action.collection())) {
 			com.reachcrafting.ReachCraftingMod.LOGGER.info(
 				"[recipe_replay] flushing grid before replay remainingClicks={} allowNearby={} craftAll={} refillable={} bulkActive={}",
 				remainingClicks,

@@ -186,10 +186,21 @@ final class RecipeClickExecutor {
 		// Exact-count requests still chain (the user asked for a number that
 		// direct crafting alone may not reach), and self-referential recipes
 		// always route through the chain path in bulk regardless.
+		// Yellow-indicator contract: if the recipe is directly craftable right
+		// now (counting nearby stock -- exactly what the yellow icon means),
+		// there is no reason to look for a chain alternative until that direct
+		// supply is exhausted. The immediate deficit is computed from
+		// availableCounts, which lags behind the (nearby-aware) craftability
+		// cache on a cold nearby scan -- the first click after opening a table
+		// then wrongly concluded "direct unsatisfiable -> chain", launching an
+		// expensive cyclic planner search AND dropping into tiny eject batches.
+		// Trust the same signal the indicator shows.
+		boolean directlyCraftableNow = !immediateCraftDeficit.hasMissingIngredients()
+			|| ChainCraftabilityCache.isReachable(selectedRecipe.recipeId());
 		boolean directBulkTakesPriority = (refillableBulkMaxMode
 				|| (effectiveCraftAll && AutoCraftController.isBulkModeEnabled()))
 			&& !selfReferentialRecipe
-			&& !immediateCraftDeficit.hasMissingIngredients();
+			&& directlyCraftableNow;
 		boolean canOfferChainCraft = (deficitReport.hasMissingIngredients()
 				|| (selfReferentialRecipe && AutoCraftController.isBulkModeEnabled()))
 			&& !directBulkTakesPriority
@@ -384,8 +395,29 @@ final class RecipeClickExecutor {
 				// grid clears, each of which consumes the previous result and injects
 				// byproducts into inventory via Inventory.add(), causing fragmentation.
 				if (!ChainCraftController.tryManualSelfReferentialPlacement(minecraft, resolvedItemId)) {
-					ReachCraftingMod.LOGGER.info("[recipe_place] handlePlaceRecipe(shift=true) from RecipeClickExecutor NEARBY path");
-					minecraft.gameMode.handlePlaceRecipe(player.containerMenu.containerId, selectedRecipe.recipe(), true);
+					// M3 (T2): bulk-chain finals with a single unstackable
+					// ingredient run the whole batch as a GridExtractor
+					// key-cycle over the ring — zero place packets and no
+					// per-copy settlement rounds (see the direct-path twin).
+					boolean nearbyChainFinalT2 = ChainCraftController.isRunningFinalStep()
+						&& BulkChainCraftController.isActive()
+						&& !PlaceRecipeBudget.isUnlimited(minecraft)
+						&& GridTopUp.isKeyCycleEligible(ingredientSummary);
+					if (GridTopUp.tryStageInsteadOfPlace(minecraft, player, ingredientSummary)) {
+						// Ring built/maintained via clicks, rationed place
+						// packet skipped.
+						if (nearbyChainFinalT2) {
+							GridExtractor.begin(selectedRecipe.displayStack(), effectiveRequestedClicks, ingredientSummary, true);
+							ReachCraftingMod.LOGGER.info(
+								"[recipe_place] chain_t2 key-cycle batch copies={} recipe={} (nearby path)",
+								effectiveRequestedClicks,
+								selectedRecipe.recipeId()
+							);
+						}
+					} else {
+						ReachCraftingMod.LOGGER.info("[recipe_place] handlePlaceRecipe(shift=true) from RecipeClickExecutor NEARBY path");
+						minecraft.gameMode.handlePlaceRecipe(player.containerMenu.containerId, selectedRecipe.recipe(), true);
+					}
 				}
 				AvailableItemSnapshot postPlaceSnapshot = AvailableItemSnapshot.capture(player, screen);
 				ReachCraftingMod.LOGGER.info(
@@ -396,7 +428,9 @@ final class RecipeClickExecutor {
 					resolveRecipeQueueLimit(minecraft, selectedRecipe.recipe(), collection),
 					postPlaceSnapshot.hasReservedGrid()
 				);
-				ContainerUtils.scheduleAutoMove(selectedRecipe.displayStack());
+				if (!GridExtractor.isActive()) {
+					ContainerUtils.scheduleAutoMove(selectedRecipe.displayStack());
+				}
 				if (!ChainCraftController.isActive()) {
 					ReachCraftingConfig.get().noteRecentRecipe(selectedRecipe.recipeId());
 					RecipeBookChunkedScheduler.onRecentRecipesChanged();
@@ -417,6 +451,20 @@ final class RecipeClickExecutor {
 					immediateLocalCraftDeficit.compactMissingSummary(),
 					immediateCraftDeficit.compactMissingSummary()
 				);
+			}
+
+			if (GridTopUp.tryStageInsteadOfPlace(minecraft, player, ingredientSummary)) {
+				// Ring cycle: unstackable slot(s) refilled via clicks. Bypass
+				// the dry-run/search-session machinery entirely — its restore
+				// bookkeeping treats a persistent ring as foreign grid content
+				// and aborts the session (observed as skip_schedule
+				// no_craft_staged). The bulk session is already armed here;
+				// scheduling the auto-move is all that remains.
+				ReachCraftingMod.LOGGER.info("[recipe_place] grid_topup ring cycle, dry-run bypassed");
+				if (AutoCraftController.isEnabled()) {
+					ContainerUtils.scheduleAutoMove(selectedRecipe.displayStack());
+				}
+				return;
 			}
 
 			if (!deficitReport.hasMissingIngredients() && availableItems.hasReservedGrid()) {
@@ -458,12 +506,31 @@ final class RecipeClickExecutor {
 		MultiPlayerGameMode gameMode = minecraft.gameMode;
 		if (gameMode != null) {
 			int queueLimit = resolveRecipeQueueLimit(minecraft, selectedRecipe.recipe(), collection);
-			// Intermediate chain steps must keep exact per-click placement; a
-			// shift place would craft-all and desync batch settlement. The
-			// FINAL chain step is a flat bulk craft though — one shift place
-			// crafts the whole batch at flat bulk speed instead of one copy
-			// per settlement round.
+			// Intermediate chain steps must keep exact per-copy CONSUMPTION; a
+			// shift place + QUICK_MOVE would craft-all, and with shared
+			// ingredients (lectern: planks feed slabs AND bookshelves) that
+			// overcraft starves later steps. On budgeted servers the T1 path
+			// below still gets the packet win: ONE shift place stages maximal
+			// stacks (staging is not consumption) and GridExtractor caps the
+			// crafts via counted result clicks. The FINAL chain step is a flat
+			// bulk craft though — one shift place crafts the whole batch at
+			// flat bulk speed instead of one copy per settlement round.
 			boolean chainFinalBulkPlace = AutoCraftController.isBulkModeEnabled() && ChainCraftController.isRunningFinalStep();
+			boolean chainIntermediateT1 = !chainFinalBulkPlace
+				&& ChainCraftController.isRunningIntermediateStep()
+				&& !PlaceRecipeBudget.isUnlimited(minecraft)
+				&& effectiveRequestedClicks > 1
+				&& GridExtractor.isEligibleSummary(ingredientSummary);
+			// M3 (T2): a bulk-chain FINAL step with a single unstackable
+			// ingredient (dispenser's bow) used to pay one rationed packet per
+			// copy — schedule, shift-place one balanced copy, settle, repeat.
+			// Instead run the whole batch as a GridExtractor key-cycle: the
+			// ring stages the stackable slots, each craft is "insert next key
+			// + pick result" in ordinary clicks, zero place packets.
+			boolean chainFinalT2 = chainFinalBulkPlace
+				&& BulkChainCraftController.isActive()
+				&& !PlaceRecipeBudget.isUnlimited(minecraft)
+				&& GridTopUp.isKeyCycleEligible(ingredientSummary);
 			boolean useBulkPlace = effectiveCraftAll
 				|| chainFinalBulkPlace
 				|| (AutoCraftController.isBulkModeEnabled() && !ChainCraftController.isActive() && requestedClicks >= queueLimit);
@@ -472,6 +539,25 @@ final class RecipeClickExecutor {
 			if (ChainCraftController.tryManualSelfReferentialPlacement(minecraft, resolvedItemId)) {
 				// Self-referential chain step: inputs were placed client-side so
 				// the server cannot pick the step's own output as an ingredient.
+			} else if (chainIntermediateT1) {
+				gameMode.handlePlaceRecipe(player.containerMenu.containerId, selectedRecipe.recipe(), true);
+				GridExtractor.begin(selectedRecipe.displayStack(), effectiveRequestedClicks, ingredientSummary);
+				ReachCraftingMod.LOGGER.info(
+					"[recipe_place] chain_t1 single max place + counted extraction copies={} recipe={}",
+					effectiveRequestedClicks,
+					selectedRecipe.recipeId()
+				);
+			} else if (chainFinalT2 && GridTopUp.tryStageInsteadOfPlace(minecraft, player, ingredientSummary)) {
+				GridExtractor.begin(selectedRecipe.displayStack(), effectiveRequestedClicks, ingredientSummary, true);
+				ReachCraftingMod.LOGGER.info(
+					"[recipe_place] chain_t2 key-cycle batch copies={} recipe={}",
+					effectiveRequestedClicks,
+					selectedRecipe.recipeId()
+				);
+			} else if (GridTopUp.tryStageInsteadOfPlace(minecraft, player, ingredientSummary)) {
+				// Unstackable-ingredient bulk: the ingredient ring was built or
+				// maintained with ordinary clicks, saving the rationed place
+				// packet (see PlaceRecipeBudget / GridTopUp).
 			} else if (useBulkPlace) {
 				gameMode.handlePlaceRecipe(player.containerMenu.containerId, selectedRecipe.recipe(), true);
 			} else {
@@ -509,7 +595,13 @@ final class RecipeClickExecutor {
 					selectedRecipe.displayStack(),
 					ingredientSummary
 				);
-				ContainerUtils.scheduleAutoMove(selectedRecipe.displayStack());
+				// A T1 batch owns its result slot: GridExtractor performs the
+				// counted extraction and reports through onAutoMoveFinished
+				// itself; the blanket auto-move would QUICK_MOVE-craft the
+				// whole staged grid past the scheduled copy count.
+				if (!GridExtractor.isActive()) {
+					ContainerUtils.scheduleAutoMove(selectedRecipe.displayStack());
+				}
 			}
 			if (!ChainCraftController.isActive()) {
 				ReachCraftingConfig.get().noteRecentRecipe(selectedRecipe.recipeId());

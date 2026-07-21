@@ -54,6 +54,59 @@ public final class ChainCraftController {
 		return activeRun != null;
 	}
 
+	/**
+	 * True when the currently scheduled batch's output is already fully
+	 * observable (inventory + cursor + eject credits). A shift-place final
+	 * step can craft the whole batch in one server action; the result-wait
+	 * must recognize that as done instead of waiting for a result slot that
+	 * will never repopulate (that wait timed out and fed a phantom drop into
+	 * the place budget's AIMD).
+	 */
+	static boolean isCurrentBatchObservedComplete() {
+		return activeRun != null
+			&& activeRun.scheduledBatchCopies() > 0
+			&& activeRun.observedProducedRecipeCopies() >= activeRun.scheduledBatchCopies();
+	}
+
+	/**
+	 * Has the current batch produced ANY observable output? A result-wait
+	 * timeout with partial production is an accounting shortfall (e.g. the
+	 * materials ran out one copy early), NOT a dropped place packet — a real
+	 * drop leaves the batch at zero. Used to spare the AIMD budget.
+	 */
+	static boolean hasCurrentBatchObservedAnyCopies() {
+		return activeRun != null && activeRun.observedProducedRecipeCopies() > 0;
+	}
+
+	/**
+	 * Does the CURRENT step consume any item a LATER step also consumes?
+	 * When it does not, overcrafting the step is harmless surplus (the
+	 * planner recounts availability every iteration) and extraction may
+	 * craft-all in one shift-click, release-style. When it does (lectern:
+	 * planks feed both slabs and bookshelves), extraction must stay
+	 * copy-exact or the surplus starves the sibling step.
+	 */
+	static boolean currentStepSharesIngredientsWithLaterSteps() {
+		ChainCraftRun run = activeRun;
+		if (run == null) {
+			return true; // unknown -> conservative
+		}
+		java.util.List<ChainCraftPlan.Step> steps = run.plan().steps();
+		int index = run.currentStepIndex();
+		if (index >= steps.size() - 1) {
+			return false; // final step has no later consumers
+		}
+		java.util.Set<String> current = new java.util.HashSet<>(steps.get(index).ingredientSummary().acceptedItemIds());
+		for (int later = index + 1; later < steps.size(); later++) {
+			for (String itemId : steps.get(later).ingredientSummary().acceptedItemIds()) {
+				if (current.contains(itemId)) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
 	static boolean isRunningIntermediateStep() {
 		return activeRun != null && activeRun.currentStepIndex() < activeRun.plan().steps().size() - 1;
 	}
@@ -266,7 +319,7 @@ public final class ChainCraftController {
 			activeRun = null;
 			return;
 		}
-		if (!client.isWindowActive()) {
+		if (!client.isWindowActive() && !ReproHarness.suppressFocusGuard()) {
 			abort(true);
 			return;
 		}
@@ -700,7 +753,15 @@ public final class ChainCraftController {
 		ChainCraftRun withCompletedBatch() {
 			int producedCopies = observedProducedRecipeCopies();
 			int completedCopies = Math.max(1, Math.min(Math.max(scheduledBatchCopies, 1), producedCopies));
-			int remaining = remainingStepCopies - completedCopies;
+			// Copies observed BEYOND the scheduled batch are real output of
+			// this step (an arrival can slide across a batch boundary, and
+			// craft-all overshoot lands here too). Discarding the surplus
+			// made the step's LAST batch schedule one more copy than the
+			// materials could produce; its result wait then timed out and
+			// fed a phantom drop into the place budget's AIMD — once per
+			// iteration, compounding across runs until the budget pinned at
+			// its floor (field: "first run much faster than subsequent").
+			int remaining = remainingStepCopies - Math.max(completedCopies, producedCopies);
 			ReachCraftingMod.LOGGER.info(
 				"[chain_execute] batch_finished index={} scheduled_copies={} observed_copies={} completed_copies={} remaining_before={}",
 				currentStepIndex,
