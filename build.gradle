@@ -41,7 +41,8 @@ loom {
 		clientRepro {
 			client()
 			configName = "Repro Client (localhost Paper)"
-			programArgs("--username", "ReproBot", "--quickPlayMultiplayer", "localhost:25565")
+			def reproPort = project.hasProperty("ecServerPort") ? project.property("ecServerPort") : "25565"
+			programArgs("--username", "ReproBot", "--quickPlayMultiplayer", "localhost:${reproPort}")
 			// The automated launch scripts pass -PecReproQuiet to opt into the
 			// non-intrusive dev client (no focus steal / taskbar flash, free
 			// cursor). A plain `gradlew runClientRepro` you run by hand leaves
