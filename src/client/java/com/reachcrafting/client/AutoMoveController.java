@@ -328,7 +328,7 @@ final class AutoMoveController {
 				directEjectLastGridTotal = gridTotalNow;
 				directEjectRefillGapTicks = 0;
 				if (directEjectRethrowStallTicks < DIRECT_EJECT_RETHROW_STALL_LIMIT) {
-					client.gameMode.handleInventoryMouseClick(menu.containerId, resultSlot.index, 1, ClickType.THROW, client.player);
+					client.gameMode.handleContainerInput(menu.containerId, resultSlot.index, 1, ContainerInput.THROW, client.player);
 					if (directEjectSettlementTicks % 20 == 1) {
 						com.reachcrafting.ReachCraftingMod.LOGGER.info(
 							"[auto_move] direct eject re-throw (craft-one server): ticks={} grid_total={} stateId={}",
@@ -430,7 +430,7 @@ final class AutoMoveController {
 				}
 				chainEjectLastGridTotal = chainGridNow;
 				if (chainEjectRethrowStallTicks < DIRECT_EJECT_RETHROW_STALL_LIMIT) {
-					client.gameMode.handleInventoryMouseClick(menu.containerId, resultSlot.index, 1, ClickType.THROW, client.player);
+					client.gameMode.handleContainerInput(menu.containerId, resultSlot.index, 1, ContainerInput.THROW, client.player);
 					return;
 				}
 				// grid stopped draining -> settle below
