@@ -51,6 +51,21 @@ final class AutoCraftController {
 		}
 
 		autoCraftKeyHeld = false;
+
+		// While a bulk or chain session is actively crafting, Alt is INERT: an
+		// Alt tap, or an alt-tab (which delivers an Alt release), must not stop
+		// the run, toggle the mode, or schedule a stray quick-craft. Esc is the
+		// abort key. We still clear the transient Alt/quick-craft state so the
+		// gesture leaves no residue for after the session ends.
+		if (isBulkOrChainSessionRunning()) {
+			holdStickyBulkAltOverride = false;
+			holdStickyNormalAltOverride = false;
+			holdQuickCraftCancelled = false;
+			holdQuickCraftConsumed = false;
+			autoCraftTogglePending = false;
+			return;
+		}
+
 		if (ReachCraftingConfig.get().autoCraftHandling() == ReachCraftingConfig.AutoCraftHandling.TOGGLE) {
 			if (autoCraftTogglePending) {
 				autoCraftTogglePending = false;
@@ -80,6 +95,14 @@ final class AutoCraftController {
 
 		autoCraftTogglePending = false;
 		holdReleaseGraceTicks = HOLD_RELEASE_GRACE_TICKS;
+	}
+
+	/** True while a bulk / bulk-chain / chain craft is actually running, so Alt
+	 *  gestures (tap, alt-tab release) must not disturb it — Esc aborts. */
+	private static boolean isBulkOrChainSessionRunning() {
+		return BulkAutoCraftController.isActive()
+			|| BulkChainCraftController.isActive()
+			|| ChainCraftController.isActive();
 	}
 
 	static void cancelToggle() {
