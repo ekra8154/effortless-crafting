@@ -282,7 +282,7 @@ final class AutoMoveController {
 			// either the slot is empty OR it shows the ring's foreign preview.
 			boolean directEjectForeignPreview = resultSlot.hasItem()
 				&& !autoMoveExpectedStack.isEmpty()
-				&& !ItemStack.isSameItemSameComponents(resultSlot.getItem(), autoMoveExpectedStack);
+				&& !ItemStack.isSameItem(resultSlot.getItem(), autoMoveExpectedStack);
 			boolean expectedOutputGone = !resultSlot.hasItem()
 				|| (directEjectForeignPreview
 					&& (GridTopUp.isRingAwaitingKeyItem(client, menu)
@@ -342,7 +342,7 @@ final class AutoMoveController {
 			// preview (dropper over a bow-less ring) counts as gone, else the
 			// 20-tick timeout would discard a legitimate credit every craft.
 			boolean thrownOutputGone = !resultSlot.hasItem()
-				|| (!ItemStack.isSameItemSameComponents(resultSlot.getItem(), chainEjectPendingStack)
+				|| (!ItemStack.isSameItem(resultSlot.getItem(), chainEjectPendingStack)
 					&& (GridTopUp.isRingAwaitingKeyItem(client, menu)
 						// Same summary-free fallback as direct-eject: a foreign
 						// item persisting in the result slot is the ring
@@ -399,7 +399,7 @@ final class AutoMoveController {
 			if (resultSlot.hasItem() && resultSlot.mayPickup(client.player)) {
 				ItemStack currentResult = resultSlot.getItem();
 
-				if (!autoMoveExpectedStack.isEmpty() && !ItemStack.isSameItemSameComponents(currentResult, autoMoveExpectedStack)) {
+				if (!autoMoveExpectedStack.isEmpty() && !ItemStack.isSameItem(currentResult, autoMoveExpectedStack)) {
 					if (GridTopUp.isRingAwaitingKeyItem(client, menu)) {
 						// The bulk ring's key (unstackable) slot is empty between
 						// cycles and the remaining ring previews a foreign recipe
@@ -455,7 +455,7 @@ final class AutoMoveController {
 				// the expected output when autoMoveExpectedStack is set.
 				boolean chainFinalResultEject = ChainCraftController.isRunningFinalStep()
 					&& !autoMoveExpectedStack.isEmpty()
-					&& ItemStack.isSameItemSameComponents(currentResult, autoMoveExpectedStack);
+					&& ItemStack.isSameItem(currentResult, autoMoveExpectedStack);
 				boolean chainFinalDirectEject = chainFinalResultEject && BulkChainCraftController.shouldDirectEjectCurrentResult();
 				boolean shouldEject = bulkDirectEject || chainFinalDirectEject;
 				boolean delayInventoryFullFallbackEject = BulkAutoCraftController.shouldDelayInventoryFullFallbackEject();
@@ -723,7 +723,7 @@ final class AutoMoveController {
 				ItemStack carriedNow = menu.getCarried();
 				if (!carriedNow.isEmpty()
 					&& autoMoveWaitingTicks >= 10 && autoMoveWaitingTicks % 10 == 0
-					&& !ItemStack.isSameItemSameComponents(carriedNow, autoMoveExpectedStack)) {
+					&& !ItemStack.isSameItem(carriedNow, autoMoveExpectedStack)) {
 					String carriedId = net.minecraft.core.registries.BuiltInRegistries.ITEM
 						.getKey(carriedNow.getItem()).toString();
 					Slot rescueSlot = MenuTransferHelper.findPlayerDestinationSlot(client.player, menu, carriedId);
