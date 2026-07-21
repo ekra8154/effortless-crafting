@@ -70,6 +70,26 @@ Combinations of these modifiers stack naturally.
 - `Shift + scroll` over the result slot can also be used as a fast **scroll to pull** shortcut for crafted results.
 
 ---
+## Server Rate-Limit Compatibility
+
+Bulk and chain crafting send recipe-placement packets, and many multiplayer
+servers (Paper and similar) ration those packets and silently drop the excess —
+which used to make large crafts crawl or stall on those servers. Effortless
+Crafting now paces recipe placements against a self-tuning budget: it starts
+conservatively, learns each server's real limit, and remembers it per server,
+so big crafts stay fast without tripping the limiter.
+
+- **No setup required** — it adapts automatically.
+- **Settings → Advanced → Server Rate Limits** exposes the initial/maximum
+  rates and an on/off toggle if you want to pin a known limit.
+- **Playing an older version through a proxy?** On servers newer than your
+  client (joined via a ViaVersion/ViaBackwards translation layer),
+  **Minecraft 1.21.4 and older** clients can mis-detect crafted items because
+  the proxy rewrites item data between protocols; use a same-version server for
+  reliable bulk/chain crafting on those versions. **1.21.5 and newer** are
+  unaffected.
+
+---
 ## Auto-Crafting
 
 - **Hold vs Toggle modes**: By default, autocraft uses hold mode. Holding `Alt` signals autocraft behavior for the current request. If preferred, autocraft can also be configured to use a toggle mode in settings. When autocraft is active, the arrow in the result slot indicates it.
