@@ -26,7 +26,10 @@ public final class BulkChainCraftController {
 	// runs withdraw a trickle of materials per round no matter how much
 	// inventory space was free.
 	private static final int MAX_BATCH_FINAL_COPIES = 512;
-	private static final int MAX_CONSECUTIVE_STALLED_ITERATIONS = 2;
+	// A stalled iteration on a server is usually a place-packet budget hit,
+	// which needs several seconds of backoff to clear (see PlaceRecipeBudget)
+	// — so allow more consecutive stalls than the old 1-tick retry did.
+	private static final int MAX_CONSECUTIVE_STALLED_ITERATIONS = 4;
 	private static BulkChainSession activeSession;
 	private static int settleDelayTicks;
 
@@ -113,6 +116,13 @@ public final class BulkChainCraftController {
 				activeSession.requestedTotalCopies(),
 				ContainerUtils.formatStack(activeSession.selection().displayStack())
 			);
+			if ("abort_all_sessions".equals(reason) || "window_focus_lost".equals(reason)) {
+				// Make user-initiated stops unmistakable in postmortems: this
+				// reason means the screen was closed / focus dropped, i.e. a
+				// deliberate interrupt — NOT a mod failure.
+				ReachCraftingMod.LOGGER.info(
+					"[bulk_chain] session_stop was USER-INITIATED (screen closed or focus lost), not a crafting failure");
+			}
 			if (activeSession.completedCopies() > 0) {
 				ReachCraftingConfig.get().noteRecentRecipe(activeSession.selection().recipeId());
 			}
@@ -126,8 +136,11 @@ public final class BulkChainCraftController {
 			);
 		}
 		Minecraft client = Minecraft.getInstance();
-		AutoCraftController.finishBulkSessionTeardown();
+		// clear() first: teardown skips itself while a chain session is
+		// active (flat sub-sessions ending mid-chain must not reset the
+		// latch), so our own flag must drop before we call it.
 		clear();
+		AutoCraftController.finishBulkSessionTeardown();
 		// Return accumulated leftover pulled materials to their chests when
 		// the player is still present at the screen. Skipped for the screen
 		// close path (its own flush runs right after abortAllSessions and
@@ -156,7 +169,7 @@ public final class BulkChainCraftController {
 			return;
 		}
 		BulkDespawnWarning.tick();
-		if (!client.isWindowActive()) {
+		if (!client.isWindowActive() && !ReproHarness.suppressFocusGuard()) {
 			stop(true, "window_focus_lost");
 			return;
 		}
@@ -212,10 +225,15 @@ public final class BulkChainCraftController {
 				stop(true, "no_progress_detected");
 				return;
 			}
-			// Retry with a smaller batch: a stalled chain is most often an
-			// inventory-fit failure, which a smaller batch can clear.
+			// Retry with a smaller batch after a backoff: on a server a stall
+			// usually means the place-packet budget was exhausted and needs
+			// seconds to refill; in singleplayer it's an inventory-fit issue
+			// and the backoff collapses to a single tick.
 			activeSession = session.withIterationAccounted(0, stalled, Math.max(1, session.batchCap() / 2));
-			settleDelayTicks = 1;
+			settleDelayTicks = PlaceRecipeBudget.stallBackoffTicks(client);
+			ReachCraftingMod.LOGGER.info(
+				"[bulk_chain] stall_backoff stalled={}/{} settle_delay_ticks={}",
+				stalled, MAX_CONSECUTIVE_STALLED_ITERATIONS, settleDelayTicks);
 			return;
 		}
 
@@ -249,6 +267,38 @@ public final class BulkChainCraftController {
 		if (plan.isEmpty()) {
 			stop(false, "materials_exhausted");
 			return;
+		}
+		// Size the iteration to what the place-packet budget can afford so
+		// progress stays continuous instead of exhausting the server's window
+		// mid-iteration and stalling (no-op in singleplayer). Priced against
+		// the PLAN's real packet cost: a T1 step (all-stackable, counted
+		// extraction) spends ONE place per batch regardless of copies, so a
+		// full-T1 chain like lectern costs ~steps packets per iteration and
+		// must not be clamped as if every copy cost a placement — the old
+		// per-copy pricing throttled post-T1 iterations to 1-2 copies each.
+		double affordablePlaces = PlaceRecipeBudget.affordablePlaces(client);
+		int planCost = planPlacePacketCost(plan.get());
+		if (planCost > affordablePlaces) {
+			int clamped = Math.max(1, (int) (batchTarget * affordablePlaces / planCost));
+			if (clamped < batchTarget) {
+				ReachCraftingMod.LOGGER.info(
+					"[bulk_chain] budget_clamp batch_target={} -> {} plan_cost={} affordable={}",
+					batchTarget, clamped, planCost, String.format("%.1f", affordablePlaces));
+				batchTarget = clamped;
+				plan = ChainCraftPlanner.planMax(
+					client,
+					client.player,
+					session.selection(),
+					availableCounts,
+					session.allowNearby(),
+					batchTarget,
+					true
+				);
+				if (plan.isEmpty()) {
+					stop(false, "materials_exhausted");
+					return;
+				}
+			}
 		}
 
 		// Size the batch so staged materials, in-flight intermediates, and
@@ -310,6 +360,22 @@ public final class BulkChainCraftController {
 		if (!ChainCraftController.isActive()) {
 			stop(true, "chain_start_failed");
 		}
+	}
+
+	/**
+	 * Rationed place packets a plan iteration will actually spend: one per
+	 * T1-eligible step (single max place + counted extraction, copies come
+	 * from ordinary clicks), one per copy for everything else (per-copy
+	 * placement / rapid-eject restage).
+	 */
+	private static int planPlacePacketCost(ChainCraftPlan plan) {
+		int cost = 0;
+		for (ChainCraftPlan.Step step : plan.steps()) {
+			cost += GridExtractor.isEligibleSummary(step.ingredientSummary())
+				? 1
+				: Math.max(step.recipeCopies(), 1);
+		}
+		return cost;
 	}
 
 	private static boolean willEjectFinalOutputs(BulkChainSession session, ChainCraftPlan plan) {
