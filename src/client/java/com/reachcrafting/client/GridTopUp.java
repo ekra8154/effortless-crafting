@@ -89,11 +89,20 @@ final class GridTopUp {
 			}
 			ItemStack inGrid = menu.getSlot(1 + i).getItem();
 			if (inGrid.isEmpty()) {
-				return 0;
+				// The naive slot->grid map (summary slot i -> grid slot 1+i)
+				// only holds when the recipe fills the grid contiguously. A
+				// SHAPED recipe smaller than the grid (honey_block: 2x2 in a
+				// 3x3 menu occupies grid slots 1,2,4,5 — slot 3 is a shape gap)
+				// hits an empty slot here and used to report 0 staged copies,
+				// which stalled the DIRECT_EJECT fast path for ~6 ticks EVERY
+				// batch before it fell back to the slow organize path. The
+				// layout-agnostic rawCopies (min over occupied slots) is
+				// correct for these; use it rather than under-reporting 0.
+				return rawCopies;
 			}
 			staged = Math.min(staged, inGrid.getCount());
 		}
-		return staged == Integer.MAX_VALUE ? 0 : staged;
+		return staged == Integer.MAX_VALUE ? rawCopies : Math.max(staged, rawCopies);
 	}
 
 	/**
