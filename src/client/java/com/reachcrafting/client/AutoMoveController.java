@@ -51,6 +51,26 @@ final class AutoMoveController {
 	private static int chainEjectPerCraftCount = 1;
 	private static ItemStack[] directEjectGridBefore = null;
 	private static int directEjectPerCraftCount = 1;
+	// Direct-eject re-throw for craft-one-per-throw servers: native <=1.21.x (and
+	// anti-cheat rewriters) execute only ONE craft per result-slot THROW, then
+	// refill the result slot from the still-full grid. The old logic threw once
+	// and waited for an EMPTY slot, so the refill hung the session forever
+	// (26.2 masked it: one throw drains the whole staged batch, slot empties in a
+	// tick). We now re-issue the throw while the slot shows the expected output
+	// and the grid still has ingredients. directEjectLastGridTotal + the stall
+	// counter stop us if the grid ever stops draining (a true reject), so a
+	// non-crafting server can't spin the loop.
+	private static int directEjectLastGridTotal = Integer.MAX_VALUE;
+	private static int directEjectRethrowStallTicks = 0;
+	private static final int DIRECT_EJECT_RETHROW_STALL_LIMIT = 60;
+	// Consecutive ticks the result slot has NOT shown the expected output while
+	// the cursor is empty. Once the last throw stops refilling the slot (grid
+	// drained, OR the grid holds only crafting remainders like cake's empty
+	// buckets so the recipe no longer forms), this rises past the debounce and
+	// we settle. The debounce rides over the ~1-tick empty window right after a
+	// throw so we don't settle mid-drain.
+	private static int directEjectRefillGapTicks = 0;
+	private static final int DIRECT_EJECT_REFILL_GAP_LIMIT = 8;
 
 	private AutoMoveController() {
 	}
@@ -78,6 +98,19 @@ final class AutoMoveController {
 			snapshot[i] = menu.getSlot(1 + i).getItem().copy();
 		}
 		return snapshot;
+	}
+
+	// Total ingredient count across the grid slots. Direct-eject settlement uses
+	// this to tell "batch drained, done" (0) from "slot refilled, keep throwing"
+	// (>0) on craft-one-per-throw servers, and to detect drain progress.
+	private static int gridItemTotal(AbstractContainerMenu menu) {
+		int gridCount = menu instanceof net.minecraft.world.inventory.CraftingMenu ? 9
+			: menu instanceof InventoryMenu ? 4 : 0;
+		int total = 0;
+		for (int i = 0; i < gridCount; i++) {
+			total += menu.getSlot(1 + i).getItem().getCount();
+		}
+		return total;
 	}
 
 	/**
@@ -264,25 +297,77 @@ final class AutoMoveController {
 			// for an empty slot here hung the whole session (observed: 1200+
 			// ticks). The throw is settled once the expected output is gone —
 			// either the slot is empty OR it shows the ring's foreign preview.
+			int gridTotalNow = gridItemTotal(menu);
+			boolean carriedEmpty = menu.getCarried().isEmpty();
+			boolean slotHasExpected = resultSlot.hasItem()
+				&& !autoMoveExpectedStack.isEmpty()
+				&& ItemStack.isSameItemSameComponents(resultSlot.getItem(), autoMoveExpectedStack);
 			boolean directEjectForeignPreview = resultSlot.hasItem()
 				&& !autoMoveExpectedStack.isEmpty()
 				&& !ItemStack.isSameItemSameComponents(resultSlot.getItem(), autoMoveExpectedStack);
-			boolean expectedOutputGone = !resultSlot.hasItem()
-				|| (directEjectForeignPreview
+
+			// Craft-one-per-throw servers refill the result slot with our
+			// expected output after each throw. Keep re-throwing while the grid
+			// still has ingredients — this drains it copy by copy. The stall
+			// guard settles anyway if the grid ever stops draining (true reject),
+			// so a non-crafting server can't spin the loop. (On 26.2 the first
+			// throw drains the whole batch, so the slot is already empty here and
+			// this branch never runs.)
+			if (carriedEmpty && slotHasExpected && gridTotalNow > 0) {
+				if (gridTotalNow < directEjectLastGridTotal) {
+					directEjectRethrowStallTicks = 0;
+				} else {
+					directEjectRethrowStallTicks++;
+				}
+				directEjectLastGridTotal = gridTotalNow;
+				directEjectRefillGapTicks = 0;
+				if (directEjectRethrowStallTicks < DIRECT_EJECT_RETHROW_STALL_LIMIT) {
+					client.gameMode.handleInventoryMouseClick(menu.containerId, resultSlot.index, 1, ClickType.THROW, client.player);
+					if (directEjectSettlementTicks % 20 == 1) {
+						com.reachcrafting.ReachCraftingMod.LOGGER.info(
+							"[auto_move] direct eject re-throw (craft-one server): ticks={} grid_total={} stateId={}",
+							directEjectSettlementTicks, gridTotalNow, menu.getStateId());
+					}
+					return;
+				}
+				com.reachcrafting.ReachCraftingMod.LOGGER.info(
+					"[auto_move] direct eject re-throw stalled at grid_total={} for {} ticks -> settling",
+					gridTotalNow, directEjectRethrowStallTicks);
+				// fall through to credit + finish
+			} else {
+				// Not draining right now. Settle only when the batch is truly
+				// done: the slot no longer shows our output AND the grid is
+				// depleted (an empty slot with grid>0 is the one-tick post-throw
+				// window that refills next tick), or a foreign ring preview holds
+				// the slot (bow-less ring), or the safety timeout fires.
+				boolean foreignSettled = directEjectForeignPreview
 					&& (GridTopUp.isRingAwaitingKeyItem(client, menu)
 						// Summary-free fallback: a FOREIGN item holding the
 						// result slot for 10+ ticks cannot be our pending
 						// output — it is the ring preview even when the
 						// session summary is unavailable to prove it.
-						|| directEjectSettlementTicks > 10));
-			if (!expectedOutputGone || !menu.getCarried().isEmpty()) {
-				com.reachcrafting.ReachCraftingMod.LOGGER.info(
-					"[auto_move] direct eject awaiting settlement: ticks={} result_now={} carried={}",
-					directEjectSettlementTicks,
-					resultSlot.hasItem() ? ContainerUtils.formatStack(resultSlot.getItem()) : "<empty>",
-					ContainerUtils.formatStack(menu.getCarried())
-				);
-				return;
+						|| directEjectSettlementTicks > 10);
+				if (carriedEmpty) {
+					directEjectRefillGapTicks++;
+				}
+				boolean settled = carriedEmpty && !slotHasExpected
+					&& (gridTotalNow == 0
+						|| directEjectRefillGapTicks >= DIRECT_EJECT_REFILL_GAP_LIMIT
+						|| foreignSettled);
+				if (!settled) {
+					if (directEjectSettlementTicks % 20 == 1) {
+						com.reachcrafting.ReachCraftingMod.LOGGER.info(
+							"[auto_move] direct eject awaiting settlement: ticks={} result_now={} carried={} grid_total={} refill_gap={}",
+							directEjectSettlementTicks,
+							resultSlot.hasItem() ? ContainerUtils.formatStack(resultSlot.getItem()) : "<empty>",
+							ContainerUtils.formatStack(menu.getCarried()),
+							gridTotalNow,
+							directEjectRefillGapTicks
+						);
+					}
+					return;
+				}
+				// fall through to credit + finish
 			}
 			int directCredit = resolveEjectCredit(
 				menu, directEjectGridBefore, directEjectPerCraftCount, directEjectPendingCount, "direct eject");
@@ -295,6 +380,9 @@ final class AutoMoveController {
 			directEjectAwaitingSettlement = false;
 			directEjectSettlementTicks = 0;
 			directEjectAwaitingStagedCopiesTicks = 0;
+			directEjectLastGridTotal = Integer.MAX_VALUE;
+			directEjectRethrowStallTicks = 0;
+			directEjectRefillGapTicks = 0;
 			pendingAutoMove = false;
 			autoMoveOrganizing = false;
 			autoMoveTargetArrivalObserved = false;
@@ -560,6 +648,9 @@ final class AutoMoveController {
 						directEjectPendingCount = totalEjected;
 						directEjectAwaitingSettlement = true;
 						directEjectSettlementTicks = 0;
+						directEjectLastGridTotal = Integer.MAX_VALUE;
+						directEjectRethrowStallTicks = 0;
+						directEjectRefillGapTicks = 0;
 						directEjectGridBefore = gridBeforeThrow;
 						directEjectPerCraftCount = Math.max(currentResult.getCount(), 1);
 						autoMoveWaitingTicks = 0;
