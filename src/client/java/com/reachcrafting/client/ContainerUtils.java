@@ -403,7 +403,7 @@ public final class ContainerUtils {
 			|| InputConstants.isKeyDown(window, GLFW.GLFW_KEY_RIGHT_ALT);
 		tickAutoCraftController();
 
-		if (!Minecraft.getInstance().isWindowActive()) {
+		if (!Minecraft.getInstance().isWindowActive() && !ReproHarness.suppressFocusGuard()) {
 			if (isAutoCraftTogglePending()) {
 				cancelAutoCraftToggle();
 			}
