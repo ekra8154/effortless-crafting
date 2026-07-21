@@ -42,6 +42,14 @@ loom {
 			client()
 			configName = "Repro Client (localhost Paper)"
 			programArgs("--username", "ReproBot", "--quickPlayMultiplayer", "localhost:25565")
+			// The automated launch scripts set EC_REPRO_QUIET to opt into the
+			// non-intrusive dev client (no focus steal / taskbar flash, free
+			// cursor). A plain `gradlew runClientRepro` you run by hand leaves
+			// it unset -> normal focused window + grabbed mouse, so you can
+			// play as ReproBot; F6 still toggles the free cursor live.
+			if (System.getenv("EC_REPRO_QUIET") != null) {
+				vmArgs("-Dreachcrafting.repro.quiet=true")
+			}
 		}
 	}
 }
