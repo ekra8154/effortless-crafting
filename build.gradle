@@ -35,6 +35,15 @@ loom {
 		}
 	}
 
+	// Temporary run config for the server packet-limit investigation:
+	// auto-joins the localhost Paper repro server as a fixed offline user.
+	runs {
+		clientRepro {
+			client()
+			configName = "Repro Client (localhost Paper)"
+			programArgs("--username", "ReproBot", "--quickPlayMultiplayer", "localhost:25565")
+		}
+	}
 }
 
 dependencies {

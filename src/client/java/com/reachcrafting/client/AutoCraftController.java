@@ -245,7 +245,16 @@ final class AutoCraftController {
 	/** Shared end-of-bulk-session teardown for flat bulk and bulk chain. */
 	static void finishBulkSessionTeardown() {
 		Minecraft client = Minecraft.getInstance();
-		boolean preserveAutoCraft = client.isWindowActive()
+		if (BulkChainCraftController.isActive()) {
+			// A flat sub-session ending mid-bulk-chain must not reset the
+			// mode latch the CHAIN still owns — that killed a healthy
+			// 500-craft run at 358 ("bulk_mode_disabled"). The chain's own
+			// stop() calls back here after it clears its active flag.
+			com.reachcrafting.ReachCraftingMod.LOGGER.info(
+				"[bulk_craft] teardown deferred: bulk chain session still active");
+			return;
+		}
+		boolean preserveAutoCraft = (client.isWindowActive() || ReproHarness.suppressFocusGuard())
 			&& (client.screen instanceof CraftingScreen || client.screen instanceof InventoryScreen)
 			&& isEnabled();
 		resetBulkModeAfterSession(preserveAutoCraft);
@@ -304,7 +313,7 @@ final class AutoCraftController {
 			holdReleaseGraceTicks--;
 		}
 
-		if (!Minecraft.getInstance().isWindowActive()) {
+		if (!Minecraft.getInstance().isWindowActive() && !ReproHarness.suppressFocusGuard()) {
 			logLatchWipe("tick_window_inactive");
 			holdReleaseGraceTicks = 0;
 			holdStickyNormalLatched = false;

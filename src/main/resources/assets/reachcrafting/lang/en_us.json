@@ -151,5 +151,13 @@
   "message.reachcrafting.chain_crafting.bulk_partial_always": "Not enough resources for %s %s. Bulk chain crafting %s instead.",
   "enum.reachcrafting.enable_nearby_container_usage.disabled": "Disabled",
   "enum.reachcrafting.enable_nearby_container_usage.ctrl_held": "While Ctrl Held",
-  "enum.reachcrafting.enable_nearby_container_usage.always": "Always On"
+  "enum.reachcrafting.enable_nearby_container_usage.always": "Always On",
+  "category.reachcrafting.sub.server_limits": "Server Rate Limits",
+  "option.reachcrafting.packet_budget_initial_rate": "Initial Place-Packet Rate (per second)",
+  "tooltip.reachcrafting.packet_budget_initial_rate": "Assumed recipe-placement packet rate on servers the mod has not learned yet. The default fits under stock Paper limits; the mod probes upward from here and remembers what each server allows.",
+  "option.reachcrafting.packet_budget_max_rate": "Max Place-Packet Rate (per second)",
+  "tooltip.reachcrafting.packet_budget_max_rate": "Upper bound for probing on servers that turn out not to limit recipe placements. Learned rates are stored per server in effortless-crafting-server-budgets.json.",
+  "option.reachcrafting.packet_budget_adaptive": "Adaptive Rate Learning",
+  "tooltip.reachcrafting.packet_budget_adaptive": "When on, the mod probes each server's real placement-packet limit and remembers it per server. Turn off to pin the rate to the Initial value above (no probing, no learning, nothing saved) - useful if you already know your server's limit.",
+  "text.reachcrafting.packet_budget_no_server": "Not connected to a rate-limited server (learned rates are stored per server in effortless-crafting-server-budgets.json)."
 }
