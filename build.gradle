@@ -42,6 +42,9 @@ loom {
 			client()
 			configName = "Repro Client (localhost Paper)"
 			programArgs("--username", "ReproBot", "--quickPlayMultiplayer", "localhost:25565")
+			if (project.hasProperty("ecReproQuiet") || System.getenv("EC_REPRO_QUIET") != null) {
+				vmArgs("-Dreachcrafting.repro.quiet=true")
+			}
 		}
 	}
 }
