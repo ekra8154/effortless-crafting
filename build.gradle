@@ -42,12 +42,17 @@ loom {
 			client()
 			configName = "Repro Client (localhost Paper)"
 			programArgs("--username", "ReproBot", "--quickPlayMultiplayer", "localhost:25565")
-			// The automated launch scripts set EC_REPRO_QUIET to opt into the
+			// The automated launch scripts pass -PecReproQuiet to opt into the
 			// non-intrusive dev client (no focus steal / taskbar flash, free
 			// cursor). A plain `gradlew runClientRepro` you run by hand leaves
 			// it unset -> normal focused window + grabbed mouse, so you can
 			// play as ReproBot; F6 still toggles the free cursor live.
-			if (System.getenv("EC_REPRO_QUIET") != null) {
+			//
+			// NB: this MUST be a project property (-P), not an env var: Gradle's
+			// System.getenv() reads the long-lived DAEMON's environment, so a
+			// reused daemon silently ignores a per-launch env var. -P is
+			// per-invocation and daemon-safe. (Env var kept only as a fallback.)
+			if (project.hasProperty("ecReproQuiet") || System.getenv("EC_REPRO_QUIET") != null) {
 				vmArgs("-Dreachcrafting.repro.quiet=true")
 			}
 		}
