@@ -3,6 +3,8 @@
 	"package": "com.reachcrafting.client.mixin",
 	"compatibilityLevel": "JAVA_21",
 	"client": [
+		"MouseHandlerMixin",
+		"WindowMixin",
 		"AbstractContainerMenuMixin",
 		"AbstractContainerScreenAccessor",
 		"AbstractContainerScreenMixin",
