@@ -37,6 +37,9 @@ final class AutoMoveController {
 	private static int directEjectAwaitingStagedCopiesTicks = 0;
 	private static boolean chainEjectAwaitingRefresh = false;
 	private static int chainEjectRefreshTicks = 0;
+	private static int chainEjectLastGridTotal = Integer.MAX_VALUE;
+	private static int chainEjectRethrowStallTicks = 0;
+	private static int chainEjectRefillGapTicks = 0;
 	private static int chainEjectPendingCount = 0;
 	private static ItemStack chainEjectPendingStack = ItemStack.EMPTY;
 	// Grid snapshots taken at the moment of a result-slot THROW. A THROW with
@@ -241,6 +244,9 @@ final class AutoMoveController {
 		directEjectAwaitingStagedCopiesTicks = 0;
 		chainEjectAwaitingRefresh = false;
 		chainEjectRefreshTicks = 0;
+		chainEjectLastGridTotal = Integer.MAX_VALUE;
+		chainEjectRethrowStallTicks = 0;
+		chainEjectRefillGapTicks = 0;
 		chainEjectPendingCount = 0;
 		chainEjectPendingStack = ItemStack.EMPTY;
 		chainEjectGridBefore = null;
@@ -403,46 +409,62 @@ final class AutoMoveController {
 		// shows the pre-throw stack a tick later.
 		if (chainEjectAwaitingRefresh) {
 			chainEjectRefreshTicks++;
-			// Same ring rule as direct-eject settlement: the throw is proven
-			// once the EXPECTED output left the slot — a ring's foreign
-			// preview (dropper over a bow-less ring) counts as gone, else the
-			// 20-tick timeout would discard a legitimate credit every craft.
-			boolean thrownOutputGone = !resultSlot.hasItem()
-				|| (!ItemStack.isSameItemSameComponents(resultSlot.getItem(), chainEjectPendingStack)
-					&& (GridTopUp.isRingAwaitingKeyItem(client, menu)
-						// Same summary-free fallback as direct-eject: a foreign
-						// item persisting in the result slot is the ring
-						// preview, not the thrown output — credit, don't
-						// discard (a discarded credit read as 63/64).
-						|| chainEjectRefreshTicks > 10));
-			if (!thrownOutputGone && chainEjectRefreshTicks <= 20) {
-				return;
-			}
-			if (thrownOutputGone) {
-				int chainCredit = resolveEjectCredit(
-					menu, chainEjectGridBefore, chainEjectPerCraftCount, chainEjectPendingCount, "chain eject");
-				if (chainCredit > 0) {
-					BulkChainCraftController.addEjectedOutput(chainEjectPendingStack, chainCredit);
-					ChainCraftController.noteFinalOutputEjected(chainCredit);
+			int chainGridNow = gridItemTotal(menu);
+			boolean chainCarriedEmpty = menu.getCarried().isEmpty();
+			boolean slotHasThrown = resultSlot.hasItem()
+				&& !chainEjectPendingStack.isEmpty()
+				&& ItemStack.isSameItemSameComponents(resultSlot.getItem(), chainEjectPendingStack);
+			boolean chainForeignPreview = resultSlot.hasItem()
+				&& !chainEjectPendingStack.isEmpty()
+				&& !ItemStack.isSameItemSameComponents(resultSlot.getItem(), chainEjectPendingStack);
+			// Craft-one-per-throw servers refill the result slot with the thrown
+			// output after each throw. Re-throw to drain the staged batch instead of
+			// waiting out the refresh timeout once per craft (1 craft/sec on native).
+			// Mirrors the direct-eject settlement; crediting is by observed grid drain.
+			if (chainCarriedEmpty && slotHasThrown && chainGridNow > 0) {
+				chainEjectRefillGapTicks = 0;
+				if (chainGridNow < chainEjectLastGridTotal) {
+					chainEjectRethrowStallTicks = 0;
+				} else {
+					chainEjectRethrowStallTicks++;
 				}
+				chainEjectLastGridTotal = chainGridNow;
+				if (chainEjectRethrowStallTicks < DIRECT_EJECT_RETHROW_STALL_LIMIT) {
+					client.gameMode.handleInventoryMouseClick(menu.containerId, resultSlot.index, 1, ClickType.THROW, client.player);
+					return;
+				}
+				// grid stopped draining -> settle below
 			} else {
-				com.reachcrafting.ReachCraftingMod.LOGGER.info(
-					"[auto_move] chain eject refresh timeout; discarding uncredited pending count={}",
-					chainEjectPendingCount
-				);
+				if (chainCarriedEmpty) {
+					chainEjectRefillGapTicks++;
+				}
+				boolean chainForeignSettled = chainForeignPreview
+					&& (GridTopUp.isRingAwaitingKeyItem(client, menu) || chainEjectRefreshTicks > 10);
+				boolean chainSettled = chainCarriedEmpty && !slotHasThrown
+					&& (chainGridNow == 0
+						|| chainEjectRefillGapTicks >= DIRECT_EJECT_REFILL_GAP_LIMIT
+						|| chainForeignSettled);
+				if (!chainSettled) {
+					return;
+				}
+			}
+			int chainCredit = resolveEjectCredit(
+				menu, chainEjectGridBefore, chainEjectPerCraftCount, chainEjectPendingCount, "chain eject");
+			if (chainCredit > 0) {
+				BulkChainCraftController.addEjectedOutput(chainEjectPendingStack, chainCredit);
+				ChainCraftController.noteFinalOutputEjected(chainCredit);
 			}
 			chainEjectAwaitingRefresh = false;
 			chainEjectRefreshTicks = 0;
+			chainEjectLastGridTotal = Integer.MAX_VALUE;
+			chainEjectRethrowStallTicks = 0;
+			chainEjectRefillGapTicks = 0;
 			chainEjectPendingCount = 0;
 			chainEjectPendingStack = ItemStack.EMPTY;
 			chainEjectGridBefore = null;
 			if (!menu.getCarried().isEmpty()) {
 				tryResolveCarriedStack(client, menu);
 			}
-			// The craft that settled may have left ingredient remainders in
-			// the grid (milk buckets -> empty buckets). Throw them before
-			// restaging, or handlePlaceRecipe stows them into inventory where
-			// they eat a slot per craft and starve future batch staging.
 			ejectUnneededGridItems(client, menu);
 			if (ChainCraftController.restageFinalStepForRapidEject(client)) {
 				autoMoveWaitingTicks = 0;
@@ -637,6 +659,9 @@ final class AutoMoveController {
 						// empty (see the chainEjectAwaitingRefresh block).
 						chainEjectAwaitingRefresh = true;
 						chainEjectRefreshTicks = 0;
+						chainEjectLastGridTotal = Integer.MAX_VALUE;
+						chainEjectRethrowStallTicks = 0;
+						chainEjectRefillGapTicks = 0;
 						chainEjectPendingCount = totalEjected;
 						chainEjectPendingStack = thrownResult;
 						chainEjectGridBefore = gridBeforeThrow;
