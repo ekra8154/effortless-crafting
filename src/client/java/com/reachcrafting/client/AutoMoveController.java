@@ -330,13 +330,13 @@ final class AutoMoveController {
 				if (directEjectRethrowStallTicks < DIRECT_EJECT_RETHROW_STALL_LIMIT) {
 					client.gameMode.handleInventoryMouseClick(menu.containerId, resultSlot.index, 1, ClickType.THROW, client.player);
 					if (directEjectSettlementTicks % 20 == 1) {
-						com.reachcrafting.ReachCraftingMod.LOGGER.info(
+						com.reachcrafting.ReachCraftingMod.LOGGER.debug(
 							"[auto_move] direct eject re-throw (craft-one server): ticks={} grid_total={} stateId={}",
 							directEjectSettlementTicks, gridTotalNow, menu.getStateId());
 					}
 					return;
 				}
-				com.reachcrafting.ReachCraftingMod.LOGGER.info(
+				com.reachcrafting.ReachCraftingMod.LOGGER.debug(
 					"[auto_move] direct eject re-throw stalled at grid_total={} for {} ticks -> settling",
 					gridTotalNow, directEjectRethrowStallTicks);
 				// fall through to credit + finish
@@ -362,7 +362,7 @@ final class AutoMoveController {
 						|| foreignSettled);
 				if (!settled) {
 					if (directEjectSettlementTicks % 20 == 1) {
-						com.reachcrafting.ReachCraftingMod.LOGGER.info(
+						com.reachcrafting.ReachCraftingMod.LOGGER.debug(
 							"[auto_move] direct eject awaiting settlement: ticks={} result_now={} carried={} grid_total={} refill_gap={}",
 							directEjectSettlementTicks,
 							resultSlot.hasItem() ? ContainerUtils.formatStack(resultSlot.getItem()) : "<empty>",
