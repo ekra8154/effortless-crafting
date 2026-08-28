@@ -69,6 +69,7 @@ public class ReachCraftingModClient implements ClientModInitializer {
 		TickStallWatchdog.init();
 		ContainerFilterRenderer.init();
 		PlaceRecipeBudget.init();
+		ClickStageUpgrade.init();
 		ReproHarness.init();
 		
 

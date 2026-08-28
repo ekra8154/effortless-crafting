@@ -2015,6 +2015,13 @@ final class SearchSession extends BaseCraftSession {
 			for (int i = 0; i < targetCopiesPerSlot; i++) {
 				gameMode.handlePlaceRecipe(player.containerMenu.containerId, recipeId, false);
 			}
+			if (clickStage == ClickStageResult.DECLINED_BUDGET) {
+				// Transient decline only: let the placements start draining,
+				// but keep watching for the click window to free so the rest
+				// of the craft can be clicked instead of dripped.
+				ClickStageUpgrade.arm(
+					recipeId, recipeCollection, player.containerMenu.containerId, targetCopiesPerSlot, recipeIndex);
+			}
 		}
 		AvailableItemSnapshot postPlaceSnapshot = AvailableItemSnapshot.capture(player, client.gui.screen());
 		ReachCraftingMod.LOGGER.info(
@@ -2092,10 +2099,10 @@ final class SearchSession extends BaseCraftSession {
 			// succeeds once the window drains, so ask the caller to wait
 			// rather than falling back to N rationed placements.
 			ReachCraftingMod.LOGGER.info(
-				"[recipe_place] click_stage_declined idx={} estimated_clicks={} window={} (falling back to placement)",
+				"[recipe_place] click_stage_declined idx={} estimated_clicks={} window={} (placing now, will upgrade if the window frees)",
 				recipeIndex, estimatedClicks, GridTopUp.clickWindowCount()
 			);
-			return ClickStageResult.DECLINED;
+			return ClickStageResult.DECLINED_BUDGET;
 		}
 		int staged = ManualRecipePlacer.placeCrafts(
 			client, summary, slotChoices, targetCopiesPerSlot, false, "idx=" + recipeIndex);
@@ -2109,10 +2116,15 @@ final class SearchSession extends BaseCraftSession {
 		return ClickStageResult.STAGED;
 	}
 
-	/** Outcome of trying to stage an exact copy count with clicks. */
+	/**
+	 * Outcome of trying to stage an exact copy count with clicks.
+	 * DECLINED_BUDGET is transient - the same request succeeds once the click
+	 * window frees - so it arms an upgrade; plain DECLINED is structural.
+	 */
 	private enum ClickStageResult {
 		STAGED,
-		DECLINED
+		DECLINED,
+		DECLINED_BUDGET
 	}
 
 

@@ -74,6 +74,24 @@ final class ManualRecipePlacer {
 		boolean pristineOnly,
 		String label
 	) {
+		return placeCrafts(client, summary, slotItemIds, maxCopies, pristineOnly, label, false);
+	}
+
+	/**
+	 * @param allowPartiallyStaged accept a grid that already holds some of this
+	 *     recipe's own inputs and top it up, instead of requiring it empty.
+	 *     Used when upgrading a placement-fed craft to clicks mid-flight: the
+	 *     placements that already landed count toward the target.
+	 */
+	static int placeCrafts(
+		Minecraft client,
+		RecipeIngredientSummary summary,
+		List<String> slotItemIds,
+		int maxCopies,
+		boolean pristineOnly,
+		String label,
+		boolean allowPartiallyStaged
+	) {
 		LocalPlayer player = client.player;
 		if (player == null || client.gameMode == null || maxCopies <= 0 || summary == null) {
 			return 0;
@@ -83,13 +101,6 @@ final class ManualRecipePlacer {
 		if (gridSlotCount == 0 || !menu.getCarried().isEmpty()) {
 			return 0;
 		}
-		for (int i = 1; i <= gridSlotCount; i++) {
-			if (menu.getSlot(i).hasItem()) {
-				ReachCraftingMod.LOGGER.info("[manual_place] grid_not_empty slot={}", i);
-				return 0;
-			}
-		}
-
 		if (slotItemIds.isEmpty() || slotItemIds.stream().allMatch(java.util.Objects::isNull)) {
 			return 0;
 		}
@@ -104,6 +115,22 @@ final class ManualRecipePlacer {
 			);
 			return 0;
 		}
+		// The grid must be empty, or - when topping up a partly-placed craft -
+		// hold ONLY this recipe's own inputs, none of them already past the
+		// target. Anything else is foreign content this must not consume.
+		for (int i = 1; i <= gridSlotCount; i++) {
+			ItemStack inGrid = menu.getSlot(i).getItem();
+			if (inGrid.isEmpty()) {
+				continue;
+			}
+			int mapped = gridIndices.indexOf(i);
+			String expected = mapped >= 0 ? slotItemIds.get(mapped) : null;
+			if (!allowPartiallyStaged || expected == null
+				|| !expected.equals(itemIdOf(inGrid)) || inGrid.getCount() > maxCopies) {
+				ReachCraftingMod.LOGGER.info("[manual_place] grid_not_empty slot={}", i);
+				return 0;
+			}
+		}
 
 		Map<String, Integer> slotsPerItem = new LinkedHashMap<>();
 		for (String itemId : slotItemIds) {
@@ -114,7 +141,20 @@ final class ManualRecipePlacer {
 		int copies = maxCopies;
 		for (Map.Entry<String, Integer> entry : slotsPerItem.entrySet()) {
 			copies = Math.min(copies, maxStackSizeFor(entry.getKey()));
-			copies = Math.min(copies, countSources(menu, entry.getKey(), pristineOnly) / entry.getValue());
+			// Copies already sitting in this item's grid slots are staged
+			// work, not something the inventory still has to supply.
+			int alreadyEach = Integer.MAX_VALUE;
+			for (int slotIndex = 0; slotIndex < slotItemIds.size(); slotIndex++) {
+				if (entry.getKey().equals(slotItemIds.get(slotIndex))) {
+					alreadyEach = Math.min(alreadyEach,
+						countInGridSlot(menu, gridIndices.get(slotIndex), entry.getKey()));
+				}
+			}
+			if (alreadyEach == Integer.MAX_VALUE) {
+				alreadyEach = 0;
+			}
+			copies = Math.min(copies,
+				alreadyEach + countSources(menu, entry.getKey(), pristineOnly) / entry.getValue());
 		}
 		if (copies <= 0) {
 			ReachCraftingMod.LOGGER.info(
