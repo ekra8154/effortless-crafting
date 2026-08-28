@@ -300,7 +300,7 @@ final class GridTopUp {
 		return keyEmpty && sawStack;
 	}
 
-	private static RecipeIngredientSummary resolveSummary(Minecraft client, RecipeDisplayId recipeId, RecipeCollection collection) {
+	static RecipeIngredientSummary resolveSummary(Minecraft client, RecipeDisplayId recipeId, RecipeCollection collection) {
 		for (RecipeDisplayEntry entry : collection.getRecipes()) {
 			if (entry.id().equals(recipeId)) {
 				ContextMap context = SlotDisplayContext.fromLevel(client.level);

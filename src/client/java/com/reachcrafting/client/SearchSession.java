@@ -1997,6 +1997,8 @@ final class SearchSession extends BaseCraftSession {
 			// ONLY for exact sub-grid counts, where a max place would overstage.
 			ReachCraftingMod.LOGGER.info("[recipe_place] handlePlaceRecipe(shift=true) from SearchSession.placePlannedGrid target={} requested={}", targetCopiesPerSlot, requestedSingleClicks);
 			gameMode.handlePlaceRecipe(player.containerMenu.containerId, recipeId, true);
+		} else if (stageExactCopiesByClicking()) {
+			// Handled by clicks - no placement packet was spent.
 		} else {
 			ReachCraftingMod.LOGGER.info("[recipe_place] handlePlaceRecipe(shift=false) x{} from SearchSession.placePlannedGrid", targetCopiesPerSlot);
 			for (int i = 0; i < targetCopiesPerSlot; i++) {
@@ -2016,6 +2018,60 @@ final class SearchSession extends BaseCraftSession {
 
 		ReachCraftingMod.LOGGER.debug("[nearby_restore] idx={} placed_via_vanilla_calls target={}", recipeIndex, targetCopiesPerSlot);
 		return PlacementAttempt.SUCCESS;
+	}
+
+	/**
+	 * Stages an exact sub-grid copy count with container clicks instead of one
+	 * placement packet per copy.
+	 *
+	 * <p>A max placement can't express "exactly N" whenever the player holds
+	 * more materials than N crafts need - it stages everything the grid can
+	 * take - so the per-copy loop was the only way to hit the count. But that
+	 * loop spends the one packet type servers ration: Paper drops place_recipe
+	 * above 5/s while allowing ~500 other packets/s, so a 23-copy request
+	 * became 23 rationed packets, taking seconds and losing the tail of the
+	 * queue whenever the screen closed first. Clicking costs ~100x less per
+	 * copy and lands the exact count, so it is preferred wherever it applies;
+	 * anything it declines falls through to the placement loop unchanged.
+	 */
+	private boolean stageExactCopiesByClicking() {
+		if (PlaceRecipeBudget.isUnlimited(client)) {
+			// Singleplayer rations nothing; vanilla placement is fewer
+			// packets and far less grid churn.
+			return false;
+		}
+		RecipeIngredientSummary summary = GridTopUp.resolveSummary(client, recipeId, recipeCollection);
+		if (summary == null) {
+			return false;
+		}
+		List<String> slotChoices =
+			ManualRecipePlacer.resolveSlotChoicesFromInventory(player.containerMenu, summary, false);
+		if (slotChoices.isEmpty()) {
+			return false;
+		}
+		// Exact counts cost roughly one right-click per copy per filled slot
+		// (plus a pickup and a putback), which is real traffic - clear it with
+		// the shared click governor rather than racing Paper's kick limit. A
+		// decline falls through to the placement loop, same as before.
+		int filledSlots = (int) slotChoices.stream().filter(java.util.Objects::nonNull).count();
+		int estimatedClicks = filledSlots * (targetCopiesPerSlot + 2);
+		if (!GridTopUp.clickBudgetAllows(estimatedClicks)) {
+			ReachCraftingMod.LOGGER.info(
+				"[recipe_place] click_stage_declined idx={} estimated_clicks={} window={}",
+				recipeIndex, estimatedClicks, GridTopUp.clickWindowCount()
+			);
+			return false;
+		}
+		int staged = ManualRecipePlacer.placeCrafts(
+			client, summary, slotChoices, targetCopiesPerSlot, false, "idx=" + recipeIndex);
+		if (staged <= 0) {
+			return false;
+		}
+		ReachCraftingMod.LOGGER.info(
+			"[recipe_place] click_staged idx={} staged={} target={} place_packets_saved={}",
+			recipeIndex, staged, targetCopiesPerSlot, targetCopiesPerSlot
+		);
+		return true;
 	}
 
 

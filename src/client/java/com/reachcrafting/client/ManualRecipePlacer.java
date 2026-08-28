@@ -37,8 +37,45 @@ final class ManualRecipePlacer {
 	 * nothing was placed (busy cursor, occupied grid, or no pristine inputs).
 	 */
 	static int placeStepCrafts(Minecraft client, ChainCraftPlan.Step step, int maxCopies) {
+		List<String> slotItemIds = resolvePerSlotInputs(step);
+		// Self-referential steps must never consume the player's dyed or
+		// filled variants, so sources stay restricted to pristine stacks.
+		return placeCrafts(
+			client,
+			step.ingredientSummary(),
+			slotItemIds,
+			maxCopies,
+			true,
+			ContainerUtils.formatStack(step.displayStack())
+		);
+	}
+
+	/**
+	 * Stages up to maxCopies crafts of an explicit per-slot input choice into
+	 * the crafting grid using ordinary container clicks. slotItemIds is
+	 * positional over the summary's ingredient slots (null = empty slot).
+	 * Returns the number of copies actually staged; 0 means nothing was placed
+	 * and the caller must fall back to its normal placement path.
+	 *
+	 * <p>Clicks are the cheaper currency here: servers ration place_recipe hard
+	 * (Paper's default drops above 5/s) while container clicks run against the
+	 * far larger general budget, so staging N copies by clicking costs a
+	 * fraction of what N single placement packets do - and unlike a placement,
+	 * it can hit an exact sub-grid count without overstaging. Cheaper is not
+	 * free: every click is recorded with GridTopUp's governor (280 per 7s,
+	 * under Paper's all-packets kick limit), and callers staging large counts
+	 * should clear the estimate with clickBudgetAllows first.
+	 */
+	static int placeCrafts(
+		Minecraft client,
+		RecipeIngredientSummary summary,
+		List<String> slotItemIds,
+		int maxCopies,
+		boolean pristineOnly,
+		String label
+	) {
 		LocalPlayer player = client.player;
-		if (player == null || client.gameMode == null || maxCopies <= 0) {
+		if (player == null || client.gameMode == null || maxCopies <= 0 || summary == null) {
 			return 0;
 		}
 		AbstractContainerMenu menu = player.containerMenu;
@@ -53,8 +90,18 @@ final class ManualRecipePlacer {
 			}
 		}
 
-		List<String> slotItemIds = resolvePerSlotInputs(step);
-		if (slotItemIds.stream().allMatch(java.util.Objects::isNull) || slotItemIds.size() > gridSlotCount) {
+		if (slotItemIds.isEmpty() || slotItemIds.stream().allMatch(java.util.Objects::isNull)) {
+			return 0;
+		}
+		// Ingredient slots are row-major within the recipe's OWN bounding box,
+		// so a narrower shaped recipe has to be offset onto the real grid
+		// (2x2 in a 3x3 menu -> slots 1,2,4,5). gridSlotIndices owns that map.
+		List<Integer> gridIndices = summary.gridSlotIndices(gridSlotCount);
+		if (gridIndices.size() != slotItemIds.size()) {
+			ReachCraftingMod.LOGGER.info(
+				"[manual_place] shape_unmappable output={} slots={} mapped={} grid={}",
+				label, slotItemIds.size(), gridIndices.size(), gridSlotCount
+			);
 			return 0;
 		}
 
@@ -67,39 +114,34 @@ final class ManualRecipePlacer {
 		int copies = maxCopies;
 		for (Map.Entry<String, Integer> entry : slotsPerItem.entrySet()) {
 			copies = Math.min(copies, maxStackSizeFor(entry.getKey()));
-			copies = Math.min(copies, countPristine(menu, gridSlotCount, entry.getKey()) / entry.getValue());
+			copies = Math.min(copies, countSources(menu, entry.getKey(), pristineOnly) / entry.getValue());
 		}
 		if (copies <= 0) {
 			ReachCraftingMod.LOGGER.info(
-				"[manual_place] no_pristine_inputs output={} needed={}",
-				ContainerUtils.formatStack(step.displayStack()),
-				slotsPerItem
+				"[manual_place] no_inputs output={} needed={} pristine_only={}",
+				label, slotsPerItem, pristineOnly
 			);
 			return 0;
 		}
 
-		// Slot index maps positionally onto the grid (recipe displays list
-		// slots row-major, INCLUDING empties for shaped recipes), so shaped
-		// self-referential recipes like smithing-template duplication keep
-		// their pattern. Shapeless displays carry no empties, so this
-		// degrades to sequential filling for them.
 		for (int slotIndex = 0; slotIndex < slotItemIds.size(); slotIndex++) {
 			String slotItemId = slotItemIds.get(slotIndex);
 			if (slotItemId == null) {
 				continue;
 			}
-			int gridIndex = 1 + slotIndex;
-			if (!moveIntoGridSlot(client, menu, gridSlotCount, slotItemId, copies, gridIndex)) {
-				// Partial placements are left for the step-failure grid flush.
+			int gridIndex = gridIndices.get(slotIndex);
+			if (!moveIntoGridSlot(client, menu, slotItemId, copies, gridIndex, pristineOnly)) {
+				// Partial placements are left for the caller's grid flush.
 				ReachCraftingMod.LOGGER.warn("[manual_place] move_failed item={} grid_slot={}", slotItemId, gridIndex);
 				return 0;
 			}
 		}
 		ReachCraftingMod.LOGGER.info(
-			"[manual_place] staged output={} copies={} slots={}",
-			ContainerUtils.formatStack(step.displayStack()),
+			"[manual_place] staged output={} copies={} slots={} grid_slots={}",
+			label,
 			copies,
-			slotItemIds
+			slotItemIds,
+			gridIndices
 		);
 		return copies;
 	}
@@ -143,10 +185,10 @@ final class ManualRecipePlacer {
 	private static boolean moveIntoGridSlot(
 		Minecraft client,
 		AbstractContainerMenu menu,
-		int gridSlotCount,
 		String itemId,
 		int count,
-		int gridSlotIndex
+		int gridSlotIndex,
+		boolean pristineOnly
 	) {
 		int placed = 0;
 		int attempts = 0;
@@ -154,11 +196,12 @@ final class ManualRecipePlacer {
 			if (++attempts > count + 4) {
 				return false;
 			}
-			int sourceIndex = findPristineSource(menu, gridSlotCount, itemId);
+			int sourceIndex = findSource(menu, itemId, pristineOnly);
 			if (sourceIndex == -1) {
 				return false;
 			}
 			client.gameMode.handleContainerInput(menu.containerId, sourceIndex, 0, ContainerInput.PICKUP, client.player);
+			GridTopUp.recordClick();
 			ItemStack carried = menu.getCarried();
 			if (carried.isEmpty()) {
 				return false;
@@ -170,15 +213,18 @@ final class ManualRecipePlacer {
 				// right-clicking with a bundle on the cursor is the bundle
 				// dump/insert gesture and silently no-ops on an empty slot.
 				client.gameMode.handleContainerInput(menu.containerId, gridSlotIndex, 0, ContainerInput.PICKUP, client.player);
+				GridTopUp.recordClick();
 			} else {
 				// Oversized normal stack (e.g. a stack of dye when one is
 				// needed): right-click drops one item per click, then the
 				// remainder goes back to its source slot.
 				for (int i = 0; i < needed; i++) {
 					client.gameMode.handleContainerInput(menu.containerId, gridSlotIndex, 1, ContainerInput.PICKUP, client.player);
+					GridTopUp.recordClick();
 				}
 				if (!menu.getCarried().isEmpty()) {
 					client.gameMode.handleContainerInput(menu.containerId, sourceIndex, 0, ContainerInput.PICKUP, client.player);
+					GridTopUp.recordClick();
 				}
 			}
 			// The client applies the same vanilla click logic the server
@@ -204,21 +250,61 @@ final class ManualRecipePlacer {
 		return stack.getCount();
 	}
 
-	private static int findPristineSource(AbstractContainerMenu menu, int gridSlotCount, String itemId) {
+	/**
+	 * Picks a concrete input for each ingredient slot from what the player is
+	 * actually carrying, preferring the most plentiful accepted item so the
+	 * staged copy count is not capped by an arbitrary alternative. Returns an
+	 * empty list when any non-empty slot has no available input, which leaves
+	 * the caller on its normal placement path.
+	 */
+	static List<String> resolveSlotChoicesFromInventory(
+		AbstractContainerMenu menu,
+		RecipeIngredientSummary summary,
+		boolean pristineOnly
+	) {
+		List<String> slotItemIds = new ArrayList<>();
+		for (RecipeIngredientSummary.IngredientSlot slot : summary.slots()) {
+			if (slot.isEmpty()) {
+				slotItemIds.add(null);
+				continue;
+			}
+			String best = null;
+			int bestCount = 0;
+			for (String itemId : slot.itemIds()) {
+				int available = countSources(menu, itemId, pristineOnly);
+				if (available > bestCount) {
+					best = itemId;
+					bestCount = available;
+				}
+			}
+			if (best == null) {
+				return List.of();
+			}
+			slotItemIds.add(best);
+		}
+		return slotItemIds;
+	}
+
+	private static boolean isUsableSource(ItemStack stack, String itemId, boolean pristineOnly) {
+		return !stack.isEmpty()
+			&& itemId.equals(itemIdOf(stack))
+			&& (!pristineOnly || isPristine(stack));
+	}
+
+	private static int findSource(AbstractContainerMenu menu, String itemId, boolean pristineOnly) {
 		for (int index = firstSourceIndex(menu); index <= lastSourceIndex(menu); index++) {
-			ItemStack stack = menu.getSlot(index).getItem();
-			if (!stack.isEmpty() && itemId.equals(itemIdOf(stack)) && isPristine(stack)) {
+			if (isUsableSource(menu.getSlot(index).getItem(), itemId, pristineOnly)) {
 				return index;
 			}
 		}
 		return -1;
 	}
 
-	private static int countPristine(AbstractContainerMenu menu, int gridSlotCount, String itemId) {
+	static int countSources(AbstractContainerMenu menu, String itemId, boolean pristineOnly) {
 		int total = 0;
 		for (int index = firstSourceIndex(menu); index <= lastSourceIndex(menu); index++) {
 			ItemStack stack = menu.getSlot(index).getItem();
-			if (!stack.isEmpty() && itemId.equals(itemIdOf(stack)) && isPristine(stack)) {
+			if (isUsableSource(stack, itemId, pristineOnly)) {
 				total += stack.getCount();
 			}
 		}
