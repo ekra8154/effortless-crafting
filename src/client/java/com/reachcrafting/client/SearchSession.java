@@ -2002,14 +2002,15 @@ final class SearchSession extends BaseCraftSession {
 			gameMode.handlePlaceRecipe(player.containerMenu.containerId, recipeId, true);
 		} else if ((clickStage = stageExactCopiesByClicking()) == ClickStageResult.STAGED) {
 			// Handled by clicks - no placement packet was spent.
-		} else if (clickStage == ClickStageResult.BUDGET_WAIT) {
-			// The click window is momentarily saturated. It drains at ~40
-			// clicks/s, so waiting a few ticks gets the exact count for free;
-			// dumping N rationed placements instead is both slower AND lossy
-			// (the queue is discarded if the screen closes before it drains).
-			// The caller's seed-wait timeout is the safety valve.
-			return PlacementAttempt.WAITING_FOR_SEED;
 		} else {
+			// NB: a click-budget decline falls back here like any other. An
+			// earlier attempt to WAIT for the window instead silently dropped
+			// the craft: the governor's window is a 7-SECOND SLIDING EXPIRY,
+			// not a steady drain, so a burst of 152 clicks keeps the window
+			// pinned for the full 7s while the 20-tick seed wait times out -
+			// and that timeout abandons the placement rather than retrying it.
+			// Waiting is only viable with a wait longer than the window AND a
+			// fallback on timeout; a slow craft beats a lost one.
 			ReachCraftingMod.LOGGER.info("[recipe_place] handlePlaceRecipe(shift=false) x{} from SearchSession.placePlannedGrid", targetCopiesPerSlot);
 			for (int i = 0; i < targetCopiesPerSlot; i++) {
 				gameMode.handlePlaceRecipe(player.containerMenu.containerId, recipeId, false);
@@ -2070,10 +2071,10 @@ final class SearchSession extends BaseCraftSession {
 			// succeeds once the window drains, so ask the caller to wait
 			// rather than falling back to N rationed placements.
 			ReachCraftingMod.LOGGER.info(
-				"[recipe_place] click_stage_waiting idx={} estimated_clicks={} window={}",
+				"[recipe_place] click_stage_declined idx={} estimated_clicks={} window={} (falling back to placement)",
 				recipeIndex, estimatedClicks, GridTopUp.clickWindowCount()
 			);
-			return ClickStageResult.BUDGET_WAIT;
+			return ClickStageResult.DECLINED;
 		}
 		int staged = ManualRecipePlacer.placeCrafts(
 			client, summary, slotChoices, targetCopiesPerSlot, false, "idx=" + recipeIndex);
@@ -2087,16 +2088,10 @@ final class SearchSession extends BaseCraftSession {
 		return ClickStageResult.STAGED;
 	}
 
-	/**
-	 * Outcome of trying to stage an exact copy count with clicks. BUDGET_WAIT
-	 * is deliberately distinct from DECLINED: it is transient, and the correct
-	 * response is to retry shortly rather than to fall back to the placement
-	 * loop the click path exists to avoid.
-	 */
+	/** Outcome of trying to stage an exact copy count with clicks. */
 	private enum ClickStageResult {
 		STAGED,
-		DECLINED,
-		BUDGET_WAIT
+		DECLINED
 	}
 
 
