@@ -167,17 +167,26 @@ final class GridTopUp {
 
 	/** Shared with GridExtractor: automation clicks draw from one governor. */
 	static boolean clickBudgetAllows(int estimatedClicks) {
+		if (clickBudgetAllowsQuietly(estimatedClicks)) {
+			return true;
+		}
+		ReachCraftingMod.LOGGER.warn(
+			"[grid_topup] click governor engaged ({} clicks in window, +{} requested) - deferring to place packet",
+			recentClicks.size(), estimatedClicks);
+		return false;
+	}
+
+	/**
+	 * Same check without the log line, for callers that POLL - a per-tick
+	 * upgrade watcher hits this ~20 times a second while it waits, and the
+	 * logging variant buried the session in warnings for one decision.
+	 */
+	static boolean clickBudgetAllowsQuietly(int estimatedClicks) {
 		long now = System.currentTimeMillis();
 		while (!recentClicks.isEmpty() && now - recentClicks.peekFirst() > CLICK_WINDOW_MS) {
 			recentClicks.pollFirst();
 		}
-		if (recentClicks.size() + estimatedClicks > CLICK_WINDOW_CAP) {
-			ReachCraftingMod.LOGGER.warn(
-				"[grid_topup] click governor engaged ({} clicks in window, +{} requested) - deferring to place packet",
-				recentClicks.size(), estimatedClicks);
-			return false;
-		}
-		return true;
+		return recentClicks.size() + estimatedClicks <= CLICK_WINDOW_CAP;
 	}
 
 	/** The governor's ceiling, for diagnostics that report headroom. */

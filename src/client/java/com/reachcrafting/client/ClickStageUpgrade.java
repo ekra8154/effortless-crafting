@@ -89,7 +89,7 @@ final class ClickStageUpgrade {
 		if (slotChoices.isEmpty()) {
 			return; // inputs not reachable right now; keep waiting
 		}
-		if (!GridTopUp.clickBudgetAllows(estimateClicks(slotChoices))) {
+		if (!GridTopUp.clickBudgetAllowsQuietly(estimateClicks(slotChoices))) {
 			return; // still saturated - the slow path keeps running underneath
 		}
 
