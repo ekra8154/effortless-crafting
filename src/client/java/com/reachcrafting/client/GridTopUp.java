@@ -68,8 +68,12 @@ final class GridTopUp {
 	// Historical note: 180 once throttled M3's T2 chain pace (~23 clicks/s
 	// sustained) into a session abort, so this cap is not free to lower
 	// either. The suite's kicks==0 assertion guards the margin.
+	// The cap itself is configurable (clickBudgetPerWindow): the limit is the
+	// SERVER's, and it varies - Paper enforces one by default, vanilla and
+	// Fabric servers have none at all, and anti-cheat plugins may be stricter
+	// than Paper. Unlike the place-packet budget this cannot be learned by
+	// probing, because exceeding it disconnects rather than dropping a packet.
 	private static final int CLICK_WINDOW_MS = 7000;
-	private static final int CLICK_WINDOW_CAP = 450;
 	private static final java.util.ArrayDeque<Long> recentClicks = new java.util.ArrayDeque<>();
 
 	// Whether the most recent tryStageInsteadOfPlace returned false ONLY
@@ -186,12 +190,12 @@ final class GridTopUp {
 		while (!recentClicks.isEmpty() && now - recentClicks.peekFirst() > CLICK_WINDOW_MS) {
 			recentClicks.pollFirst();
 		}
-		return recentClicks.size() + estimatedClicks <= CLICK_WINDOW_CAP;
+		return recentClicks.size() + estimatedClicks <= clickWindowCap();
 	}
 
 	/** The governor's ceiling, for diagnostics that report headroom. */
 	static int clickWindowCap() {
-		return CLICK_WINDOW_CAP;
+		return ReachCraftingConfig.get().clickBudgetPerWindow();
 	}
 
 	/** Current trailing-window click count (diagnostics for slow-craft logs). */
