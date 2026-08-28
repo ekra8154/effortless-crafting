@@ -2092,7 +2092,10 @@ final class SearchSession extends BaseCraftSession {
 			int perRound = Math.max(1, 64 / groupSlots);
 			int rounds = groupSlots > 1 ? targetCopiesPerSlot / perRound : 0;
 			int remainder = targetCopiesPerSlot - rounds * perRound;
-			estimatedClicks += rounds * (groupSlots + 4) + groupSlots * (remainder + 2);
+			// Per-slot remainder costs the CHEAPER direction: place what is
+			// wanted, or take the whole stack and shed the excess.
+			int perSlot = Math.min(remainder, Math.max(1, 64 - remainder));
+			estimatedClicks += rounds * (groupSlots + 4) + groupSlots * (perSlot + 2);
 		}
 		if (!GridTopUp.clickBudgetAllows(estimatedClicks)) {
 			// A SATURATED window, not a structural refusal: the same request

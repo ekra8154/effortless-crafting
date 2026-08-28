@@ -128,7 +128,8 @@ final class ClickStageUpgrade {
 			int perRound = Math.max(1, 64 / groupSlots);
 			int rounds = groupSlots > 1 ? targetCopies / perRound : 0;
 			int remainder = targetCopies - rounds * perRound;
-			estimate += rounds * (groupSlots + 4) + groupSlots * (remainder + 2);
+			int perSlot = Math.min(remainder, Math.max(1, 64 - remainder));
+			estimate += rounds * (groupSlots + 4) + groupSlots * (perSlot + 2);
 		}
 		return estimate;
 	}

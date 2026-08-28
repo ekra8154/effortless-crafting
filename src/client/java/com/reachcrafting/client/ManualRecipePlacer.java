@@ -353,6 +353,20 @@ final class ManualRecipePlacer {
 				// dump/insert gesture and silently no-ops on an empty slot.
 				client.gameMode.handleContainerInput(menu.containerId, gridSlotIndex, 0, ContainerInput.PICKUP, client.player);
 				GridTopUp.recordClick();
+			} else if (carried.getCount() - needed < needed) {
+				// Cheaper to shed the EXCESS than to place what is wanted:
+				// right-click the source to drop items back one at a time,
+				// then left-click the whole remainder into the grid. Wanting
+				// 46 of a 64 stack costs 18 clicks this way instead of 46.
+				// (Same gesture InventoryGridRestoreTracker uses to move an
+				// exact count.)
+				int excess = carried.getCount() - needed;
+				for (int i = 0; i < excess; i++) {
+					client.gameMode.handleContainerInput(menu.containerId, sourceIndex, 1, ContainerInput.PICKUP, client.player);
+					GridTopUp.recordClick();
+				}
+				client.gameMode.handleContainerInput(menu.containerId, gridSlotIndex, 0, ContainerInput.PICKUP, client.player);
+				GridTopUp.recordClick();
 			} else {
 				// Oversized normal stack (e.g. a stack of dye when one is
 				// needed): right-click drops one item per click, then the
