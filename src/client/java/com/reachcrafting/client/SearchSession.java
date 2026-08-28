@@ -2067,11 +2067,26 @@ final class SearchSession extends BaseCraftSession {
 		// one-click-per-item price here would decline on a cost we no longer
 		// pay. Deliberately rounded up; a decline falls through to the
 		// placement loop, same as before.
-		int filledSlots = (int) slotChoices.stream().filter(java.util.Objects::nonNull).count();
-		int perSlotClicks = filledSlots > 1
-			? Math.min(targetCopiesPerSlot, Math.max(1, 64 / filledSlots))
-			: targetCopiesPerSlot;
-		int estimatedClicks = filledSlots * (perSlotClicks + 2) + 16;
+		// Priced PER INGREDIENT GROUP, because that is how the placer fills:
+		// a group of T slots takes drag rounds of floor(64/T) each (costing
+		// T+4 clicks a round), then pays per-item for the remainder. Pricing
+		// off the total filled-slot count instead treated a SINGLE-slot group
+		// as if it had drag partners - it costs one click per item and has
+		// none - which under-estimated a piston by ~40% and let the window
+		// overshoot its cap (observed at 479/450).
+		Map<String, Integer> groupSizes = new LinkedHashMap<>();
+		for (String choice : slotChoices) {
+			if (choice != null) {
+				groupSizes.merge(choice, 1, Integer::sum);
+			}
+		}
+		int estimatedClicks = 0;
+		for (int groupSlots : groupSizes.values()) {
+			int perRound = Math.max(1, 64 / groupSlots);
+			int rounds = groupSlots > 1 ? targetCopiesPerSlot / perRound : 0;
+			int remainder = targetCopiesPerSlot - rounds * perRound;
+			estimatedClicks += rounds * (groupSlots + 4) + groupSlots * (remainder + 2);
+		}
 		if (!GridTopUp.clickBudgetAllows(estimatedClicks)) {
 			// A SATURATED window, not a structural refusal: the same request
 			// succeeds once the window drains, so ask the caller to wait
