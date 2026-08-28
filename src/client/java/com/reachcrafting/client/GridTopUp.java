@@ -46,10 +46,17 @@ final class GridTopUp {
 	//
 	// That limit is `action: KICK, interval: 7.0, max-packet-rate: 500.0`,
 	// and it is 500 packets PER INTERVAL - i.e. 500 per 7s, not per second.
-	// This was briefly "corrected" to a per-second reading and the cap raised
-	// to 1000, which kicked a live session ("You are sending too many
-	// packets!") after ~837 clicks in 7s. 280 is 56% of the real limit,
-	// leaving >200 packets of headroom for movement and other traffic.
+	// A per-second reading once raised this to 1000 and kicked a live session
+	// ("You are sending too many packets!") after ~837 clicks in 7s.
+	//
+	// 450 is a DELIBERATE 90% of that limit. The budget is shared with every
+	// other packet, so this leaves only ~50 for them - affordable because
+	// staging happens with a container screen open, where a stationary client
+	// sends about one position packet a second (~7 across the window). The
+	// residual risk is a craft that straddles walking between chests, or
+	// another mod's traffic landing in the same window; the exposure is
+	// bounded to the rapid MANUAL-craft pattern, since bulk and chain run on
+	// the ring at ~3 clicks/craft and never approach this.
 	//
 	// This ceiling is the reason exact-count click staging must stay CHEAP
 	// rather than lean on a bigger allowance: at ~1 click per item per slot a
@@ -62,7 +69,7 @@ final class GridTopUp {
 	// sustained) into a session abort, so this cap is not free to lower
 	// either. The suite's kicks==0 assertion guards the margin.
 	private static final int CLICK_WINDOW_MS = 7000;
-	private static final int CLICK_WINDOW_CAP = 280;
+	private static final int CLICK_WINDOW_CAP = 450;
 	private static final java.util.ArrayDeque<Long> recentClicks = new java.util.ArrayDeque<>();
 
 	// Whether the most recent tryStageInsteadOfPlace returned false ONLY
