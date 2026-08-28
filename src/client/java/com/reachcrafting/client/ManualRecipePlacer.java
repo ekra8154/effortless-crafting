@@ -124,16 +124,32 @@ final class ManualRecipePlacer {
 			return 0;
 		}
 
+		// Slots wanting the SAME item are filled together: one left-drag splits
+		// a carried stack evenly across them, so the bulk of the fill costs
+		// ~(3 + slots) clicks per round instead of one click per item per
+		// slot. The per-slot loop then tops up whatever the drag could not
+		// divide evenly. Furnace (8 cobblestone slots, 20 copies) drops from
+		// ~176 clicks to ~60.
+		Map<String, List<Integer>> groupTargets = new LinkedHashMap<>();
 		for (int slotIndex = 0; slotIndex < slotItemIds.size(); slotIndex++) {
 			String slotItemId = slotItemIds.get(slotIndex);
 			if (slotItemId == null) {
 				continue;
 			}
-			int gridIndex = gridIndices.get(slotIndex);
-			if (!moveIntoGridSlot(client, menu, slotItemId, copies, gridIndex, pristineOnly)) {
-				// Partial placements are left for the caller's grid flush.
-				ReachCraftingMod.LOGGER.warn("[manual_place] move_failed item={} grid_slot={}", slotItemId, gridIndex);
-				return 0;
+			groupTargets.computeIfAbsent(slotItemId, key -> new ArrayList<>()).add(gridIndices.get(slotIndex));
+		}
+		for (Map.Entry<String, List<Integer>> group : groupTargets.entrySet()) {
+			String slotItemId = group.getKey();
+			List<Integer> targets = group.getValue();
+			if (targets.size() > 1) {
+				dragFillGroup(client, menu, slotItemId, copies, targets, pristineOnly);
+			}
+			for (int gridIndex : targets) {
+				if (!moveIntoGridSlot(client, menu, slotItemId, copies, gridIndex, pristineOnly)) {
+					// Partial placements are left for the caller's grid flush.
+					ReachCraftingMod.LOGGER.warn("[manual_place] move_failed item={} grid_slot={}", slotItemId, gridIndex);
+					return 0;
+				}
 			}
 		}
 		ReachCraftingMod.LOGGER.info(
@@ -182,6 +198,75 @@ final class ManualRecipePlacer {
 		return slotItemIds;
 	}
 
+	/**
+	 * Fill several same-item grid slots toward targetPerSlot using vanilla
+	 * left-drag (QUICK_CRAFT), which divides the carried stack evenly across
+	 * the dragged slots. Best-effort: it only runs rounds that divide cleanly
+	 * without overshooting, and leaves any remainder to the per-slot top-up.
+	 * The cursor is always returned empty, so a bail-out is safe.
+	 */
+	private static void dragFillGroup(
+		Minecraft client,
+		AbstractContainerMenu menu,
+		String itemId,
+		int targetPerSlot,
+		List<Integer> targets,
+		boolean pristineOnly
+	) {
+		int slots = targets.size();
+		// Each round adds floor(carried/slots) per slot, so the count strictly
+		// rises; the guard only bounds a pathological no-progress case.
+		for (int round = 0; round < 8; round++) {
+			if (!menu.getCarried().isEmpty()) {
+				return;
+			}
+			int lowest = Integer.MAX_VALUE;
+			for (int target : targets) {
+				lowest = Math.min(lowest, countInGridSlot(menu, target, itemId));
+			}
+			int remainingEach = targetPerSlot - lowest;
+			if (remainingEach <= 0) {
+				return;
+			}
+			int sourceIndex = findSource(menu, itemId, pristineOnly);
+			if (sourceIndex == -1) {
+				return;
+			}
+			if (menu.getSlot(sourceIndex).getItem().getCount() < slots) {
+				return; // not even one each: the per-slot path is cheaper
+			}
+			client.gameMode.handleContainerInput(menu.containerId, sourceIndex, 0, ContainerInput.PICKUP, client.player);
+			GridTopUp.recordClick();
+			ItemStack carried = menu.getCarried();
+			if (carried.isEmpty()) {
+				return;
+			}
+			int each = carried.getCount() / slots;
+			if (each <= 0 || each > remainingEach) {
+				// Would place nothing, or overshoot the exact count. Put the
+				// stack back and let the per-slot top-up finish precisely.
+				client.gameMode.handleContainerInput(menu.containerId, sourceIndex, 0, ContainerInput.PICKUP, client.player);
+				GridTopUp.recordClick();
+				return;
+			}
+			// QUICK_CRAFT protocol: header 0 = start, 1 = add slot, 2 = end;
+			// type 0 (left drag) splits the carried stack evenly.
+			client.gameMode.handleContainerInput(menu.containerId, -999, 0, ContainerInput.QUICK_CRAFT, client.player);
+			GridTopUp.recordClick();
+			for (int target : targets) {
+				client.gameMode.handleContainerInput(menu.containerId, target, 1, ContainerInput.QUICK_CRAFT, client.player);
+				GridTopUp.recordClick();
+			}
+			client.gameMode.handleContainerInput(menu.containerId, -999, 2, ContainerInput.QUICK_CRAFT, client.player);
+			GridTopUp.recordClick();
+			if (!menu.getCarried().isEmpty()) {
+				// Remainder (carried % slots) goes back where it came from.
+				client.gameMode.handleContainerInput(menu.containerId, sourceIndex, 0, ContainerInput.PICKUP, client.player);
+				GridTopUp.recordClick();
+			}
+		}
+	}
+
 	private static boolean moveIntoGridSlot(
 		Minecraft client,
 		AbstractContainerMenu menu,
@@ -190,7 +275,10 @@ final class ManualRecipePlacer {
 		int gridSlotIndex,
 		boolean pristineOnly
 	) {
-		int placed = 0;
+		// count is the ABSOLUTE target for the slot, not an amount to add, so a
+		// slot the drag pass already partly filled is topped up rather than
+		// overshot.
+		int placed = countInGridSlot(menu, gridSlotIndex, itemId);
 		int attempts = 0;
 		while (placed < count) {
 			if (++attempts > count + 4) {

@@ -41,15 +41,28 @@ final class GridTopUp {
 	private static final int RING_LOW_WATER = 4;
 
 	// Safety governor: automation clicks in a trailing window, kept below
-	// Paper's all-packets KICK limit (500 per 7s). If staging would push past
-	// this, decline and let the (budgeted) place-packet path carry the cycle.
-	// 180 throttled M3's full T2 chain pace (ring upkeep + key inserts +
-	// throws sustained ~23 clicks/s) and the resulting stall cascaded into a
-	// session abort; 280 (56% of the kick limit, >200 packets of headroom
-	// for movement/other traffic) clears it. The suite's kicks==0 assertion
-	// is the regression guard for this margin.
+	// Paper's all-packets KICK limit. If staging would push past this,
+	// decline and let the (budgeted) place-packet path carry the cycle.
+	//
+	// That limit is `action: KICK, interval: 7.0, max-packet-rate: 500.0`,
+	// and max-packet-rate is packets PER SECOND averaged over the interval —
+	// so ~3500 per 7s window, NOT 500 per 7s as this comment previously read.
+	// (Proof from the sibling override: place_recipe is interval 4.0 /
+	// max-packet-rate 5.0, and placements sustain ~4.4/s without a server
+	// drop; at "5 per 4s" = 1.25/s they would drop constantly.) The old 280
+	// was therefore ~8% of the real allowance while believing it was 56%,
+	// and it throttled ordinary back-to-back crafts: exact-count click
+	// staging costs ~1 click per item per slot, so two 8-slot crafts filled
+	// the window and the third fell back to the slow placement path.
+	//
+	// 1000 per 7s (~143/s) is under 30% of the kick limit, leaving generous
+	// headroom for movement and other traffic. Headroom matters more here
+	// than for place_recipe because exceeding this one DISCONNECTS rather
+	// than dropping a packet. Historical note: 180 once throttled M3's T2
+	// chain pace (~23 clicks/s sustained) into a session abort, so this cap
+	// is not free to lower. The suite's kicks==0 assertion guards the margin.
 	private static final int CLICK_WINDOW_MS = 7000;
-	private static final int CLICK_WINDOW_CAP = 280;
+	private static final int CLICK_WINDOW_CAP = 1000;
 	private static final java.util.ArrayDeque<Long> recentClicks = new java.util.ArrayDeque<>();
 
 	// Whether the most recent tryStageInsteadOfPlace returned false ONLY

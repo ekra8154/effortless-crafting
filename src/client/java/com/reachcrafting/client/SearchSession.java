@@ -2060,12 +2060,18 @@ final class SearchSession extends BaseCraftSession {
 		if (slotChoices.isEmpty()) {
 			return ClickStageResult.DECLINED;
 		}
-		// Exact counts cost roughly one right-click per copy per filled slot
-		// (plus a pickup and a putback), which is real traffic - clear it with
-		// the shared click governor rather than racing Paper's kick limit. A
-		// decline falls through to the placement loop, same as before.
+		// Cost model must track ManualRecipePlacer: same-item slots are filled
+		// by left-drag rounds that divide a carried stack evenly, so each slot
+		// only pays per-click for the remainder the drag could not divide -
+		// bounded by one stack spread across the group. Estimating the old
+		// one-click-per-item price here would decline on a cost we no longer
+		// pay. Deliberately rounded up; a decline falls through to the
+		// placement loop, same as before.
 		int filledSlots = (int) slotChoices.stream().filter(java.util.Objects::nonNull).count();
-		int estimatedClicks = filledSlots * (targetCopiesPerSlot + 2);
+		int perSlotClicks = filledSlots > 1
+			? Math.min(targetCopiesPerSlot, Math.max(1, 64 / filledSlots))
+			: targetCopiesPerSlot;
+		int estimatedClicks = filledSlots * (perSlotClicks + 2) + 16;
 		if (!GridTopUp.clickBudgetAllows(estimatedClicks)) {
 			// A SATURATED window, not a structural refusal: the same request
 			// succeeds once the window drains, so ask the caller to wait
