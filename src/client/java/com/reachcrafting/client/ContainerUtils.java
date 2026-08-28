@@ -362,17 +362,22 @@ public final class ContainerUtils {
 		// of silently leaving the queue to expire.
 		int pendingPlacements = PlaceRecipeBudget.pendingCount();
 		boolean wasAnyActive = isAnySessionActive() || pendingPlacements > 0;
-		com.reachcrafting.ReachCraftingMod.LOGGER.info(
-			"[abort] abortAllSessions was_active={} pending_placements={} input_queue={} auto_move={} dry_run={} bulk={} chain={} bulk_chain={}",
-			wasAnyActive,
-			pendingPlacements,
-			RecipeBookInputController.getInstance().isInputQueueActive(),
-			AutoMoveController.isAutomatedInteractionRunning(),
-			NearbyContainerDryRun.isActiveSessionRunning(),
-			BulkAutoCraftController.isActive(),
-			ChainCraftController.isActive(),
-			BulkChainCraftController.isActive()
-		);
+		// This runs from EVERY container screen onClose, not just an Esc with
+		// work in flight, so only speak up when something was really aborted.
+		if (wasAnyActive) {
+			com.reachcrafting.ReachCraftingMod.LOGGER.info(
+				"[abort] aborting pending_placements={} input_queue={} auto_move={} dry_run={} bulk={} chain={} bulk_chain={}",
+				pendingPlacements,
+				RecipeBookInputController.getInstance().isInputQueueActive(),
+				AutoMoveController.isAutomatedInteractionRunning(),
+				NearbyContainerDryRun.isActiveSessionRunning(),
+				BulkAutoCraftController.isActive(),
+				ChainCraftController.isActive(),
+				BulkChainCraftController.isActive()
+			);
+		} else {
+			com.reachcrafting.ReachCraftingMod.LOGGER.debug("[abort] abortAllSessions with nothing active");
+		}
 		if (pendingPlacements > 0) {
 			com.reachcrafting.ReachCraftingMod.LOGGER.info(
 				"[abort] discarded {} queued placement(s)", PlaceRecipeBudget.clearDeferred());
