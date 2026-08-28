@@ -232,6 +232,22 @@ public final class PlaceRecipeBudget {
 
 	/** True while a placement for this container is still queued client-side
 	 * (i.e. the server has not been asked yet, so no result can exist). */
+	/** Queued placements waiting on the budget, across all containers. */
+	public static int pendingCount() {
+		return deferred.size();
+	}
+
+	/**
+	 * Drop every queued placement. An abort cancels the work these belong to,
+	 * so draining them into a dead container just dribbles out one "dropped
+	 * stale" line each and makes a user's Esc look like packet loss.
+	 */
+	public static int clearDeferred() {
+		int dropped = deferred.size();
+		deferred.clear();
+		return dropped;
+	}
+
 	public static boolean hasPendingFor(int containerId) {
 		for (PendingPlace pending : deferred) {
 			if (pending.containerId() == containerId) {

@@ -1980,6 +1980,9 @@ final class SearchSession extends BaseCraftSession {
 		}
 
 		int queueLimit = RecipeClickExecutor.resolveRecipeQueueLimit(client, recipeId, recipeCollection);
+		// Assigned inside the chain below so the self-referential and ring
+		// paths keep their precedence - clicking must not pre-empt them.
+		ClickStageResult clickStage = ClickStageResult.DECLINED;
 		if (ChainCraftController.tryManualSelfReferentialPlacement(client, null)) {
 			ReachCraftingMod.LOGGER.info("[recipe_place] manual self-referential placement from SearchSession.placePlannedGrid target={}", targetCopiesPerSlot);
 		} else if (GridTopUp.tryStageInsteadOfPlace(client, player, recipeId, recipeCollection)) {
@@ -1997,8 +2000,15 @@ final class SearchSession extends BaseCraftSession {
 			// ONLY for exact sub-grid counts, where a max place would overstage.
 			ReachCraftingMod.LOGGER.info("[recipe_place] handlePlaceRecipe(shift=true) from SearchSession.placePlannedGrid target={} requested={}", targetCopiesPerSlot, requestedSingleClicks);
 			gameMode.handlePlaceRecipe(player.containerMenu.containerId, recipeId, true);
-		} else if (stageExactCopiesByClicking()) {
+		} else if ((clickStage = stageExactCopiesByClicking()) == ClickStageResult.STAGED) {
 			// Handled by clicks - no placement packet was spent.
+		} else if (clickStage == ClickStageResult.BUDGET_WAIT) {
+			// The click window is momentarily saturated. It drains at ~40
+			// clicks/s, so waiting a few ticks gets the exact count for free;
+			// dumping N rationed placements instead is both slower AND lossy
+			// (the queue is discarded if the screen closes before it drains).
+			// The caller's seed-wait timeout is the safety valve.
+			return PlacementAttempt.WAITING_FOR_SEED;
 		} else {
 			ReachCraftingMod.LOGGER.info("[recipe_place] handlePlaceRecipe(shift=false) x{} from SearchSession.placePlannedGrid", targetCopiesPerSlot);
 			for (int i = 0; i < targetCopiesPerSlot; i++) {
@@ -2034,20 +2044,20 @@ final class SearchSession extends BaseCraftSession {
 	 * copy and lands the exact count, so it is preferred wherever it applies;
 	 * anything it declines falls through to the placement loop unchanged.
 	 */
-	private boolean stageExactCopiesByClicking() {
+	private ClickStageResult stageExactCopiesByClicking() {
 		if (PlaceRecipeBudget.isUnlimited(client)) {
 			// Singleplayer rations nothing; vanilla placement is fewer
 			// packets and far less grid churn.
-			return false;
+			return ClickStageResult.DECLINED;
 		}
 		RecipeIngredientSummary summary = GridTopUp.resolveSummary(client, recipeId, recipeCollection);
 		if (summary == null) {
-			return false;
+			return ClickStageResult.DECLINED;
 		}
 		List<String> slotChoices =
 			ManualRecipePlacer.resolveSlotChoicesFromInventory(player.containerMenu, summary, false);
 		if (slotChoices.isEmpty()) {
-			return false;
+			return ClickStageResult.DECLINED;
 		}
 		// Exact counts cost roughly one right-click per copy per filled slot
 		// (plus a pickup and a putback), which is real traffic - clear it with
@@ -2056,22 +2066,37 @@ final class SearchSession extends BaseCraftSession {
 		int filledSlots = (int) slotChoices.stream().filter(java.util.Objects::nonNull).count();
 		int estimatedClicks = filledSlots * (targetCopiesPerSlot + 2);
 		if (!GridTopUp.clickBudgetAllows(estimatedClicks)) {
+			// A SATURATED window, not a structural refusal: the same request
+			// succeeds once the window drains, so ask the caller to wait
+			// rather than falling back to N rationed placements.
 			ReachCraftingMod.LOGGER.info(
-				"[recipe_place] click_stage_declined idx={} estimated_clicks={} window={}",
+				"[recipe_place] click_stage_waiting idx={} estimated_clicks={} window={}",
 				recipeIndex, estimatedClicks, GridTopUp.clickWindowCount()
 			);
-			return false;
+			return ClickStageResult.BUDGET_WAIT;
 		}
 		int staged = ManualRecipePlacer.placeCrafts(
 			client, summary, slotChoices, targetCopiesPerSlot, false, "idx=" + recipeIndex);
 		if (staged <= 0) {
-			return false;
+			return ClickStageResult.DECLINED;
 		}
 		ReachCraftingMod.LOGGER.info(
 			"[recipe_place] click_staged idx={} staged={} target={} place_packets_saved={}",
 			recipeIndex, staged, targetCopiesPerSlot, targetCopiesPerSlot
 		);
-		return true;
+		return ClickStageResult.STAGED;
+	}
+
+	/**
+	 * Outcome of trying to stage an exact copy count with clicks. BUDGET_WAIT
+	 * is deliberately distinct from DECLINED: it is transient, and the correct
+	 * response is to retry shortly rather than to fall back to the placement
+	 * loop the click path exists to avoid.
+	 */
+	private enum ClickStageResult {
+		STAGED,
+		DECLINED,
+		BUDGET_WAIT
 	}
 
 
