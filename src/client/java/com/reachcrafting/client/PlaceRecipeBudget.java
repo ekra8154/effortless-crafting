@@ -183,7 +183,11 @@ public final class PlaceRecipeBudget {
 			return true;
 		}
 		deferred.addLast(new PendingPlace(containerId, recipeId, useMaxItems));
-		if (clientTicks - lastDeferralLogTick >= 20) {
+		// Sentinel check first: clientTicks - Long.MIN_VALUE OVERFLOWS to a
+		// negative, so the plain subtraction never clears the threshold and
+		// the very first deferral - every deferral, in practice, since the
+		// sentinel is then never replaced - goes unlogged.
+		if (lastDeferralLogTick == Long.MIN_VALUE || clientTicks - lastDeferralLogTick >= 20) {
 			lastDeferralLogTick = clientTicks;
 			ReachCraftingMod.LOGGER.info(
 				"[place_budget] deferring container={} queue={} tokens={} rate={}/s",
@@ -294,13 +298,20 @@ public final class PlaceRecipeBudget {
 				clientTicks - lastCursorRescueTick);
 			return;
 		}
-		if (clientTicks - lastSendTick > DROP_ATTRIBUTION_WINDOW_TICKS) {
+		// The sentinel must be tested explicitly: clientTicks - Long.MIN_VALUE
+		// OVERFLOWS negative, which reads as "sent 0 ticks ago" and INVERTS
+		// this guard - before the first placement of a session every unrelated
+		// timeout was attributed to the limiter, halving a budget that is then
+		// PERSISTED per-server and reloaded on every later join.
+		if (lastSendTick == Long.MIN_VALUE || clientTicks - lastSendTick > DROP_ATTRIBUTION_WINDOW_TICKS) {
 			// No placement was sent recently, so this timeout can't be a
 			// dropped place packet (e.g. a click-staged chain step failed for
 			// its own reasons). Don't punish the budget for it.
 			ReachCraftingMod.LOGGER.info(
-				"[place_budget] timeout without recent place send ({} ticks ago) - budget unchanged",
-				clientTicks - lastSendTick);
+				"[place_budget] timeout without recent place send ({}) - budget unchanged",
+				lastSendTick == Long.MIN_VALUE
+					? "none this session"
+					: (clientTicks - lastSendTick) + " ticks ago");
 			return;
 		}
 		ensureServerBudgetLoaded(Minecraft.getInstance());
