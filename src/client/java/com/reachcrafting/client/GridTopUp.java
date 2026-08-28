@@ -67,10 +67,15 @@ final class GridTopUp {
 
 	// Whether the most recent tryStageInsteadOfPlace returned false ONLY
 	// because the click governor declined. The extractor must tell this apart
-	// from a genuinely dead ring: a saturated window drains at ~40 clicks/s,
-	// so waiting a few ticks resumes the ring at 3 clicks/craft — while
-	// treating it as "grid spent" flushes the ring and falls back to one
-	// place packet + ~20 clicks per craft.
+	// from a genuinely dead ring: the ring resumes at ~3 clicks/craft once the
+	// window has room, while treating it as "grid spent" flushes the ring and
+	// falls back to one place packet + ~20 clicks per craft.
+	//
+	// NB: the window does NOT drain at a steady rate. It is a 7-SECOND SLIDING
+	// EXPIRY - a click leaves the window 7s after it was made - so a burst
+	// keeps the count pinned for the full 7s and then falls off sharply.
+	// Anything that "waits for room" needs a timeout longer than the window;
+	// a 1s wait built on the steady-drain reading silently dropped crafts.
 	private static boolean lastStageDeclineWasBudget = false;
 
 	private GridTopUp() {
@@ -166,6 +171,11 @@ final class GridTopUp {
 			return false;
 		}
 		return true;
+	}
+
+	/** The governor's ceiling, for diagnostics that report headroom. */
+	static int clickWindowCap() {
+		return CLICK_WINDOW_CAP;
 	}
 
 	/** Current trailing-window click count (diagnostics for slow-craft logs). */

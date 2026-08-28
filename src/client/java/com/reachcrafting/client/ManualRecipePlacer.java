@@ -130,6 +130,7 @@ final class ManualRecipePlacer {
 		// slot. The per-slot loop then tops up whatever the drag could not
 		// divide evenly. Furnace (8 cobblestone slots, 20 copies) drops from
 		// ~176 clicks to ~60.
+		int clickWindowBefore = GridTopUp.clickWindowCount();
 		Map<String, List<Integer>> groupTargets = new LinkedHashMap<>();
 		for (int slotIndex = 0; slotIndex < slotItemIds.size(); slotIndex++) {
 			String slotItemId = slotItemIds.get(slotIndex);
@@ -152,10 +153,20 @@ final class ManualRecipePlacer {
 				}
 			}
 		}
+		// Report what this craft actually cost against the governor. Without
+		// this the window count only ever appeared on a DECLINE, so headroom
+		// had to be inferred from the algorithm instead of measured - and the
+		// per-slot cost of SINGLE-slot ingredient groups (no drag partner, so
+		// one click per item) is invisible until it causes a decline.
+		int clickWindowAfter = GridTopUp.clickWindowCount();
 		ReachCraftingMod.LOGGER.info(
-			"[manual_place] staged output={} copies={} slots={} grid_slots={}",
+			"[manual_place] staged output={} copies={} clicks={} window={}/{} groups={} slots={} grid_slots={}",
 			label,
 			copies,
+			clickWindowAfter - clickWindowBefore,
+			clickWindowAfter,
+			GridTopUp.clickWindowCap(),
+			groupTargets.size(),
 			slotItemIds,
 			gridIndices
 		);
