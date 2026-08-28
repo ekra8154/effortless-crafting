@@ -48,7 +48,30 @@ public abstract class RecipeBookComponentMixin {
 	// GLFW repeats deliver presses with no intervening release, and a naive
 	// counter reads a held key as a double tap. (Holding the toggle key is a
 	// real gesture here - space held is the x16 multiplier.)
+	//
+	// The release is detected by POLLING, not by the keyReleased inject: that
+	// injection never fires for this component, so the flag stuck true after
+	// the first press and every later press read as a repeat - the toggle
+	// simply stopped working. AbstractContainerScreenMixin already polls for
+	// Alt release for the same reason ("Mixin remapping issues with inherited
+	// methods"); this is the same hazard.
 	private boolean reachcrafting$toggleKeyDown = false;
+
+	/** Clear the held flag once the toggle key is physically up again. */
+	private void reachcrafting$pollToggleKeyReleased() {
+		if (!reachcrafting$toggleKeyDown || this.minecraft == null) {
+			return;
+		}
+		InputConstants.Key key =
+			((KeyMappingAccessor) com.reachcrafting.client.ReachCraftingModClient.toggleCraftableFilterKey).getKey();
+		// A non-keyboard binding cannot be polled this way; clear rather than
+		// latch, so an unpollable binding degrades to "every press is a tap"
+		// instead of never toggling again.
+		if (key.getType() != InputConstants.Type.KEYSYM
+			|| !InputConstants.isKeyDown(this.minecraft.getWindow(), key.getValue())) {
+			reachcrafting$toggleKeyDown = false;
+		}
+	}
 
 	/**
 	 * Records a qualifying press of the toggle key. Returns true only on the
@@ -282,7 +305,11 @@ public abstract class RecipeBookComponentMixin {
 
 	@Inject(method = "extractRenderState", at = @At("TAIL"))
 	private void reachcrafting$onRender(net.minecraft.client.gui.GuiGraphicsExtractor guiGraphics, int mouseX, int mouseY, float partialTick, CallbackInfo ci) {
-		if (!ReachCraftingConfig.get().enabled() || !this.isVisible()) {
+		if (!ReachCraftingConfig.get().enabled()) {
+			return;
+		}
+		reachcrafting$pollToggleKeyReleased();
+		if (!this.isVisible()) {
 			return;
 		}
 
