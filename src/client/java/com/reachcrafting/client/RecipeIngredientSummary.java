@@ -16,7 +16,21 @@ import net.minecraft.world.item.crafting.display.ShapedCraftingRecipeDisplay;
 import net.minecraft.world.item.crafting.display.ShapelessCraftingRecipeDisplay;
 import net.minecraft.world.item.crafting.display.SlotDisplay;
 
-public record RecipeIngredientSummary(List<IngredientSlot> slots, List<String> rawSlots, String compactSummary) {
+/**
+ * The ingredient slots of a recipe display, plus the shape they were laid out
+ * in. shapedWidth/shapedHeight are the SHAPED recipe's own bounding box (0 for
+ * shapeless): {@link #slots} is row-major within that box, NOT within the
+ * crafting grid, so a 2x2 recipe in a 3x3 menu yields 4 slots that belong at
+ * grid positions 1,2,4,5 - never 1,2,3,4. Use {@link #gridSlotIndices} to map
+ * them; assuming slot i sits at grid slot 1+i is the shape-gap bug.
+ */
+public record RecipeIngredientSummary(
+	List<IngredientSlot> slots,
+	List<String> rawSlots,
+	String compactSummary,
+	int shapedWidth,
+	int shapedHeight
+) {
 	public static RecipeIngredientSummary fromDisplay(Object display, ContextMap context) {
 		List<SlotDisplay> ingredients = extractIngredients(display);
 		List<IngredientSlot> slots = new ArrayList<>();
@@ -38,7 +52,53 @@ public record RecipeIngredientSummary(List<IngredientSlot> slots, List<String> r
 		}
 
 		String compactSummary = compact.length() == 0 ? "<no ingredients>" : compact.toString();
-		return new RecipeIngredientSummary(List.copyOf(slots), List.copyOf(rawSlots), compactSummary);
+		int shapedWidth = 0;
+		int shapedHeight = 0;
+		if (display instanceof ShapedCraftingRecipeDisplay shaped) {
+			shapedWidth = shaped.width();
+			shapedHeight = shaped.height();
+		}
+		return new RecipeIngredientSummary(
+			List.copyOf(slots), List.copyOf(rawSlots), compactSummary, shapedWidth, shapedHeight);
+	}
+
+	/**
+	 * Maps each ingredient slot onto the menu slot index it must occupy in a
+	 * grid of gridSlotCount slots (1-based; slot 0 is the result). Shaped
+	 * recipes are anchored top-left and keep their gaps; shapeless ones fill
+	 * sequentially. Returns an empty list when the recipe cannot fit.
+	 */
+	public List<Integer> gridSlotIndices(int gridSlotCount) {
+		int gridWidth = switch (gridSlotCount) {
+			case 4 -> 2;
+			case 9 -> 3;
+			default -> 0;
+		};
+		if (gridWidth == 0 || slots.isEmpty()) {
+			return List.of();
+		}
+		if (shapedWidth <= 0 || shapedHeight <= 0) {
+			// Shapeless: no pattern to honor, fill the first N slots.
+			if (slots.size() > gridSlotCount) {
+				return List.of();
+			}
+			List<Integer> sequential = new ArrayList<>();
+			for (int i = 0; i < slots.size(); i++) {
+				sequential.add(1 + i);
+			}
+			return sequential;
+		}
+		int gridHeight = gridSlotCount / gridWidth;
+		if (shapedWidth > gridWidth || shapedHeight > gridHeight || slots.size() != shapedWidth * shapedHeight) {
+			return List.of();
+		}
+		List<Integer> indices = new ArrayList<>();
+		for (int recipeY = 0; recipeY < shapedHeight; recipeY++) {
+			for (int recipeX = 0; recipeX < shapedWidth; recipeX++) {
+				indices.add(1 + recipeY * gridWidth + recipeX);
+			}
+		}
+		return indices;
 	}
 
 	public Set<String> acceptedItemIds() {

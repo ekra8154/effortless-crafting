@@ -33,6 +33,60 @@ public abstract class RecipeBookComponentMixin {
 	private int reachcrafting$searchHistoryIndex = -1;
 	private String reachcrafting$searchHistoryDraft = "";
 	private boolean reachcrafting$lastKeyPressedWasToggle = false;
+	// The craftability toggle needs a DOUBLE tap, so a single press of its key
+	// falls through to whatever that key normally does. This exists because
+	// the default binding is SPACE, which vanilla already uses to re-place the
+	// last recipe - a binding the mod silently shadowed. Requiring two taps
+	// for EVERY binding rather than special-casing space keeps one rule to
+	// learn instead of a space-shaped exception.
+	private static final long TOGGLE_DOUBLE_TAP_WINDOW_MS = 400L;
+	private long reachcrafting$lastToggleTapMillis = 0L;
+	// Taps are counted on the press AFTER a release, never on held-key repeat:
+	// GLFW repeats deliver presses with no intervening release, and a naive
+	// counter reads a held key as a double tap. (Holding the toggle key is a
+	// real gesture here - space held is the x16 multiplier.)
+	//
+	// The release is detected by POLLING, not by the keyReleased inject: that
+	// injection never fires for this component, so the flag stuck true after
+	// the first press and every later press read as a repeat - the toggle
+	// simply stopped working. AbstractContainerScreenMixin already polls for
+	// Alt release for the same reason ("Mixin remapping issues with inherited
+	// methods"); this is the same hazard.
+	private boolean reachcrafting$toggleKeyDown = false;
+
+	/** Clear the held flag once the toggle key is physically up again. */
+	private void reachcrafting$pollToggleKeyReleased() {
+		if (!reachcrafting$toggleKeyDown || this.minecraft == null) {
+			return;
+		}
+		InputConstants.Key key =
+			((KeyMappingAccessor) com.reachcrafting.client.ReachCraftingModClient.toggleCraftableFilterKey).getKey();
+		// A non-keyboard binding cannot be polled this way; clear rather than
+		// latch, so an unpollable binding degrades to "every press is a tap"
+		// instead of never toggling again.
+		if (key.getType() != InputConstants.Type.KEYSYM
+			|| !InputConstants.isKeyDown(this.minecraft.getWindow().getWindow(), key.getValue())) {
+			reachcrafting$toggleKeyDown = false;
+		}
+	}
+
+	/**
+	 * Records a qualifying press of the toggle key. Returns true only on the
+	 * second tap inside the window, i.e. when the toggle should actually fire.
+	 */
+	private boolean reachcrafting$registerToggleTap() {
+		if (reachcrafting$toggleKeyDown) {
+			return false; // key repeat, not a new tap
+		}
+		reachcrafting$toggleKeyDown = true;
+		long now = System.currentTimeMillis();
+		if (now - reachcrafting$lastToggleTapMillis <= TOGGLE_DOUBLE_TAP_WINDOW_MS) {
+			reachcrafting$lastToggleTapMillis = 0L;
+			return true;
+		}
+		reachcrafting$lastToggleTapMillis = now;
+		return false;
+	}
 	private int reachcrafting$preservedPageIndex = -1;
 	private boolean reachcrafting$dropKeyHeldFromHover = false;
 	private boolean reachcrafting$offhandKeyHeldFromHover = false;
@@ -113,6 +167,7 @@ public abstract class RecipeBookComponentMixin {
 		if (keyCode == GLFW.GLFW_KEY_SPACE
 			&& reachcrafting$isToggleBoundToSpace()
 			&& reachcrafting$isSearchReadyToReplace()
+			&& reachcrafting$registerToggleTap()
 			&& reachcrafting$toggleCraftabilityAndClearSearch()) {
 			reachcrafting$lastKeyPressedWasToggle = true;
 			cir.setReturnValue(true);
@@ -155,7 +210,8 @@ public abstract class RecipeBookComponentMixin {
 			boolean canToggle = !isSearchBoxFocused
 				|| (isSpace && (this.searchBox.getValue().isEmpty() || reachcrafting$isSearchReadyToReplace()));
 
-			if (this.isVisible() && canToggle && !(isSpace && requestModifierHeld)) {
+			if (this.isVisible() && canToggle && !(isSpace && requestModifierHeld)
+				&& reachcrafting$registerToggleTap()) {
 				if (reachcrafting$toggleCraftabilityAndClearSearch()) {
 					reachcrafting$lastKeyPressedWasToggle = true;
 					cir.setReturnValue(true);
@@ -185,6 +241,9 @@ public abstract class RecipeBookComponentMixin {
 			if (this.minecraft.options.keySwapOffhand.matches(keyCode, scanCode)) {
 				reachcrafting$offhandKeyHeldFromHover = false;
 			}
+		}
+		if (com.reachcrafting.client.ReachCraftingModClient.toggleCraftableFilterKey.matches(keyCode, scanCode)) {
+			reachcrafting$toggleKeyDown = false;
 		}
 		if (keyCode == GLFW.GLFW_KEY_LEFT_ALT || keyCode == GLFW.GLFW_KEY_RIGHT_ALT) {
 			ContainerUtils.handleAutoCraftKeyReleased();
@@ -243,7 +302,11 @@ public abstract class RecipeBookComponentMixin {
 
 	@Inject(method = "render", at = @At("TAIL"))
 	private void reachcrafting$onRender(net.minecraft.client.gui.GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick, CallbackInfo ci) {
-		if (!ReachCraftingConfig.get().enabled() || !this.isVisible()) {
+		if (!ReachCraftingConfig.get().enabled()) {
+			return;
+		}
+		reachcrafting$pollToggleKeyReleased();
+		if (!this.isVisible()) {
 			return;
 		}
 
