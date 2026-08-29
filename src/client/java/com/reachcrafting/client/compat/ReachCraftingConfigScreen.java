@@ -536,6 +536,17 @@ public final class ReachCraftingConfigScreen {
 			.setSaveConsumer(config::setPacketBudgetMaxRate)
 			.build());
 
+		serverLimitsGroup.add(entries.startIntField(
+				Component.translatable("option.reachcrafting.click_budget_per_window"),
+				config.clickBudgetPerWindow()
+			)
+			.setDefaultValue(450)
+			.setMin(40)
+			.setMax(3000)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.click_budget_per_window"))
+			.setSaveConsumer(config::setClickBudgetPerWindow)
+			.build());
+
 		containers.addEntry(serverLimitsGroup.build());
 
 		builder.setSavingRunnable(ReachCraftingConfig::save);

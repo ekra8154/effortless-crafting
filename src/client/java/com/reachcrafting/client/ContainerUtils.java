@@ -356,7 +356,32 @@ public final class ContainerUtils {
 
 	public static void abortAllSessions() {
 		AutoMoveController.settleCompletedWork(net.minecraft.client.Minecraft.getInstance());
-		boolean wasAnyActive = isAnySessionActive();
+		// Placements still queued on the packet budget are live work too: the
+		// craft they belong to has not happened yet. Counting them here means
+		// Esc during a budget-throttled placement reports as an abort instead
+		// of silently leaving the queue to expire.
+		int pendingPlacements = PlaceRecipeBudget.pendingCount();
+		boolean wasAnyActive = isAnySessionActive() || pendingPlacements > 0;
+		// This runs from EVERY container screen onClose, not just an Esc with
+		// work in flight, so only speak up when something was really aborted.
+		if (wasAnyActive) {
+			com.reachcrafting.ReachCraftingMod.LOGGER.info(
+				"[abort] aborting pending_placements={} input_queue={} auto_move={} dry_run={} bulk={} chain={} bulk_chain={}",
+				pendingPlacements,
+				RecipeBookInputController.getInstance().isInputQueueActive(),
+				AutoMoveController.isAutomatedInteractionRunning(),
+				NearbyContainerDryRun.isActiveSessionRunning(),
+				BulkAutoCraftController.isActive(),
+				ChainCraftController.isActive(),
+				BulkChainCraftController.isActive()
+			);
+		} else {
+			com.reachcrafting.ReachCraftingMod.LOGGER.debug("[abort] abortAllSessions with nothing active");
+		}
+		if (pendingPlacements > 0) {
+			com.reachcrafting.ReachCraftingMod.LOGGER.info(
+				"[abort] discarded {} queued placement(s)", PlaceRecipeBudget.clearDeferred());
+		}
 
 		AutoCraftController.clearHoldSession();
 		clearInputQueue();
