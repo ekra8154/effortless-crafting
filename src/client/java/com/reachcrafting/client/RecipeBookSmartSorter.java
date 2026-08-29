@@ -72,13 +72,13 @@ public final class RecipeBookSmartSorter {
 				"collections=" + collections.size()
 					+ " eager=true"
 					+ " chain_memo=" + sortContext.chainCraftableByRecipe.size()
-					+ " nearby_memo=" + sortContext.nearbyCraftabilityByRecipe.size()
+					+ " collection_memo=" + sortContext.collectionCraftability.size()
 			);
 			ReachCraftingMod.LOGGER.info(
-				"[recipe_sort] sorted mode=eager collections={} chain_memo={} nearby_memo={}",
+				"[recipe_sort] sorted mode=eager collections={} chain_memo={} collection_memo={}",
 				collections.size(),
 				sortContext.chainCraftableByRecipe.size(),
-				sortContext.nearbyCraftabilityByRecipe.size()
+				sortContext.collectionCraftability.size()
 			);
 			return sorted;
 		}
@@ -177,7 +177,8 @@ public final class RecipeBookSmartSorter {
 		boolean locallyChain = false;
 		boolean nearbyDirect = false;
 		boolean anyChain = false;
-		for (RecipeDisplayEntry entry : recipes) {
+		// getRecipes(), NOT the grid-filtered selection - see collectionCraftability.
+		for (RecipeDisplayEntry entry : collection.getRecipes()) {
 			RecipeDisplayId recipeId = entry.id();
 			locallyDirect |= ChainCraftabilityCache.isReachableLocally(recipeId);
 			locallyChain |= ChainCraftabilityCache.isChainCraftableLocally(recipeId);
@@ -246,39 +247,30 @@ public final class RecipeBookSmartSorter {
 			return new SortScore(0, recentRank, originalIndex);
 		}
 
-		boolean explicitVariantSelection = recipes.size() > 1;
-		boolean locallyDirect = false;
-		boolean locallyChain = false;
-		boolean nearbyDirect = false;
-		boolean anyChain = false;
-		for (RecipeDisplayEntry entry : recipes) {
-			RecipeDisplayId recipeId = entry.id();
-			NearbyMemoKey nearbyMemoKey = new NearbyMemoKey(recipeId, explicitVariantSelection);
-			RecipeButtonNearbyIndicator.Craftability craftability = context.nearbyCraftabilityByRecipe.computeIfAbsent(
-				nearbyMemoKey,
-				ignored -> RecipeButtonNearbyIndicator.getCraftability(
-					recipeId,
-					collection,
-					ItemStack.EMPTY,
-					explicitVariantSelection
-				)
-			);
-			locallyDirect |= craftability == RecipeButtonNearbyIndicator.Craftability.LOCALLY_CRAFTABLE;
-			nearbyDirect |= craftability == RecipeButtonNearbyIndicator.Craftability.NEARBY_CRAFTABLE;
-			locallyChain |= ChainCraftabilityCache.isChainCraftableLocally(recipeId);
-			anyChain |= context.chainCraftableByRecipe.computeIfAbsent(recipeId, ChainCraftabilityCache::isChainCraftable);
-			if (locallyDirect) {
-				break;
-			}
-		}
-
-		if (locallyDirect) {
+		// Exactly the predicate the craftable ICON is drawn from, so a recipe
+		// can never show a craftable icon and sort into an uncraftable tier.
+		RecipeButtonNearbyIndicator.Craftability craftability =
+			context.collectionCraftability.computeIfAbsent(
+				collection, RecipeButtonNearbyIndicator::collectionCraftability);
+		if (craftability == RecipeButtonNearbyIndicator.Craftability.LOCALLY_CRAFTABLE) {
 			return new SortScore(0, recentRank, originalIndex);
 		}
+
+		boolean locallyChain = false;
+		boolean anyChain = false;
+		for (RecipeDisplayEntry entry : collection.getRecipes()) {
+			RecipeDisplayId recipeId = entry.id();
+			if (ChainCraftabilityCache.isChainCraftableLocally(recipeId)) {
+				locallyChain = true;
+				break;
+			}
+			anyChain |= context.chainCraftableByRecipe.computeIfAbsent(recipeId, ChainCraftabilityCache::isChainCraftable);
+		}
+
 		if (locallyChain) {
 			return new SortScore(1, recentRank, originalIndex);
 		}
-		if (nearbyDirect) {
+		if (craftability == RecipeButtonNearbyIndicator.Craftability.NEARBY_CRAFTABLE) {
 			return new SortScore(2, recentRank, originalIndex);
 		}
 		if (anyChain) {
@@ -341,7 +333,7 @@ public final class RecipeBookSmartSorter {
 		final Map<Integer, Integer> recentRanks;
 		final boolean retrievalModeEnabled = ExistingOutputRetrievalController.isEnabled();
 		final Map<RecipeDisplayId, Boolean> chainCraftableByRecipe = new HashMap<>();
-		final Map<NearbyMemoKey, RecipeButtonNearbyIndicator.Craftability> nearbyCraftabilityByRecipe = new HashMap<>();
+		final Map<RecipeCollection, RecipeButtonNearbyIndicator.Craftability> collectionCraftability = new IdentityHashMap<>();
 		final Map<NearbyMemoKey, Boolean> retrievabilityByRecipe = new HashMap<>();
 
 		SortPassContext(Map<Integer, Integer> recentRanks) {

@@ -432,7 +432,7 @@ public final class RecipeBookChunkedScheduler {
 					startedAtNanos,
 					"collections=" + collections.size()
 						+ " chain_memo=" + sortContext.chainCraftableByRecipe.size()
-						+ " nearby_memo=" + sortContext.nearbyCraftabilityByRecipe.size()
+						+ " collection_memo=" + sortContext.collectionCraftability.size()
 				);
 			}
 			return processed;
