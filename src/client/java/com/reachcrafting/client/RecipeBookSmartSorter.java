@@ -132,21 +132,6 @@ public final class RecipeBookSmartSorter {
 		return ranks;
 	}
 
-	static SortScore fallbackScore(RecipeCollection collection, Map<Integer, Integer> recentRanks, int originalIndex) {
-		List<RecipeDisplayEntry> recipes = selectedRecipes(collection);
-		int recentRank = recentRank(recipes, recentRanks);
-		if (ContainerUtils.isExistingOutputRetrievalEnabled()) {
-			if (recentRank != Integer.MAX_VALUE) {
-				return new SortScore(0, recentRank, originalIndex);
-			}
-			return new SortScore(3, 0, originalIndex);
-		}
-		if (recentRank != Integer.MAX_VALUE) {
-			return new SortScore(0, recentRank, originalIndex);
-		}
-		return new SortScore(3, 0, originalIndex);
-	}
-
 	public static SortScore fastScore(RecipeCollection collection, SortPassContext context, int originalIndex) {
 		List<RecipeDisplayEntry> recipes = selectedRecipes(collection);
 		int recentRank = recentRank(recipes, context.recentRanks);
@@ -182,31 +167,40 @@ public final class RecipeBookSmartSorter {
 			return new SortScore(3, 0, originalIndex);
 		}
 
-		if (recentRank != Integer.MAX_VALUE) {
+		// Craftability decides the tier; recency only ranks WITHIN a tier, so
+		// a recently-used recipe never outranks something craftable right now.
+		if (collection.hasCraftable()) {
 			return new SortScore(0, recentRank, originalIndex);
 		}
-		
-		boolean isReachable = false;
-		boolean isChainCraftable = false;
+
+		boolean locallyDirect = false;
+		boolean locallyChain = false;
+		boolean nearbyDirect = false;
+		boolean anyChain = false;
 		for (RecipeDisplayEntry entry : recipes) {
-			if (ChainCraftabilityCache.isReachable(entry.id())) {
-				isReachable = true;
+			RecipeDisplayId recipeId = entry.id();
+			locallyDirect |= ChainCraftabilityCache.isReachableLocally(recipeId);
+			locallyChain |= ChainCraftabilityCache.isChainCraftableLocally(recipeId);
+			nearbyDirect |= ChainCraftabilityCache.isReachable(recipeId);
+			anyChain |= ChainCraftabilityCache.isChainCraftable(recipeId);
+			if (locallyDirect) {
 				break;
 			}
-			if (ChainCraftabilityCache.isChainCraftable(entry.id())) {
-				isChainCraftable = true;
-			}
 		}
 
-		if (isReachable) {
-			return new SortScore(1, 0, originalIndex);
+		if (locallyDirect) {
+			return new SortScore(0, recentRank, originalIndex);
 		}
-		if (isChainCraftable) {
-			return new SortScore(2, 0, originalIndex);
+		if (locallyChain) {
+			return new SortScore(1, recentRank, originalIndex);
 		}
-
-		// Fallback for uncraftable (or vanilla craftable which hasn't been checked yet)
-		return new SortScore(3, 0, originalIndex);
+		if (nearbyDirect) {
+			return new SortScore(2, recentRank, originalIndex);
+		}
+		if (anyChain) {
+			return new SortScore(3, recentRank, originalIndex);
+		}
+		return new SortScore(4, recentRank, originalIndex);
 	}
 
 	static SortScore fullScore(RecipeCollection collection, SortPassContext context, int originalIndex) {
@@ -244,44 +238,53 @@ public final class RecipeBookSmartSorter {
 			return new SortScore(3, 0, originalIndex);
 		}
 
-		if (recentRank != Integer.MAX_VALUE) {
-			return new SortScore(0, recentRank, originalIndex);
-		}
+		// Tier order (user-facing contract): in-inventory direct, in-inventory
+		// chain, needs-nearby direct, needs-nearby chain, everything else.
+		// Recency only ranks WITHIN a tier - a recently-used recipe with no
+		// materials must not outrank something craftable right now.
 		if (collection.hasCraftable()) {
-			return new SortScore(1, 0, originalIndex);
+			return new SortScore(0, recentRank, originalIndex);
 		}
 
 		boolean explicitVariantSelection = recipes.size() > 1;
-		boolean chainCraftable = false;
-		boolean nearbyCraftable = false;
+		boolean locallyDirect = false;
+		boolean locallyChain = false;
+		boolean nearbyDirect = false;
+		boolean anyChain = false;
 		for (RecipeDisplayEntry entry : recipes) {
 			RecipeDisplayId recipeId = entry.id();
-			chainCraftable |= context.chainCraftableByRecipe.computeIfAbsent(recipeId, ChainCraftabilityCache::isChainCraftable);
-			if (!nearbyCraftable) {
-				NearbyMemoKey nearbyMemoKey = new NearbyMemoKey(recipeId, explicitVariantSelection);
-				RecipeButtonNearbyIndicator.Craftability craftability = context.nearbyCraftabilityByRecipe.computeIfAbsent(
-					nearbyMemoKey,
-					ignored -> RecipeButtonNearbyIndicator.getCraftability(
-						recipeId,
-						collection,
-						ItemStack.EMPTY,
-						explicitVariantSelection
-					)
-				);
-				nearbyCraftable = craftability == RecipeButtonNearbyIndicator.Craftability.NEARBY_CRAFTABLE;
-			}
-			if (chainCraftable && nearbyCraftable) {
+			NearbyMemoKey nearbyMemoKey = new NearbyMemoKey(recipeId, explicitVariantSelection);
+			RecipeButtonNearbyIndicator.Craftability craftability = context.nearbyCraftabilityByRecipe.computeIfAbsent(
+				nearbyMemoKey,
+				ignored -> RecipeButtonNearbyIndicator.getCraftability(
+					recipeId,
+					collection,
+					ItemStack.EMPTY,
+					explicitVariantSelection
+				)
+			);
+			locallyDirect |= craftability == RecipeButtonNearbyIndicator.Craftability.LOCALLY_CRAFTABLE;
+			nearbyDirect |= craftability == RecipeButtonNearbyIndicator.Craftability.NEARBY_CRAFTABLE;
+			locallyChain |= ChainCraftabilityCache.isChainCraftableLocally(recipeId);
+			anyChain |= context.chainCraftableByRecipe.computeIfAbsent(recipeId, ChainCraftabilityCache::isChainCraftable);
+			if (locallyDirect) {
 				break;
 			}
 		}
 
-		if (nearbyCraftable) {
-			return new SortScore(1, 0, originalIndex);
+		if (locallyDirect) {
+			return new SortScore(0, recentRank, originalIndex);
 		}
-		if (chainCraftable) {
-			return new SortScore(2, 0, originalIndex);
+		if (locallyChain) {
+			return new SortScore(1, recentRank, originalIndex);
 		}
-		return new SortScore(3, 0, originalIndex);
+		if (nearbyDirect) {
+			return new SortScore(2, recentRank, originalIndex);
+		}
+		if (anyChain) {
+			return new SortScore(3, recentRank, originalIndex);
+		}
+		return new SortScore(4, recentRank, originalIndex);
 	}
 
 	private static List<RecipeDisplayEntry> selectedRecipes(RecipeCollection collection) {
