@@ -1980,6 +1980,9 @@ final class SearchSession extends BaseCraftSession {
 		}
 
 		int queueLimit = RecipeClickExecutor.resolveRecipeQueueLimit(client, recipeId, recipeCollection);
+		// Assigned inside the chain below so the self-referential and ring
+		// paths keep their precedence - clicking must not pre-empt them.
+		ClickStageResult clickStage = ClickStageResult.DECLINED;
 		if (ChainCraftController.tryManualSelfReferentialPlacement(client, null)) {
 			ReachCraftingMod.LOGGER.info("[recipe_place] manual self-referential placement from SearchSession.placePlannedGrid target={}", targetCopiesPerSlot);
 		} else if (GridTopUp.tryStageInsteadOfPlace(client, player, recipeId, recipeCollection)) {
@@ -1997,10 +2000,27 @@ final class SearchSession extends BaseCraftSession {
 			// ONLY for exact sub-grid counts, where a max place would overstage.
 			ReachCraftingMod.LOGGER.info("[recipe_place] handlePlaceRecipe(shift=true) from SearchSession.placePlannedGrid target={} requested={}", targetCopiesPerSlot, requestedSingleClicks);
 			gameMode.handlePlaceRecipe(player.containerMenu.containerId, recipeId, true);
+		} else if ((clickStage = stageExactCopiesByClicking()) == ClickStageResult.STAGED) {
+			// Handled by clicks - no placement packet was spent.
 		} else {
+			// NB: a click-budget decline falls back here like any other. An
+			// earlier attempt to WAIT for the window instead silently dropped
+			// the craft: the governor's window is a 7-SECOND SLIDING EXPIRY,
+			// not a steady drain, so a burst of 152 clicks keeps the window
+			// pinned for the full 7s while the 20-tick seed wait times out -
+			// and that timeout abandons the placement rather than retrying it.
+			// Waiting is only viable with a wait longer than the window AND a
+			// fallback on timeout; a slow craft beats a lost one.
 			ReachCraftingMod.LOGGER.info("[recipe_place] handlePlaceRecipe(shift=false) x{} from SearchSession.placePlannedGrid", targetCopiesPerSlot);
 			for (int i = 0; i < targetCopiesPerSlot; i++) {
 				gameMode.handlePlaceRecipe(player.containerMenu.containerId, recipeId, false);
+			}
+			if (clickStage == ClickStageResult.DECLINED_BUDGET) {
+				// Transient decline only: let the placements start draining,
+				// but keep watching for the click window to free so the rest
+				// of the craft can be clicked instead of dripped.
+				ClickStageUpgrade.arm(
+					recipeId, recipeCollection, player.containerMenu.containerId, targetCopiesPerSlot, recipeIndex);
 			}
 		}
 		AvailableItemSnapshot postPlaceSnapshot = AvailableItemSnapshot.capture(player, client.screen);
@@ -2016,6 +2036,98 @@ final class SearchSession extends BaseCraftSession {
 
 		ReachCraftingMod.LOGGER.debug("[nearby_restore] idx={} placed_via_vanilla_calls target={}", recipeIndex, targetCopiesPerSlot);
 		return PlacementAttempt.SUCCESS;
+	}
+
+	/**
+	 * Stages an exact sub-grid copy count with container clicks instead of one
+	 * placement packet per copy.
+	 *
+	 * <p>A max placement can't express "exactly N" whenever the player holds
+	 * more materials than N crafts need - it stages everything the grid can
+	 * take - so the per-copy loop was the only way to hit the count. But that
+	 * loop spends the one packet type servers ration: Paper drops place_recipe
+	 * above 5/s while allowing ~500 other packets/s, so a 23-copy request
+	 * became 23 rationed packets, taking seconds and losing the tail of the
+	 * queue whenever the screen closed first. Clicking costs ~100x less per
+	 * copy and lands the exact count, so it is preferred wherever it applies;
+	 * anything it declines falls through to the placement loop unchanged.
+	 */
+	private ClickStageResult stageExactCopiesByClicking() {
+		if (PlaceRecipeBudget.isUnlimited(client)) {
+			// Singleplayer rations nothing; vanilla placement is fewer
+			// packets and far less grid churn.
+			return ClickStageResult.DECLINED;
+		}
+		RecipeIngredientSummary summary = GridTopUp.resolveSummary(client, recipeId, recipeCollection);
+		if (summary == null) {
+			return ClickStageResult.DECLINED;
+		}
+		List<String> slotChoices =
+			ManualRecipePlacer.resolveSlotChoicesFromInventory(player.containerMenu, summary, false);
+		if (slotChoices.isEmpty()) {
+			return ClickStageResult.DECLINED;
+		}
+		// Cost model must track ManualRecipePlacer: same-item slots are filled
+		// by left-drag rounds that divide a carried stack evenly, so each slot
+		// only pays per-click for the remainder the drag could not divide -
+		// bounded by one stack spread across the group. Estimating the old
+		// one-click-per-item price here would decline on a cost we no longer
+		// pay. Deliberately rounded up; a decline falls through to the
+		// placement loop, same as before.
+		// Priced PER INGREDIENT GROUP, because that is how the placer fills:
+		// a group of T slots takes drag rounds of floor(64/T) each (costing
+		// T+4 clicks a round), then pays per-item for the remainder. Pricing
+		// off the total filled-slot count instead treated a SINGLE-slot group
+		// as if it had drag partners - it costs one click per item and has
+		// none - which under-estimated a piston by ~40% and let the window
+		// overshoot its cap (observed at 479/450).
+		Map<String, Integer> groupSizes = new LinkedHashMap<>();
+		for (String choice : slotChoices) {
+			if (choice != null) {
+				groupSizes.merge(choice, 1, Integer::sum);
+			}
+		}
+		int estimatedClicks = 0;
+		for (int groupSlots : groupSizes.values()) {
+			int perRound = Math.max(1, 64 / groupSlots);
+			int rounds = groupSlots > 1 ? targetCopiesPerSlot / perRound : 0;
+			int remainder = targetCopiesPerSlot - rounds * perRound;
+			// Per-slot remainder costs the CHEAPER direction: place what is
+			// wanted, or take the whole stack and shed the excess.
+			int perSlot = Math.min(remainder, Math.max(1, 64 - remainder));
+			estimatedClicks += rounds * (groupSlots + 4) + groupSlots * (perSlot + 2);
+		}
+		if (!GridTopUp.clickBudgetAllows(estimatedClicks)) {
+			// A SATURATED window, not a structural refusal: the same request
+			// succeeds once the window drains, so ask the caller to wait
+			// rather than falling back to N rationed placements.
+			ReachCraftingMod.LOGGER.info(
+				"[recipe_place] click_stage_declined idx={} estimated_clicks={} window={} (placing now, will upgrade if the window frees)",
+				recipeIndex, estimatedClicks, GridTopUp.clickWindowCount()
+			);
+			return ClickStageResult.DECLINED_BUDGET;
+		}
+		int staged = ManualRecipePlacer.placeCrafts(
+			client, summary, slotChoices, targetCopiesPerSlot, false, "idx=" + recipeIndex);
+		if (staged <= 0) {
+			return ClickStageResult.DECLINED;
+		}
+		ReachCraftingMod.LOGGER.info(
+			"[recipe_place] click_staged idx={} staged={} target={} place_packets_saved={}",
+			recipeIndex, staged, targetCopiesPerSlot, targetCopiesPerSlot
+		);
+		return ClickStageResult.STAGED;
+	}
+
+	/**
+	 * Outcome of trying to stage an exact copy count with clicks.
+	 * DECLINED_BUDGET is transient - the same request succeeds once the click
+	 * window frees - so it arms an upgrade; plain DECLINED is structural.
+	 */
+	private enum ClickStageResult {
+		STAGED,
+		DECLINED,
+		DECLINED_BUDGET
 	}
 
 
