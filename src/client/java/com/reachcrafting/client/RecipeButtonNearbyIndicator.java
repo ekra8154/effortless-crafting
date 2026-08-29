@@ -1,5 +1,6 @@
 package com.reachcrafting.client;
 
+import java.util.List;
 import java.util.IdentityHashMap;
 import java.util.Map;
 import net.minecraft.client.Minecraft;
@@ -36,6 +37,7 @@ public final class RecipeButtonNearbyIndicator {
 	private static final Map<RecipeDisplayId, Craftability> mainCache = new java.util.HashMap<>();
 	private static final Map<RecipeDisplayId, Craftability> overlayCache = new java.util.HashMap<>();
 	private static final Map<RecipeCollection, IndicatorState> collectionIndicatorCache = new IdentityHashMap<>();
+	private static final Map<RecipeCollection, Craftability> collectionCraftabilityCache = new IdentityHashMap<>();
 
 	private RecipeButtonNearbyIndicator() {
 	}
@@ -46,6 +48,7 @@ public final class RecipeButtonNearbyIndicator {
 		mainCache.clear();
 		overlayCache.clear();
 		collectionIndicatorCache.clear();
+		collectionCraftabilityCache.clear();
 	}
 
 	public static boolean shouldShow(RecipeButton button) {
@@ -114,6 +117,8 @@ public final class RecipeButtonNearbyIndicator {
 			mainCache.clear();
 			overlayCache.clear();
 			collectionIndicatorCache.clear();
+			collectionCraftabilityCache.clear();
+		collectionCraftabilityCache.clear();
 			currentStateKey = stateKey;
 			currentContext = null;
 		}
@@ -164,6 +169,42 @@ public final class RecipeButtonNearbyIndicator {
 		}
 
 		return indicatorStateForRecipe(button.getCurrentRecipe(), collection, button.getDisplayStack().copy(), false);
+	}
+
+	/**
+	 * The craftability of a whole collection, asked the same way the ICON asks
+	 * it: over every recipe in {@link RecipeCollection#getRecipes()}.
+	 *
+	 * <p>The smart sort must use THIS rather than walking
+	 * {@code getSelectedRecipes(...)}, which vanilla filters by the open
+	 * menu's grid size - that made a recipe show a craftable icon while
+	 * sorting into the uncraftable tier, and made the 2x2 inventory book
+	 * disagree with the 3x3 table for the same recipe.</p>
+	 */
+	public static Craftability collectionCraftability(RecipeCollection collection) {
+		if (collection == null) {
+			return Craftability.NOT_CRAFTABLE;
+		}
+		Craftability cached = collectionCraftabilityCache.get(collection);
+		if (cached != null) {
+			return cached;
+		}
+		List<RecipeDisplayEntry> recipes = collection.getRecipes();
+		boolean explicitVariantSelection = recipes.size() > 1;
+		Craftability best = Craftability.NOT_CRAFTABLE;
+		for (RecipeDisplayEntry entry : recipes) {
+			Craftability craftability =
+				getCraftability(entry.id(), collection, ItemStack.EMPTY, explicitVariantSelection);
+			if (craftability == Craftability.LOCALLY_CRAFTABLE) {
+				best = craftability;
+				break;
+			}
+			if (craftability == Craftability.NEARBY_CRAFTABLE) {
+				best = craftability;
+			}
+		}
+		collectionCraftabilityCache.put(collection, best);
+		return best;
 	}
 
 	private static IndicatorState resolveCollectionIndicatorState(RecipeCollection collection) {
