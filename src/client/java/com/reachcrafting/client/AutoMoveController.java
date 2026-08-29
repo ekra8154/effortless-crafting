@@ -356,8 +356,27 @@ final class AutoMoveController {
 				if (carriedEmpty) {
 					directEjectRefillGapTicks++;
 				}
+				// The refill-gap debounce answers "has the slot stopped
+				// refilling?", which is only worth asking when the expected
+				// count is UNKNOWN. When the grid has already given up
+				// everything we predicted, no further craft can arrive and the
+				// remaining wait is pure delay - and it was being paid on every
+				// batch, not just awkward ones: every settlement in a honey run
+				// took the full 8 ticks (7.6s of an 8s run), and cake spent 9.6s
+				// of 15s the same way. Neither ever exited via gridTotalNow == 0,
+				// because a recipe leaving remainders (cake's empty buckets) or a
+				// partly restaged grid never reaches zero.
+				//
+				// Read through observedGridDrainCrafts rather than
+				// resolveEjectCredit: the latter logs on every mismatch and this
+				// runs each tick.
+				int observedCraftsNow = observedGridDrainCrafts(menu, directEjectGridBefore);
+				boolean fullyObserved = directEjectPendingCount > 0
+					&& observedCraftsNow >= 0
+					&& observedCraftsNow * Math.max(directEjectPerCraftCount, 1) >= directEjectPendingCount;
 				boolean settled = carriedEmpty && !slotHasExpected
 					&& (gridTotalNow == 0
+						|| fullyObserved
 						|| directEjectRefillGapTicks >= DIRECT_EJECT_REFILL_GAP_LIMIT
 						|| foreignSettled);
 				if (!settled) {
