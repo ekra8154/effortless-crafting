@@ -5,6 +5,9 @@ import com.reachcrafting.client.mixin.ClientRecipeBookAccessor;
 import com.reachcrafting.client.mixin.AbstractRecipeBookScreenAccessor;
 import com.reachcrafting.client.mixin.RecipeBookComponentAccessor;
 import com.reachcrafting.client.mixin.RecipeBookPageAccessor;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import net.minecraft.client.Minecraft;
@@ -241,6 +244,32 @@ final class RecipeClickExecutor {
 			&& !ChainCraftController.isActive()
 			&& !BulkAutoCraftController.isActive()
 			&& !BulkChainCraftController.isActive();
+		// Variant fallback for the chain path. The collection's chain
+		// indicator lights up when ANY variant is chain-craftable (spruce
+		// logs on a door entry rotating through bamboo), but the click only
+		// ever planned the ONE recipe the resolver returned -- and when no
+		// variant is directly craftable that is always the clicked one. So
+		// the request died as "missing bamboo planks" on a collection the
+		// icon had just promised was reachable. Gate on the availability
+		// setting rather than on allowVariantSwitching: the resolver's flag
+		// only opens up on the nearby/dry-run paths, while the setting is
+		// what the user actually told us about swapping variants.
+		List<RecipeVariantResolver.Selection> chainVariantCandidates = canOfferChainCraft
+			? chainVariantFallbackCandidates(
+				minecraft,
+				player,
+				recipeId,
+				collection,
+				displayStack,
+				availableItems,
+				selectedRecipe,
+				explicitVariantSelection,
+				vanillaShiftClick,
+				effectiveCraftAll,
+				desiredVariantCopies,
+				allowNearbyChests
+			)
+			: List.of(selectedRecipe);
 		String missingMessage = deficitReport.hasMissingIngredients()
 			? "Missing: " + deficitReport.compactMissingSummary()
 			: "";
@@ -284,7 +313,7 @@ final class RecipeClickExecutor {
 			Optional<ChainCraftOffer> chainOffer = planChainCraftOffer(
 				minecraft,
 				player,
-				selectedRecipe,
+				chainVariantCandidates,
 				chainAvailableCounts,
 				allowNearbyChests,
 				chainCraftAll,
@@ -298,9 +327,17 @@ final class RecipeClickExecutor {
 			);
 			if (chainOffer.isPresent()) {
 				ChainCraftPlan chainPlan = chainOffer.get().plan();
+				RecipeVariantResolver.Selection chainSelection = chainOffer.get().selection();
+				// A fallback variant has its own shortfall, so the deferred
+				// "Missing: ..." shown when the popup is declined must name
+				// the variant we offered, not the one that was rotating.
+				String chainMissingMessage = chainSelection.recipeId().equals(selectedRecipe.recipeId())
+					? missingMessage
+					: missingMessageFor(chainSelection, availableCounts, availableItems, effectiveCraftAll, desiredVariantCopies);
 				ReachCraftingMod.LOGGER.info(
-					"[chain_plan] available recipe={} requested={} planned={} steps={} allow_nearby={} bulk_mode={}",
+					"[chain_plan] available clicked_recipe={} recipe={} requested={} planned={} steps={} allow_nearby={} bulk_mode={}",
 					selectedRecipe.recipeId(),
+					chainSelection.recipeId(),
 					chainOffer.get().requestedRecipeCopies(),
 					chainPlan.finalRecipeCopies(),
 					chainPlan.steps().size(),
@@ -314,18 +351,18 @@ final class RecipeClickExecutor {
 					}
 					ChainCraftPopupController.handleBulkChainPlan(
 						chainPlan,
-						selectedRecipe,
+						chainSelection,
 						allowNearbyChests,
 						chainOffer.get().requestedRecipeCopies(),
 						chainOffer.get().maxRequest(),
-						missingMessage
+						chainMissingMessage
 					);
 					return;
 				}
 				int popupRequestedCopies = chainOffer.get().maxRequest()
 					? chainPlan.finalRecipeCopies()
 					: chainOffer.get().requestedRecipeCopies();
-				ChainCraftPopupController.handlePlan(chainPlan, popupRequestedCopies, false, missingMessage);
+				ChainCraftPopupController.handlePlan(chainPlan, popupRequestedCopies, false, chainMissingMessage);
 				return;
 			}
 			ReachCraftingMod.LOGGER.info(
@@ -862,7 +899,40 @@ final class RecipeClickExecutor {
 		);
 	}
 
+	/**
+	 * Walks the candidate variants in preference order and offers the first one
+	 * the planner can actually build. The clicked variant always leads, so a
+	 * collection that chains on its own recipe never gets swapped away from.
+	 */
 	private static Optional<ChainCraftOffer> planChainCraftOffer(
+		Minecraft minecraft,
+		LocalPlayer player,
+		List<RecipeVariantResolver.Selection> candidates,
+		Map<String, Integer> availableCounts,
+		boolean allowNearbyChests,
+		boolean effectiveCraftAll,
+		int requestedClicks,
+		int desiredVariantCopies
+	) {
+		for (RecipeVariantResolver.Selection candidate : candidates) {
+			Optional<ChainCraftOffer> offer = planChainCraftOfferFor(
+				minecraft,
+				player,
+				candidate,
+				availableCounts,
+				allowNearbyChests,
+				effectiveCraftAll,
+				requestedClicks,
+				desiredVariantCopies
+			);
+			if (offer.isPresent()) {
+				return offer;
+			}
+		}
+		return Optional.empty();
+	}
+
+	private static Optional<ChainCraftOffer> planChainCraftOfferFor(
 		Minecraft minecraft,
 		LocalPlayer player,
 		RecipeVariantResolver.Selection selectedRecipe,
@@ -886,7 +956,7 @@ final class RecipeClickExecutor {
 			desiredVariantCopies
 		);
 		if (exactOrMax.isPresent()) {
-			return Optional.of(new ChainCraftOffer(exactOrMax.get(), requestedRecipeCopies, effectiveCraftAll));
+			return Optional.of(new ChainCraftOffer(exactOrMax.get(), selectedRecipe, requestedRecipeCopies, effectiveCraftAll));
 		}
 		// Craft-all already ran planMax, so an empty result is final; only exact
 		// count requests benefit from the smaller-count fallback search.
@@ -901,10 +971,95 @@ final class RecipeClickExecutor {
 			allowNearbyChests,
 			requestedRecipeCopies - 1,
 			AutoCraftController.isBulkModeEnabled()
-		).map(plan -> new ChainCraftOffer(plan, requestedRecipeCopies, false));
+		).map(plan -> new ChainCraftOffer(plan, selectedRecipe, requestedRecipeCopies, false));
 	}
 
-	private record ChainCraftOffer(ChainCraftPlan plan, int requestedRecipeCopies, boolean maxRequest) {
+	/**
+	 * The clicked variant first, then whichever siblings the chain cache says
+	 * are reachable -- the same per-recipe answer the collection's chain
+	 * indicator is drawn from, so the click can only offer what the icon shows.
+	 * Siblings that are chain-craftable from the inventory alone come before
+	 * ones that need a chest withdrawal, matching the smart sort's tiering.
+	 */
+	private static List<RecipeVariantResolver.Selection> chainVariantFallbackCandidates(
+		Minecraft minecraft,
+		LocalPlayer player,
+		RecipeDisplayId clickedRecipeId,
+		net.minecraft.client.gui.screens.recipebook.RecipeCollection collection,
+		ItemStack displayStack,
+		AvailableItemSnapshot availableItems,
+		RecipeVariantResolver.Selection selectedRecipe,
+		boolean explicitVariantSelection,
+		boolean vanillaShiftClick,
+		boolean effectiveCraftAll,
+		int desiredVariantCopies,
+		boolean allowNearbyChests
+	) {
+		if (explicitVariantSelection
+			|| vanillaShiftClick
+			|| collection == null
+			|| collection.getRecipes().size() <= 1
+			|| availableItems.hasReservedGrid()
+			|| ReachCraftingConfig.get().revolvingCraftHandling() == ReachCraftingConfig.RevolvingCraftHandling.SPECIFIC_VARIANT_ONLY) {
+			return List.of(selectedRecipe);
+		}
+
+		List<RecipeVariantResolver.Selection> siblings = RecipeVariantResolver.collectionCandidates(
+			minecraft,
+			player,
+			clickedRecipeId,
+			collection,
+			displayStack != null ? displayStack.copy() : ItemStack.EMPTY,
+			availableItems,
+			availableItems.inventoryCounts(),
+			availableItems.inventoryCounts(),
+			effectiveCraftAll,
+			desiredVariantCopies
+		).stream()
+			.filter(candidate -> !candidate.recipeId().equals(selectedRecipe.recipeId()))
+			.filter(candidate -> allowNearbyChests
+				? ChainCraftabilityCache.isChainCraftable(candidate.recipeId())
+				: ChainCraftabilityCache.isChainCraftableLocally(candidate.recipeId()))
+			.sorted(Comparator
+				.comparingInt((RecipeVariantResolver.Selection candidate) ->
+					ChainCraftabilityCache.isChainCraftableLocally(candidate.recipeId()) ? 0 : 1)
+				.thenComparing(RecipeVariantResolver.preferenceOrder()))
+			.toList();
+		if (siblings.isEmpty()) {
+			return List.of(selectedRecipe);
+		}
+
+		List<RecipeVariantResolver.Selection> candidates = new ArrayList<>();
+		candidates.add(selectedRecipe);
+		candidates.addAll(siblings);
+		ReachCraftingMod.LOGGER.info(
+			"[chain_variant_fallback] clicked_recipe={} selected_recipe={} fallbacks={}",
+			clickedRecipeId,
+			selectedRecipe.recipeId(),
+			siblings.stream().map(candidate -> candidate.outputItemId()).toList()
+		);
+		return List.copyOf(candidates);
+	}
+
+	private static String missingMessageFor(
+		RecipeVariantResolver.Selection selection,
+		Map<String, Integer> availableCounts,
+		AvailableItemSnapshot availableItems,
+		boolean effectiveCraftAll,
+		int desiredVariantCopies
+	) {
+		RecipeDeficitReport report = effectiveCraftAll
+			? RecipeDeficitReport.from(selection.ingredientSummary(), availableCounts, availableItems.gridStacks(), true)
+			: RecipeDeficitReport.from(selection.ingredientSummary(), availableCounts, availableItems.gridStacks(), desiredVariantCopies);
+		return report.hasMissingIngredients() ? "Missing: " + report.compactMissingSummary() : "";
+	}
+
+	private record ChainCraftOffer(
+		ChainCraftPlan plan,
+		RecipeVariantResolver.Selection selection,
+		int requestedRecipeCopies,
+		boolean maxRequest
+	) {
 	}
 
 	private static boolean areNearbyResourcesRequired(
