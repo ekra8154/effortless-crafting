@@ -40,3 +40,4 @@ replay_*.log
 *.jfr
 run-repro-launch.err
 run-repro-launch*.log
+client-launch.log

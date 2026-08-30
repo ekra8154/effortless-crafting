@@ -613,6 +613,9 @@ final class RecipeClickExecutor {
 			if (ChainCraftController.tryManualSelfReferentialPlacement(minecraft, resolvedItemId)) {
 				// Self-referential chain step: inputs were placed client-side so
 				// the server cannot pick the step's own output as an ingredient.
+			} else if (ChainCraftController.tryManualLastResortPlacement(minecraft, resolvedItemId)) {
+				// Mixed slot (any oak log): inputs placed client-side so the
+				// server cannot substitute stripped logs for the planned ones.
 			} else if (chainCountedT1) {
 				gameMode.handlePlaceRecipe(player.containerMenu.containerId, selectedRecipe.recipeId(), true);
 				GridExtractor.begin(selectedRecipe.displayStack(), effectiveRequestedClicks, ingredientSummary);

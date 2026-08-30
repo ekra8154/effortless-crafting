@@ -608,7 +608,21 @@ final class ChainCraftPlanner {
 		if (ReachCraftingConfig.get().countPreference() == IngredientPlanning.CountPreference.HIGHEST_TOTAL) {
 			byCount = byCount.reversed();
 		}
-		return byAvailableNow.thenComparing(byRecipeInputAvailability).thenComparing(byCount).thenComparing(Comparator.naturalOrder());
+		// The same last-resort tier the direct planner applies in
+		// IngredientPlanning.compareByPreference: a chain step needing "any oak
+		// log" must not spend the stripped ones just because there are more of
+		// them. Sits BELOW byAvailableNow on purpose -- dodging a deprioritised
+		// item is worth losing the count preference over, but not worth
+		// inventing a deeper chain to replace something already in hand.
+		java.util.Set<String> lastResortCategories =
+			LastResortIngredients.activeCategories(ReachCraftingConfig.get());
+		Comparator<String> byLastResort = Comparator.comparingInt((String itemId) ->
+			LastResortIngredients.isLastResort(itemId, lastResortCategories) ? 1 : 0);
+		return byAvailableNow
+			.thenComparing(byLastResort)
+			.thenComparing(byRecipeInputAvailability)
+			.thenComparing(byCount)
+			.thenComparing(Comparator.naturalOrder());
 	}
 
 	private int bestCandidateScore(

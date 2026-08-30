@@ -185,6 +185,91 @@ public final class ChainCraftController {
 		return true;
 	}
 
+	/**
+	 * Place a chain step's planned inputs client-side when the server's own
+	 * recipe placement could substitute a deprioritised item for the planned
+	 * one.
+	 *
+	 * <p>handlePlaceRecipe lets the SERVER fill the grid, and it picks freely
+	 * from anything the slot accepts -- so a planks step planned against plain
+	 * oak logs would still happily eat the stripped ones. The direct path never
+	 * had this problem because SearchSession stages its SlotTargets itself;
+	 * nothing in chain execution consumed them. Same shape as the
+	 * self-referential case above, same remedy.</p>
+	 *
+	 * <p>Strictly a fallback-safe optimisation: returns false whenever the step
+	 * has no such ambiguity, the click budget is tight, or staging placed
+	 * nothing, and the caller then runs its normal placement path. Steps
+	 * without a mixed slot (a sticky piston's slime ball and piston) never
+	 * reach it, so the counted T1 path is untouched for them.</p>
+	 */
+	static boolean tryManualLastResortPlacement(Minecraft client, String outputItemId) {
+		if (activeRun == null || client.player == null || client.gameMode == null || !activeRun.waitingForStep()) {
+			return false;
+		}
+		ChainCraftPlan.Step step = activeRun.currentStep();
+		if (step == null || isSelfReferentialStep(step) || !hasLastResortAmbiguity(step)) {
+			return false;
+		}
+		if (outputItemId != null && !outputItemId.equals(itemIdOf(step.displayStack()))) {
+			return false;
+		}
+		int remaining = Math.max(activeRun.scheduledBatchCopies() - activeRun.observedProducedRecipeCopies(), 1);
+		int occupiedSlots = (int) step.ingredientSummary().slots().stream()
+			.filter(slot -> !slot.isEmpty())
+			.count();
+		if (!GridTopUp.clickBudgetAllows(Math.max(occupiedSlots, 1) * 2)) {
+			ReachCraftingMod.LOGGER.info(
+				"[chain_execute] manual_last_resort skipped reason=click_budget output={} remaining={}",
+				ContainerUtils.formatStack(step.displayStack()),
+				remaining
+			);
+			return false;
+		}
+		int staged = ManualRecipePlacer.placeStepCrafts(client, step, remaining);
+		ReachCraftingMod.LOGGER.info(
+			"[chain_execute] manual_last_resort output={} staged={} remaining={} inputs={}",
+			ContainerUtils.formatStack(step.displayStack()),
+			staged,
+			remaining,
+			step.requiredInputs()
+		);
+		// Unlike the self-referential case, staging nothing here is NOT
+		// "handled": the ordinary placement path is a correct craft, just one
+		// that may spend the wrong logs. Falling back beats failing the step.
+		return staged > 0;
+	}
+
+	/**
+	 * True when some slot of the step accepts BOTH a deprioritised item and an
+	 * ordinary one, which is exactly when the server's free choice can differ
+	 * from what the planner picked.
+	 */
+	private static boolean hasLastResortAmbiguity(ChainCraftPlan.Step step) {
+		java.util.Set<String> categories = LastResortIngredients.activeCategories(ReachCraftingConfig.get());
+		if (categories.isEmpty()) {
+			return false;
+		}
+		for (RecipeIngredientSummary.IngredientSlot slot : step.ingredientSummary().slots()) {
+			if (slot.isEmpty()) {
+				continue;
+			}
+			boolean sawLastResort = false;
+			boolean sawOrdinary = false;
+			for (String itemId : slot.itemIds()) {
+				if (LastResortIngredients.isLastResort(itemId, categories)) {
+					sawLastResort = true;
+				} else {
+					sawOrdinary = true;
+				}
+			}
+			if (sawLastResort && sawOrdinary) {
+				return true;
+			}
+		}
+		return false;
+	}
+
 	private static boolean isSelfReferentialStep(ChainCraftPlan.Step step) {
 		return step != null
 			&& !step.displayStack().isEmpty()
