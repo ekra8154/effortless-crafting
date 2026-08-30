@@ -263,6 +263,7 @@ final class RecipeClickExecutor {
 				collection,
 				displayStack,
 				availableItems,
+				chainAvailableCounts,
 				selectedRecipe,
 				explicitVariantSelection,
 				vanillaShiftClick,
@@ -1011,6 +1012,7 @@ final class RecipeClickExecutor {
 		net.minecraft.client.gui.screens.recipebook.RecipeCollection collection,
 		ItemStack displayStack,
 		AvailableItemSnapshot availableItems,
+		Map<String, Integer> chainAvailableCounts,
 		RecipeVariantResolver.Selection selectedRecipe,
 		boolean explicitVariantSelection,
 		boolean vanillaShiftClick,
@@ -1049,9 +1051,25 @@ final class RecipeClickExecutor {
 		for (RecipeVariantResolver.Selection candidate : variants) {
 			chainTiers.put(candidate.recipeId(), chainTier(candidate.recipeId(), allowNearbyChests));
 		}
+		// Rank on the material that actually decides the variant. The direct
+		// count preference cannot: a chain candidate holds none of its own
+		// direct ingredient by definition, so preferredTotalCount reads zero
+		// for every one of them and the order collapses to a stable-but-
+		// arbitrary tiebreak. Variants the ranking has no signal for sort
+		// behind the scored ones in BOTH directions -- under Lowest Total an
+		// unscored variant would otherwise win on a zero it never earned.
+		Map<RecipeDisplayId, Integer> variantScores =
+			ChainVariantRanking.scoreVariants(variants, chainAvailableCounts);
+		boolean lowestFirst = ReachCraftingConfig.get().countPreference()
+			== IngredientPlanning.CountPreference.LOWEST_TOTAL;
+		Comparator<RecipeVariantResolver.Selection> byScore =
+			Comparator.comparingInt((RecipeVariantResolver.Selection candidate) ->
+				variantScores.getOrDefault(candidate.recipeId(), 0));
 		Comparator<RecipeVariantResolver.Selection> chainOrder = Comparator
 			.comparingInt((RecipeVariantResolver.Selection candidate) ->
 				chainTiers.getOrDefault(candidate.recipeId(), CHAIN_TIER_UNREACHABLE))
+			.thenComparingInt(candidate -> variantScores.containsKey(candidate.recipeId()) ? 0 : 1)
+			.thenComparing(lowestFirst ? byScore : byScore.reversed())
 			.thenComparing(RecipeVariantResolver.preferenceOrder());
 
 		List<RecipeVariantResolver.Selection> siblings = variants.stream()
@@ -1084,12 +1102,20 @@ final class RecipeClickExecutor {
 			candidates.sort(chainOrder);
 		}
 		ReachCraftingMod.LOGGER.info(
-			"[chain_variant_fallback] clicked_recipe={} selected_recipe={} handling={} prefer_clicked={} order={}",
+			"[chain_variant_fallback] clicked_recipe={} selected_recipe={} handling={} preference={} prefer_clicked={} order={}",
 			clickedRecipeId,
 			selectedRecipe.recipeId(),
 			ReachCraftingConfig.get().revolvingCraftHandling(),
+			ReachCraftingConfig.get().countPreference(),
 			preferClickedVariant,
-			candidates.stream().map(RecipeVariantResolver.Selection::outputItemId).toList()
+			candidates.stream()
+				.map(candidate -> candidate.outputItemId()
+					+ "(tier=" + chainTiers.getOrDefault(candidate.recipeId(), CHAIN_TIER_UNREACHABLE)
+					+ " score=" + (variantScores.containsKey(candidate.recipeId())
+						? String.valueOf(variantScores.get(candidate.recipeId()))
+						: "none")
+					+ ")")
+				.toList()
 		);
 		return List.copyOf(candidates);
 	}
