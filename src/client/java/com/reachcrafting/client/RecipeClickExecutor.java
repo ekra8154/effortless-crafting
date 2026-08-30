@@ -7,6 +7,7 @@ import com.reachcrafting.client.mixin.RecipeBookComponentAccessor;
 import com.reachcrafting.client.mixin.RecipeBookPageAccessor;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -974,6 +975,25 @@ final class RecipeClickExecutor {
 		).map(plan -> new ChainCraftOffer(plan, selectedRecipe, requestedRecipeCopies, false));
 	}
 
+	private static final int CHAIN_TIER_LOCAL = 0;
+	private static final int CHAIN_TIER_NEARBY = 1;
+	private static final int CHAIN_TIER_UNREACHABLE = 2;
+
+	/**
+	 * Chain reachability of one variant, ranked so inventory-only chains beat
+	 * ones needing a chest withdrawal -- the smart sort's tiering. Costs two
+	 * cache queries, so callers snapshot it rather than asking per comparison.
+	 */
+	private static int chainTier(RecipeDisplayId recipeId, boolean allowNearbyChests) {
+		if (ChainCraftabilityCache.isChainCraftableLocally(recipeId)) {
+			return CHAIN_TIER_LOCAL;
+		}
+		if (allowNearbyChests && ChainCraftabilityCache.isChainCraftable(recipeId)) {
+			return CHAIN_TIER_NEARBY;
+		}
+		return CHAIN_TIER_UNREACHABLE;
+	}
+
 	/**
 	 * The variants worth asking the chain planner about, best first.
 	 *
@@ -1007,12 +1027,7 @@ final class RecipeClickExecutor {
 			return List.of(selectedRecipe);
 		}
 
-		Comparator<RecipeVariantResolver.Selection> chainOrder = Comparator
-			.comparingInt((RecipeVariantResolver.Selection candidate) ->
-				ChainCraftabilityCache.isChainCraftableLocally(candidate.recipeId()) ? 0 : 1)
-			.thenComparing(RecipeVariantResolver.preferenceOrder());
-
-		List<RecipeVariantResolver.Selection> siblings = RecipeVariantResolver.collectionCandidates(
+		List<RecipeVariantResolver.Selection> variants = RecipeVariantResolver.collectionCandidates(
 			minecraft,
 			player,
 			clickedRecipeId,
@@ -1023,11 +1038,26 @@ final class RecipeClickExecutor {
 			availableItems.inventoryCounts(),
 			effectiveCraftAll,
 			desiredVariantCopies
-		).stream()
+		);
+
+		// Snapshot each variant's tier ONCE. Every ChainCraftabilityCache
+		// query re-walks the whole recipe book and re-hashes the inventory
+		// before it reaches its own staleness check (refreshIfNeeded skips the
+		// tick cooldown for off-tick callers), so asking it from inside a
+		// comparator would pay that O(recipe book) cost O(n log n) times.
+		Map<RecipeDisplayId, Integer> chainTiers = new HashMap<>();
+		for (RecipeVariantResolver.Selection candidate : variants) {
+			chainTiers.put(candidate.recipeId(), chainTier(candidate.recipeId(), allowNearbyChests));
+		}
+		Comparator<RecipeVariantResolver.Selection> chainOrder = Comparator
+			.comparingInt((RecipeVariantResolver.Selection candidate) ->
+				chainTiers.getOrDefault(candidate.recipeId(), CHAIN_TIER_UNREACHABLE))
+			.thenComparing(RecipeVariantResolver.preferenceOrder());
+
+		List<RecipeVariantResolver.Selection> siblings = variants.stream()
 			.filter(candidate -> !candidate.recipeId().equals(selectedRecipe.recipeId()))
-			.filter(candidate -> allowNearbyChests
-				? ChainCraftabilityCache.isChainCraftable(candidate.recipeId())
-				: ChainCraftabilityCache.isChainCraftableLocally(candidate.recipeId()))
+			.filter(candidate -> chainTiers.getOrDefault(candidate.recipeId(), CHAIN_TIER_UNREACHABLE)
+				!= CHAIN_TIER_UNREACHABLE)
 			.sorted(chainOrder)
 			.toList();
 		if (siblings.isEmpty()) {
