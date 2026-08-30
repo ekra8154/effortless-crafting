@@ -975,11 +975,14 @@ final class RecipeClickExecutor {
 	}
 
 	/**
-	 * The clicked variant first, then whichever siblings the chain cache says
-	 * are reachable -- the same per-recipe answer the collection's chain
-	 * indicator is drawn from, so the click can only offer what the icon shows.
-	 * Siblings that are chain-craftable from the inventory alone come before
-	 * ones that need a chest withdrawal, matching the smart sort's tiering.
+	 * The variants worth asking the chain planner about, best first.
+	 *
+	 * <p>Siblings are filtered by the same per-recipe chain cache the
+	 * collection's indicator is drawn from, so a click can only offer what the
+	 * icon shows, and ones chain-craftable from the inventory alone rank above
+	 * ones needing a chest withdrawal (the smart sort's tiering). Where the
+	 * rotating variant lands in that order depends on the availability
+	 * setting -- see the ordering comment below.</p>
 	 */
 	private static List<RecipeVariantResolver.Selection> chainVariantFallbackCandidates(
 		Minecraft minecraft,
@@ -1004,6 +1007,11 @@ final class RecipeClickExecutor {
 			return List.of(selectedRecipe);
 		}
 
+		Comparator<RecipeVariantResolver.Selection> chainOrder = Comparator
+			.comparingInt((RecipeVariantResolver.Selection candidate) ->
+				ChainCraftabilityCache.isChainCraftableLocally(candidate.recipeId()) ? 0 : 1)
+			.thenComparing(RecipeVariantResolver.preferenceOrder());
+
 		List<RecipeVariantResolver.Selection> siblings = RecipeVariantResolver.collectionCandidates(
 			minecraft,
 			player,
@@ -1020,23 +1028,38 @@ final class RecipeClickExecutor {
 			.filter(candidate -> allowNearbyChests
 				? ChainCraftabilityCache.isChainCraftable(candidate.recipeId())
 				: ChainCraftabilityCache.isChainCraftableLocally(candidate.recipeId()))
-			.sorted(Comparator
-				.comparingInt((RecipeVariantResolver.Selection candidate) ->
-					ChainCraftabilityCache.isChainCraftableLocally(candidate.recipeId()) ? 0 : 1)
-				.thenComparing(RecipeVariantResolver.preferenceOrder()))
+			.sorted(chainOrder)
 			.toList();
 		if (siblings.isEmpty()) {
 			return List.of(selectedRecipe);
 		}
 
+		// The two fallback settings disagree about the rotating variant, so
+		// the chain path has to disagree with them too. "Current Variant with
+		// Availability Fallback" gives it first refusal -- chain it if it can
+		// be chained, siblings only after that. "Always Based On Available"
+		// gives it no privilege at all, so it gets ranked alongside them.
+		// Either way a variant the resolver already found direct stock for
+		// keeps the lead: resolve() picked it under this same count
+		// preference, and a chain-only sibling should not displace a variant
+		// that is already partly craftable outright.
+		boolean preferClickedVariant = selectedRecipe.copiesAvailable() > 0
+			|| ReachCraftingConfig.get().revolvingCraftHandling()
+				== ReachCraftingConfig.RevolvingCraftHandling.PREFER_CLICKED_TYPE_WITH_COUNT_FALLBACK;
+
 		List<RecipeVariantResolver.Selection> candidates = new ArrayList<>();
 		candidates.add(selectedRecipe);
 		candidates.addAll(siblings);
+		if (!preferClickedVariant) {
+			candidates.sort(chainOrder);
+		}
 		ReachCraftingMod.LOGGER.info(
-			"[chain_variant_fallback] clicked_recipe={} selected_recipe={} fallbacks={}",
+			"[chain_variant_fallback] clicked_recipe={} selected_recipe={} handling={} prefer_clicked={} order={}",
 			clickedRecipeId,
 			selectedRecipe.recipeId(),
-			siblings.stream().map(candidate -> candidate.outputItemId()).toList()
+			ReachCraftingConfig.get().revolvingCraftHandling(),
+			preferClickedVariant,
+			candidates.stream().map(RecipeVariantResolver.Selection::outputItemId).toList()
 		);
 		return List.copyOf(candidates);
 	}
