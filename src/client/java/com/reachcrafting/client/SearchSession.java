@@ -1519,12 +1519,7 @@ final class SearchSession extends BaseCraftSession {
 			return planningPolicy;
 		}
 
-		return new IngredientPlanning.Policy(
-			planningPolicy.countPreference(),
-			planningPolicy.redistributeToCraftWhenNeeded(),
-			planningPolicy.preferInventory(),
-			preferredVariants
-		);
+		return planningPolicy.withPreferredVariants(preferredVariants);
 	}
 
 	private Map<String, Integer> preferenceTotalsForSelection(Map<String, Integer> baseTotals, RecipeVariantResolver.Selection selection) {

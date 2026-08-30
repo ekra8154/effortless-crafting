@@ -27,6 +27,7 @@ public final class ReachCraftingConfig {
 	private static final InWorldFilterMode DEFAULT_IN_WORLD_FILTER_MODE = InWorldFilterMode.NONE;
 	private static final RevolvingCraftHandling DEFAULT_REVOLVING_CRAFT_HANDLING = RevolvingCraftHandling.SPECIFIC_VARIANT_ONLY;
 	private static final IngredientPlanning.CountPreference DEFAULT_COUNT_PREFERENCE = IngredientPlanning.CountPreference.HIGHEST_TOTAL;
+	private static final boolean DEFAULT_PREFER_NON_STRIPPED_LOGS = true;
 	private static final boolean DEFAULT_SHOW_NEARBY_CRAFTABLE_INDICATOR = true;
 	private static final boolean DEFAULT_ENABLE_EXISTING_OUTPUT_RETRIEVAL = true;
 	private static final boolean DEFAULT_CACHE_CONTAINERS_FOR_FASTER_SEARCH = true;
@@ -105,6 +106,7 @@ public final class ReachCraftingConfig {
 	private boolean reachCraftHoldAndRelease;
 	private boolean reachCraftCloseOverlayAfterRelease;
 	private boolean reachCraftPreferInventory;
+	private boolean preferNonStrippedLogs;
 	private boolean putPulledResourcesBack;
 	private boolean restoreInventoryItemPositions;
 	private SearchHistoryMode searchHistoryMode;
@@ -184,6 +186,7 @@ public final class ReachCraftingConfig {
 			instance.reachCraftHoldAndRelease = stored.reachCraftHoldAndRelease != null ? stored.reachCraftHoldAndRelease : DEFAULT_REACH_CRAFT_HOLD_AND_RELEASE;
 			instance.reachCraftCloseOverlayAfterRelease = stored.reachCraftCloseOverlayAfterRelease != null ? stored.reachCraftCloseOverlayAfterRelease : DEFAULT_REACH_CRAFT_CLOSE_OVERLAY_AFTER_RELEASE;
 			instance.reachCraftPreferInventory = stored.reachCraftPreferInventory != null ? stored.reachCraftPreferInventory : DEFAULT_REACH_CRAFT_PREFER_INVENTORY;
+			instance.preferNonStrippedLogs = stored.preferNonStrippedLogs != null ? stored.preferNonStrippedLogs : DEFAULT_PREFER_NON_STRIPPED_LOGS;
 			instance.putPulledResourcesBack = stored.putPulledResourcesBack != null ? stored.putPulledResourcesBack : DEFAULT_PUT_PULLED_RESOURCES_BACK;
 			instance.restoreInventoryItemPositions = stored.restoreInventoryItemPositions != null ? stored.restoreInventoryItemPositions : DEFAULT_RESTORE_INVENTORY_ITEM_POSITIONS;
 			instance.searchHistoryMode = stored.searchHistoryMode != null
@@ -298,7 +301,13 @@ public final class ReachCraftingConfig {
 	}
 
 	public IngredientPlanning.Policy toPlanningPolicy() {
-		return new IngredientPlanning.Policy(countPreference, redistributeToCraftWhenNeeded, reachCraftPreferInventory);
+		return new IngredientPlanning.Policy(
+			countPreference,
+			redistributeToCraftWhenNeeded,
+			reachCraftPreferInventory,
+			java.util.Set.of(),
+			LastResortIngredients.activeCategories(this)
+		);
 	}
 
 	public boolean redistributeToCraftWhenNeeded() {
@@ -393,6 +402,14 @@ public final class ReachCraftingConfig {
 
 	public boolean reachCraftPreferInventory() {
 		return reachCraftPreferInventory;
+	}
+
+	public boolean preferNonStrippedLogs() {
+		return preferNonStrippedLogs;
+	}
+
+	public void setPreferNonStrippedLogs(boolean preferNonStrippedLogs) {
+		this.preferNonStrippedLogs = preferNonStrippedLogs;
 	}
 
 	public void setReachCraftPreferInventory(boolean reachCraftPreferInventory) {
@@ -865,6 +882,7 @@ public final class ReachCraftingConfig {
 		defaults.reachCraftHoldAndRelease = DEFAULT_REACH_CRAFT_HOLD_AND_RELEASE;
 		defaults.reachCraftCloseOverlayAfterRelease = DEFAULT_REACH_CRAFT_CLOSE_OVERLAY_AFTER_RELEASE;
 		defaults.reachCraftPreferInventory = DEFAULT_REACH_CRAFT_PREFER_INVENTORY;
+		defaults.preferNonStrippedLogs = DEFAULT_PREFER_NON_STRIPPED_LOGS;
 		defaults.putPulledResourcesBack = DEFAULT_PUT_PULLED_RESOURCES_BACK;
 		defaults.restoreInventoryItemPositions = DEFAULT_RESTORE_INVENTORY_ITEM_POSITIONS;
 		defaults.searchHistoryMode = DEFAULT_SEARCH_HISTORY_MODE;
@@ -1114,6 +1132,7 @@ public final class ReachCraftingConfig {
 		private Boolean reachCraftHoldAndRelease;
 		private Boolean reachCraftCloseOverlayAfterRelease;
 		private Boolean reachCraftPreferInventory;
+		private Boolean preferNonStrippedLogs;
 		private Boolean putPulledResourcesBack;
 		private Boolean restoreInventoryItemPositions;
 		private Boolean rememberPreviousSearch;
@@ -1172,6 +1191,7 @@ public final class ReachCraftingConfig {
 			this.reachCraftHoldAndRelease = config.reachCraftHoldAndRelease;
 			this.reachCraftCloseOverlayAfterRelease = config.reachCraftCloseOverlayAfterRelease;
 			this.reachCraftPreferInventory = config.reachCraftPreferInventory;
+			this.preferNonStrippedLogs = config.preferNonStrippedLogs;
 			this.putPulledResourcesBack = config.putPulledResourcesBack;
 			this.restoreInventoryItemPositions = config.restoreInventoryItemPositions;
 			this.searchHistoryMode = config.searchHistoryMode;
