@@ -380,12 +380,7 @@ public final class ChainCraftController {
 			activeRun = activeRun.withSettlingBatch();
 			return;
 		}
-		activeRun = activeRun.withCompletedBatch();
-		if (activeRun == null || activeRun.currentStepIndex() >= activeRun.plan().steps().size()) {
-			activeRun = null;
-			return;
-		}
-		activeRun = activeRun.withWaiting(false, 0);
+		advancePastCompletedBatch();
 	}
 
 	private static void tick(Minecraft client) {
@@ -523,9 +518,31 @@ public final class ChainCraftController {
 		if (activeRun == null) {
 			return;
 		}
+		advancePastCompletedBatch();
+	}
+
+	/**
+	 * Step past the batch just finished, and announce the run when that was
+	 * the last one.
+	 *
+	 * <p>A plain chain had no success signal at all -- only failure and abort
+	 * spoke -- so anything driving one had nothing to wait for, and the two
+	 * call sites had drifted into identical copies of this logic.</p>
+	 */
+	private static void advancePastCompletedBatch() {
+		if (activeRun == null) {
+			return;
+		}
+		ChainCraftPlan plan = activeRun.plan();
 		activeRun = activeRun.withCompletedBatch();
-		if (activeRun == null || activeRun.currentStepIndex() >= activeRun.plan().steps().size()) {
+		if (activeRun == null || activeRun.currentStepIndex() >= plan.steps().size()) {
 			activeRun = null;
+			ReachCraftingMod.diag(
+				"[chain_execute] run_complete output={} copies={} steps={}",
+				ContainerUtils.formatStack(plan.finalOutput()),
+				plan.finalRecipeCopies(),
+				plan.steps().size()
+			);
 			return;
 		}
 		activeRun = activeRun.withWaiting(false, 0);
