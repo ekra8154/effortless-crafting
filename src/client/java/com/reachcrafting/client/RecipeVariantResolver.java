@@ -116,7 +116,7 @@ public final class RecipeVariantResolver {
 		int requestedCopies = Math.max(desiredCopiesPerSlot, 1);
 		boolean lockToCurrentVariant = BulkAutoCraftController.shouldLockToCurrentVariant(clickedRecipeId, collection, explicitVariantSelection);
 		/*
-		ReachCraftingMod.LOGGER.info(
+		ReachCraftingMod.diag(
 			"[recipe_variant_candidates] clicked_recipe={} collection_size={} craft_all={} requested_copies={} handling={} lock_current={} candidates={}",
 			clickedRecipeId,
 			collection.getRecipes().size(),
@@ -206,6 +206,61 @@ public final class RecipeVariantResolver {
 		return viableCandidates.stream()
 			.max(compareSelections(ReachCraftingConfig.get().countPreference(), craftAll))
 			.orElse(exactSelection);
+	}
+
+	/**
+	 * Every variant of the clicked recipe's canonical collection, scored
+	 * against the same availability the click itself was resolved with.
+	 *
+	 * <p>{@link #resolve} only ever returns ONE recipe, and when nothing in the
+	 * collection is directly craftable that one is the clicked variant. The
+	 * collection's chain indicator, however, lights up when ANY variant is
+	 * chain-craftable, so the chain-craft path needs the whole list to make
+	 * good on what the icon promised.</p>
+	 */
+	public static List<Selection> collectionCandidates(
+		Minecraft minecraft,
+		LocalPlayer player,
+		RecipeDisplayId clickedRecipeId,
+		RecipeCollection collection,
+		ItemStack clickedDisplayStack,
+		AvailableItemSnapshot availableItems,
+		Map<String, Integer> usableCounts,
+		Map<String, Integer> preferenceTotals,
+		boolean craftAll,
+		int desiredCopiesPerSlot
+	) {
+		if (minecraft.level == null) {
+			return List.of();
+		}
+
+		RecipeCollection canonical = resolveCanonicalCollection(player, collection, clickedRecipeId);
+		if (canonical == null) {
+			return List.of();
+		}
+
+		ContextMap context = SlotDisplayContext.fromLevel(minecraft.level);
+		return canonical.getRecipes().stream()
+			.map(entry -> toSelection(
+				entry,
+				entry.id().equals(clickedRecipeId) ? clickedDisplayStack : ItemStack.EMPTY,
+				context,
+				availableItems,
+				usableCounts,
+				preferenceTotals,
+				craftAll,
+				desiredCopiesPerSlot
+			))
+			.toList();
+	}
+
+	/**
+	 * The order {@link #resolve} would rank variants in, best first, so callers
+	 * that walk the collection themselves agree with the count preference the
+	 * single-selection path uses.
+	 */
+	public static Comparator<Selection> preferenceOrder() {
+		return compareSelections(ReachCraftingConfig.get().countPreference(), false).reversed();
 	}
 
 	private static Selection resolveRetrievalSelection(

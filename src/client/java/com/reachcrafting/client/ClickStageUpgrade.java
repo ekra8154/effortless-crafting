@@ -100,14 +100,14 @@ final class ClickStageUpgrade {
 		int staged = ManualRecipePlacer.placeCrafts(
 			client, summary, slotChoices, targetCopies, false, "idx=" + recipeIndex, true);
 		if (staged > 0) {
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.diag(
 				"[recipe_place] click_stage_upgraded idx={} staged={} target={} placements_cancelled={}",
 				recipeIndex, staged, targetCopies, dropped
 			);
 			clear();
 			return;
 		}
-		ReachCraftingMod.LOGGER.info(
+		ReachCraftingMod.diag(
 			"[recipe_place] click_stage_upgrade_failed idx={} restoring={} placements", recipeIndex, dropped);
 		for (int i = 0; i < dropped; i++) {
 			client.gameMode.handlePlaceRecipe(containerId, recipeId, false);

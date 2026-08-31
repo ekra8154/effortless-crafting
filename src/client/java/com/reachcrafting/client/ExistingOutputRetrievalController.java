@@ -23,11 +23,11 @@ public final class ExistingOutputRetrievalController {
 	static void setEnabled(boolean enabled) {
 		boolean next = enabled && ReachCraftingConfig.get().enableExistingOutputRetrieval();
 		if (ExistingOutputRetrievalController.enabled == next) {
-			ReachCraftingMod.LOGGER.info("[retrieval_mode] setEnabled no-op next={} config_enabled={}", next, ReachCraftingConfig.get().enableExistingOutputRetrieval());
+			ReachCraftingMod.diag("[retrieval_mode] setEnabled no-op next={} config_enabled={}", next, ReachCraftingConfig.get().enableExistingOutputRetrieval());
 			return;
 		}
 		ExistingOutputRetrievalController.enabled = next;
-		ReachCraftingMod.LOGGER.info("[retrieval_mode] setEnabled next={} screen={}", next, Minecraft.getInstance().screen != null ? Minecraft.getInstance().screen.getClass().getSimpleName() : "null");
+		ReachCraftingMod.diag("[retrieval_mode] setEnabled next={} screen={}", next, Minecraft.getInstance().screen != null ? Minecraft.getInstance().screen.getClass().getSimpleName() : "null");
 		RecipeButtonNearbyIndicator.clearCaches();
 		RecipeBookChunkedScheduler.clear();
 		RecipeBookChunkedScheduler.resetFrozenPageState("retrieval_mode_toggled");
