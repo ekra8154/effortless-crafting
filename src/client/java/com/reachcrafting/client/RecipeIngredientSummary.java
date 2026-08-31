@@ -16,7 +16,25 @@ import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.world.item.crafting.ShapedRecipe;
 
-public record RecipeIngredientSummary(List<IngredientSlot> slots, List<String> rawSlots, String compactSummary) {
+/**
+ * The ingredient slots of a recipe, plus the shape they were laid out in.
+ * shapedWidth/shapedHeight are the SHAPED recipe's own bounding box (0 for
+ * shapeless).
+ *
+ * Unlike the display-based versions from 1.21.2 up, {@link #fromRecipe} here
+ * already expands a shaped pattern into GRID coordinates -- a 2x2 recipe in a
+ * 3x3 menu comes back as 9 slots with the gaps present as empties -- so slot i
+ * really does belong at grid slot 1+i. The shape fields are kept anyway so
+ * {@link #gridSlotIndices} can reject a recipe that does not fit the menu it
+ * was asked about, which the truncating expansion cannot detect on its own.
+ */
+public record RecipeIngredientSummary(
+	List<IngredientSlot> slots,
+	List<String> rawSlots,
+	String compactSummary,
+	int shapedWidth,
+	int shapedHeight
+) {
 	public static RecipeIngredientSummary fromRecipe(Recipe<?> recipe, int craftingGridSlotCount) {
 		List<Ingredient> ingredients = extractIngredients(recipe, craftingGridSlotCount);
 		List<IngredientSlot> slots = new ArrayList<>();
@@ -38,7 +56,46 @@ public record RecipeIngredientSummary(List<IngredientSlot> slots, List<String> r
 		}
 
 		String compactSummary = compact.length() == 0 ? "<no ingredients>" : compact.toString();
-		return new RecipeIngredientSummary(List.copyOf(slots), List.copyOf(rawSlots), compactSummary);
+		int shapedWidth = 0;
+		int shapedHeight = 0;
+		if (recipe instanceof ShapedRecipe shaped) {
+			shapedWidth = shaped.getWidth();
+			shapedHeight = shaped.getHeight();
+		}
+		return new RecipeIngredientSummary(
+			List.copyOf(slots), List.copyOf(rawSlots), compactSummary, shapedWidth, shapedHeight);
+	}
+
+	/**
+	 * Maps each ingredient slot onto the menu slot index it must occupy in a
+	 * grid of gridSlotCount slots (1-based; slot 0 is the result). Slots are
+	 * already in grid order here, so this is the identity map plus a fit
+	 * check. Returns an empty list when the recipe cannot fit.
+	 */
+	public List<Integer> gridSlotIndices(int gridSlotCount) {
+		int gridWidth = switch (gridSlotCount) {
+			case 4 -> 2;
+			case 9 -> 3;
+			default -> 0;
+		};
+		if (gridWidth == 0 || slots.isEmpty()) {
+			return List.of();
+		}
+		int gridHeight = gridSlotCount / gridWidth;
+		if (shapedWidth > 0 && shapedHeight > 0
+			&& (shapedWidth > gridWidth || shapedHeight > gridHeight)) {
+			// Shaped recipe bigger than this menu. fromRecipe truncated it to
+			// fit; refuse rather than place a wrong pattern.
+			return List.of();
+		}
+		if (slots.size() > gridSlotCount) {
+			return List.of();
+		}
+		List<Integer> indices = new ArrayList<>(slots.size());
+		for (int i = 0; i < slots.size(); i++) {
+			indices.add(1 + i);
+		}
+		return indices;
 	}
 
 	public Set<String> acceptedItemIds() {

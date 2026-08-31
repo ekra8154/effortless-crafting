@@ -77,6 +77,7 @@ public class ReachCraftingModClient implements ClientModInitializer {
 		ChainCraftController.init();
 		RecipeBookScrollController.init();
 		PlaceRecipeBudget.init();
+		ClickStageUpgrade.init();
 		ReproHarness.init();
 		String reachCraftingCategory = "key.categories." + ReachCraftingMod.MOD_ID;
 

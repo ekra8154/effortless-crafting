@@ -40,23 +40,52 @@ final class GridTopUp {
 	private static final int RING_LOW_WATER = 4;
 
 	// Safety governor: automation clicks in a trailing window, kept below
-	// Paper's all-packets KICK limit (500 per 7s). If staging would push past
-	// this, decline and let the (budgeted) place-packet path carry the cycle.
-	// 180 throttled M3's full T2 chain pace (ring upkeep + key inserts +
-	// throws sustained ~23 clicks/s) and the resulting stall cascaded into a
-	// session abort; 280 (56% of the kick limit, >200 packets of headroom
-	// for movement/other traffic) clears it. The suite's kicks==0 assertion
-	// is the regression guard for this margin.
+	// Paper's all-packets KICK limit. If staging would push past this,
+	// decline and let the (budgeted) place-packet path carry the cycle.
+	//
+	// That limit is `action: KICK, interval: 7.0, max-packet-rate: 500.0`,
+	// and it is 500 packets PER INTERVAL - i.e. 500 per 7s, not per second.
+	// A per-second reading once raised this to 1000 and kicked a live session
+	// ("You are sending too many packets!") after ~837 clicks in 7s.
+	//
+	// 450 is a DELIBERATE 90% of that limit. The budget is shared with every
+	// other packet, so this leaves only ~50 for them - affordable because
+	// staging happens with a container screen open, where a stationary client
+	// sends about one position packet a second (~7 across the window). The
+	// residual risk is a craft that straddles walking between chests, or
+	// another mod's traffic landing in the same window; the exposure is
+	// bounded to the rapid MANUAL-craft pattern, since bulk and chain run on
+	// the ring at ~3 clicks/craft and never approach this.
+	//
+	// This ceiling is the reason exact-count click staging must stay CHEAP
+	// rather than lean on a bigger allowance: at ~1 click per item per slot a
+	// single large craft can approach the whole window on its own. Cutting the
+	// per-copy cost (drag-fill for multi-slot groups; ideally stack-splitting
+	// for single-slot groups and drag remainders) is the only way to raise
+	// effective throughput here - the packet budget itself cannot be raised.
+	//
+	// Historical note: 180 once throttled M3's T2 chain pace (~23 clicks/s
+	// sustained) into a session abort, so this cap is not free to lower
+	// either. The suite's kicks==0 assertion guards the margin.
+	// The cap itself is configurable (clickBudgetPerWindow): the limit is the
+	// SERVER's, and it varies - Paper enforces one by default, vanilla and
+	// Fabric servers have none at all, and anti-cheat plugins may be stricter
+	// than Paper. Unlike the place-packet budget this cannot be learned by
+	// probing, because exceeding it disconnects rather than dropping a packet.
 	private static final int CLICK_WINDOW_MS = 7000;
-	private static final int CLICK_WINDOW_CAP = 280;
 	private static final java.util.ArrayDeque<Long> recentClicks = new java.util.ArrayDeque<>();
 
 	// Whether the most recent tryStageInsteadOfPlace returned false ONLY
 	// because the click governor declined. The extractor must tell this apart
-	// from a genuinely dead ring: a saturated window drains at ~40 clicks/s,
-	// so waiting a few ticks resumes the ring at 3 clicks/craft — while
-	// treating it as "grid spent" flushes the ring and falls back to one
-	// place packet + ~20 clicks per craft.
+	// from a genuinely dead ring: the ring resumes at ~3 clicks/craft once the
+	// window has room, while treating it as "grid spent" flushes the ring and
+	// falls back to one place packet + ~20 clicks per craft.
+	//
+	// NB: the window does NOT drain at a steady rate. It is a 7-SECOND SLIDING
+	// EXPIRY - a click leaves the window 7s after it was made - so a burst
+	// keeps the count pinned for the full 7s and then falls off sharply.
+	// Anything that "waits for room" needs a timeout longer than the window;
+	// a 1s wait built on the steady-drain reading silently dropped crafts.
 	private static boolean lastStageDeclineWasBudget = false;
 
 	private GridTopUp() {
@@ -132,17 +161,31 @@ final class GridTopUp {
 
 	/** Shared with GridExtractor: automation clicks draw from one governor. */
 	static boolean clickBudgetAllows(int estimatedClicks) {
+		if (clickBudgetAllowsQuietly(estimatedClicks)) {
+			return true;
+		}
+		ReachCraftingMod.LOGGER.warn(
+			"[grid_topup] click governor engaged ({} clicks in window, +{} requested) - deferring to place packet",
+			recentClicks.size(), estimatedClicks);
+		return false;
+	}
+
+	/**
+	 * Same check without the log line, for callers that POLL - a per-tick
+	 * upgrade watcher hits this ~20 times a second while it waits, and the
+	 * logging variant buried the session in warnings for one decision.
+	 */
+	static boolean clickBudgetAllowsQuietly(int estimatedClicks) {
 		long now = System.currentTimeMillis();
 		while (!recentClicks.isEmpty() && now - recentClicks.peekFirst() > CLICK_WINDOW_MS) {
 			recentClicks.pollFirst();
 		}
-		if (recentClicks.size() + estimatedClicks > CLICK_WINDOW_CAP) {
-			ReachCraftingMod.LOGGER.warn(
-				"[grid_topup] click governor engaged ({} clicks in window, +{} requested) - deferring to place packet",
-				recentClicks.size(), estimatedClicks);
-			return false;
-		}
-		return true;
+		return recentClicks.size() + estimatedClicks <= clickWindowCap();
+	}
+
+	/** The governor's ceiling, for diagnostics that report headroom. */
+	static int clickWindowCap() {
+		return ReachCraftingConfig.get().clickBudgetPerWindow();
 	}
 
 	/** Current trailing-window click count (diagnostics for slow-craft logs). */
@@ -290,7 +333,7 @@ final class GridTopUp {
 		return keyEmpty && sawStack;
 	}
 
-	private static RecipeIngredientSummary resolveSummary(Minecraft client, ResourceLocation recipeId, RecipeCollection collection) {
+	static RecipeIngredientSummary resolveSummary(Minecraft client, ResourceLocation recipeId, RecipeCollection collection) {
 		int gridSlotCount = client.screen instanceof InventoryScreen ? 4 : 9;
 		for (Recipe<?> recipe : collection.getRecipes()) {
 			if (recipe.getId().equals(recipeId)) {
