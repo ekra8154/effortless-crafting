@@ -19,17 +19,18 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 @Mixin(Window.class)
 public class WindowMixin {
 	@Redirect(
-		// 26.x calls glfwCreateWindow inside the static createGlfwWindow;
-		// older MC (1.21.x) calls it inside the Window constructor. The LWJGL
-		// signature is stable, so target the call in whichever method has it.
-		method = {"createGlfwWindow", "<init>"},
+		// 1.20.1 calls glfwCreateWindow inside the Window constructor (26.x
+		// moved it to a static createGlfwWindow). A @Redirect handler must
+		// match the staticness of the method it is injected into, so this one
+		// is an instance method -- the newer branches keep a static copy.
+		method = "<init>",
 		at = @At(
 			value = "INVOKE",
 			target = "Lorg/lwjgl/glfw/GLFW;glfwCreateWindow(IILjava/lang/CharSequence;JJ)J"
 		),
 		require = 1
 	)
-	private static long reachcrafting$createWithoutStealingFocus(int width, int height, CharSequence title, long monitor, long share) {
+	private long reachcrafting$createWithoutStealingFocus(int width, int height, CharSequence title, long monitor, long share) {
 		if (ReproHarness.suppressWindowFocus()) {
 			GLFW.glfwWindowHint(GLFW.GLFW_FOCUS_ON_SHOW, GLFW.GLFW_FALSE);
 			GLFW.glfwWindowHint(GLFW.GLFW_FOCUSED, GLFW.GLFW_FALSE);
