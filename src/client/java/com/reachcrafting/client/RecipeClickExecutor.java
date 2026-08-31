@@ -640,6 +640,25 @@ final class RecipeClickExecutor {
 				gameMode.handlePlaceRecipe(player.containerMenu.containerId, selectedRecipe.recipeId(), true);
 			} else {
 				int iterations = repeatDirectPlacement ? Math.max(effectiveRequestedClicks, 1) : 1;
+				if (iterations > 1) {
+					// The one placement branch with no fast-path win: N single
+					// placements, which a server processes asynchronously and
+					// can race -- that is how a sticky piston batch landed 14
+					// of 22 and then gave up. It was also the only SILENT
+					// branch, so a recipe falling in here was detectable just
+					// by feeling the stutter. Name the disqualifier instead,
+					// so the next one reports itself.
+					ReachCraftingMod.LOGGER.info(
+						"[recipe_place] slow_repeat_placement copies={} recipe={} reason={} chain={} final_step={} bulk={} summary={}",
+						iterations,
+						selectedRecipe.recipeId(),
+						slowPlacementReason(minecraft, ingredientSummary, effectiveRequestedClicks),
+						ChainCraftController.isActive(),
+						ChainCraftController.isRunningFinalStep(),
+						AutoCraftController.isBulkModeEnabled(),
+						ingredientSummary.compactSummary()
+					);
+				}
 				for (int i = 0; i < iterations; i++) {
 					gameMode.handlePlaceRecipe(player.containerMenu.containerId, selectedRecipe.recipeId(), false);
 				}
@@ -987,6 +1006,36 @@ final class RecipeClickExecutor {
 			requestedRecipeCopies - 1,
 			AutoCraftController.isBulkModeEnabled()
 		).map(plan -> new ChainCraftOffer(plan, selectedRecipe, requestedRecipeCopies, false));
+	}
+
+	/**
+	 * Which gate sent this batch to repeated single placements, checked in the
+	 * order chainCountedT1 evaluates them so the slug names the FIRST reason
+	 * rather than an incidental one.
+	 *
+	 * <p>"unlimited_budget" is singleplayer and benign -- the integrated server
+	 * applies the placements synchronously, so the repeat cannot race itself.
+	 * The rest are worth acting on.</p>
+	 */
+	private static String slowPlacementReason(
+		Minecraft minecraft,
+		RecipeIngredientSummary ingredientSummary,
+		int effectiveRequestedClicks
+	) {
+		if (PlaceRecipeBudget.isUnlimited(minecraft)) {
+			return "unlimited_budget";
+		}
+		String ineligible = GridExtractor.describeIneligibility(ingredientSummary);
+		if (ineligible != null) {
+			return ineligible;
+		}
+		if (!ChainCraftController.isActive()) {
+			return "no_chain_session";
+		}
+		if (effectiveRequestedClicks <= 1) {
+			return "single_copy";
+		}
+		return "unclassified";
 	}
 
 	private static final int CHAIN_TIER_LOCAL = 0;

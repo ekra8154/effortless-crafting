@@ -111,8 +111,20 @@ final class GridExtractor {
 	 * and would stall the result slot).
 	 */
 	static boolean isEligibleSummary(RecipeIngredientSummary summary) {
+		return describeIneligibility(summary) == null;
+	}
+
+	/**
+	 * Why this recipe cannot use counted extraction, or null when it can.
+	 *
+	 * <p>The eligibility predicate and its explanation share one body on
+	 * purpose: the placement path logs this slug when it falls through to
+	 * repeated single placements, and a separately maintained explanation
+	 * would drift from the rule it claims to describe.</p>
+	 */
+	static String describeIneligibility(RecipeIngredientSummary summary) {
 		if (summary == null || summary.slots().isEmpty()) {
-			return false;
+			return "no_ingredients";
 		}
 		boolean sawIngredient = false;
 		for (RecipeIngredientSummary.IngredientSlot slot : summary.slots()) {
@@ -120,17 +132,21 @@ final class GridExtractor {
 				continue;
 			}
 			sawIngredient = true;
+			// Counted extraction pulls whole stacks off the result slot; an
+			// unstackable slot stages one copy per placement and a crafting
+			// remainder (a bucket back from milk) lands in the grid mid-batch
+			// and desynchronises the count.
 			if (slot.maxStackSize() <= 1) {
-				return false;
+				return "unstackable_ingredient";
 			}
 			for (String itemId : slot.itemIds()) {
 				var item = BuiltInRegistries.ITEM.getValue(net.minecraft.resources.Identifier.parse(itemId));
 				if (item != null && item.getCraftingRemainder() != null) {
-					return false;
+					return "crafting_remainder";
 				}
 			}
 		}
-		return sawIngredient;
+		return sawIngredient ? null : "no_ingredients";
 	}
 
 	/** Arm a T1 extraction of exactly {@code copies} crafts of {@code output}. */
