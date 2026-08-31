@@ -85,7 +85,7 @@ final class AutoMoveController {
 		autoMoveTargetArrivalObserved = false;
 		directEjectAwaitingStagedCopiesTicks = 0;
 		autoMoveExpectedStack = expectedStack != null ? expectedStack.copy() : ItemStack.EMPTY;
-		com.reachcrafting.ReachCraftingMod.LOGGER.info(
+		com.reachcrafting.ReachCraftingMod.diag(
 			"[auto_move] scheduleAutoMove expected={} bulk_active={} bulk_mode={}",
 			ContainerUtils.formatStack(autoMoveExpectedStack),
 			BulkAutoCraftController.isActive(),
@@ -156,7 +156,7 @@ final class AutoMoveController {
 		}
 		int observed = observedCrafts * Math.max(perCraftCount, 1);
 		if (observed != predicted) {
-			com.reachcrafting.ReachCraftingMod.LOGGER.info(
+			com.reachcrafting.ReachCraftingMod.diag(
 				"[auto_move] {} credit corrected: predicted={} observed={} (crafts={} x{})",
 				tag, predicted, observed, observedCrafts, perCraftCount);
 		}
@@ -192,7 +192,7 @@ final class AutoMoveController {
 			return;
 		}
 
-		com.reachcrafting.ReachCraftingMod.LOGGER.info(
+		com.reachcrafting.ReachCraftingMod.diag(
 			"[auto_move] settling completed work before abort pending={} organizing={} directEjectAwaitingSettlement={} target={} expected={}",
 			pendingAutoMove,
 			autoMoveOrganizing,
@@ -226,7 +226,7 @@ final class AutoMoveController {
 	}
 
 	static void abort() {
-		// com.reachcrafting.ReachCraftingMod.LOGGER.info(
+		// com.reachcrafting.ReachCraftingMod.diag(
 		// 	"[auto_move] abort pending={} organizing={} directEjectNextTick={} pendingEjected={} target={} expected={}",
 		// 	pendingAutoMove,
 		// 	autoMoveOrganizing,
@@ -264,7 +264,7 @@ final class AutoMoveController {
 			return;
 		}
 		if (client.player == null || client.player.containerMenu == null) {
-			com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] autoMoveResult exiting: player_or_menu_missing");
+			com.reachcrafting.ReachCraftingMod.diag("[auto_move] autoMoveResult exiting: player_or_menu_missing");
 			pendingAutoMove = false;
 			directEjectAwaitingStagedCopiesTicks = 0;
 			return;
@@ -284,7 +284,7 @@ final class AutoMoveController {
 		}
 
 		Slot resultSlot = menu.getSlot(0);
-		com.reachcrafting.ReachCraftingMod.LOGGER.info(
+		com.reachcrafting.ReachCraftingMod.diag(
 			"[auto_move] tick pending={} organizing={} waitTicks={} directEjectNextTick={} pendingEjected={} result={} carried={}",
 			pendingAutoMove,
 			autoMoveOrganizing,
@@ -396,7 +396,7 @@ final class AutoMoveController {
 			}
 			int directCredit = resolveEjectCredit(
 				menu, directEjectGridBefore, directEjectPerCraftCount, directEjectPendingCount, "direct eject");
-			com.reachcrafting.ReachCraftingMod.LOGGER.info(
+			com.reachcrafting.ReachCraftingMod.diag(
 				"[auto_move] direct eject settled: ticks={} crediting count={} (predicted={})",
 				directEjectSettlementTicks,
 				directCredit,
@@ -496,9 +496,9 @@ final class AutoMoveController {
 		}
 
 		if (AutoCraftController.isBulkModeEnabled() && BulkAutoCraftController.isActive()) {
-			// com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] >> sweepAndEjectByProducts entry. {}", logBottleDistribution(menu));
+			// com.reachcrafting.ReachCraftingMod.diag("[auto_move] >> sweepAndEjectByProducts entry. {}", logBottleDistribution(menu));
 			sweepAndEjectByProducts(client, menu);
-			// com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] << sweepAndEjectByProducts exit.  {}", logBottleDistribution(menu));
+			// com.reachcrafting.ReachCraftingMod.diag("[auto_move] << sweepAndEjectByProducts exit.  {}", logBottleDistribution(menu));
 		}
 
 		if (!autoMoveOrganizing) {
@@ -515,7 +515,7 @@ final class AutoMoveController {
 						// phantom drop fed into the place budget's AIMD.
 						autoMoveWaitingTicks++;
 						if (autoMoveWaitingTicks % 20 == 1) {
-							com.reachcrafting.ReachCraftingMod.LOGGER.info(
+							com.reachcrafting.ReachCraftingMod.diag(
 								"[auto_move] foreign preview over key-empty ring (expected={}, preview={}); waiting",
 								ContainerUtils.formatStack(autoMoveExpectedStack),
 								ContainerUtils.formatStack(currentResult)
@@ -526,7 +526,7 @@ final class AutoMoveController {
 					foreignResultTicks++;
 					if (foreignResultTicks <= FOREIGN_RESULT_DEBOUNCE_TICKS) {
 						if (foreignResultTicks == 1) {
-							com.reachcrafting.ReachCraftingMod.LOGGER.info(
+							com.reachcrafting.ReachCraftingMod.diag(
 								"[auto_move] foreign result preview (expected={}, found={}); debouncing",
 								ContainerUtils.formatStack(autoMoveExpectedStack),
 								ContainerUtils.formatStack(currentResult)
@@ -535,7 +535,7 @@ final class AutoMoveController {
 						return;
 					}
 					foreignResultTicks = 0;
-					com.reachcrafting.ReachCraftingMod.LOGGER.info(
+					com.reachcrafting.ReachCraftingMod.diag(
 						"[auto_move] Recipe changed! Expected: {}, Found: {}. Stopping.",
 						ContainerUtils.formatStack(autoMoveExpectedStack),
 						ContainerUtils.formatStack(currentResult)
@@ -580,14 +580,14 @@ final class AutoMoveController {
 					&& !ChainCraftController.isRunningIntermediateStep()
 					&& !canFitInInventory(menu, currentResult)) {
 					shouldEject = true;
-					com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] shouldEject=true (inv full, cannot fit result)");
+					com.reachcrafting.ReachCraftingMod.diag("[auto_move] shouldEject=true (inv full, cannot fit result)");
 				} else if (!shouldEject
 					&& delayInventoryFullFallbackEject
 					&& !bulkProtectedKeep
 					&& ReachCraftingConfig.get().ejectItemsWhenFull()
 					&& !ChainCraftController.isRunningIntermediateStep()
 					&& !canFitInInventory(menu, currentResult)) {
-					com.reachcrafting.ReachCraftingMod.LOGGER.info(
+					com.reachcrafting.ReachCraftingMod.diag(
 						"[auto_move] delaying inventory-full eject until after organize pass result={} nearby_required={}",
 						ContainerUtils.formatStack(currentResult),
 						BulkAutoCraftController.nearbyResourcesRequired()
@@ -607,7 +607,7 @@ final class AutoMoveController {
 						: 1;
 					if ((bulkDirectEject && totalEjected <= 0) || (chainFinalResultEject && chainStagedCopies <= 0)) {
 						directEjectAwaitingStagedCopiesTicks++;
-						com.reachcrafting.ReachCraftingMod.LOGGER.info(
+						com.reachcrafting.ReachCraftingMod.diag(
 							"[auto_move] direct eject waiting for staged copies: waitTicks={} chain_final={} result={} expected={} carried={}",
 							directEjectAwaitingStagedCopiesTicks,
 							chainFinalResultEject,
@@ -618,7 +618,7 @@ final class AutoMoveController {
 						if (directEjectAwaitingStagedCopiesTicks <= 5) {
 							return;
 						}
-						com.reachcrafting.ReachCraftingMod.LOGGER.info(
+						com.reachcrafting.ReachCraftingMod.diag(
 							"[auto_move] direct eject staged-copy mismatch persisted; result {}",
 							ContainerUtils.formatStack(currentResult)
 						);
@@ -662,7 +662,7 @@ final class AutoMoveController {
 				}
 
 				if (shouldEject) {
-					com.reachcrafting.ReachCraftingMod.LOGGER.info(
+					com.reachcrafting.ReachCraftingMod.diag(
 						"[auto_move] EJECT path: THROW result {} from slot {} predicted_ejected={} bulkDirectEject={} bulkProtectedKeep={}",
 						ContainerUtils.formatStack(currentResult),
 						resultSlot.index,
@@ -698,7 +698,7 @@ final class AutoMoveController {
 						directEjectGridBefore = gridBeforeThrow;
 						directEjectPerCraftCount = Math.max(currentResult.getCount(), 1);
 						autoMoveWaitingTicks = 0;
-						com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] direct eject queued awaiting settlement: predicted_ejected={}", totalEjected);
+						com.reachcrafting.ReachCraftingMod.diag("[auto_move] direct eject queued awaiting settlement: predicted_ejected={}", totalEjected);
 						return;
 					}
 					if (AutoCraftController.isBulkModeEnabled() && totalEjected > 0) {
@@ -710,7 +710,7 @@ final class AutoMoveController {
 					// Eject any by-products left in the grid
 					ejectUnneededGridItems(client, menu);
 
-					// com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] EJECT path done. {}", logBottleDistribution(menu));
+					// com.reachcrafting.ReachCraftingMod.diag("[auto_move] EJECT path done. {}", logBottleDistribution(menu));
 					pendingAutoMove = false;
 					BulkAutoCraftController.onAutoMoveFinished(client, true);
 					ChainCraftController.onAutoMoveFinished(client, true);
@@ -719,7 +719,7 @@ final class AutoMoveController {
 				directEjectAwaitingStagedCopiesTicks = 0;
 
 				if (ChainCraftController.isRunningIntermediateStep() && !canFitInInventory(menu, currentResult)) {
-					com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] chain intermediate has no inventory room for {}", ContainerUtils.formatStack(currentResult));
+					com.reachcrafting.ReachCraftingMod.diag("[auto_move] chain intermediate has no inventory room for {}", ContainerUtils.formatStack(currentResult));
 					pendingAutoMove = false;
 					autoMoveOrganizing = false;
 					autoMoveTargetArrivalObserved = false;
@@ -747,7 +747,7 @@ final class AutoMoveController {
 				autoMoveTargetStack = currentResult.copy();
 				autoMoveWaitingTicks = 0;
 				autoMoveOrganizing = true;
-				com.reachcrafting.ReachCraftingMod.LOGGER.info(
+				com.reachcrafting.ReachCraftingMod.diag(
 					"[auto_move] QUICK_MOVE path starting target={} slotsNeeded={} snapshottingInventory=true",
 					ContainerUtils.formatStack(autoMoveTargetStack),
 					slotsNeeded
@@ -774,7 +774,7 @@ final class AutoMoveController {
 				}
 
 				client.gameMode.handleContainerInput(menu.containerId, resultSlot.index, 0, ContainerInput.QUICK_MOVE, client.player);
-				com.reachcrafting.ReachCraftingMod.LOGGER.info(
+				com.reachcrafting.ReachCraftingMod.diag(
 					"[auto_move] SHIFT-CLICK path: post-shiftclick. {} hotbar={}",
 					logBottleDistribution(menu),
 					logHotbarState(menu)
@@ -791,7 +791,7 @@ final class AutoMoveController {
 					// A shift-place final step crafts its whole batch in one
 					// server action: output is already banked and the grid is
 					// spent, so an empty result slot means DONE, not pending.
-					com.reachcrafting.ReachCraftingMod.LOGGER.info(
+					com.reachcrafting.ReachCraftingMod.diag(
 						"[auto_move] chain batch output already complete; finishing without result wait"
 					);
 					pendingAutoMove = false;
@@ -807,7 +807,7 @@ final class AutoMoveController {
 				if (BulkAutoCraftController.isActive() && client.screen != null) {
 					stagedCraftCopies = BulkAutoCraftController.getCurrentStagedCraftCopies(client);
 				}
-				com.reachcrafting.ReachCraftingMod.LOGGER.info(
+				com.reachcrafting.ReachCraftingMod.diag(
 					"[auto_move] waiting_for_result waitTicks={} bulk_active={} expected={} carried={} staged_copies={} result_now={}",
 					autoMoveWaitingTicks,
 					BulkAutoCraftController.isActive(),
@@ -856,12 +856,12 @@ final class AutoMoveController {
 					autoMoveOrganizing = false;
 					autoMoveTargetArrivalObserved = false;
 					autoMoveTargetStack = ItemStack.EMPTY;
-					com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] waiting_for_result timeout in non-bulk mode");
+					com.reachcrafting.ReachCraftingMod.diag("[auto_move] waiting_for_result timeout in non-bulk mode");
 					if (ChainCraftController.hasCurrentBatchObservedAnyCopies()) {
 						// Partial batch production proves the place packet
 						// landed; the missing tail is accounting (materials
 						// ran out a copy early), not a limiter drop.
-						com.reachcrafting.ReachCraftingMod.LOGGER.info(
+						com.reachcrafting.ReachCraftingMod.diag(
 							"[auto_move] timeout with partial batch production - budget unchanged");
 					} else {
 						PlaceRecipeBudget.onSuspectedDrop();
@@ -920,7 +920,7 @@ final class AutoMoveController {
 
 				if (currentCount > oldCount) {
 					autoMoveTargetArrivalObserved = true;
-					com.reachcrafting.ReachCraftingMod.LOGGER.info(
+					com.reachcrafting.ReachCraftingMod.diag(
 						"[auto_move] source candidate inv={} slot={} oldCount={} currentCount={} hotbar={} snapshot={}",
 						i,
 						sourceSlot.index,
@@ -931,7 +931,7 @@ final class AutoMoveController {
 					);
 					if (oldCount > 0) {
 						autoMoveSnapshotCounts.put(i, currentCount);
-						com.reachcrafting.ReachCraftingMod.LOGGER.info(
+						com.reachcrafting.ReachCraftingMod.diag(
 							"[auto_move] source candidate ignored because slot existed in snapshot inv={} oldCount={} currentCount={}",
 							i,
 							oldCount,
@@ -974,12 +974,12 @@ final class AutoMoveController {
 					for (int h = 0; h < i && h < 9; h++) {
 						Slot targetSlot = findInventorySlot(menu, h);
 						if (targetSlot == null) {
-							com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] target skip inv={} reason=no_slot", h);
+							com.reachcrafting.ReachCraftingMod.diag("[auto_move] target skip inv={} reason=no_slot", h);
 							continue;
 						}
 						int snapshotCount = autoMoveSnapshotCounts.getOrDefault(h, 0);
 						if (snapshotCount > 0) {
-							com.reachcrafting.ReachCraftingMod.LOGGER.info(
+							com.reachcrafting.ReachCraftingMod.diag(
 								"[auto_move] target skip inv={} slot={} reason=in_snapshot snapshotCount={} current={}",
 								h,
 								targetSlot.index,
@@ -997,7 +997,7 @@ final class AutoMoveController {
 								canMove = true;
 							}
 						}
-						com.reachcrafting.ReachCraftingMod.LOGGER.info(
+						com.reachcrafting.ReachCraftingMod.diag(
 							"[auto_move] target check sourceInv={} targetInv={} targetSlot={} canMove={} targetCurrent={}",
 							i,
 							h,
@@ -1017,7 +1017,7 @@ final class AutoMoveController {
 							movesThisTick++;
 							autoMoveSnapshotCounts.remove(i);
 							autoMoveSnapshotCounts.put(h, Math.max(targetSlot.getItem().getCount(), currentCount));
-							com.reachcrafting.ReachCraftingMod.LOGGER.info(
+							com.reachcrafting.ReachCraftingMod.diag(
 								"[auto_move] move executed sourceInv={} targetInv={} hotbarAfter={}",
 								i,
 								h,
@@ -1031,7 +1031,7 @@ final class AutoMoveController {
 		}
 
 		if (movesThisTick == 0 && autoMoveWaitingTicks > 1) {
-			com.reachcrafting.ReachCraftingMod.LOGGER.info(
+			com.reachcrafting.ReachCraftingMod.diag(
 				"[auto_move] organize idle: movesThisTick=0 waitTicks={} target={} result={} carried={}",
 				autoMoveWaitingTicks,
 				ContainerUtils.formatStack(autoMoveTargetStack),
@@ -1040,7 +1040,7 @@ final class AutoMoveController {
 			);
 			boolean observedTargetArrival = autoMoveTargetArrivalObserved || hasObservedAutoMoveTargetArrival(menu);
 			if (!observedTargetArrival && autoMoveWaitingTicks <= ORGANIZE_TARGET_ARRIVAL_WAIT_TICKS) {
-				com.reachcrafting.ReachCraftingMod.LOGGER.info(
+				com.reachcrafting.ReachCraftingMod.diag(
 					"[auto_move] organize waiting for target arrival: waitTicks={} target={} snapshot_known_slots={}",
 					autoMoveWaitingTicks,
 					ContainerUtils.formatStack(autoMoveTargetStack),
@@ -1050,7 +1050,7 @@ final class AutoMoveController {
 			}
 			if (!autoMoveTargetArrivalObserved && observedTargetArrival) {
 				autoMoveTargetArrivalObserved = true;
-				com.reachcrafting.ReachCraftingMod.LOGGER.info(
+				com.reachcrafting.ReachCraftingMod.diag(
 					"[auto_move] organize observed target arrival: waitTicks={} target={}",
 					autoMoveWaitingTicks,
 					ContainerUtils.formatStack(autoMoveTargetStack)
@@ -1079,7 +1079,7 @@ final class AutoMoveController {
 					int ejectedCount = ChainCraftController.isRunningFinalStep()
 						? Math.max(BulkAutoCraftController.getCurrentStagedCraftCopies(client), 1) * Math.max(ejectedStack.getCount(), 1)
 						: ejectedStack.getCount();
-					com.reachcrafting.ReachCraftingMod.LOGGER.info(
+					com.reachcrafting.ReachCraftingMod.diag(
 						"[auto_move] organize fallback eject: result still blocked after quick-move target={} count={}",
 						ContainerUtils.formatStack(ejectedStack),
 						ejectedCount
@@ -1098,7 +1098,7 @@ final class AutoMoveController {
 					ChainCraftController.onAutoMoveFinished(client, true);
 					return;
 				}
-				com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] Result slot still has items after organizing. Quick-moving next result.");
+				com.reachcrafting.ReachCraftingMod.diag("[auto_move] Result slot still has items after organizing. Quick-moving next result.");
 				client.gameMode.handleContainerInput(menu.containerId, resultSlot.index, 0, ContainerInput.QUICK_MOVE, client.player);
 				autoMoveTargetArrivalObserved = true;
 				autoMoveWaitingTicks = 0;
@@ -1109,7 +1109,7 @@ final class AutoMoveController {
 			autoMoveOrganizing = false;
 			autoMoveTargetArrivalObserved = false;
 			autoMoveTargetStack = ItemStack.EMPTY;
-			com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] organize complete: finishing batch");
+			com.reachcrafting.ReachCraftingMod.diag("[auto_move] organize complete: finishing batch");
 			BulkAutoCraftController.onAutoMoveFinished(client, true);
 			ChainCraftController.onAutoMoveFinished(client, true);
 		}
@@ -1191,10 +1191,10 @@ final class AutoMoveController {
 					
 					// If this was extra output, report it to the bulk controller so it doesn't think progress stopped
 					if (itemId.equals(outputId)) {
-						com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] Ejected EXTRA OUTPUT: {} matched outputId {} (count={})", itemId, outputId, amountEjected);
+						com.reachcrafting.ReachCraftingMod.diag("[auto_move] Ejected EXTRA OUTPUT: {} matched outputId {} (count={})", itemId, outputId, amountEjected);
 						BulkAutoCraftController.addEjectedOutput(amountEjected);
 					} else {
-						com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] Ejected BYPRODUCT: {} (expected outputId: {})", itemId, outputId);
+						com.reachcrafting.ReachCraftingMod.diag("[auto_move] Ejected BYPRODUCT: {} (expected outputId: {})", itemId, outputId);
 					}
 
 					// Update current counts so we don't over-eject if there are multiple slots of the same byproduct
@@ -1262,12 +1262,12 @@ final class AutoMoveController {
 				BulkAutoCraftController.addEjectedOutput(ejectedCount);
 				BulkChainCraftController.addEjectedOutput(carried, ejectedCount);
 				ChainCraftController.noteFinalOutputEjected(ejectedCount);
-				com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] Ejected carried output {} while finalizing batch", ContainerUtils.formatStack(carried));
+				com.reachcrafting.ReachCraftingMod.diag("[auto_move] Ejected carried output {} while finalizing batch", ContainerUtils.formatStack(carried));
 				return true;
 			}
 		}
 
-		com.reachcrafting.ReachCraftingMod.LOGGER.info("[auto_move] Waiting for carried stack to resolve before finishing batch: {}", ContainerUtils.formatStack(client.player.containerMenu.getCarried()));
+		com.reachcrafting.ReachCraftingMod.diag("[auto_move] Waiting for carried stack to resolve before finishing batch: {}", ContainerUtils.formatStack(client.player.containerMenu.getCarried()));
 		return false;
 	}
 

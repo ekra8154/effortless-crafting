@@ -348,7 +348,7 @@ public abstract class RecipeBookComponentMixin {
 		}
 		int currentPage = ((RecipeBookPageAccessor) page).getCurrentPage();
 		reachcrafting$preservedPageIndex = currentPage;
-		// com.reachcrafting.ReachCraftingMod.LOGGER.info(
+		// com.reachcrafting.ReachCraftingMod.diag(
 		// 	"[recipe_sort] capture_page_before_update resetPage={} filtering={} current_page={} frozen_page={} preserved_page={} freeze={} active_session={}",
 		// 	resetPage,
 		// 	filtering,

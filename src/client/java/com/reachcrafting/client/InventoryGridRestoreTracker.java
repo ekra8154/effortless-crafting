@@ -479,13 +479,13 @@ public final class InventoryGridRestoreTracker {
 				&& (BulkAutoCraftController.isActive() || BulkChainCraftController.isActive())) {
 				java.util.Set<String> acceptedIds = ContainerUtils.bulkSessionAcceptedItemIds();
 				if (acceptedIds != null && !acceptedIds.contains(itemId)) {
-					ReachCraftingMod.LOGGER.info("[grid_flush] THROW byproduct from grid slot {}: {}x{}", gridIdx, itemCount, itemName);
+					ReachCraftingMod.diag("[grid_flush] THROW byproduct from grid slot {}: {}x{}", gridIdx, itemCount, itemName);
 					gameMode.handleContainerInput(menu.containerId, gridSlot.index, 1, ContainerInput.THROW, client.player);
 					continue;
 				}
 			}
 
-			ReachCraftingMod.LOGGER.info("[grid_flush] Flushing grid slot {}: {}x{}", gridIdx, itemCount, itemName);
+			ReachCraftingMod.diag("[grid_flush] Flushing grid slot {}: {}x{}", gridIdx, itemCount, itemName);
 
 			// Pick up all items from this grid slot
 			gameMode.handleContainerInput(menu.containerId, gridIdx, 0, ContainerInput.PICKUP, client.player);
@@ -508,7 +508,7 @@ public final class InventoryGridRestoreTracker {
 				int maxStack = Math.min(target.getMaxStackSize(), carried.getMaxStackSize());
 				if (target.getItem().getCount() >= maxStack) continue;
 
-				ReachCraftingMod.LOGGER.info("[grid_flush] Phase1 merge: inv {} (menu {}) has {}x{}, merging carried {}",
+				ReachCraftingMod.diag("[grid_flush] Phase1 merge: inv {} (menu {}) has {}x{}, merging carried {}",
 					invIdx, menuIdx, target.getItem().getCount(), itemName, carried.getCount());
 				gameMode.handleContainerInput(menu.containerId, menuIdx, 0, ContainerInput.PICKUP, client.player);
 			}
@@ -521,14 +521,14 @@ public final class InventoryGridRestoreTracker {
 				Slot target = menu.getSlot(menuIdx);
 				if (target.hasItem()) continue;
 
-				ReachCraftingMod.LOGGER.info("[grid_flush] Phase2 empty hotbar: inv {} (menu {}), depositing {}",
+				ReachCraftingMod.diag("[grid_flush] Phase2 empty hotbar: inv {} (menu {}), depositing {}",
 					invIdx, menuIdx, client.player.containerMenu.getCarried().getCount());
 				gameMode.handleContainerInput(menu.containerId, menuIdx, 0, ContainerInput.PICKUP, client.player);
 			}
 
 			// Phase 3: If still carrying, put back in grid and shift-click (vanilla logic)
 			if (!client.player.containerMenu.getCarried().isEmpty()) {
-				ReachCraftingMod.LOGGER.info("[grid_flush] Phase3 shift-click fallback: remaining {}",
+				ReachCraftingMod.diag("[grid_flush] Phase3 shift-click fallback: remaining {}",
 					client.player.containerMenu.getCarried().getCount());
 				gameMode.handleContainerInput(menu.containerId, gridIdx, 0, ContainerInput.PICKUP, client.player);
 				if (menu.getSlot(gridIdx).hasItem()) {
@@ -576,7 +576,7 @@ public final class InventoryGridRestoreTracker {
 				continue;
 			}
 
-			ReachCraftingMod.LOGGER.info("[grid_flush] resolve carried merge: inv {} (menu {}), item {} count {}",
+			ReachCraftingMod.diag("[grid_flush] resolve carried merge: inv {} (menu {}), item {} count {}",
 				invIdx, menuIdx, itemName, currentCarried.getCount());
 			gameMode.handleContainerInput(menu.containerId, menuIdx, 0, ContainerInput.PICKUP, client.player);
 		}
@@ -592,7 +592,7 @@ public final class InventoryGridRestoreTracker {
 				continue;
 			}
 
-			ReachCraftingMod.LOGGER.info("[grid_flush] resolve carried empty slot: inv {} (menu {}), item {} count {}",
+			ReachCraftingMod.diag("[grid_flush] resolve carried empty slot: inv {} (menu {}), item {} count {}",
 				invIdx, menuIdx, itemName, client.player.containerMenu.getCarried().getCount());
 			gameMode.handleContainerInput(menu.containerId, menuIdx, 0, ContainerInput.PICKUP, client.player);
 		}
@@ -607,7 +607,7 @@ public final class InventoryGridRestoreTracker {
 				|| (ItemStack.isSameItemSameComponents(gridSlot.getItem(), currentCarried)
 					&& gridSlot.getItem().getCount() < Math.min(gridSlot.getMaxStackSize(), currentCarried.getMaxStackSize()));
 			if (canReturnToGrid) {
-				ReachCraftingMod.LOGGER.info("[grid_flush] resolve carried return-to-grid: grid {} item {} count {}",
+				ReachCraftingMod.diag("[grid_flush] resolve carried return-to-grid: grid {} item {} count {}",
 					preferredGridIdx, itemName, currentCarried.getCount());
 				gameMode.handleContainerInput(menu.containerId, preferredGridIdx, 0, ContainerInput.PICKUP, client.player);
 			}

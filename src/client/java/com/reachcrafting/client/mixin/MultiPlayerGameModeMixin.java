@@ -67,7 +67,7 @@ public abstract class MultiPlayerGameModeMixin {
 
 		// DIAGNOSTIC: Log every click on the result slot (slot 0) — crafting only triggers here
 		if (slotId == 0 && com.reachcrafting.client.BulkAutoCraftController.isActive()) {
-			com.reachcrafting.ReachCraftingMod.LOGGER.info(
+			com.reachcrafting.ReachCraftingMod.diag(
 				"[RESULT_SLOT_CLICK] slot=0 button={} clickType={} caller={}",
 				button, clickType,
 				new Throwable().getStackTrace()[2].getMethodName()

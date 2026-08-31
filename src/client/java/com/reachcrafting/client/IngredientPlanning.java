@@ -261,6 +261,19 @@ public final class IngredientPlanning {
 			comp = comp.thenComparing(itemId -> policy.preferredVariants().contains(itemId) ? 0 : 1);
 		}
 
+		// Directly under the resolved variant, and deliberately ABOVE both the
+		// inventory preference and the count preference: a slot accepting "any
+		// spruce log" must not eat stripped logs just because there are more of
+		// them or because they happen to be the copies already on the hotbar.
+		// Ordering only -- when nothing else can fill the slot these still win
+		// the fallthrough, and a recipe whose slot accepts ONLY the
+		// deprioritised item ranks every candidate equally, so the tier is a
+		// no-op there.
+		if (!policy.lastResortCategories().isEmpty()) {
+			comp = comp.thenComparing(itemId ->
+				LastResortIngredients.isLastResort(itemId, policy.lastResortCategories()) ? 1 : 0);
+		}
+
 		if (policy.preferInventory()) {
 			// Prioritize items already in inventory
 			comp = comp.thenComparing(itemId -> inventoryCounts.getOrDefault(itemId, 0) > 0 ? 0 : 1);
@@ -343,14 +356,36 @@ public final class IngredientPlanning {
 		return joiner.length() == 0 ? "<none>" : joiner.toString();
 	}
 
-	public record Policy(CountPreference countPreference, boolean redistributeToCraftWhenNeeded, boolean preferInventory, java.util.Set<String> preferredVariants) {
+	public record Policy(
+		CountPreference countPreference,
+		boolean redistributeToCraftWhenNeeded,
+		boolean preferInventory,
+		java.util.Set<String> preferredVariants,
+		java.util.Set<String> lastResortCategories
+	) {
 		public Policy {
 			Objects.requireNonNull(countPreference, "countPreference");
 			preferredVariants = java.util.Set.copyOf(preferredVariants);
+			lastResortCategories = java.util.Set.copyOf(lastResortCategories);
 		}
 
 		public Policy(CountPreference countPreference, boolean redistributeToCraftWhenNeeded, boolean preferInventory) {
-			this(countPreference, redistributeToCraftWhenNeeded, preferInventory, java.util.Set.of());
+			this(countPreference, redistributeToCraftWhenNeeded, preferInventory, java.util.Set.of(), java.util.Set.of());
+		}
+
+		/**
+		 * Narrow an existing policy to a resolved recipe's exact ingredients.
+		 * Derive with this rather than rebuilding field by field: a
+		 * hand-rolled copy silently drops any field it does not know about.
+		 */
+		public Policy withPreferredVariants(java.util.Set<String> preferredVariants) {
+			return new Policy(
+				countPreference,
+				redistributeToCraftWhenNeeded,
+				preferInventory,
+				preferredVariants,
+				lastResortCategories
+			);
 		}
 	}
 
