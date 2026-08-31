@@ -64,7 +64,7 @@ final class CacheWarmupSession extends BaseCraftSession {
 
 	@Override
 	public void start() {
-		ReachCraftingMod.LOGGER.info("[retrieval_virtual] warmup start reason={} candidates={}", request.reason(), candidates.size());
+		ReachCraftingMod.diag("[retrieval_virtual] warmup start reason={} candidates={}", request.reason(), candidates.size());
 		sendDebugChat("Scanning nearby containers...");
 		state = WarmupState.OPEN_NEXT;
 	}
@@ -135,7 +135,7 @@ final class CacheWarmupSession extends BaseCraftSession {
 
 	@Override
 	public void onOpenFailed(String reason) {
-		ReachCraftingMod.LOGGER.info("[retrieval_virtual] warmup skip pos={} reason={}", ContainerUtils.formatPos(pendingContainerPos), reason);
+		ReachCraftingMod.diag("[retrieval_virtual] warmup skip pos={} reason={}", ContainerUtils.formatPos(pendingContainerPos), reason);
 		pendingContainerPos = null;
 		timeoutTicks = 0;
 		state = WarmupState.OPEN_NEXT;
@@ -156,7 +156,7 @@ final class CacheWarmupSession extends BaseCraftSession {
 	}
 
 	private void finishAndRefresh(boolean closeContainer) {
-		ReachCraftingMod.LOGGER.info("[retrieval_virtual] warmup finish scanned={} candidates={}", scannedContainers, candidates.size());
+		ReachCraftingMod.diag("[retrieval_virtual] warmup finish scanned={} candidates={}", scannedContainers, candidates.size());
 		finishSession(closeContainer);
 		RecipeBookChunkedScheduler.forceVisibleRecipeBookRefresh();
 	}
