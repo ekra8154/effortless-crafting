@@ -3,6 +3,10 @@ package com.reachcrafting.client;
 import com.reachcrafting.ReachCraftingMod;
 import com.reachcrafting.client.mixin.RecipeBookComponentAccessor;
 import com.reachcrafting.client.mixin.RecipeBookPageAccessor;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import net.minecraft.client.Minecraft;
@@ -209,6 +213,33 @@ final class RecipeClickExecutor {
 			&& !ChainCraftController.isActive()
 			&& !BulkAutoCraftController.isActive()
 			&& !BulkChainCraftController.isActive();
+		// Variant fallback for the chain path. The collection's chain
+		// indicator lights up when ANY variant is chain-craftable (spruce
+		// logs on a door entry rotating through bamboo), but the click only
+		// ever planned the ONE recipe the resolver returned -- and when no
+		// variant is directly craftable that is always the clicked one. So
+		// the request died as "missing bamboo planks" on a collection the
+		// icon had just promised was reachable. Gate on the availability
+		// setting rather than on allowVariantSwitching: the resolver's flag
+		// only opens up on the nearby/dry-run paths, while the setting is
+		// what the user actually told us about swapping variants.
+		List<RecipeVariantResolver.Selection> chainVariantCandidates = canOfferChainCraft
+			? chainVariantFallbackCandidates(
+				minecraft,
+				player,
+				recipe,
+				collection,
+				displayStack,
+				availableItems,
+				chainAvailableCounts,
+				selectedRecipe,
+				explicitVariantSelection,
+				vanillaShiftClick,
+				effectiveCraftAll,
+				desiredVariantCopies,
+				allowNearbyChests
+			)
+			: List.of(selectedRecipe);
 		String missingMessage = deficitReport.hasMissingIngredients()
 			? "Missing: " + deficitReport.compactMissingSummary()
 			: "";
@@ -223,7 +254,7 @@ final class RecipeClickExecutor {
 
 		if (deficitReport.hasMissingIngredients()) {
 			ReachCraftingMod.LOGGER.debug("[chain_gate_hold_state] {}", AutoCraftController.describeHoldState());
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.diag(
 				"[chain_gate] recipe={} missing={} direct_priority={} auto_requested={} mode={} use_dry_run={} force_dry_run={} allow_nearby={} bulk_mode={} craft_all={} effective_craft_all={} requested_clicks={} desired_copies={} available={} chain_available={} local_available={}",
 				selectedRecipe.recipeId(),
 				deficitReport.compactMissingSummary(),
@@ -252,7 +283,7 @@ final class RecipeClickExecutor {
 			Optional<ChainCraftOffer> chainOffer = planChainCraftOffer(
 				minecraft,
 				player,
-				selectedRecipe,
+				chainVariantCandidates,
 				chainAvailableCounts,
 				allowNearbyChests,
 				chainCraftAll,
@@ -266,9 +297,17 @@ final class RecipeClickExecutor {
 			);
 			if (chainOffer.isPresent()) {
 				ChainCraftPlan chainPlan = chainOffer.get().plan();
-				ReachCraftingMod.LOGGER.info(
-					"[chain_plan] available recipe={} requested={} planned={} steps={} allow_nearby={} bulk_mode={}",
+				RecipeVariantResolver.Selection chainSelection = chainOffer.get().selection();
+				// A fallback variant has its own shortfall, so the deferred
+				// "Missing: ..." shown when the popup is declined must name
+				// the variant we offered, not the one that was rotating.
+				String chainMissingMessage = chainSelection.recipeId().equals(selectedRecipe.recipeId())
+					? missingMessage
+					: missingMessageFor(chainSelection, availableCounts, availableItems, effectiveCraftAll, desiredVariantCopies);
+				ReachCraftingMod.diag(
+					"[chain_plan] available clicked_recipe={} recipe={} requested={} planned={} steps={} allow_nearby={} bulk_mode={}",
 					selectedRecipe.recipeId(),
+					chainSelection.recipeId(),
 					chainOffer.get().requestedRecipeCopies(),
 					chainPlan.finalRecipeCopies(),
 					chainPlan.steps().size(),
@@ -282,21 +321,21 @@ final class RecipeClickExecutor {
 					}
 					ChainCraftPopupController.handleBulkChainPlan(
 						chainPlan,
-						selectedRecipe,
+						chainSelection,
 						allowNearbyChests,
 						chainOffer.get().requestedRecipeCopies(),
 						chainOffer.get().maxRequest(),
-						missingMessage
+						chainMissingMessage
 					);
 					return;
 				}
 				int popupRequestedCopies = chainOffer.get().maxRequest()
 					? chainPlan.finalRecipeCopies()
 					: chainOffer.get().requestedRecipeCopies();
-				ChainCraftPopupController.handlePlan(chainPlan, popupRequestedCopies, false, missingMessage);
+				ChainCraftPopupController.handlePlan(chainPlan, popupRequestedCopies, false, chainMissingMessage);
 				return;
 			}
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.diag(
 				"[chain_plan] unavailable recipe={} requested={} allow_nearby={} missing={} nearby_cache_incomplete={}",
 				selectedRecipe.recipeId(),
 				effectiveCraftAll ? requestedClicks : desiredVariantCopies,
@@ -341,7 +380,7 @@ final class RecipeClickExecutor {
 			&& nearbyCacheIncomplete
 			&& AutoCraftController.isBulkModeEnabled()
 			&& (refillableBulkMaxMode || effectiveCraftAll)) {
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.diag(
 				"[bulk_warmup] cold_cache_full_scan_first recipe={} clicks={} craft_all={} refillable={}",
 				selectedRecipe.recipeId(),
 				effectiveRequestedClicks,
@@ -408,19 +447,19 @@ final class RecipeClickExecutor {
 						// packet skipped.
 						if (nearbyChainFinalT2) {
 							GridExtractor.begin(selectedRecipe.displayStack(), effectiveRequestedClicks, ingredientSummary, true);
-							ReachCraftingMod.LOGGER.info(
+							ReachCraftingMod.diag(
 								"[recipe_place] chain_t2 key-cycle batch copies={} recipe={} (nearby path)",
 								effectiveRequestedClicks,
 								selectedRecipe.recipeId()
 							);
 						}
 					} else {
-						ReachCraftingMod.LOGGER.info("[recipe_place] handlePlaceRecipe(shift=true) from RecipeClickExecutor NEARBY path");
+						ReachCraftingMod.diag("[recipe_place] handlePlaceRecipe(shift=true) from RecipeClickExecutor NEARBY path");
 						minecraft.gameMode.handlePlaceRecipe(player.containerMenu.containerId, selectedRecipe.recipe(), true);
 					}
 				}
 				AvailableItemSnapshot postPlaceSnapshot = AvailableItemSnapshot.capture(player, screen);
-				ReachCraftingMod.LOGGER.info(
+				ReachCraftingMod.diag(
 					"[recipe_place] post_place nearby result={} staged_copies={} requestedClicks={} queueLimit={} grid_reserved={}",
 					ContainerUtils.formatStack(player.containerMenu.getSlot(0).getItem()),
 					ContainerUtils.currentReservedCraftCopies(postPlaceSnapshot.gridStacks()),
@@ -446,7 +485,7 @@ final class RecipeClickExecutor {
 				&& !effectiveCraftAll
 				&& !immediateCraftDeficit.hasMissingIngredients()
 				&& immediateLocalCraftDeficit.hasMissingIngredients()) {
-				ReachCraftingMod.LOGGER.info(
+				ReachCraftingMod.diag(
 					"[recipe_place] skip_direct_nearby_bulk reason=nearby_only_first_craft local_missing={} total_missing={}",
 					immediateLocalCraftDeficit.compactMissingSummary(),
 					immediateCraftDeficit.compactMissingSummary()
@@ -460,7 +499,7 @@ final class RecipeClickExecutor {
 				// and aborts the session (observed as skip_schedule
 				// no_craft_staged). The bulk session is already armed here;
 				// scheduling the auto-move is all that remains.
-				ReachCraftingMod.LOGGER.info("[recipe_place] grid_topup ring cycle, dry-run bypassed");
+				ReachCraftingMod.diag("[recipe_place] grid_topup ring cycle, dry-run bypassed");
 				if (AutoCraftController.isEnabled()) {
 					ContainerUtils.scheduleAutoMove(selectedRecipe.displayStack());
 				}
@@ -516,8 +555,17 @@ final class RecipeClickExecutor {
 			// bulk craft though — one shift place crafts the whole batch at
 			// flat bulk speed instead of one copy per settlement round.
 			boolean chainFinalBulkPlace = AutoCraftController.isBulkModeEnabled() && ChainCraftController.isRunningFinalStep();
-			boolean chainIntermediateT1 = !chainFinalBulkPlace
-				&& ChainCraftController.isRunningIntermediateStep()
+			// The flat-bulk final place above needs bulk mode, so on a PLAIN
+			// chain craft the final step matched none of the fast branches and
+			// dropped to the per-copy loop below: one balanced copy staged,
+			// one craft, a whole settlement round, repeat. Pistons flew and
+			// the sticky pistons that consumed them trickled out one at a
+			// time. T1 is the right path for it -- one shift place stages
+			// maximal stacks (staging is not consumption) and GridExtractor
+			// caps the crafts by counted result clicks, so the exact-count
+			// contract a non-bulk chain depends on is still kept.
+			boolean chainCountedT1 = !chainFinalBulkPlace
+				&& ChainCraftController.isActive()
 				&& !PlaceRecipeBudget.isUnlimited(minecraft)
 				&& effectiveRequestedClicks > 1
 				&& GridExtractor.isEligibleSummary(ingredientSummary);
@@ -539,17 +587,21 @@ final class RecipeClickExecutor {
 			if (ChainCraftController.tryManualSelfReferentialPlacement(minecraft, resolvedItemId)) {
 				// Self-referential chain step: inputs were placed client-side so
 				// the server cannot pick the step's own output as an ingredient.
-			} else if (chainIntermediateT1) {
+			} else if (ChainCraftController.tryManualLastResortPlacement(minecraft, resolvedItemId)) {
+				// Mixed slot (any oak log): inputs placed client-side so the
+				// server cannot substitute stripped logs for the planned ones.
+			} else if (chainCountedT1) {
 				gameMode.handlePlaceRecipe(player.containerMenu.containerId, selectedRecipe.recipe(), true);
 				GridExtractor.begin(selectedRecipe.displayStack(), effectiveRequestedClicks, ingredientSummary);
-				ReachCraftingMod.LOGGER.info(
-					"[recipe_place] chain_t1 single max place + counted extraction copies={} recipe={}",
+				ReachCraftingMod.diag(
+					"[recipe_place] chain_t1 single max place + counted extraction copies={} recipe={} final_step={}",
 					effectiveRequestedClicks,
-					selectedRecipe.recipeId()
+					selectedRecipe.recipeId(),
+					ChainCraftController.isRunningFinalStep()
 				);
 			} else if (chainFinalT2 && GridTopUp.tryStageInsteadOfPlace(minecraft, player, ingredientSummary)) {
 				GridExtractor.begin(selectedRecipe.displayStack(), effectiveRequestedClicks, ingredientSummary, true);
-				ReachCraftingMod.LOGGER.info(
+				ReachCraftingMod.diag(
 					"[recipe_place] chain_t2 key-cycle batch copies={} recipe={}",
 					effectiveRequestedClicks,
 					selectedRecipe.recipeId()
@@ -562,12 +614,31 @@ final class RecipeClickExecutor {
 				gameMode.handlePlaceRecipe(player.containerMenu.containerId, selectedRecipe.recipe(), true);
 			} else {
 				int iterations = repeatDirectPlacement ? Math.max(effectiveRequestedClicks, 1) : 1;
+				if (iterations > 1) {
+					// The one placement branch with no fast-path win: N single
+					// placements, which a server processes asynchronously and
+					// can race -- that is how a sticky piston batch landed 14
+					// of 22 and then gave up. It was also the only SILENT
+					// branch, so a recipe falling in here was detectable just
+					// by feeling the stutter. Name the disqualifier instead,
+					// so the next one reports itself.
+					ReachCraftingMod.diag(
+						"[recipe_place] slow_repeat_placement copies={} recipe={} reason={} chain={} final_step={} bulk={} summary={}",
+						iterations,
+						selectedRecipe.recipeId(),
+						slowPlacementReason(minecraft, ingredientSummary, effectiveRequestedClicks),
+						ChainCraftController.isActive(),
+						ChainCraftController.isRunningFinalStep(),
+						AutoCraftController.isBulkModeEnabled(),
+						ingredientSummary.compactSummary()
+					);
+				}
 				for (int i = 0; i < iterations; i++) {
 					gameMode.handlePlaceRecipe(player.containerMenu.containerId, selectedRecipe.recipe(), false);
 				}
 			}
 			AvailableItemSnapshot postPlaceSnapshot = AvailableItemSnapshot.capture(player, screen);
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.diag(
 				"[recipe_place] post_place direct useBulkPlace={} requestedClicks={} queueLimit={} result={} staged_copies={} grid_reserved={}",
 				useBulkPlace,
 				requestedClicks,
@@ -738,7 +809,7 @@ final class RecipeClickExecutor {
 		ItemStack expectedOutput,
 		RecipeIngredientSummary ingredientSummary
 	) {
-		com.reachcrafting.ReachCraftingMod.LOGGER.info(
+		com.reachcrafting.ReachCraftingMod.diag(
 			"[bulk_arm] clicked_recipe={} resolved_recipe={} requestedClicks={} craftAll={} allowNearby={} nearby_required={} bulk_mode={} explicit_variant={} refillable={} expected_output={}",
 			clickedRecipeId,
 			recipeId,
@@ -752,7 +823,7 @@ final class RecipeClickExecutor {
 			ContainerUtils.formatStack(expectedOutput)
 		);
 		if (!AutoCraftController.isBulkModeEnabled() || requestedClicks <= 1) {
-			com.reachcrafting.ReachCraftingMod.LOGGER.info(
+			com.reachcrafting.ReachCraftingMod.diag(
 				"[bulk_arm] clear reason={} bulk_mode={} requestedClicks={}",
 				!AutoCraftController.isBulkModeEnabled() ? "bulk_mode_disabled" : "requested_clicks_too_small",
 				AutoCraftController.isBulkModeEnabled(),
@@ -775,7 +846,7 @@ final class RecipeClickExecutor {
 		} else {
 			continuationMode = BulkAutoCraftController.determineVariantContinuationMode(clickedRecipeId, recipeId, explicitVariantSelection);
 		}
-		com.reachcrafting.ReachCraftingMod.LOGGER.info(
+		com.reachcrafting.ReachCraftingMod.diag(
 			"[bulk_arm] start continuation_recipe={} continuation_mode={} keep_family={}",
 			continuationRecipeId,
 			continuationMode,
@@ -836,7 +907,40 @@ final class RecipeClickExecutor {
 		);
 	}
 
+	/**
+	 * Walks the candidate variants in preference order and offers the first one
+	 * the planner can actually build. The clicked variant always leads, so a
+	 * collection that chains on its own recipe never gets swapped away from.
+	 */
 	private static java.util.Optional<ChainCraftOffer> planChainCraftOffer(
+		Minecraft minecraft,
+		LocalPlayer player,
+		List<RecipeVariantResolver.Selection> candidates,
+		Map<String, Integer> availableCounts,
+		boolean allowNearbyChests,
+		boolean effectiveCraftAll,
+		int requestedClicks,
+		int desiredVariantCopies
+	) {
+		for (RecipeVariantResolver.Selection candidate : candidates) {
+			Optional<ChainCraftOffer> offer = planChainCraftOfferFor(
+				minecraft,
+				player,
+				candidate,
+				availableCounts,
+				allowNearbyChests,
+				effectiveCraftAll,
+				requestedClicks,
+				desiredVariantCopies
+			);
+			if (offer.isPresent()) {
+				return offer;
+			}
+		}
+		return Optional.empty();
+	}
+
+	private static Optional<ChainCraftOffer> planChainCraftOfferFor(
 		Minecraft minecraft,
 		LocalPlayer player,
 		RecipeVariantResolver.Selection selectedRecipe,
@@ -860,7 +964,7 @@ final class RecipeClickExecutor {
 			desiredVariantCopies
 		);
 		if (exactOrMax.isPresent()) {
-			return java.util.Optional.of(new ChainCraftOffer(exactOrMax.get(), requestedRecipeCopies, effectiveCraftAll));
+			return Optional.of(new ChainCraftOffer(exactOrMax.get(), selectedRecipe, requestedRecipeCopies, effectiveCraftAll));
 		}
 		// Craft-all already ran planMax, so an empty result is final; only exact
 		// count requests benefit from the smaller-count fallback search.
@@ -875,10 +979,202 @@ final class RecipeClickExecutor {
 			allowNearbyChests,
 			requestedRecipeCopies - 1,
 			AutoCraftController.isBulkModeEnabled()
-		).map(plan -> new ChainCraftOffer(plan, requestedRecipeCopies, false));
+		).map(plan -> new ChainCraftOffer(plan, selectedRecipe, requestedRecipeCopies, false));
 	}
 
-	private record ChainCraftOffer(ChainCraftPlan plan, int requestedRecipeCopies, boolean maxRequest) {
+	/**
+	 * Which gate sent this batch to repeated single placements, checked in the
+	 * order chainCountedT1 evaluates them so the slug names the FIRST reason
+	 * rather than an incidental one.
+	 *
+	 * <p>"unlimited_budget" is singleplayer and benign -- the integrated server
+	 * applies the placements synchronously, so the repeat cannot race itself.
+	 * The rest are worth acting on.</p>
+	 */
+	private static String slowPlacementReason(
+		Minecraft minecraft,
+		RecipeIngredientSummary ingredientSummary,
+		int effectiveRequestedClicks
+	) {
+		if (PlaceRecipeBudget.isUnlimited(minecraft)) {
+			return "unlimited_budget";
+		}
+		String ineligible = GridExtractor.describeIneligibility(ingredientSummary);
+		if (ineligible != null) {
+			return ineligible;
+		}
+		if (!ChainCraftController.isActive()) {
+			return "no_chain_session";
+		}
+		if (effectiveRequestedClicks <= 1) {
+			return "single_copy";
+		}
+		return "unclassified";
+	}
+
+	private static final int CHAIN_TIER_LOCAL = 0;
+	private static final int CHAIN_TIER_NEARBY = 1;
+	private static final int CHAIN_TIER_UNREACHABLE = 2;
+
+	/**
+	 * Chain reachability of one variant, ranked so inventory-only chains beat
+	 * ones needing a chest withdrawal -- the smart sort's tiering. Costs two
+	 * cache queries, so callers snapshot it rather than asking per comparison.
+	 */
+	private static int chainTier(net.minecraft.resources.ResourceLocation recipeId, boolean allowNearbyChests) {
+		if (ChainCraftabilityCache.isChainCraftableLocally(recipeId)) {
+			return CHAIN_TIER_LOCAL;
+		}
+		if (allowNearbyChests && ChainCraftabilityCache.isChainCraftable(recipeId)) {
+			return CHAIN_TIER_NEARBY;
+		}
+		return CHAIN_TIER_UNREACHABLE;
+	}
+
+	/**
+	 * The variants worth asking the chain planner about, best first.
+	 *
+	 * <p>Siblings are filtered by the same per-recipe chain cache the
+	 * collection's indicator is drawn from, so a click can only offer what the
+	 * icon shows, and ones chain-craftable from the inventory alone rank above
+	 * ones needing a chest withdrawal (the smart sort's tiering). Where the
+	 * rotating variant lands in that order depends on the availability
+	 * setting -- see the ordering comment below.</p>
+	 */
+	private static List<RecipeVariantResolver.Selection> chainVariantFallbackCandidates(
+		Minecraft minecraft,
+		LocalPlayer player,
+		RecipeHolder<?> clickedRecipe,
+		net.minecraft.client.gui.screens.recipebook.RecipeCollection collection,
+		ItemStack displayStack,
+		AvailableItemSnapshot availableItems,
+		Map<String, Integer> chainAvailableCounts,
+		RecipeVariantResolver.Selection selectedRecipe,
+		boolean explicitVariantSelection,
+		boolean vanillaShiftClick,
+		boolean effectiveCraftAll,
+		int desiredVariantCopies,
+		boolean allowNearbyChests
+	) {
+		if (explicitVariantSelection
+			|| vanillaShiftClick
+			|| collection == null
+			|| collection.getRecipes().size() <= 1
+			|| availableItems.hasReservedGrid()
+			|| ReachCraftingConfig.get().revolvingCraftHandling() == ReachCraftingConfig.RevolvingCraftHandling.SPECIFIC_VARIANT_ONLY) {
+			return List.of(selectedRecipe);
+		}
+
+		List<RecipeVariantResolver.Selection> variants = RecipeVariantResolver.collectionCandidates(
+			minecraft,
+			player,
+			clickedRecipe,
+			collection,
+			displayStack != null ? displayStack.copy() : ItemStack.EMPTY,
+			availableItems,
+			availableItems.inventoryCounts(),
+			availableItems.inventoryCounts(),
+			effectiveCraftAll,
+			desiredVariantCopies
+		);
+
+		// Snapshot each variant's tier ONCE. Every ChainCraftabilityCache
+		// query re-walks the whole recipe book and re-hashes the inventory
+		// before it reaches its own staleness check (refreshIfNeeded skips the
+		// tick cooldown for off-tick callers), so asking it from inside a
+		// comparator would pay that O(recipe book) cost O(n log n) times.
+		Map<net.minecraft.resources.ResourceLocation, Integer> chainTiers = new HashMap<>();
+		for (RecipeVariantResolver.Selection candidate : variants) {
+			chainTiers.put(candidate.recipeId(), chainTier(candidate.recipeId(), allowNearbyChests));
+		}
+		// Rank on the material that actually decides the variant. The direct
+		// count preference cannot: a chain candidate holds none of its own
+		// direct ingredient by definition, so preferredTotalCount reads zero
+		// for every one of them and the order collapses to a stable-but-
+		// arbitrary tiebreak. Variants the ranking has no signal for sort
+		// behind the scored ones in BOTH directions -- under Lowest Total an
+		// unscored variant would otherwise win on a zero it never earned.
+		Map<net.minecraft.resources.ResourceLocation, Integer> variantScores =
+			ChainVariantRanking.scoreVariants(variants, chainAvailableCounts);
+		boolean lowestFirst = ReachCraftingConfig.get().countPreference()
+			== IngredientPlanning.CountPreference.LOWEST_TOTAL;
+		Comparator<RecipeVariantResolver.Selection> byScore =
+			Comparator.comparingInt((RecipeVariantResolver.Selection candidate) ->
+				variantScores.getOrDefault(candidate.recipeId(), 0));
+		Comparator<RecipeVariantResolver.Selection> chainOrder = Comparator
+			.comparingInt((RecipeVariantResolver.Selection candidate) ->
+				chainTiers.getOrDefault(candidate.recipeId(), CHAIN_TIER_UNREACHABLE))
+			.thenComparingInt(candidate -> variantScores.containsKey(candidate.recipeId()) ? 0 : 1)
+			.thenComparing(lowestFirst ? byScore : byScore.reversed())
+			.thenComparing(RecipeVariantResolver.preferenceOrder());
+
+		List<RecipeVariantResolver.Selection> siblings = variants.stream()
+			.filter(candidate -> !candidate.recipeId().equals(selectedRecipe.recipeId()))
+			.filter(candidate -> chainTiers.getOrDefault(candidate.recipeId(), CHAIN_TIER_UNREACHABLE)
+				!= CHAIN_TIER_UNREACHABLE)
+			.sorted(chainOrder)
+			.toList();
+		if (siblings.isEmpty()) {
+			return List.of(selectedRecipe);
+		}
+
+		// The two fallback settings disagree about the rotating variant, so
+		// the chain path has to disagree with them too. "Current Variant with
+		// Availability Fallback" gives it first refusal -- chain it if it can
+		// be chained, siblings only after that. "Always Based On Available"
+		// gives it no privilege at all, so it gets ranked alongside them.
+		// Either way a variant the resolver already found direct stock for
+		// keeps the lead: resolve() picked it under this same count
+		// preference, and a chain-only sibling should not displace a variant
+		// that is already partly craftable outright.
+		boolean preferClickedVariant = selectedRecipe.copiesAvailable() > 0
+			|| ReachCraftingConfig.get().revolvingCraftHandling()
+				== ReachCraftingConfig.RevolvingCraftHandling.PREFER_CLICKED_TYPE_WITH_COUNT_FALLBACK;
+
+		List<RecipeVariantResolver.Selection> candidates = new ArrayList<>();
+		candidates.add(selectedRecipe);
+		candidates.addAll(siblings);
+		if (!preferClickedVariant) {
+			candidates.sort(chainOrder);
+		}
+		ReachCraftingMod.diag(
+			"[chain_variant_fallback] clicked_recipe={} selected_recipe={} handling={} preference={} prefer_clicked={} order={}",
+			clickedRecipe.id(),
+			selectedRecipe.recipeId(),
+			ReachCraftingConfig.get().revolvingCraftHandling(),
+			ReachCraftingConfig.get().countPreference(),
+			preferClickedVariant,
+			candidates.stream()
+				.map(candidate -> candidate.outputItemId()
+					+ "(tier=" + chainTiers.getOrDefault(candidate.recipeId(), CHAIN_TIER_UNREACHABLE)
+					+ " score=" + (variantScores.containsKey(candidate.recipeId())
+						? String.valueOf(variantScores.get(candidate.recipeId()))
+						: "none")
+					+ ")")
+				.toList()
+		);
+		return List.copyOf(candidates);
+	}
+
+	private static String missingMessageFor(
+		RecipeVariantResolver.Selection selection,
+		Map<String, Integer> availableCounts,
+		AvailableItemSnapshot availableItems,
+		boolean effectiveCraftAll,
+		int desiredVariantCopies
+	) {
+		RecipeDeficitReport report = effectiveCraftAll
+			? RecipeDeficitReport.from(selection.ingredientSummary(), availableCounts, availableItems.gridStacks(), true)
+			: RecipeDeficitReport.from(selection.ingredientSummary(), availableCounts, availableItems.gridStacks(), desiredVariantCopies);
+		return report.hasMissingIngredients() ? "Missing: " + report.compactMissingSummary() : "";
+	}
+
+	private record ChainCraftOffer(
+		ChainCraftPlan plan,
+		RecipeVariantResolver.Selection selection,
+		int requestedRecipeCopies,
+		boolean maxRequest
+	) {
 	}
 
 	private static boolean areNearbyResourcesRequired(

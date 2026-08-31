@@ -172,7 +172,7 @@ final class SearchSession extends BaseCraftSession {
 			refreshReachableView();
 			discoveredNearby.clear();
 			discoveredNearby.putAll(reachableView.countsFor(scanAcceptedItemIds));
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.diag(
 				"[nearby_cache] idx={} seeded cached_items={} snapshots={} reachable_containers={} requested_recipe={} requested_output={}",
 				recipeIndex,
 				AvailableItemSnapshot.formatCounts(discoveredNearby),
@@ -369,7 +369,7 @@ final class SearchSession extends BaseCraftSession {
 		boolean shouldMergeDiscovery = phase == SearchPhase.DISCOVERY || !useCachedSearch;
 		if (!usefulItems.isEmpty() && shouldMergeDiscovery) {
 			usefulItems.forEach((itemId, count) -> discoveredNearby.merge(itemId, count, Integer::sum));
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.diag(
 				"[nearby_discovery] idx={} pos={} merged_items={} merged_totals={} selected_recipe={} selected_output={}",
 				recipeIndex,
 				ContainerUtils.formatPos(pendingContainerPos),
@@ -606,7 +606,7 @@ final class SearchSession extends BaseCraftSession {
 			}
 		}
 		boolean hasUnscanned = reachableView.snapshotsByKey().size() < reachableView.nearestAccessByKey().size();
-		ReachCraftingMod.LOGGER.info(
+		ReachCraftingMod.diag(
 			"[recipe_variant] idx={} phase={} requested_recipe={} current_recipe={} resolved_recipe={} requested_output={} resolved_output={} total_available={} remaining={} unscanned_containers={} snapshots={} reachable_containers={}",
 			recipeIndex,
 			phase.name().toLowerCase(),
@@ -752,7 +752,7 @@ final class SearchSession extends BaseCraftSession {
 			List<BlockPos> uncachedFallbackWithdraw = remainingUnvisitedCandidates(candidates);
 			if (!uncachedFallbackWithdraw.isEmpty() && !discoveredNearby.isEmpty()) {
 				withdrawCandidates = uncachedFallbackWithdraw;
-				ReachCraftingMod.LOGGER.info(
+				ReachCraftingMod.diag(
 					"[nearby_cache] idx={} empty_prioritized_candidates_using_full_withdraw_list remaining={} candidates={} discovered={}",
 					recipeIndex,
 					summarizeRemainingItems(remainingItemIds),
@@ -786,7 +786,7 @@ final class SearchSession extends BaseCraftSession {
 	}
 
 	private void applySearchPlanDecision(SearchPlanDecision decision) {
-		ReachCraftingMod.LOGGER.info(
+		ReachCraftingMod.diag(
 			"[nearby_plan] idx={} phase={} requested_recipe={} chosen_recipe={} chosen_output={} target_copies={} immediate_fetch={} fetch={} withdraw_candidates={} resume={} fallback={} total_available={}",
 			recipeIndex,
 			phase.name().toLowerCase(),
@@ -909,7 +909,7 @@ final class SearchSession extends BaseCraftSession {
 		// for recipes like buttons that need inventory staging beyond the first 64.
 		int remainingCopies = Math.max(requestedSingleClicks, 0);
 		if (remainingCopies <= 0) {
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.diag(
 				"[bulk_stage] idx={} skipped reason=no_remaining_copies requested={} target_now={} desired_now={} covered_now={}",
 				recipeIndex,
 				requestedSingleClicks,
@@ -922,7 +922,7 @@ final class SearchSession extends BaseCraftSession {
 
 		int extraFutureCopies = Math.max(0, remainingCopies - Math.max(targetCopiesPerSlot, 1));
 		if (extraFutureCopies <= 0) {
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.diag(
 				"[bulk_stage] idx={} skipped reason=no_extra_future_copies requested={} remaining={} target_now={} desired_now={} covered_now={}",
 				recipeIndex,
 				requestedSingleClicks,
@@ -936,7 +936,7 @@ final class SearchSession extends BaseCraftSession {
 
 		Map<String, Integer> perCraftCounts = perCraftIngredientCounts(slotTargets);
 		if (perCraftCounts.isEmpty()) {
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.diag(
 				"[bulk_stage] idx={} skipped reason=no_per_craft_counts requested={} remaining={} target_now={} desired_now={} covered_now={}",
 				recipeIndex,
 				requestedSingleClicks,
@@ -950,7 +950,7 @@ final class SearchSession extends BaseCraftSession {
 
 		int reachableFutureCopies = computeReachableFutureCopies(desiredCounts, perCraftCounts);
 		if (reachableFutureCopies <= 0) {
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.diag(
 				"[bulk_stage] idx={} capped reason=reachable requested={} remaining={} target_now={} extra_requested={} reachable_future={} per_craft={} desired_now={} covered_now={}",
 				recipeIndex,
 				requestedSingleClicks,
@@ -973,7 +973,7 @@ final class SearchSession extends BaseCraftSession {
 			requestedStageCopies
 		);
 		if (stageableFutureCopies <= 0) {
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.diag(
 				"[bulk_stage] idx={} capped reason=inventory requested={} remaining={} target_now={} extra_requested={} reachable_future={} requested_stage={} stageable_future={} per_craft={} desired_now={} covered_now={}",
 				recipeIndex,
 				requestedSingleClicks,
@@ -1009,7 +1009,7 @@ final class SearchSession extends BaseCraftSession {
 			);
 		}
 		if (surplusFutureCopies >= Math.max(2 * Math.max(targetCopiesPerSlot, 1), 8)) {
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.diag(
 				"[bulk_stage] idx={} skipped reason=surplus_covers_buffer surplus_future={} stageable_future={} remaining={} desired_now={} covered_now={}",
 				recipeIndex,
 				surplusFutureCopies,
@@ -1025,7 +1025,7 @@ final class SearchSession extends BaseCraftSession {
 			desiredCounts.merge(entry.getKey(), entry.getValue() * stageableFutureCopies, Integer::sum);
 		}
 
-		ReachCraftingMod.LOGGER.info(
+		ReachCraftingMod.diag(
 			"[bulk_stage] idx={} planned requested={} remaining={} target_now={} extra_requested={} reachable_future={} requested_stage={} stageable_future={} per_craft={} desired_total={} covered_now={}",
 			recipeIndex,
 			requestedSingleClicks,
@@ -1083,7 +1083,7 @@ final class SearchSession extends BaseCraftSession {
 		List<ItemStack> simulatedInventory = copyStacks(currentPlanInventory);
 		Map<String, Integer> simulatedReserve = new LinkedHashMap<>(futureLocalReserve);
 		int slotBudgetCap = capFutureCopiesByAccessibleSlots(currentPlanInventory, perCraftCounts, maxExtraFutureCopies);
-		ReachCraftingMod.LOGGER.info(
+		ReachCraftingMod.diag(
 			"[bulk_stage_cap] idx={} current_desired={} covered={} future_reserve={} inventory_slots={} inventory_counts={} max_extra={} slot_budget_cap={}",
 			recipeIndex,
 			AvailableItemSnapshot.formatCounts(currentDesiredCounts),
@@ -1120,7 +1120,7 @@ final class SearchSession extends BaseCraftSession {
 			}
 
 			if (!fits) {
-				ReachCraftingMod.LOGGER.info(
+				ReachCraftingMod.diag(
 					"[bulk_stage_cap] idx={} stopped_copy={} simulated_inventory={} simulated_reserve={}",
 					recipeIndex,
 					copyIndex,
@@ -1135,7 +1135,7 @@ final class SearchSession extends BaseCraftSession {
 			stageableCopies++;
 		}
 
-		ReachCraftingMod.LOGGER.info(
+		ReachCraftingMod.diag(
 			"[bulk_stage_cap] idx={} final_stageable={} final_inventory={} final_reserve={}",
 			recipeIndex,
 			stageableCopies,
@@ -1176,7 +1176,7 @@ final class SearchSession extends BaseCraftSession {
 			compatibleRoom.putIfAbsent(itemId, 0);
 		}
 
-		ReachCraftingMod.LOGGER.info(
+		ReachCraftingMod.diag(
 			"[bulk_stage_slots] idx={} empty_slots={} compatible_room={} stack_sizes={} max_extra={}",
 			recipeIndex,
 			emptySlots,
@@ -1190,7 +1190,7 @@ final class SearchSession extends BaseCraftSession {
 		while (low < high) {
 			int mid = (low + high + 1) / 2;
 			int additionalSlotsNeeded = additionalSlotsNeededForFutureCopies(mid, perCraftCounts, compatibleRoom, stackSizes);
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.diag(
 				"[bulk_stage_slots] idx={} probe_future={} additional_slots_needed={} empty_slots={}",
 				recipeIndex,
 				mid,
@@ -1203,7 +1203,7 @@ final class SearchSession extends BaseCraftSession {
 				high = mid - 1;
 			}
 		}
-		ReachCraftingMod.LOGGER.info("[bulk_stage_slots] idx={} capped_future={}", recipeIndex, low);
+		ReachCraftingMod.diag("[bulk_stage_slots] idx={} capped_future={}", recipeIndex, low);
 		return low;
 	}
 
@@ -1503,7 +1503,7 @@ final class SearchSession extends BaseCraftSession {
 			BulkAutoCraftController.noteDiscoveryPerformed();
 		}
 		refreshReachableView();
-		ReachCraftingMod.LOGGER.info(
+		ReachCraftingMod.diag(
 			"[nearby_cache] idx={} fallback_discovery requested_recipe={} current_recipe={} current_output={} discovered={} remaining={} snapshots={} reachable_containers={}",
 			recipeIndex,
 			initialRequestedRecipeId,
@@ -1681,12 +1681,7 @@ final class SearchSession extends BaseCraftSession {
 			return planningPolicy;
 		}
 
-		return new IngredientPlanning.Policy(
-			planningPolicy.countPreference(),
-			planningPolicy.redistributeToCraftWhenNeeded(),
-			planningPolicy.preferInventory(),
-			preferredVariants
-		);
+		return planningPolicy.withPreferredVariants(preferredVariants);
 	}
 
 	private Map<String, Integer> preferenceTotalsForSelection(Map<String, Integer> baseTotals, RecipeVariantResolver.Selection selection) {
@@ -1744,7 +1739,7 @@ final class SearchSession extends BaseCraftSession {
 	private BulkAutoCraftController.VariantContinuationMode resolveBulkVariantContinuationMode(RecipeVariantResolver.Selection resolvedSelection) {
 		BulkAutoCraftController.VariantContinuationMode currentMode = BulkAutoCraftController.currentVariantContinuationMode();
 		if (!ReachCraftingConfig.get().bulkVariantSwitching()) {
-			com.reachcrafting.ReachCraftingMod.LOGGER.info(
+			com.reachcrafting.ReachCraftingMod.diag(
 				"[bulk_variant_mode] force_strict requested_recipe={} current_recipe={} resolved_recipe={} current_mode={} reason=bulk_variant_switching_disabled",
 				initialRequestedRecipeId,
 				recipeId,
@@ -1855,7 +1850,7 @@ final class SearchSession extends BaseCraftSession {
 		boolean shouldAttemptReservedPlacement = gridRestored
 			&& targetCopiesPerSlot > 0
 			&& (redistributeThisRun ? originalContext.hasReservedGrid() : reservedGridMatchesRecipe);
-		ReachCraftingMod.LOGGER.info(
+		ReachCraftingMod.diag(
 			"[recipe_place] reserved gate idx={} redistribute={} has_reserved={} grid_restored={} matches_recipe={} target_copies={} should_attempt={}",
 			recipeIndex,
 			redistributeThisRun,
@@ -1971,7 +1966,7 @@ final class SearchSession extends BaseCraftSession {
 		} else if (placedPlannedGrid) {
 			sendDebugChat("Updated grid: " + outputLabel);
 		} else if (targetCopiesPerSlot > 0 && !updatedDeficit.hasMissingIngredients() && player.containerMenu != null) {
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.diag(
 				"[recipe_place] from=SearchSession.tryFinishAfterResume shift={} recipe_id={} output={} target_copies={} remaining={} updated_missing={}",
 				craftAll,
 				recipeId,
@@ -2002,7 +1997,7 @@ final class SearchSession extends BaseCraftSession {
 		}
 		if (AutoCraftController.isEnabled() && autoMoveReady) {
 			ItemStack expectedStack = RecipeVariantResolver.resolveDisplayStack(resolveRecipeById(recipeId), client);
-			com.reachcrafting.ReachCraftingMod.LOGGER.info(
+			com.reachcrafting.ReachCraftingMod.diag(
 				"[bulk_place] bulk_mode={} craftAll={} requestedSingleClicks={} autoMoveReady={} expected={} chosen_recipe={}",
 				AutoCraftController.isBulkModeEnabled(),
 				craftAll,
@@ -2013,7 +2008,7 @@ final class SearchSession extends BaseCraftSession {
 			);
 			if (AutoCraftController.isBulkModeEnabled() && requestedSingleClicks > 1) {
 				BulkAutoCraftController.VariantContinuationMode continuationMode = resolveBulkVariantContinuationMode(null);
-				com.reachcrafting.ReachCraftingMod.LOGGER.info(
+				com.reachcrafting.ReachCraftingMod.diag(
 					"[bulk_place] start_or_update recipe={} continuation_recipe={} continuation_mode={} refillable={}",
 					recipeId,
 					bulkContinuationRecipeId(),
@@ -2038,7 +2033,7 @@ final class SearchSession extends BaseCraftSession {
 					ingredientSummary
 				);
 			} else {
-				com.reachcrafting.ReachCraftingMod.LOGGER.info(
+				com.reachcrafting.ReachCraftingMod.diag(
 					"[bulk_place] skip_start_or_update reason={} bulk_mode={} requestedSingleClicks={}",
 					!AutoCraftController.isBulkModeEnabled() ? "bulk_mode_disabled" : "requested_clicks_too_small",
 					AutoCraftController.isBulkModeEnabled(),
@@ -2047,7 +2042,7 @@ final class SearchSession extends BaseCraftSession {
 			}
 			ContainerUtils.scheduleAutoMove(expectedStack);
 		} else if (AutoCraftController.isEnabled()) {
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.diag(
 				"[auto_move] skip_schedule idx={} reason=no_craft_staged target_copies={} grid_restored={} reserved_expanded={} placed_planned={} remaining={} missing={}",
 				recipeIndex,
 				targetCopiesPerSlot,
@@ -2171,9 +2166,9 @@ final class SearchSession extends BaseCraftSession {
 		// paths keep their precedence - clicking must not pre-empt them.
 		ClickStageResult clickStage = ClickStageResult.DECLINED;
 		if (ChainCraftController.tryManualSelfReferentialPlacement(client, null)) {
-			ReachCraftingMod.LOGGER.info("[recipe_place] manual self-referential placement from SearchSession.placePlannedGrid target={}", targetCopiesPerSlot);
+			ReachCraftingMod.diag("[recipe_place] manual self-referential placement from SearchSession.placePlannedGrid target={}", targetCopiesPerSlot);
 		} else if (GridTopUp.tryStageInsteadOfPlace(client, player, recipeId, recipeCollection)) {
-			ReachCraftingMod.LOGGER.info("[recipe_place] grid_topup staged from SearchSession.placePlannedGrid target={}", targetCopiesPerSlot);
+			ReachCraftingMod.diag("[recipe_place] grid_topup staged from SearchSession.placePlannedGrid target={}", targetCopiesPerSlot);
 		} else if (craftAll || requestedSingleClicks > targetCopiesPerSlot || targetCopiesPerSlot >= queueLimit) {
 			// Max/refillable request: ONE vanilla max place stages the whole grid
 			// (min of 64 and the ingredient-limited biggest craftable, which
@@ -2185,7 +2180,7 @@ final class SearchSession extends BaseCraftSession {
 			// leaf-node ordering to protect, so staging the grid maximally in a
 			// single packet is always correct here. The per-copy loop is kept
 			// ONLY for exact sub-grid counts, where a max place would overstage.
-			ReachCraftingMod.LOGGER.info("[recipe_place] handlePlaceRecipe(shift=true) from SearchSession.placePlannedGrid target={} requested={}", targetCopiesPerSlot, requestedSingleClicks);
+			ReachCraftingMod.diag("[recipe_place] handlePlaceRecipe(shift=true) from SearchSession.placePlannedGrid target={} requested={}", targetCopiesPerSlot, requestedSingleClicks);
 			gameMode.handlePlaceRecipe(player.containerMenu.containerId, recipe, true);
 		} else if ((clickStage = stageExactCopiesByClicking()) == ClickStageResult.STAGED) {
 			// Handled by clicks - no placement packet was spent.
@@ -2198,7 +2193,7 @@ final class SearchSession extends BaseCraftSession {
 			// and that timeout abandons the placement rather than retrying it.
 			// Waiting is only viable with a wait longer than the window AND a
 			// fallback on timeout; a slow craft beats a lost one.
-			ReachCraftingMod.LOGGER.info("[recipe_place] handlePlaceRecipe(shift=false) x{} from SearchSession.placePlannedGrid", targetCopiesPerSlot);
+			ReachCraftingMod.diag("[recipe_place] handlePlaceRecipe(shift=false) x{} from SearchSession.placePlannedGrid", targetCopiesPerSlot);
 			for (int i = 0; i < targetCopiesPerSlot; i++) {
 				gameMode.handlePlaceRecipe(player.containerMenu.containerId, recipe, false);
 			}
@@ -2211,7 +2206,7 @@ final class SearchSession extends BaseCraftSession {
 			}
 		}
 		AvailableItemSnapshot postPlaceSnapshot = AvailableItemSnapshot.capture(player, client.screen);
-		ReachCraftingMod.LOGGER.info(
+		ReachCraftingMod.diag(
 			"[recipe_place] post_place planned idx={} target={} queueLimit={} result={} staged_copies={} grid_reserved={}",
 			recipeIndex,
 			targetCopiesPerSlot,
@@ -2288,7 +2283,7 @@ final class SearchSession extends BaseCraftSession {
 			// A SATURATED window, not a structural refusal: the same request
 			// succeeds once the window drains, so ask the caller to wait
 			// rather than falling back to N rationed placements.
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.diag(
 				"[recipe_place] click_stage_declined idx={} estimated_clicks={} window={} (placing now, will upgrade if the window frees)",
 				recipeIndex, estimatedClicks, GridTopUp.clickWindowCount()
 			);
@@ -2299,7 +2294,7 @@ final class SearchSession extends BaseCraftSession {
 		if (staged <= 0) {
 			return ClickStageResult.DECLINED;
 		}
-		ReachCraftingMod.LOGGER.info(
+		ReachCraftingMod.diag(
 			"[recipe_place] click_staged idx={} staged={} target={} place_packets_saved={}",
 			recipeIndex, staged, targetCopiesPerSlot, targetCopiesPerSlot
 		);
@@ -2327,7 +2322,7 @@ final class SearchSession extends BaseCraftSession {
 		AbstractContainerMenu menu = containerScreen.getMenu();
 		PlacementAttempt directPlacement = placePlannedGridWithVanillaShape();
 		if (directPlacement == PlacementAttempt.SUCCESS) {
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.diag(
 				"[recipe_place] direct vanilla replay placement succeeded idx={} target={} recipe={}",
 				recipeIndex,
 				targetCopiesPerSlot,
@@ -2338,7 +2333,7 @@ final class SearchSession extends BaseCraftSession {
 
 		// Clear the entire grid to ensure a clean slate for vanilla placement
 		if (!clearGridForRedistribute(menu, Map.of())) {
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.diag(
 				"[recipe_place] redistribute clear failed before replay placement idx={} target={} recipe={} reason={}",
 				recipeIndex,
 				targetCopiesPerSlot,
@@ -2352,7 +2347,7 @@ final class SearchSession extends BaseCraftSession {
 		if (!player.containerMenu.getCarried().isEmpty()) {
 			if (!stashCarriedStackIntoInventory(menu)) {
 				lastRestoreFailure = "cursor_not_empty_after_clear item=" + BuiltInRegistries.ITEM.getKey(player.containerMenu.getCarried().getItem());
-				ReachCraftingMod.LOGGER.info(
+				ReachCraftingMod.diag(
 					"[recipe_place] redistribute cursor cleanup failed idx={} target={} recipe={} reason={}",
 					recipeIndex,
 					targetCopiesPerSlot,
@@ -2365,7 +2360,7 @@ final class SearchSession extends BaseCraftSession {
 
 		PlacementAttempt clearedPlacement = placePlannedGridWithVanillaShape();
 		if (clearedPlacement != PlacementAttempt.SUCCESS) {
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.diag(
 				"[recipe_place] redistribute vanilla replay placement failed idx={} target={} recipe={} attempt={}",
 				recipeIndex,
 				targetCopiesPerSlot,
@@ -2580,7 +2575,7 @@ final class SearchSession extends BaseCraftSession {
 		boolean blockedByInventory = false;
 
 		List<Map.Entry<String, Integer>> orderedNeeds = orderRemainingNeedsForPacking(menu, remainingNeeds, virtualPlayerCounts, virtualPlayerItemIds);
-		ReachCraftingMod.LOGGER.info(
+		ReachCraftingMod.diag(
 			"[nearby_withdraw_order] idx={} pos={} ordered_needs={} reserved_output_slots={}",
 			recipeIndex,
 			ContainerUtils.formatPos(pendingContainerPos),
@@ -2655,7 +2650,7 @@ final class SearchSession extends BaseCraftSession {
 				AvailableItemSnapshot.formatCounts(unresolvedNeeds)
 			);
 		}
-		ReachCraftingMod.LOGGER.info(
+		ReachCraftingMod.diag(
 			"[nearby_withdraw_plan] idx={} pos={} moves={} planned={} unresolved={} blocked={}",
 			recipeIndex,
 			ContainerUtils.formatPos(pendingContainerPos),

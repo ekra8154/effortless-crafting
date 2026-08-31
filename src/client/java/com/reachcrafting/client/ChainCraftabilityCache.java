@@ -102,6 +102,31 @@ public final class ChainCraftabilityCache {
 		return recipeId != null && locallyReachableRecipeIds.contains(recipeId);
 	}
 
+	/**
+	 * Item ids consumed by the known recipes that produce {@code outputItemId}
+	 * -- the material one hop below an ingredient (spruce logs for spruce
+	 * planks).
+	 *
+	 * <p>Reads the prebuilt index directly and deliberately does NOT call
+	 * {@link #refreshIfNeeded}: that re-walks every recipe collection and
+	 * re-hashes the inventory before its own staleness check, which is far too
+	 * expensive to pay per ingredient. An index that has not been built yet
+	 * simply yields nothing, which degrades the caller to its own tiebreak.</p>
+	 */
+	public static Set<String> producerInputItemIds(String outputItemId) {
+		List<LightRecipe> producers = recipesByOutput.get(outputItemId);
+		if (producers == null || producers.isEmpty()) {
+			return Set.of();
+		}
+		Set<String> inputItemIds = new HashSet<>();
+		for (LightRecipe producer : producers) {
+			for (List<String> slot : producer.ingredientSlots()) {
+				inputItemIds.addAll(slot);
+			}
+		}
+		return Set.copyOf(inputItemIds);
+	}
+
 	private static void tick(Minecraft client) {
 		refreshIfNeeded(client, true);
 	}

@@ -27,6 +27,8 @@ public final class ReachCraftingConfig {
 	private static final InWorldFilterMode DEFAULT_IN_WORLD_FILTER_MODE = InWorldFilterMode.NONE;
 	private static final RevolvingCraftHandling DEFAULT_REVOLVING_CRAFT_HANDLING = RevolvingCraftHandling.SPECIFIC_VARIANT_ONLY;
 	private static final IngredientPlanning.CountPreference DEFAULT_COUNT_PREFERENCE = IngredientPlanning.CountPreference.HIGHEST_TOTAL;
+	private static final boolean DEFAULT_PREFER_NON_STRIPPED_LOGS = true;
+	private static final boolean DEFAULT_DIAGNOSTIC_LOGGING_ENABLED = false;
 	private static final boolean DEFAULT_SHOW_NEARBY_CRAFTABLE_INDICATOR = true;
 	private static final boolean DEFAULT_CACHE_CONTAINERS_FOR_FASTER_SEARCH = true;
 	private static final ContainerDrainOrder DEFAULT_CONTAINER_DRAIN_ORDER = ContainerDrainOrder.SMALLEST_FIRST;
@@ -102,6 +104,7 @@ public final class ReachCraftingConfig {
 	private boolean reachCraftHoldAndRelease;
 	private boolean reachCraftCloseOverlayAfterRelease;
 	private boolean reachCraftPreferInventory;
+	private boolean preferNonStrippedLogs;
 	private boolean putPulledResourcesBack;
 	private boolean restoreInventoryItemPositions;
 	private SearchHistoryMode searchHistoryMode;
@@ -137,6 +140,7 @@ public final class ReachCraftingConfig {
 	private boolean altClickInstantCraft;
 	private boolean debugMessagesEnabled;
 	private boolean performanceLoggingEnabled;
+	private boolean diagnosticLoggingEnabled;
 	private Set<String> blacklistedContainerIds;
 	private List<String> recentRecipeDisplayIds;
 	private Map<String, List<String>> recentRecipeDisplayIdsByContext;
@@ -179,6 +183,7 @@ public final class ReachCraftingConfig {
 			instance.reachCraftHoldAndRelease = stored.reachCraftHoldAndRelease != null ? stored.reachCraftHoldAndRelease : DEFAULT_REACH_CRAFT_HOLD_AND_RELEASE;
 			instance.reachCraftCloseOverlayAfterRelease = stored.reachCraftCloseOverlayAfterRelease != null ? stored.reachCraftCloseOverlayAfterRelease : DEFAULT_REACH_CRAFT_CLOSE_OVERLAY_AFTER_RELEASE;
 			instance.reachCraftPreferInventory = stored.reachCraftPreferInventory != null ? stored.reachCraftPreferInventory : DEFAULT_REACH_CRAFT_PREFER_INVENTORY;
+			instance.preferNonStrippedLogs = stored.preferNonStrippedLogs != null ? stored.preferNonStrippedLogs : DEFAULT_PREFER_NON_STRIPPED_LOGS;
 			instance.putPulledResourcesBack = stored.putPulledResourcesBack != null ? stored.putPulledResourcesBack : DEFAULT_PUT_PULLED_RESOURCES_BACK;
 			instance.restoreInventoryItemPositions = stored.restoreInventoryItemPositions != null ? stored.restoreInventoryItemPositions : DEFAULT_RESTORE_INVENTORY_ITEM_POSITIONS;
 			instance.searchHistoryMode = stored.searchHistoryMode != null
@@ -218,7 +223,8 @@ public final class ReachCraftingConfig {
 			instance.altClickInstantCraft = stored.altClickInstantCraft != null ? stored.altClickInstantCraft : DEFAULT_ALT_CLICK_INSTANT_CRAFT;
 			instance.debugMessagesEnabled = stored.debugMessagesEnabled != null ? stored.debugMessagesEnabled : DEFAULT_DEBUG_MESSAGES_ENABLED;
 			instance.performanceLoggingEnabled = stored.performanceLoggingEnabled != null ? stored.performanceLoggingEnabled : DEFAULT_PERFORMANCE_LOGGING_ENABLED;
-
+			instance.diagnosticLoggingEnabled = stored.diagnosticLoggingEnabled != null ? stored.diagnosticLoggingEnabled : DEFAULT_DIAGNOSTIC_LOGGING_ENABLED;
+			
 			// Enforce capability gate on load
 			if (instance.autoCraftCapability == AutoCraftCapability.NONE) {
 				instance.autoCraftEnabled = false;
@@ -292,7 +298,13 @@ public final class ReachCraftingConfig {
 	}
 
 	public IngredientPlanning.Policy toPlanningPolicy() {
-		return new IngredientPlanning.Policy(countPreference, redistributeToCraftWhenNeeded, reachCraftPreferInventory);
+		return new IngredientPlanning.Policy(
+			countPreference,
+			redistributeToCraftWhenNeeded,
+			reachCraftPreferInventory,
+			java.util.Set.of(),
+			LastResortIngredients.activeCategories(this)
+		);
 	}
 
 	public boolean redistributeToCraftWhenNeeded() {
@@ -375,6 +387,14 @@ public final class ReachCraftingConfig {
 
 	public boolean reachCraftPreferInventory() {
 		return reachCraftPreferInventory;
+	}
+
+	public boolean preferNonStrippedLogs() {
+		return preferNonStrippedLogs;
+	}
+
+	public void setPreferNonStrippedLogs(boolean preferNonStrippedLogs) {
+		this.preferNonStrippedLogs = preferNonStrippedLogs;
 	}
 
 	public void setReachCraftPreferInventory(boolean reachCraftPreferInventory) {
@@ -674,6 +694,14 @@ public final class ReachCraftingConfig {
 		return performanceLoggingEnabled;
 	}
 
+	public boolean diagnosticLoggingEnabled() {
+		return diagnosticLoggingEnabled;
+	}
+
+	public void setDiagnosticLoggingEnabled(boolean diagnosticLoggingEnabled) {
+		this.diagnosticLoggingEnabled = diagnosticLoggingEnabled;
+	}
+
 	public void setPerformanceLoggingEnabled(boolean performanceLoggingEnabled) {
 		this.performanceLoggingEnabled = performanceLoggingEnabled;
 	}
@@ -838,6 +866,7 @@ public final class ReachCraftingConfig {
 		defaults.reachCraftHoldAndRelease = DEFAULT_REACH_CRAFT_HOLD_AND_RELEASE;
 		defaults.reachCraftCloseOverlayAfterRelease = DEFAULT_REACH_CRAFT_CLOSE_OVERLAY_AFTER_RELEASE;
 		defaults.reachCraftPreferInventory = DEFAULT_REACH_CRAFT_PREFER_INVENTORY;
+		defaults.preferNonStrippedLogs = DEFAULT_PREFER_NON_STRIPPED_LOGS;
 		defaults.putPulledResourcesBack = DEFAULT_PUT_PULLED_RESOURCES_BACK;
 		defaults.restoreInventoryItemPositions = DEFAULT_RESTORE_INVENTORY_ITEM_POSITIONS;
 		defaults.searchHistoryMode = DEFAULT_SEARCH_HISTORY_MODE;
@@ -873,6 +902,7 @@ public final class ReachCraftingConfig {
 		defaults.altClickInstantCraft = DEFAULT_ALT_CLICK_INSTANT_CRAFT;
 		defaults.debugMessagesEnabled = DEFAULT_DEBUG_MESSAGES_ENABLED;
 		defaults.performanceLoggingEnabled = DEFAULT_PERFORMANCE_LOGGING_ENABLED;
+		defaults.diagnosticLoggingEnabled = DEFAULT_DIAGNOSTIC_LOGGING_ENABLED;
 		defaults.blacklistedContainerIds = new LinkedHashSet<>(DEFAULT_BLACKLIST);
 		defaults.recentRecipeDisplayIds = new ArrayList<>();
 		defaults.recentRecipeDisplayIdsByContext = new HashMap<>();
@@ -1084,6 +1114,7 @@ public final class ReachCraftingConfig {
 		private Boolean reachCraftHoldAndRelease;
 		private Boolean reachCraftCloseOverlayAfterRelease;
 		private Boolean reachCraftPreferInventory;
+		private Boolean preferNonStrippedLogs;
 		private Boolean putPulledResourcesBack;
 		private Boolean restoreInventoryItemPositions;
 		private Boolean rememberPreviousSearch;
@@ -1121,6 +1152,7 @@ public final class ReachCraftingConfig {
 		private Boolean altClickInstantCraft;
 		private Boolean debugMessagesEnabled;
 		private Boolean performanceLoggingEnabled;
+		private Boolean diagnosticLoggingEnabled;
 		private Boolean enableEnablingBulkMode;
 		private Set<String> blacklistedContainerIds;
 		private List<String> recentRecipeDisplayIds;
@@ -1140,6 +1172,7 @@ public final class ReachCraftingConfig {
 			this.reachCraftHoldAndRelease = config.reachCraftHoldAndRelease;
 			this.reachCraftCloseOverlayAfterRelease = config.reachCraftCloseOverlayAfterRelease;
 			this.reachCraftPreferInventory = config.reachCraftPreferInventory;
+			this.preferNonStrippedLogs = config.preferNonStrippedLogs;
 			this.putPulledResourcesBack = config.putPulledResourcesBack;
 			this.restoreInventoryItemPositions = config.restoreInventoryItemPositions;
 			this.searchHistoryMode = config.searchHistoryMode;
@@ -1175,6 +1208,7 @@ public final class ReachCraftingConfig {
 			this.altClickInstantCraft = config.altClickInstantCraft;
 			this.debugMessagesEnabled = config.debugMessagesEnabled;
 			this.performanceLoggingEnabled = config.performanceLoggingEnabled;
+			this.diagnosticLoggingEnabled = config.diagnosticLoggingEnabled;
 			this.blacklistedContainerIds = config.blacklistedContainerIds;
 			this.recentRecipeDisplayIds = config.recentRecipeDisplayIds;
 			this.recentRecipeDisplayIdsByContext = config.recentRecipeDisplayIdsByContext;
