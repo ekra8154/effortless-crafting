@@ -87,7 +87,7 @@ final class CountStagingSession extends BaseCraftSession {
 		if (!BulkChainCraftController.isActive()) {
 			PulledResourcesTracker.clearWithdrawals();
 		}
-		ReachCraftingMod.LOGGER.info(
+		ReachCraftingMod.diag(
 			"[chain_stage] start reason={} desired={} candidates={}",
 			request.reason(),
 			AvailableItemSnapshot.formatCounts(remainingCounts),
@@ -128,7 +128,7 @@ final class CountStagingSession extends BaseCraftSession {
 			if (isOriginalContextReady(originalContext)) {
 				reopenSettledTicks++;
 				if (reopenSettledTicks >= REOPEN_SETTLE_TICKS) {
-					ReachCraftingMod.LOGGER.info(
+					ReachCraftingMod.diag(
 						"[chain_stage] finish withdrawn={} remaining={}",
 						AvailableItemSnapshot.formatCounts(withdrawnCounts),
 						AvailableItemSnapshot.formatCounts(remainingCounts)
