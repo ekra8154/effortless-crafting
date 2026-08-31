@@ -111,7 +111,7 @@ final class ChainCraftPlanner {
 			cachedIndexLevel = new java.lang.ref.WeakReference<>(minecraft.level);
 			cachedIndexBuiltMillis = System.currentTimeMillis();
 			int candidateCount = this.recipesByOutput.values().stream().mapToInt(List::size).sum();
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.diag(
 				"[chain_debug] index outputs={} candidates={} grid_slots={} allow_nearby={}",
 				this.recipesByOutput.size(),
 				candidateCount,
@@ -139,7 +139,7 @@ final class ChainCraftPlanner {
 			|| player == null
 			|| finalSelection == null
 			|| requestedRecipeCopies <= 0) {
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.diag(
 				"[chain_debug] abort reason=invalid_inputs minecraft={} level={} player={} selection={} requested={}",
 				minecraft != null,
 				minecraft != null && minecraft.level != null,
@@ -151,7 +151,7 @@ final class ChainCraftPlanner {
 		}
 		int gridSlotCount = minecraft.screen instanceof InventoryScreen ? 4 : minecraft.screen instanceof CraftingScreen ? 9 : 0;
 		if (gridSlotCount <= 0) {
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.diag(
 				"[chain_debug] abort reason=unsupported_screen screen={}",
 				minecraft.screen != null ? minecraft.screen.getClass().getName() : "<none>"
 			);
@@ -191,11 +191,11 @@ final class ChainCraftPlanner {
 	) {
 		int high = Math.max(upperBound, 0);
 		if (high <= 0) {
-			ReachCraftingMod.LOGGER.info("[chain_debug] plan_max abort reason=non_positive_upper_bound upper_bound={}", upperBound);
+			ReachCraftingMod.diag("[chain_debug] plan_max abort reason=non_positive_upper_bound upper_bound={}", upperBound);
 			return Optional.empty();
 		}
 		if (minecraft == null || minecraft.level == null || player == null || finalSelection == null) {
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.diag(
 				"[chain_debug] plan_max abort reason=invalid_inputs minecraft={} level={} player={} selection={}",
 				minecraft != null,
 				minecraft != null && minecraft.level != null,
@@ -206,7 +206,7 @@ final class ChainCraftPlanner {
 		}
 		int gridSlotCount = minecraft.screen instanceof InventoryScreen ? 4 : minecraft.screen instanceof CraftingScreen ? 9 : 0;
 		if (gridSlotCount <= 0) {
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.diag(
 				"[chain_debug] plan_max abort reason=unsupported_screen screen={}",
 				minecraft.screen != null ? minecraft.screen.getClass().getName() : "<none>"
 			);
@@ -259,7 +259,7 @@ final class ChainCraftPlanner {
 		boolean planned = planRecipe(finalCandidate, requestedRecipeCopies, state, new HashSet<>(), true);
 		List<ChainCraftPlan.Step> steps = state.toSteps(allowNearby);
 		if (!planned || steps.isEmpty() || (steps.size() <= 1 && !allowSingleStepPlan)) {
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.diag(
 				"[chain_debug] unavailable final_recipe={} planned={} steps={} final_counts={}",
 				finalCandidate.recipeId(),
 				planned,
@@ -320,7 +320,7 @@ final class ChainCraftPlanner {
 				// Failure-path logs deliberately omit the counts map: formatting
 				// a storage system's full inventory per backtracking step wrote
 				// hundreds of MB during a single pathological search.
-				ReachCraftingMod.LOGGER.info(
+				ReachCraftingMod.diag(
 					"[chain_debug] recipe_fail reason=ensure_exact_failed recipe={} output={} ingredient={} required={}",
 					candidate.recipeId(),
 					ContainerUtils.formatStack(candidate.displayStack()),
@@ -332,7 +332,7 @@ final class ChainCraftPlanner {
 		}
 
 		if (!planIngredientSlots(candidate, recipeCopies, flexibleSlots, 0, state, resolvingItemIds, required)) {
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.diag(
 				"[chain_debug] recipe_fail reason=ingredient_slots_failed recipe={} output={} resolving={}",
 				candidate.recipeId(),
 				ContainerUtils.formatStack(candidate.displayStack()),
@@ -383,7 +383,7 @@ final class ChainCraftPlanner {
 			int totalRequired = trialRequired.getOrDefault(itemId, 0) + recipeCopies;
 			trialRequired.put(itemId, totalRequired);
 			if (!ensureItem(itemId, totalRequired, trialState, resolvingItemIds)) {
-				ReachCraftingMod.LOGGER.info(
+				ReachCraftingMod.diag(
 					"[chain_debug] ingredient_choice_failed recipe={} output={} slot={} item={} required={}",
 					candidate.recipeId(),
 					ContainerUtils.formatStack(candidate.displayStack()),
@@ -401,7 +401,7 @@ final class ChainCraftPlanner {
 			}
 		}
 
-		ReachCraftingMod.LOGGER.info(
+		ReachCraftingMod.diag(
 			"[chain_debug] recipe_fail reason=no_ingredient_choice recipe={} output={} slot={} slot_items={} resolving={}",
 			candidate.recipeId(),
 			ContainerUtils.formatStack(candidate.displayStack()),
@@ -436,7 +436,7 @@ final class ChainCraftPlanner {
 			return false;
 		}
 		if (!resolvingItemIds.add(itemId)) {
-			ReachCraftingMod.LOGGER.info("[chain_debug] ensure_fail reason=cycle item={} resolving={}", itemId, resolvingItemIds);
+			ReachCraftingMod.diag("[chain_debug] ensure_fail reason=cycle item={} resolving={}", itemId, resolvingItemIds);
 			return false;
 		}
 		if (--planAttemptsRemaining < 0) {
@@ -482,7 +482,7 @@ final class ChainCraftPlanner {
 					trialState.counts.getOrDefault(itemId, 0)
 				);
 			}
-			ReachCraftingMod.LOGGER.info("[chain_debug] ensure_fail reason=no_candidate_succeeded item={} candidates={}", itemId, formatCandidates(candidates));
+			ReachCraftingMod.diag("[chain_debug] ensure_fail reason=no_candidate_succeeded item={} candidates={}", itemId, formatCandidates(candidates));
 			FailedEnsure existing = failedEnsureMemo.get(itemId);
 			if (existing == null || requiredCount < existing.requiredCount()) {
 				failedEnsureMemo.put(itemId, new FailedEnsure(requiredCount, available));
@@ -608,7 +608,21 @@ final class ChainCraftPlanner {
 		if (ReachCraftingConfig.get().countPreference() == IngredientPlanning.CountPreference.HIGHEST_TOTAL) {
 			byCount = byCount.reversed();
 		}
-		return byAvailableNow.thenComparing(byRecipeInputAvailability).thenComparing(byCount).thenComparing(Comparator.naturalOrder());
+		// The same last-resort tier the direct planner applies in
+		// IngredientPlanning.compareByPreference: a chain step needing "any oak
+		// log" must not spend the stripped ones just because there are more of
+		// them. Sits BELOW byAvailableNow on purpose -- dodging a deprioritised
+		// item is worth losing the count preference over, but not worth
+		// inventing a deeper chain to replace something already in hand.
+		java.util.Set<String> lastResortCategories =
+			LastResortIngredients.activeCategories(ReachCraftingConfig.get());
+		Comparator<String> byLastResort = Comparator.comparingInt((String itemId) ->
+			LastResortIngredients.isLastResort(itemId, lastResortCategories) ? 1 : 0);
+		return byAvailableNow
+			.thenComparing(byLastResort)
+			.thenComparing(byRecipeInputAvailability)
+			.thenComparing(byCount)
+			.thenComparing(Comparator.naturalOrder());
 	}
 
 	private int bestCandidateScore(
@@ -772,12 +786,12 @@ final class ChainCraftPlanner {
 				knownRecipeIds,
 				minecraft.getSingleplayerServer().getRecipeManager().getRecipes()
 			);
-			ReachCraftingMod.LOGGER.info("[chain_debug] integrated_recipe_index added={}", added);
+			ReachCraftingMod.diag("[chain_debug] integrated_recipe_index added={}", added);
 			return;
 		}
 
 		if (minecraft.getConnection() == null || !(minecraft.getConnection().recipes() instanceof FabricRecipeManager recipeManager)) {
-			ReachCraftingMod.LOGGER.info("[chain_debug] synced_recipe_index unavailable connection={} fabric_recipe_manager={}", minecraft.getConnection() != null, false);
+			ReachCraftingMod.diag("[chain_debug] synced_recipe_index unavailable connection={} fabric_recipe_manager={}", minecraft.getConnection() != null, false);
 			return;
 		}
 
@@ -786,7 +800,7 @@ final class ChainCraftPlanner {
 			knownRecipeIds,
 			recipeManager.getSynchronizedRecipes().recipes()
 		);
-		ReachCraftingMod.LOGGER.info("[chain_debug] synced_recipe_index added={}", added);
+		ReachCraftingMod.diag("[chain_debug] synced_recipe_index added={}", added);
 	}
 
 	private int addRecipeHolderCandidates(
@@ -818,7 +832,7 @@ final class ChainCraftPlanner {
 				}
 			}
 		}
-		ReachCraftingMod.LOGGER.info("[chain_debug] recipe_holder_index scanned_displays={} added={}", displayIndex, added);
+		ReachCraftingMod.diag("[chain_debug] recipe_holder_index scanned_displays={} added={}", displayIndex, added);
 		return added;
 	}
 

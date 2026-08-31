@@ -509,7 +509,7 @@ final class GridTopUp {
 			}
 		}
 		if (ringDeposits > 0 || singleInserts > 0) {
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.diag(
 				"[grid_topup] staged via clicks ring_deposits={} single_inserts={} place packet skipped",
 				ringDeposits, singleInserts
 			);
@@ -519,7 +519,7 @@ final class GridTopUp {
 
 	/** Log why the ring path stood down; the caller falls back to a place packet. */
 	private static boolean declined(String reason) {
-		ReachCraftingMod.LOGGER.info("[grid_topup] stage declined reason={}", reason);
+		ReachCraftingMod.diag("[grid_topup] stage declined reason={}", reason);
 		return false;
 	}
 
@@ -627,7 +627,7 @@ final class GridTopUp {
 				return false;
 			}
 		}
-		ReachCraftingMod.LOGGER.info(
+		ReachCraftingMod.diag(
 			"[grid_topup] spread source_slot={} across {} ring slots",
 			source,
 			targets.size()

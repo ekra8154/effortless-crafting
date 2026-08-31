@@ -155,6 +155,15 @@ public final class ReachCraftingConfigScreen {
 			.build());
 
 		queuingGroup.add(entries.startBooleanToggle(
+				Component.translatable("option.reachcrafting.prefer_non_stripped_logs"),
+				config.preferNonStrippedLogs()
+			)
+			.setDefaultValue(true)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.prefer_non_stripped_logs"))
+			.setSaveConsumer(config::setPreferNonStrippedLogs)
+			.build());
+
+		queuingGroup.add(entries.startBooleanToggle(
 				Component.translatable("option.reachcrafting.redistribute_to_craft_when_needed"),
 				config.redistributeToCraftWhenNeeded()
 			)
@@ -471,6 +480,15 @@ public final class ReachCraftingConfigScreen {
 			.setDefaultValue(false)
 			.setTooltip(Component.translatable("tooltip.reachcrafting.debug_messages_enabled"))
 			.setSaveConsumer(config::setDebugMessagesEnabled)
+			.build());
+
+		messagesGroup.add(entries.startBooleanToggle(
+				Component.translatable("option.reachcrafting.diagnostic_logging_enabled"),
+				config.diagnosticLoggingEnabled()
+			)
+			.setDefaultValue(false)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.diagnostic_logging_enabled"))
+			.setSaveConsumer(config::setDiagnosticLoggingEnabled)
 			.build());
 
 		messagesGroup.add(entries.startBooleanToggle(

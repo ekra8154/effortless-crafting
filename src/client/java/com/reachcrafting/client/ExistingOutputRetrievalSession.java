@@ -81,7 +81,7 @@ final class ExistingOutputRetrievalSession extends BaseCraftSession {
 			finishSession(false);
 			return;
 		}
-		ReachCraftingMod.LOGGER.info(
+		ReachCraftingMod.diag(
 			"[retrieve_existing] start item={} requested={} candidates={}",
 			request.outputItemId(),
 			remainingCount,

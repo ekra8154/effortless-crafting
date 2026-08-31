@@ -111,8 +111,20 @@ final class GridExtractor {
 	 * and would stall the result slot).
 	 */
 	static boolean isEligibleSummary(RecipeIngredientSummary summary) {
+		return describeIneligibility(summary) == null;
+	}
+
+	/**
+	 * Why this recipe cannot use counted extraction, or null when it can.
+	 *
+	 * <p>The eligibility predicate and its explanation share one body on
+	 * purpose: the placement path logs this slug when it falls through to
+	 * repeated single placements, and a separately maintained explanation
+	 * would drift from the rule it claims to describe.</p>
+	 */
+	static String describeIneligibility(RecipeIngredientSummary summary) {
 		if (summary == null || summary.slots().isEmpty()) {
-			return false;
+			return "no_ingredients";
 		}
 		boolean sawIngredient = false;
 		for (RecipeIngredientSummary.IngredientSlot slot : summary.slots()) {
@@ -120,17 +132,23 @@ final class GridExtractor {
 				continue;
 			}
 			sawIngredient = true;
+			// Counted extraction pulls whole stacks off the result slot; an
+			// unstackable slot stages one copy per placement and a crafting
+			// remainder (a bucket back from milk) lands in the grid mid-batch
+			// and desynchronises the count.
 			if (slot.maxStackSize() <= 1) {
-				return false;
+				return "unstackable_ingredient";
 			}
 			for (String itemId : slot.itemIds()) {
 				var item = BuiltInRegistries.ITEM.getValue(net.minecraft.resources.Identifier.parse(itemId));
+				// This branch's getCraftingRemainder() returns a stack, not a
+				// nullable; 26.x changed the signature.
 				if (item != null && !item.getCraftingRemainder().isEmpty()) {
-					return false;
+					return "crafting_remainder";
 				}
 			}
 		}
-		return sawIngredient;
+		return sawIngredient ? null : "no_ingredients";
 	}
 
 	/** Arm a T1 extraction of exactly {@code copies} crafts of {@code output}. */
@@ -170,7 +188,7 @@ final class GridExtractor {
 		// (observed: 4 stacks of dispensers accumulating) starves later
 		// batches of slots and shrinks iteration sizes.
 		ejectOutputs = keyCycle && BulkChainCraftController.shouldDirectEjectCurrentResult();
-		ReachCraftingMod.LOGGER.info(
+		ReachCraftingMod.diag(
 			"[grid_extract] armed target_copies={} output={} key_cycle={} eject={}",
 			targetCopies,
 			ContainerUtils.formatStack(expectedOutput),
@@ -258,7 +276,7 @@ final class GridExtractor {
 						quietTicks = 0;
 						budgetWaitTicks++;
 						if (budgetWaitTicks == 1 || budgetWaitTicks % 40 == 0) {
-							ReachCraftingMod.LOGGER.info(
+							ReachCraftingMod.diag(
 								"[grid_extract] budget_wait ticks={} crafted={}/{} governor_clicks={}",
 								budgetWaitTicks, craftedCopies, targetCopies, GridTopUp.clickWindowCount());
 						}
@@ -349,7 +367,7 @@ final class GridExtractor {
 				client.gameMode.handleInventoryMouseClick(menu.containerId, resultSlot.index, 0, ClickType.QUICK_MOVE, client.player);
 				GridTopUp.recordClick();
 				quickMoves++;
-				ReachCraftingMod.LOGGER.info(
+				ReachCraftingMod.diag(
 					"[grid_extract] quick_move staged={} credited={} overshoot={}",
 					staged, Math.min(staged, remaining), allowOvershoot);
 				craftedCopies += Math.min(staged, remaining);
@@ -361,7 +379,7 @@ final class GridExtractor {
 				// One-time note when a batch settles into counted mode: which
 				// gate blocked the shift-click (observability for "why is
 				// this crafting one at a time?").
-				ReachCraftingMod.LOGGER.info(
+				ReachCraftingMod.diag(
 					"[grid_extract] counted_mode staged={} remaining={} overshoot={} room_ok={} stable={}",
 					staged, remaining, allowOvershoot, fastPathSafe, resultStableTicks);
 			}
@@ -429,7 +447,7 @@ final class GridExtractor {
 	}
 
 	private static void finish(Minecraft client, boolean success, String reason) {
-		ReachCraftingMod.LOGGER.info(
+		ReachCraftingMod.diag(
 			"[grid_extract] finished success={} reason={} crafted={}/{} ticks={} quick_moves={} pickups={}",
 			success,
 			reason,
