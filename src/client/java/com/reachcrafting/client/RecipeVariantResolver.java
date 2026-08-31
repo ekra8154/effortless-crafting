@@ -116,7 +116,7 @@ public final class RecipeVariantResolver {
 		int requestedCopies = Math.max(desiredCopiesPerSlot, 1);
 		boolean lockToCurrentVariant = BulkAutoCraftController.shouldLockToCurrentVariant(clickedRecipeId, collection, explicitVariantSelection);
 		/*
-		ReachCraftingMod.LOGGER.info(
+		ReachCraftingMod.diag(
 			"[recipe_variant_candidates] clicked_recipe={} collection_size={} craft_all={} requested_copies={} handling={} lock_current={} candidates={}",
 			clickedRecipeId,
 			collection.getRecipes().size(),

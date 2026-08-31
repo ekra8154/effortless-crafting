@@ -121,7 +121,7 @@ public final class PlaceRecipeBudget {
 			ceilingRate = config.packetBudgetInitialRate();
 			tokens = Math.min(tokens, burstCapacity);
 			budgetDirty = false;
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.diag(
 				"[place_budget] adaptive OFF; pinned server={} rate={}/s", key,
 				String.format("%.2f", ratePerSecond));
 			return;
@@ -131,7 +131,7 @@ public final class PlaceRecipeBudget {
 			ratePerSecond = clamp(stored.rate(), MIN_RATE_PER_SECOND, config.packetBudgetMaxRate());
 			burstCapacity = clamp(stored.burst(), MIN_BURST_CAPACITY, MAX_BURST_CAPACITY);
 			ceilingRate = clamp(stored.ceiling(), MIN_RATE_PER_SECOND, config.packetBudgetMaxRate());
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.diag(
 				"[place_budget] loaded persisted budget server={} rate={}/s burst={} ceiling={}/s",
 				key, String.format("%.2f", ratePerSecond), String.format("%.1f", burstCapacity),
 				String.format("%.2f", ceilingRate));
@@ -139,7 +139,7 @@ public final class PlaceRecipeBudget {
 			ratePerSecond = config.packetBudgetInitialRate();
 			burstCapacity = DEFAULT_BURST_CAPACITY;
 			ceilingRate = config.packetBudgetMaxRate();
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.diag(
 				"[place_budget] new server={} starting budget rate={}/s ceiling={}/s",
 				key, String.format("%.2f", ratePerSecond), String.format("%.2f", ceilingRate));
 		}
@@ -189,7 +189,7 @@ public final class PlaceRecipeBudget {
 		// sentinel is then never replaced - goes unlogged.
 		if (lastDeferralLogTick == Long.MIN_VALUE || clientTicks - lastDeferralLogTick >= 20) {
 			lastDeferralLogTick = clientTicks;
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.diag(
 				"[place_budget] deferring container={} queue={} tokens={} rate={}/s",
 				containerId, deferred.size(), String.format("%.1f", tokens), String.format("%.1f", ratePerSecond)
 			);
@@ -211,7 +211,7 @@ public final class PlaceRecipeBudget {
 		while (!deferred.isEmpty() && tokens >= 1.0) {
 			PendingPlace pending = deferred.pollFirst();
 			if (pending.containerId() != client.player.containerMenu.containerId) {
-				ReachCraftingMod.LOGGER.info(
+				ReachCraftingMod.diag(
 					"[place_budget] dropped stale deferred place container={} current={}",
 					pending.containerId(), client.player.containerMenu.containerId
 				);
@@ -309,7 +309,7 @@ public final class PlaceRecipeBudget {
 		}
 		if (lastCursorRescueTick != Long.MIN_VALUE
 			&& clientTicks - lastCursorRescueTick <= CURSOR_RESCUE_ATTRIBUTION_WINDOW_TICKS) {
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.diag(
 				"[place_budget] timeout after cursor rescue ({} ticks ago) - occupied cursor, not a limiter drop; budget unchanged",
 				clientTicks - lastCursorRescueTick);
 			return;
@@ -323,7 +323,7 @@ public final class PlaceRecipeBudget {
 			// No placement was sent recently, so this timeout can't be a
 			// dropped place packet (e.g. a click-staged chain step failed for
 			// its own reasons). Don't punish the budget for it.
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.diag(
 				"[place_budget] timeout without recent place send ({}) - budget unchanged",
 				lastSendTick == Long.MIN_VALUE
 					? "none this session"
@@ -382,13 +382,13 @@ public final class PlaceRecipeBudget {
 		if (cleanProgressSinceDrop >= CEILING_RELAX_CLEAN_BATCHES && ceilingRate < maxRate) {
 			ceilingRate = Math.min(maxRate, ceilingRate * CEILING_RELAX_MULTIPLIER);
 			cleanProgressSinceDrop = 0;
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.diag(
 				"[place_budget] ceiling relaxed to {}/s after {} utilized clean batches",
 				String.format("%.2f", ceilingRate), CEILING_RELAX_CLEAN_BATCHES);
 		}
 		if (ratePerSecond != before) {
 			budgetDirty = true;
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.diag(
 				"[place_budget] probed up rate={}/s burst={} (utilized {}/s)",
 				String.format("%.2f", ratePerSecond), String.format("%.1f", burstCapacity),
 				String.format("%.2f", recentSendRate()));
@@ -407,7 +407,7 @@ public final class PlaceRecipeBudget {
 		PlaceBudgetStore.remove(key);
 		currentServerKey = null; // force a fresh load on next contact
 		budgetDirty = false;
-		ReachCraftingMod.LOGGER.info("[place_budget] forgot learned budget for server={} (adaptive turned off)", key);
+		ReachCraftingMod.diag("[place_budget] forgot learned budget for server={} (adaptive turned off)", key);
 	}
 
 	/** Human-readable current-server budget for the config screen, or null

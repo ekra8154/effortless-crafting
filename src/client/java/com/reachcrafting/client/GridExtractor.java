@@ -186,7 +186,7 @@ final class GridExtractor {
 		// (observed: 4 stacks of dispensers accumulating) starves later
 		// batches of slots and shrinks iteration sizes.
 		ejectOutputs = keyCycle && BulkChainCraftController.shouldDirectEjectCurrentResult();
-		ReachCraftingMod.LOGGER.info(
+		ReachCraftingMod.diag(
 			"[grid_extract] armed target_copies={} output={} key_cycle={} eject={}",
 			targetCopies,
 			ContainerUtils.formatStack(expectedOutput),
@@ -274,7 +274,7 @@ final class GridExtractor {
 						quietTicks = 0;
 						budgetWaitTicks++;
 						if (budgetWaitTicks == 1 || budgetWaitTicks % 40 == 0) {
-							ReachCraftingMod.LOGGER.info(
+							ReachCraftingMod.diag(
 								"[grid_extract] budget_wait ticks={} crafted={}/{} governor_clicks={}",
 								budgetWaitTicks, craftedCopies, targetCopies, GridTopUp.clickWindowCount());
 						}
@@ -365,7 +365,7 @@ final class GridExtractor {
 				client.gameMode.handleContainerInput(menu.containerId, resultSlot.index, 0, ContainerInput.QUICK_MOVE, client.player);
 				GridTopUp.recordClick();
 				quickMoves++;
-				ReachCraftingMod.LOGGER.info(
+				ReachCraftingMod.diag(
 					"[grid_extract] quick_move staged={} credited={} overshoot={}",
 					staged, Math.min(staged, remaining), allowOvershoot);
 				craftedCopies += Math.min(staged, remaining);
@@ -377,7 +377,7 @@ final class GridExtractor {
 				// One-time note when a batch settles into counted mode: which
 				// gate blocked the shift-click (observability for "why is
 				// this crafting one at a time?").
-				ReachCraftingMod.LOGGER.info(
+				ReachCraftingMod.diag(
 					"[grid_extract] counted_mode staged={} remaining={} overshoot={} room_ok={} stable={}",
 					staged, remaining, allowOvershoot, fastPathSafe, resultStableTicks);
 			}
@@ -445,7 +445,7 @@ final class GridExtractor {
 	}
 
 	private static void finish(Minecraft client, boolean success, String reason) {
-		ReachCraftingMod.LOGGER.info(
+		ReachCraftingMod.diag(
 			"[grid_extract] finished success={} reason={} crafted={}/{} ticks={} quick_moves={} pickups={}",
 			success,
 			reason,

@@ -82,7 +82,7 @@ public final class ReproHarness {
 			return;
 		}
 		cmdFile = FabricLoader.getInstance().getGameDir().resolve("repro-cmd.txt");
-		ReachCraftingMod.LOGGER.info("[repro_harness] armed cmd_file={} quiet_launch={} free_mouse={} (F6 toggles)",
+		ReachCraftingMod.diag("[repro_harness] armed cmd_file={} quiet_launch={} free_mouse={} (F6 toggles)",
 			cmdFile, QUIET_LAUNCH, freeMouse);
 		ClientTickEvents.END_CLIENT_TICK.register(ReproHarness::tick);
 	}
@@ -99,7 +99,7 @@ public final class ReproHarness {
 			} else {
 				client.mouseHandler.grabMouse();
 			}
-			ReachCraftingMod.LOGGER.info("[repro_harness] free-mouse {} (F6)", freeMouse ? "ON" : "OFF");
+			ReachCraftingMod.diag("[repro_harness] free-mouse {} (F6)", freeMouse ? "ON" : "OFF");
 		}
 		freeMouseKeyWasDown = down;
 	}
@@ -121,7 +121,7 @@ public final class ReproHarness {
 		if (command == null || command.isBlank()) {
 			return;
 		}
-		ReachCraftingMod.LOGGER.info("[repro_harness] command={}", command);
+		ReachCraftingMod.diag("[repro_harness] command={}", command);
 		String[] parts = command.trim().split("\\s+");
 		switch (parts[0]) {
 			case "open" -> openNearestCraftingTable(client);
@@ -131,7 +131,7 @@ public final class ReproHarness {
 				if (client.gui.screen() != null) {
 					client.player.closeContainer();
 				}
-				ReachCraftingMod.LOGGER.info("[repro_harness] closed container");
+				ReachCraftingMod.diag("[repro_harness] closed container");
 			}
 			case "clearcache" -> {
 				// The repro reuses the same chest positions every run with
@@ -139,7 +139,7 @@ public final class ReproHarness {
 				// nearby-container cache, so it would withdraw against stale
 				// data. Clear it so the next craft rescans the real contents.
 				NearbyContainerCache.clear();
-				ReachCraftingMod.LOGGER.info("[repro_harness] cleared nearby container cache");
+				ReachCraftingMod.diag("[repro_harness] cleared nearby container cache");
 			}
 			case "bulk" -> {
 				if (parts.length < 2) {
@@ -170,7 +170,7 @@ public final class ReproHarness {
 			autoConfirmTicks--;
 			if (client.gui.screen() instanceof net.minecraft.client.gui.components.PopupScreen popup
 				&& ChainCraftPopupController.isChainCraftPopup(popup)) {
-				ReachCraftingMod.LOGGER.info("[repro_harness] auto-confirming chain popup");
+				ReachCraftingMod.diag("[repro_harness] auto-confirming chain popup");
 				ChainCraftPopupController.confirm(popup);
 				autoConfirmTicks = 0;
 			}
@@ -200,7 +200,7 @@ public final class ReproHarness {
 				if (stack.isEmpty() || !itemId.equals(stack.getItem().builtInRegistryHolder().key().identifier().toString())) {
 					continue;
 				}
-				ReachCraftingMod.LOGGER.info(
+				ReachCraftingMod.diag(
 					"[repro_harness] clicking recipe id={} item={} shift=true ctrl={}", entry.id(), itemId, ctrl);
 				// Arm the sticky bulk latch the same way a user's physical
 				// alt-hold does, so the click runs a refillable bulk session.

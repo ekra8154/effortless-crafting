@@ -52,10 +52,10 @@ public final class BulkChainCraftController {
 		// meantime, re-assert it rather than dying on the first tick. A real
 		// mid-session toggle-off still aborts via the tick check.
 		if (!AutoCraftController.isBulkModeEnabled()) {
-			ReachCraftingMod.LOGGER.info("[bulk_chain] re_latching_bulk_mode_for_confirmed_session");
+			ReachCraftingMod.diag("[bulk_chain] re_latching_bulk_mode_for_confirmed_session");
 			AutoCraftController.setEnabledMode(ReachCraftingConfig.AutoCraftMode.BULK);
 		}
-		ReachCraftingMod.LOGGER.info(
+		ReachCraftingMod.diag(
 			"[bulk_chain] session_start recipe={} output={} requested_copies={} allow_nearby={}",
 			selection.recipeId(),
 			ContainerUtils.formatStack(selection.displayStack()),
@@ -108,7 +108,7 @@ public final class BulkChainCraftController {
 			ChainCraftController.abort(false);
 		}
 		if (activeSession != null) {
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.diag(
 				"[bulk_chain] session_stop aborted={} reason={} completed={}/{} output={}",
 				aborted,
 				reason,
@@ -120,7 +120,7 @@ public final class BulkChainCraftController {
 				// Make user-initiated stops unmistakable in postmortems: this
 				// reason means the screen was closed / focus dropped, i.e. a
 				// deliberate interrupt — NOT a mod failure.
-				ReachCraftingMod.LOGGER.info(
+				ReachCraftingMod.diag(
 					"[bulk_chain] session_stop was USER-INITIATED (screen closed or focus lost), not a crafting failure");
 			}
 			if (activeSession.completedCopies() > 0) {
@@ -174,7 +174,7 @@ public final class BulkChainCraftController {
 			return;
 		}
 		if (!AutoCraftController.isBulkModeEnabled()) {
-			ReachCraftingMod.LOGGER.info("[bulk_chain] bulk_mode_disabled_detail {}", AutoCraftController.describeHoldState());
+			ReachCraftingMod.diag("[bulk_chain] bulk_mode_disabled_detail {}", AutoCraftController.describeHoldState());
 			stop(true, "bulk_mode_disabled");
 			return;
 		}
@@ -210,7 +210,7 @@ public final class BulkChainCraftController {
 		int inventoryIncrease = Math.max(0, currentOutputCount - session.iterationBaselineOutputCount());
 		int gainedOutputCount = inventoryIncrease + session.iterationEjectedOutputCount();
 		int craftedCopies = gainedOutputCount / outputPerCraft;
-		ReachCraftingMod.LOGGER.info(
+		ReachCraftingMod.diag(
 			"[bulk_chain] iteration_finished crafted_copies={} inventory_increase={} ejected={} completed_before={}/{}",
 			craftedCopies,
 			inventoryIncrease,
@@ -231,7 +231,7 @@ public final class BulkChainCraftController {
 			// and the backoff collapses to a single tick.
 			activeSession = session.withIterationAccounted(0, stalled, Math.max(1, session.batchCap() / 2));
 			settleDelayTicks = PlaceRecipeBudget.stallBackoffTicks(client);
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.diag(
 				"[bulk_chain] stall_backoff stalled={}/{} settle_delay_ticks={}",
 				stalled, MAX_CONSECUTIVE_STALLED_ITERATIONS, settleDelayTicks);
 			return;
@@ -281,7 +281,7 @@ public final class BulkChainCraftController {
 		if (planCost > affordablePlaces) {
 			int clamped = Math.max(1, (int) (batchTarget * affordablePlaces / planCost));
 			if (clamped < batchTarget) {
-				ReachCraftingMod.LOGGER.info(
+				ReachCraftingMod.diag(
 					"[bulk_chain] budget_clamp batch_target={} -> {} plan_cost={} affordable={}",
 					batchTarget, clamped, planCost, String.format("%.1f", affordablePlaces));
 				batchTarget = clamped;
@@ -310,7 +310,7 @@ public final class BulkChainCraftController {
 		// row idle, and 2 where 3 would fit).
 		if (!ChainInventoryFitEstimator.planFits(client, client.player, plan.get(), willEjectFinalOutputs(session, plan.get()))) {
 			int failCopies = plan.get().finalRecipeCopies();
-			ReachCraftingMod.LOGGER.info("[bulk_chain] batch_shrink from_copies={} reason=inventory_fit", failCopies);
+			ReachCraftingMod.diag("[bulk_chain] batch_shrink from_copies={} reason=inventory_fit", failCopies);
 			Optional<ChainCraftPlan> best = Optional.empty();
 			int lo = 0;
 			int hi = failCopies;
@@ -349,7 +349,7 @@ public final class BulkChainCraftController {
 		}
 		int baselineOutputCount = BulkAutoCraftController.countAccessibleOutput(client, session.selection().displayStack());
 		activeSession = session.withChainStarted(baselineOutputCount, plan.get().finalRecipeCopies());
-		ReachCraftingMod.LOGGER.info(
+		ReachCraftingMod.diag(
 			"[bulk_chain] iteration_start batch_copies={} steps={} remaining={} batch_cap={}",
 			plan.get().finalRecipeCopies(),
 			plan.get().steps().size(),

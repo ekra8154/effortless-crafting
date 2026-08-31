@@ -28,6 +28,7 @@ public final class ReachCraftingConfig {
 	private static final RevolvingCraftHandling DEFAULT_REVOLVING_CRAFT_HANDLING = RevolvingCraftHandling.SPECIFIC_VARIANT_ONLY;
 	private static final IngredientPlanning.CountPreference DEFAULT_COUNT_PREFERENCE = IngredientPlanning.CountPreference.HIGHEST_TOTAL;
 	private static final boolean DEFAULT_PREFER_NON_STRIPPED_LOGS = true;
+	private static final boolean DEFAULT_DIAGNOSTIC_LOGGING_ENABLED = false;
 	private static final boolean DEFAULT_SHOW_NEARBY_CRAFTABLE_INDICATOR = true;
 	private static final boolean DEFAULT_ENABLE_EXISTING_OUTPUT_RETRIEVAL = true;
 	private static final boolean DEFAULT_CACHE_CONTAINERS_FOR_FASTER_SEARCH = true;
@@ -142,6 +143,7 @@ public final class ReachCraftingConfig {
 	private boolean altClickInstantCraft;
 	private boolean debugMessagesEnabled;
 	private boolean performanceLoggingEnabled;
+	private boolean diagnosticLoggingEnabled;
 	private boolean expandedVariantMenuTooltips;
 	private Set<String> blacklistedContainerIds;
 	private List<Integer> recentRecipeDisplayIds;
@@ -226,6 +228,7 @@ public final class ReachCraftingConfig {
 			instance.altClickInstantCraft = stored.altClickInstantCraft != null ? stored.altClickInstantCraft : DEFAULT_ALT_CLICK_INSTANT_CRAFT;
 			instance.debugMessagesEnabled = stored.debugMessagesEnabled != null ? stored.debugMessagesEnabled : DEFAULT_DEBUG_MESSAGES_ENABLED;
 			instance.performanceLoggingEnabled = stored.performanceLoggingEnabled != null ? stored.performanceLoggingEnabled : DEFAULT_PERFORMANCE_LOGGING_ENABLED;
+			instance.diagnosticLoggingEnabled = stored.diagnosticLoggingEnabled != null ? stored.diagnosticLoggingEnabled : DEFAULT_DIAGNOSTIC_LOGGING_ENABLED;
 			instance.expandedVariantMenuTooltips = stored.expandedVariantMenuTooltips != null ? stored.expandedVariantMenuTooltips : DEFAULT_EXPANDED_VARIANT_MENU_TOOLTIPS;
 			
 			// Enforce capability gate on load
@@ -709,6 +712,14 @@ public final class ReachCraftingConfig {
 		return performanceLoggingEnabled;
 	}
 
+	public boolean diagnosticLoggingEnabled() {
+		return diagnosticLoggingEnabled;
+	}
+
+	public void setDiagnosticLoggingEnabled(boolean diagnosticLoggingEnabled) {
+		this.diagnosticLoggingEnabled = diagnosticLoggingEnabled;
+	}
+
 	public void setPerformanceLoggingEnabled(boolean performanceLoggingEnabled) {
 		this.performanceLoggingEnabled = performanceLoggingEnabled;
 	}
@@ -918,6 +929,7 @@ public final class ReachCraftingConfig {
 		defaults.altClickInstantCraft = DEFAULT_ALT_CLICK_INSTANT_CRAFT;
 		defaults.debugMessagesEnabled = DEFAULT_DEBUG_MESSAGES_ENABLED;
 		defaults.performanceLoggingEnabled = DEFAULT_PERFORMANCE_LOGGING_ENABLED;
+		defaults.diagnosticLoggingEnabled = DEFAULT_DIAGNOSTIC_LOGGING_ENABLED;
 		defaults.expandedVariantMenuTooltips = DEFAULT_EXPANDED_VARIANT_MENU_TOOLTIPS;
 		defaults.blacklistedContainerIds = new LinkedHashSet<>(DEFAULT_BLACKLIST);
 		defaults.recentRecipeDisplayIds = new ArrayList<>();
@@ -1170,6 +1182,7 @@ public final class ReachCraftingConfig {
 		private Boolean altClickInstantCraft;
 		private Boolean debugMessagesEnabled;
 		private Boolean performanceLoggingEnabled;
+		private Boolean diagnosticLoggingEnabled;
 		private Boolean expandedVariantMenuTooltips;
 		private Boolean enableEnablingBulkMode;
 		private Set<String> blacklistedContainerIds;
@@ -1227,6 +1240,7 @@ public final class ReachCraftingConfig {
 			this.altClickInstantCraft = config.altClickInstantCraft;
 			this.debugMessagesEnabled = config.debugMessagesEnabled;
 			this.performanceLoggingEnabled = config.performanceLoggingEnabled;
+			this.diagnosticLoggingEnabled = config.diagnosticLoggingEnabled;
 			this.expandedVariantMenuTooltips = config.expandedVariantMenuTooltips;
 			this.blacklistedContainerIds = config.blacklistedContainerIds;
 			this.recentRecipeDisplayIds = config.recentRecipeDisplayIds;

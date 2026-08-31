@@ -88,7 +88,7 @@ final class RecipeClickExecutor {
 			ReachCraftingMod.LOGGER.warn("[recipe_click] missing RecipeDisplayEntry for recipe_index={}", recipeId.index());
 			return;
 		}
-		ReachCraftingMod.LOGGER.info(
+		ReachCraftingMod.diag(
 			"[recipe_click] resolved clicked_recipe={} selected_recipe={} explicit_variant={} requested_clicks={} allow_nearby={} craft_all={} display_stack={}",
 			recipeId,
 			selectedRecipe.recipeId(),
@@ -286,7 +286,7 @@ final class RecipeClickExecutor {
 
 		if (deficitReport.hasMissingIngredients()) {
 			ReachCraftingMod.LOGGER.debug("[chain_gate_hold_state] {}", AutoCraftController.describeHoldState());
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.diag(
 				"[chain_gate] recipe={} missing={} direct_priority={} auto_requested={} mode={} use_dry_run={} force_dry_run={} allow_nearby={} bulk_mode={} craft_all={} effective_craft_all={} requested_clicks={} desired_copies={} available={} chain_available={} local_available={}",
 				selectedRecipe.recipeId(),
 				deficitReport.compactMissingSummary(),
@@ -336,7 +336,7 @@ final class RecipeClickExecutor {
 				String chainMissingMessage = chainSelection.recipeId().equals(selectedRecipe.recipeId())
 					? missingMessage
 					: missingMessageFor(chainSelection, availableCounts, availableItems, effectiveCraftAll, desiredVariantCopies);
-				ReachCraftingMod.LOGGER.info(
+				ReachCraftingMod.diag(
 					"[chain_plan] available clicked_recipe={} recipe={} requested={} planned={} steps={} allow_nearby={} bulk_mode={}",
 					selectedRecipe.recipeId(),
 					chainSelection.recipeId(),
@@ -367,7 +367,7 @@ final class RecipeClickExecutor {
 				ChainCraftPopupController.handlePlan(chainPlan, popupRequestedCopies, false, chainMissingMessage);
 				return;
 			}
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.diag(
 				"[chain_plan] unavailable recipe={} requested={} allow_nearby={} missing={} nearby_cache_incomplete={}",
 				selectedRecipe.recipeId(),
 				effectiveCraftAll ? requestedClicks : desiredVariantCopies,
@@ -411,7 +411,7 @@ final class RecipeClickExecutor {
 			&& nearbyCacheIncomplete
 			&& AutoCraftController.isBulkModeEnabled()
 			&& (refillableBulkMaxMode || effectiveCraftAll)) {
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.diag(
 				"[bulk_warmup] cold_cache_full_scan_first recipe={} clicks={} craft_all={} refillable={}",
 				selectedRecipe.recipeId(),
 				effectiveRequestedClicks,
@@ -475,19 +475,19 @@ final class RecipeClickExecutor {
 						// packet skipped.
 						if (nearbyChainFinalT2) {
 							GridExtractor.begin(selectedRecipe.displayStack(), effectiveRequestedClicks, ingredientSummary, true);
-							ReachCraftingMod.LOGGER.info(
+							ReachCraftingMod.diag(
 								"[recipe_place] chain_t2 key-cycle batch copies={} recipe={} (nearby path)",
 								effectiveRequestedClicks,
 								selectedRecipe.recipeId()
 							);
 						}
 					} else {
-						ReachCraftingMod.LOGGER.info("[recipe_place] handlePlaceRecipe(shift=true) from RecipeClickExecutor NEARBY path");
+						ReachCraftingMod.diag("[recipe_place] handlePlaceRecipe(shift=true) from RecipeClickExecutor NEARBY path");
 						minecraft.gameMode.handlePlaceRecipe(player.containerMenu.containerId, selectedRecipe.recipeId(), true);
 					}
 				}
 				AvailableItemSnapshot postPlaceSnapshot = AvailableItemSnapshot.capture(player, screen);
-				ReachCraftingMod.LOGGER.info(
+				ReachCraftingMod.diag(
 					"[recipe_place] post_place nearby result={} staged_copies={} requestedClicks={} queueLimit={} grid_reserved={}",
 					ContainerUtils.formatStack(player.containerMenu.getSlot(0).getItem()),
 					ContainerUtils.currentReservedCraftCopies(postPlaceSnapshot.gridStacks()),
@@ -513,7 +513,7 @@ final class RecipeClickExecutor {
 				&& !effectiveCraftAll
 				&& !immediateCraftDeficit.hasMissingIngredients()
 				&& immediateLocalCraftDeficit.hasMissingIngredients()) {
-				ReachCraftingMod.LOGGER.info(
+				ReachCraftingMod.diag(
 					"[recipe_place] skip_direct_nearby_bulk reason=nearby_only_first_craft local_missing={} total_missing={}",
 					immediateLocalCraftDeficit.compactMissingSummary(),
 					immediateCraftDeficit.compactMissingSummary()
@@ -527,7 +527,7 @@ final class RecipeClickExecutor {
 				// and aborts the session (observed as skip_schedule
 				// no_craft_staged). The bulk session is already armed here;
 				// scheduling the auto-move is all that remains.
-				ReachCraftingMod.LOGGER.info("[recipe_place] grid_topup ring cycle, dry-run bypassed");
+				ReachCraftingMod.diag("[recipe_place] grid_topup ring cycle, dry-run bypassed");
 				if (AutoCraftController.isEnabled()) {
 					ContainerUtils.scheduleAutoMove(selectedRecipe.displayStack());
 				}
@@ -619,7 +619,7 @@ final class RecipeClickExecutor {
 			} else if (chainCountedT1) {
 				gameMode.handlePlaceRecipe(player.containerMenu.containerId, selectedRecipe.recipeId(), true);
 				GridExtractor.begin(selectedRecipe.displayStack(), effectiveRequestedClicks, ingredientSummary);
-				ReachCraftingMod.LOGGER.info(
+				ReachCraftingMod.diag(
 					"[recipe_place] chain_t1 single max place + counted extraction copies={} recipe={} final_step={}",
 					effectiveRequestedClicks,
 					selectedRecipe.recipeId(),
@@ -627,7 +627,7 @@ final class RecipeClickExecutor {
 				);
 			} else if (chainFinalT2 && GridTopUp.tryStageInsteadOfPlace(minecraft, player, ingredientSummary)) {
 				GridExtractor.begin(selectedRecipe.displayStack(), effectiveRequestedClicks, ingredientSummary, true);
-				ReachCraftingMod.LOGGER.info(
+				ReachCraftingMod.diag(
 					"[recipe_place] chain_t2 key-cycle batch copies={} recipe={}",
 					effectiveRequestedClicks,
 					selectedRecipe.recipeId()
@@ -648,7 +648,7 @@ final class RecipeClickExecutor {
 					// branch, so a recipe falling in here was detectable just
 					// by feeling the stutter. Name the disqualifier instead,
 					// so the next one reports itself.
-					ReachCraftingMod.LOGGER.info(
+					ReachCraftingMod.diag(
 						"[recipe_place] slow_repeat_placement copies={} recipe={} reason={} chain={} final_step={} bulk={} summary={}",
 						iterations,
 						selectedRecipe.recipeId(),
@@ -664,7 +664,7 @@ final class RecipeClickExecutor {
 				}
 			}
 			AvailableItemSnapshot postPlaceSnapshot = AvailableItemSnapshot.capture(player, screen);
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.diag(
 				"[recipe_place] post_place direct useBulkPlace={} requestedClicks={} queueLimit={} result={} staged_copies={} grid_reserved={}",
 				useBulkPlace,
 				requestedClicks,
@@ -836,7 +836,7 @@ final class RecipeClickExecutor {
 		ItemStack expectedOutput,
 		RecipeIngredientSummary ingredientSummary
 	) {
-		com.reachcrafting.ReachCraftingMod.LOGGER.info(
+		com.reachcrafting.ReachCraftingMod.diag(
 			"[bulk_arm] clicked_recipe={} resolved_recipe={} requestedClicks={} craftAll={} allowNearby={} nearby_required={} bulk_mode={} explicit_variant={} refillable={} expected_output={}",
 			clickedRecipeId,
 			recipeId,
@@ -850,7 +850,7 @@ final class RecipeClickExecutor {
 			ContainerUtils.formatStack(expectedOutput)
 		);
 		if (!AutoCraftController.isBulkModeEnabled() || requestedClicks <= 1) {
-			com.reachcrafting.ReachCraftingMod.LOGGER.info(
+			com.reachcrafting.ReachCraftingMod.diag(
 				"[bulk_arm] clear reason={} bulk_mode={} requestedClicks={}",
 				!AutoCraftController.isBulkModeEnabled() ? "bulk_mode_disabled" : "requested_clicks_too_small",
 				AutoCraftController.isBulkModeEnabled(),
@@ -873,7 +873,7 @@ final class RecipeClickExecutor {
 		} else {
 			continuationMode = BulkAutoCraftController.determineVariantContinuationMode(clickedRecipeId, recipeId, explicitVariantSelection);
 		}
-		com.reachcrafting.ReachCraftingMod.LOGGER.info(
+		com.reachcrafting.ReachCraftingMod.diag(
 			"[bulk_arm] start continuation_recipe={} continuation_mode={} keep_family={}",
 			continuationRecipeId,
 			continuationMode,
@@ -1163,7 +1163,7 @@ final class RecipeClickExecutor {
 		if (!preferClickedVariant) {
 			candidates.sort(chainOrder);
 		}
-		ReachCraftingMod.LOGGER.info(
+		ReachCraftingMod.diag(
 			"[chain_variant_fallback] clicked_recipe={} selected_recipe={} handling={} preference={} prefer_clicked={} order={}",
 			clickedRecipeId,
 			selectedRecipe.recipeId(),

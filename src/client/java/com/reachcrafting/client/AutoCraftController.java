@@ -273,7 +273,7 @@ final class AutoCraftController {
 			// mode latch the CHAIN still owns — that killed a healthy
 			// 500-craft run at 358 ("bulk_mode_disabled"). The chain's own
 			// stop() calls back here after it clears its active flag.
-			com.reachcrafting.ReachCraftingMod.LOGGER.info(
+			com.reachcrafting.ReachCraftingMod.diag(
 				"[bulk_craft] teardown deferred: bulk chain session still active");
 			return;
 		}

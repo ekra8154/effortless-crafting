@@ -483,6 +483,15 @@ public final class ReachCraftingConfigScreen {
 			.build());
 
 		messagesGroup.add(entries.startBooleanToggle(
+				Component.translatable("option.reachcrafting.diagnostic_logging_enabled"),
+				config.diagnosticLoggingEnabled()
+			)
+			.setDefaultValue(false)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.diagnostic_logging_enabled"))
+			.setSaveConsumer(config::setDiagnosticLoggingEnabled)
+			.build());
+
+		messagesGroup.add(entries.startBooleanToggle(
 				Component.translatable("option.reachcrafting.performance_logging_enabled"),
 				config.performanceLoggingEnabled()
 			)

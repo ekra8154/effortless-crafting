@@ -45,33 +45,33 @@ public final class VirtualRetrievalRecipeBookEntries {
 
 	public static List<RecipeCollection> injectCollections(RecipeBookComponent<?> component, List<RecipeCollection> collections) {
 		if (!ExistingOutputRetrievalController.isEnabled() || !ReachCraftingConfig.get().enableExistingOutputRetrieval()) {
-			ReachCraftingMod.LOGGER.info("[retrieval_virtual] inject skipped reason=mode_disabled retrieval_enabled={} config_enabled={}", ExistingOutputRetrievalController.isEnabled(), ReachCraftingConfig.get().enableExistingOutputRetrieval());
+			ReachCraftingMod.diag("[retrieval_virtual] inject skipped reason=mode_disabled retrieval_enabled={} config_enabled={}", ExistingOutputRetrievalController.isEnabled(), ReachCraftingConfig.get().enableExistingOutputRetrieval());
 			return collections;
 		}
 		RecipeBookComponentAccessor accessor = (RecipeBookComponentAccessor) component;
 		if (Boolean.TRUE.equals(accessor.getFilterButton().getValue())) {
-			ReachCraftingMod.LOGGER.info("[retrieval_virtual] inject skipped reason=craftable_filter_on");
+			ReachCraftingMod.diag("[retrieval_virtual] inject skipped reason=craftable_filter_on");
 			return collections;
 		}
 
 		Minecraft minecraft = accessor.getMinecraft();
 		if (minecraft == null) {
-			ReachCraftingMod.LOGGER.info("[retrieval_virtual] inject skipped reason=no_minecraft");
+			ReachCraftingMod.diag("[retrieval_virtual] inject skipped reason=no_minecraft");
 			return collections;
 		}
 		Screen screen = minecraft.gui.screen();
 		if (!(screen instanceof InventoryScreen) && !(screen instanceof CraftingScreen)) {
-			ReachCraftingMod.LOGGER.info("[retrieval_virtual] inject skipped reason=unsupported_screen screen={}", screen != null ? screen.getClass().getSimpleName() : "null");
+			ReachCraftingMod.diag("[retrieval_virtual] inject skipped reason=unsupported_screen screen={}", screen != null ? screen.getClass().getSimpleName() : "null");
 			return collections;
 		}
 		int gridSlotCount = screen instanceof InventoryScreen ? 4 : 9;
 		LocalPlayer player = minecraft.player;
 		if (player == null || minecraft.level == null || minecraft.getCameraEntity() == null) {
-			ReachCraftingMod.LOGGER.info("[retrieval_virtual] inject skipped reason=missing_context player={} level={} camera={}", player != null, minecraft.level != null, minecraft.getCameraEntity() != null);
+			ReachCraftingMod.diag("[retrieval_virtual] inject skipped reason=missing_context player={} level={} camera={}", player != null, minecraft.level != null, minecraft.getCameraEntity() != null);
 			return collections;
 		}
 		if (!ReachCraftingConfig.get().enableNearbyContainerUsage() || !ReachCraftingConfig.get().cacheContainersForFasterSearch()) {
-			ReachCraftingMod.LOGGER.info("[retrieval_virtual] inject skipped reason=config_nearby_disabled nearby_enabled={} cache_enabled={}", ReachCraftingConfig.get().enableNearbyContainerUsage(), ReachCraftingConfig.get().cacheContainersForFasterSearch());
+			ReachCraftingMod.diag("[retrieval_virtual] inject skipped reason=config_nearby_disabled nearby_enabled={} cache_enabled={}", ReachCraftingConfig.get().enableNearbyContainerUsage(), ReachCraftingConfig.get().cacheContainersForFasterSearch());
 			return collections;
 		}
 
@@ -86,13 +86,13 @@ public final class VirtualRetrievalRecipeBookEntries {
 		Set<String> experiencedItemIds = new java.util.LinkedHashSet<>(ReachCraftingConfig.get().experiencedItemIds());
 		experiencedItemIds.addAll(currentlyHeldItemIds);
 		if (nearbyCounts.isEmpty() && experiencedItemIds.isEmpty()) {
-			ReachCraftingMod.LOGGER.info("[retrieval_virtual] inject skipped reason=no_retrieval_candidates");
+			ReachCraftingMod.diag("[retrieval_virtual] inject skipped reason=no_retrieval_candidates");
 			return collections;
 		}
 
 		String search = accessor.getSearchBox() != null ? accessor.getSearchBox().getValue().trim().toLowerCase(Locale.ROOT) : "";
 		Object selectedCategory = accessor.getSelectedTab() != null ? accessor.getSelectedTab().getCategory() : null;
-		ReachCraftingMod.LOGGER.info("[retrieval_virtual] inject start base_collections={} nearby_items={} experienced_items={} crafting_outputs={} grid_slots={} search='{}' selected_category={}", collections.size(), nearbyCounts.size(), experiencedItemIds.size(), craftingTableOutputIds.size(), gridSlotCount, search, selectedCategory != null ? selectedCategory.getClass().getSimpleName() + ":" + selectedCategory : "null");
+		ReachCraftingMod.diag("[retrieval_virtual] inject start base_collections={} nearby_items={} experienced_items={} crafting_outputs={} grid_slots={} search='{}' selected_category={}", collections.size(), nearbyCounts.size(), experiencedItemIds.size(), craftingTableOutputIds.size(), gridSlotCount, search, selectedCategory != null ? selectedCategory.getClass().getSimpleName() + ":" + selectedCategory : "null");
 		List<RecipeCollection> synthetic = new ArrayList<>();
 		int skippedExistingOutput = 0;
 		int skippedNullItem = 0;
@@ -149,7 +149,7 @@ public final class VirtualRetrievalRecipeBookEntries {
 		}
 
 		if (synthetic.isEmpty()) {
-			ReachCraftingMod.LOGGER.info("[retrieval_virtual] inject produced no synthetic collections skipped_existing={} skipped_null_item={} skipped_category={} skipped_search={}", skippedExistingOutput, skippedNullItem, skippedCategory, skippedSearch);
+			ReachCraftingMod.diag("[retrieval_virtual] inject produced no synthetic collections skipped_existing={} skipped_null_item={} skipped_category={} skipped_search={}", skippedExistingOutput, skippedNullItem, skippedCategory, skippedSearch);
 			return collections;
 		}
 
@@ -157,7 +157,7 @@ public final class VirtualRetrievalRecipeBookEntries {
 		List<RecipeCollection> combined = new ArrayList<>(collections.size() + synthetic.size());
 		combined.addAll(collections);
 		combined.addAll(synthetic);
-		ReachCraftingMod.LOGGER.info("[retrieval_virtual] inject success synthetic={} combined={} skipped_existing={} skipped_null_item={} skipped_category={} skipped_search={}", synthetic.size(), combined.size(), skippedExistingOutput, skippedNullItem, skippedCategory, skippedSearch);
+		ReachCraftingMod.diag("[retrieval_virtual] inject success synthetic={} combined={} skipped_existing={} skipped_null_item={} skipped_category={} skipped_search={}", synthetic.size(), combined.size(), skippedExistingOutput, skippedNullItem, skippedCategory, skippedSearch);
 		return combined;
 	}
 

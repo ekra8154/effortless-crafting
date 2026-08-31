@@ -146,7 +146,7 @@ public abstract class RecipeBookPageMixin {
 
 		OverlayRecipeComponent overlay = ((RecipeBookPageAccessor) (Object) this).getOverlay();
 		if (overlay != null && overlay.isVisible()) {
-			com.reachcrafting.ReachCraftingMod.LOGGER.info("[recipe_page] skipping after-vanilla handler because overlay is visible");
+			com.reachcrafting.ReachCraftingMod.diag("[recipe_page] skipping after-vanilla handler because overlay is visible");
 			return;
 		}
 

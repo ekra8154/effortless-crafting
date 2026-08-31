@@ -134,6 +134,8 @@
   "tooltip.reachcrafting.show_chain_craft_messages": "Whether to show chat updates for chain crafting decisions, such as automatically crafting a smaller possible amount.",
   "option.reachcrafting.debug_messages_enabled": "Debug Messages Enabled",
   "tooltip.reachcrafting.debug_messages_enabled": "Enable verbose debug logging in chat.",
+  "option.reachcrafting.diagnostic_logging_enabled": "Diagnostic Logging",
+  "tooltip.reachcrafting.diagnostic_logging_enabled": "Write per-craft diagnostics to the game log (placement path taken, chain step scheduling, variant resolution). Off by default; turn it on only when capturing a log for a bug report. Warnings and errors are always logged regardless.",
   "option.reachcrafting.performance_logging_enabled": "Performance Logging",
   "tooltip.reachcrafting.performance_logging_enabled": "Log aggregated timing data for crafting indicators, nearby cache lookups, chain planning, and request search hotspots.",
   "popup.reachcrafting.chain_crafting.title": "Chain Crafting",
