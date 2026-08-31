@@ -36,6 +36,8 @@ public final class ChainCraftabilityCache {
 
 	private static Set<ResourceLocation> chainCraftableRecipeIds = Set.of();
 	private static Set<ResourceLocation> reachableRecipeIds = Set.of();
+	private static Set<ResourceLocation> locallyChainCraftableRecipeIds = Set.of();
+	private static Set<ResourceLocation> locallyReachableRecipeIds = Set.of();
 	private static int tickCooldown = 0;
 	private static long lastInventoryHash = 0;
 	private static long lastNearbyRevision = -1;
@@ -52,6 +54,8 @@ public final class ChainCraftabilityCache {
 	public static void clearCache() {
 		chainCraftableRecipeIds = Set.of();
 		reachableRecipeIds = Set.of();
+		locallyChainCraftableRecipeIds = Set.of();
+		locallyReachableRecipeIds = Set.of();
 		tickCooldown = 0;
 		lastInventoryHash = 0;
 		lastNearbyRevision = -1;
@@ -81,6 +85,22 @@ public final class ChainCraftabilityCache {
 		return recipeId != null && reachableRecipeIds.contains(recipeId);
 	}
 
+	/**
+	 * Like {@link #isChainCraftable} but counting ONLY the player's inventory,
+	 * not nearby containers. Used by the smart sort to rank in-inventory chains
+	 * above crafts that would need chest withdrawals.
+	 */
+	public static boolean isChainCraftableLocally(ResourceLocation recipeId) {
+		refreshIfNeeded(Minecraft.getInstance(), false);
+		return recipeId != null && locallyChainCraftableRecipeIds.contains(recipeId);
+	}
+
+	/** Like {@link #isReachable} but counting ONLY the player's inventory. */
+	public static boolean isReachableLocally(ResourceLocation recipeId) {
+		refreshIfNeeded(Minecraft.getInstance(), false);
+		return recipeId != null && locallyReachableRecipeIds.contains(recipeId);
+	}
+
 	private static void tick(Minecraft client) {
 		refreshIfNeeded(client, true);
 	}
@@ -92,6 +112,8 @@ public final class ChainCraftabilityCache {
 			if (!chainCraftableRecipeIds.isEmpty() || !reachableRecipeIds.isEmpty()) {
 				chainCraftableRecipeIds = Set.of();
 				reachableRecipeIds = Set.of();
+				locallyChainCraftableRecipeIds = Set.of();
+				locallyReachableRecipeIds = Set.of();
 				lastKnownRecipeCount = -1;
 			}
 			return;
@@ -103,6 +125,8 @@ public final class ChainCraftabilityCache {
 			if (!chainCraftableRecipeIds.isEmpty() || !reachableRecipeIds.isEmpty()) {
 				chainCraftableRecipeIds = Set.of();
 				reachableRecipeIds = Set.of();
+				locallyChainCraftableRecipeIds = Set.of();
+				locallyReachableRecipeIds = Set.of();
 			}
 			return;
 		}
@@ -158,8 +182,8 @@ public final class ChainCraftabilityCache {
 		RegistryAccess registryAccess = client.level.registryAccess();
 
 		long recomputeStartNanos = PerformanceProfiler.start();
-
-		Map<String, Integer> availableCounts = captureAvailableCounts(player, client);
+		
+		CountsCapture counts = captureCounts(player, client);
 
 		backgroundTask = java.util.concurrent.CompletableFuture.runAsync(() -> {
 			List<LightRecipe> localRecipeIndex = indexStale ? buildRecipeIndex(allRecipes, gridSlotCount, registryAccess) : recipeIndex;
@@ -179,7 +203,7 @@ public final class ChainCraftabilityCache {
 				localRecipesByOutput = recipesByOutput;
 			}
 
-			recompute(localRecipeIndex, localRecipesByOutput, availableCounts, () -> {
+			recompute(localRecipeIndex, localRecipesByOutput, counts, () -> {
 				client.execute(() -> {
 					recipeIndex = localRecipeIndex;
 					recipesByOutput = localRecipesByOutput;
@@ -202,15 +226,19 @@ public final class ChainCraftabilityCache {
 		return client.gameMode != null ? client.gameMode.getPickRange() : 4.5D;
 	}
 
-	private static Map<String, Integer> captureAvailableCounts(LocalPlayer player, Minecraft client) {
-		Map<String, Integer> availableCounts = new java.util.HashMap<>();
+	record CountsCapture(Map<String, Integer> local, Map<String, Integer> merged) {
+	}
+
+	private static CountsCapture captureCounts(LocalPlayer player, Minecraft client) {
+		Map<String, Integer> localCounts = new java.util.HashMap<>();
 		for (ItemStack stack : player.getInventory().items) {
 			if (!stack.isEmpty()) {
 				String id = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
-				availableCounts.merge(id, stack.getCount(), Integer::sum);
+				localCounts.merge(id, stack.getCount(), Integer::sum);
 			}
 		}
 
+		Map<String, Integer> mergedCounts = localCounts;
 		if (ReachCraftingConfig.get().enableNearbyContainerUsage()
 			&& ReachCraftingConfig.get().cacheContainersForFasterSearch()
 			&& client.getCameraEntity() != null
@@ -218,29 +246,71 @@ public final class ChainCraftabilityCache {
 			NearbyContainerCache.ReachableView view = NearbyContainerCache.getReachableView(
 				client.level, client.getCameraEntity(), reachDistance(client)
 			);
-			for (Map.Entry<String, Integer> entry : view.aggregateCounts().entrySet()) {
-				availableCounts.merge(entry.getKey(), entry.getValue(), Integer::sum);
+			if (!view.aggregateCounts().isEmpty()) {
+				mergedCounts = new java.util.HashMap<>(localCounts);
+				for (Map.Entry<String, Integer> entry : view.aggregateCounts().entrySet()) {
+					mergedCounts.merge(entry.getKey(), entry.getValue(), Integer::sum);
+				}
 			}
 		}
-		return availableCounts;
+		return new CountsCapture(localCounts, mergedCounts);
+	}
+
+	private record Classification(Set<ResourceLocation> chain, Set<ResourceLocation> direct) {
 	}
 
 	private static void recompute(
 		List<LightRecipe> localRecipeIndex,
 		Map<String, List<LightRecipe>> localRecipesByOutput,
-		Map<String, Integer> availableCounts,
+		CountsCapture counts,
 		Runnable onComplete
 	) {
 		long startNanos = PerformanceProfiler.start();
+		// Two classification passes: inventory-only, then inventory + nearby
+		// containers. The smart sort ranks in-inventory results above ones
+		// that would need chest withdrawals. When nearby adds nothing the
+		// merged map is the SAME instance and the second pass is skipped.
+		Classification local = classify(localRecipeIndex, localRecipesByOutput, counts.local());
+		Classification merged = counts.merged() == counts.local()
+			? local
+			: classify(localRecipeIndex, localRecipesByOutput, counts.merged());
+
+		Minecraft.getInstance().execute(() -> {
+			chainCraftableRecipeIds = merged.chain();
+			reachableRecipeIds = merged.direct();
+			locallyChainCraftableRecipeIds = local.chain();
+			locallyReachableRecipeIds = local.direct();
+			ReachCraftingMod.LOGGER.debug(
+				"[chain_cache] recomputed chain_craftable={} reachable={} local_chain={} local_reachable={} directly_available={}",
+				merged.chain().size(),
+				merged.direct().size(),
+				local.chain().size(),
+				local.direct().size(),
+				counts.merged().size()
+			);
+			PerformanceProfiler.record(
+				"chain.cache_recompute_body",
+				startNanos,
+				"chain=" + merged.chain().size() + " reachable=" + merged.direct().size()
+					+ " local_chain=" + local.chain().size() + " local_reachable=" + local.direct().size()
+					+ " direct=" + counts.merged().size()
+			);
+			onComplete.run();
+		});
+	}
+
+	private static Classification classify(
+		List<LightRecipe> localRecipeIndex,
+		Map<String, List<LightRecipe>> localRecipesByOutput,
+		Map<String, Integer> availableCounts
+	) {
 		Set<String> directlyAvailable = new HashSet<>(availableCounts.keySet());
 
 		// Forward-reachability flood-fill
 		Set<String> reachable = new HashSet<>(directlyAvailable);
 		boolean changed = true;
-		int iterations = 0;
 		while (changed) {
 			changed = false;
-			iterations++;
 			for (LightRecipe recipe : localRecipeIndex) {
 				if (reachable.contains(recipe.outputItemId)) {
 					continue;
@@ -266,25 +336,7 @@ public final class ChainCraftabilityCache {
 				reachableResult.add(recipe.recipeId);
 			}
 		}
-
-		final int finalIterations = iterations;
-		Minecraft.getInstance().execute(() -> {
-			chainCraftableRecipeIds = Set.copyOf(chainResult);
-			reachableRecipeIds = Set.copyOf(reachableResult);
-			ReachCraftingMod.LOGGER.debug(
-				"[chain_cache] recomputed chain_craftable={} reachable={} directly_available={} flood_iterations={}",
-				chainResult.size(),
-				reachableResult.size(),
-				directlyAvailable.size(),
-				finalIterations
-			);
-			PerformanceProfiler.record(
-				"chain.cache_recompute_body",
-				startNanos,
-				"chain=" + chainResult.size() + " reachable=" + reachableResult.size() + " direct=" + directlyAvailable.size() + " iterations=" + finalIterations
-			);
-			onComplete.run();
-		});
+		return new Classification(Set.copyOf(chainResult), Set.copyOf(reachableResult));
 	}
 
 	private static boolean allSlotsSatisfied(List<List<String>> ingredientSlots, Set<String> available) {

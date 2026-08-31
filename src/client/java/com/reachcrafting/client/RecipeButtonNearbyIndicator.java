@@ -8,6 +8,7 @@ import net.minecraft.client.gui.screens.inventory.CraftingScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.client.gui.screens.recipebook.RecipeButton;
 import net.minecraft.client.player.LocalPlayer;
+import java.util.List;
 import java.util.Map;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.Recipe;
@@ -49,9 +50,37 @@ public final class RecipeButtonNearbyIndicator {
 		ItemStack stack = (displayStack == null || displayStack.isEmpty())
 			? RecipeVariantResolver.resolveDisplayStack(recipe, Minecraft.getInstance())
 			: displayStack;
-		return shouldShow(recipe, collection, stack, explicitVariantSelection)
-			? Craftability.NEARBY_CRAFTABLE
-			: Craftability.NOT_CRAFTABLE;
+		return computeCraftability(recipe, collection, stack, explicitVariantSelection);
+	}
+
+	/**
+	 * The craftability of a whole collection, asked the same way the ICON asks
+	 * it: over every recipe in {@link RecipeCollection#getRecipes()}.
+	 *
+	 * <p>The smart sort must use THIS rather than walking
+	 * {@code getSelectedRecipes(...)}, which vanilla filters by the open
+	 * menu's grid size - that made a recipe show a craftable icon while
+	 * sorting into the uncraftable tier, and made the 2x2 inventory book
+	 * disagree with the 3x3 table for the same recipe.</p>
+	 */
+	public static Craftability collectionCraftability(RecipeCollection collection) {
+		if (collection == null) {
+			return Craftability.NOT_CRAFTABLE;
+		}
+		List<Recipe<?>> recipes = collection.getRecipes();
+		boolean explicitVariantSelection = recipes.size() > 1;
+		Craftability best = Craftability.NOT_CRAFTABLE;
+		for (Recipe<?> recipe : recipes) {
+			Craftability craftability =
+				computeCraftability(recipe, collection, ItemStack.EMPTY, explicitVariantSelection);
+			if (craftability == Craftability.LOCALLY_CRAFTABLE) {
+				return craftability;
+			}
+			if (craftability == Craftability.NEARBY_CRAFTABLE) {
+				best = craftability;
+			}
+		}
+		return best;
 	}
 
 	/** 1.20.1 computes nearby-craftability live; there is no persistent cache to clear. */
@@ -82,25 +111,41 @@ public final class RecipeButtonNearbyIndicator {
 	}
 
 	public static boolean shouldShow(Recipe<?> recipe, RecipeCollection collection, ItemStack displayStack, boolean explicitVariantSelection) {
+		// The blue dot is what this predicate is for: it is drawn only for a
+		// craft the inventory alone cannot do. LOCALLY_CRAFTABLE deliberately
+		// does not light it.
+		return ReachCraftingConfig.get().showNearbyCraftableIndicator()
+			&& computeCraftability(recipe, collection, displayStack, explicitVariantSelection)
+				== Craftability.NEARBY_CRAFTABLE;
+	}
+
+	/**
+	 * Full craftability of one recipe: craftable from the inventory alone,
+	 * craftable only by pulling from nearby containers, or neither.
+	 *
+	 * <p>Note this does NOT check showNearbyCraftableIndicator - that setting
+	 * governs whether the dot is DRAWN, not whether the recipe is craftable,
+	 * and the smart sort needs the answer either way.</p>
+	 */
+	public static Craftability computeCraftability(Recipe<?> recipe, RecipeCollection collection, ItemStack displayStack, boolean explicitVariantSelection) {
 		if (!ReachCraftingConfig.get().enabled()
 			|| !ReachCraftingConfig.get().enableNearbyContainerUsage()
-			|| !ReachCraftingConfig.get().showNearbyCraftableIndicator()
 			|| !ReachCraftingConfig.get().cacheContainersForFasterSearch()) {
-			return false;
+			return Craftability.NOT_CRAFTABLE;
 		}
 
 		Minecraft minecraft = Minecraft.getInstance();
 		Screen screen = minecraft.screen;
 		if (!(screen instanceof InventoryScreen) && !(screen instanceof CraftingScreen)) {
-			return false;
+			return Craftability.NOT_CRAFTABLE;
 		}
 
 		LocalPlayer player = minecraft.player;
 		if (player == null || minecraft.level == null || minecraft.getCameraEntity() == null) {
-			return false;
+			return Craftability.NOT_CRAFTABLE;
 		}
 		if (recipe == null || collection == null) {
-			return false;
+			return Craftability.NOT_CRAFTABLE;
 		}
 
 		NearbyContainerCache.ReachableView reachableView = NearbyContainerCache.getReachableView(
@@ -108,9 +153,6 @@ public final class RecipeButtonNearbyIndicator {
 			minecraft.getCameraEntity(),
 			minecraft.gameMode != null ? minecraft.gameMode.getPickRange() : 4.5D
 		);
-		if (reachableView.isEmpty()) {
-			return false;
-		}
 
 		AvailableItemSnapshot availableItems = AvailableItemSnapshot.capture(player, screen);
 		Map<String, Integer> cachedNearbyCounts = reachableView.aggregateCounts();
@@ -148,7 +190,7 @@ public final class RecipeButtonNearbyIndicator {
 			desiredVariantCopies
 		);
 		if (selection == null) {
-			return false;
+			return Craftability.NOT_CRAFTABLE;
 		}
 
 		IngredientPlanning.Policy policy = ReachCraftingConfig.get().toPlanningPolicy();
@@ -162,7 +204,11 @@ public final class RecipeButtonNearbyIndicator {
 			policy
 		);
 		if (!localPlan.hasMissingIngredients()) {
-			return false;
+			return Craftability.LOCALLY_CRAFTABLE;
+		}
+		// Nothing in reach to make up the difference.
+		if (reachableView.isEmpty()) {
+			return Craftability.NOT_CRAFTABLE;
 		}
 
 		IngredientPlanning.PlanResult cachedPlan = IngredientPlanning.plan(
@@ -174,7 +220,9 @@ public final class RecipeButtonNearbyIndicator {
 			desiredVariantCopies,
 			policy
 		);
-		return !cachedPlan.hasMissingIngredients();
+		return cachedPlan.hasMissingIngredients()
+			? Craftability.NOT_CRAFTABLE
+			: Craftability.NEARBY_CRAFTABLE;
 	}
 
 	private static int currentReservedCraftCopies(AvailableItemSnapshot availableItems) {
