@@ -72,7 +72,7 @@ public final class BulkAutoCraftController {
 
 		ItemStack expectedCopy = expectedOutput.copy();
 		boolean sameRecipe = activeSession != null && activeSession.action().sameRecipe(action);
-		com.reachcrafting.ReachCraftingMod.LOGGER.info(
+		com.reachcrafting.ReachCraftingMod.diag(
 			"[bulk_session] start_or_update active={} same_recipe={} requested={} completed={} refillable={} allow_nearby={} action_recipe={} expected_output={}",
 			activeSession != null,
 			sameRecipe,
@@ -85,7 +85,7 @@ public final class BulkAutoCraftController {
 		);
 		if (activeSession == null || !sameRecipe) {
 			int baselineOutputCount = countAccessibleOutput(client, expectedCopy);
-			com.reachcrafting.ReachCraftingMod.LOGGER.info(
+			com.reachcrafting.ReachCraftingMod.diag(
 				"[bulk_session] create_new previous_active={} previous_action={} previous_completed={} previous_requested={} previous_refillable={}",
 				activeSession != null,
 				activeSession == null ? "<none>" : activeSession.action().recipeId(),
@@ -133,7 +133,7 @@ public final class BulkAutoCraftController {
 					refillableBulkMaxMode,
 					variantContinuationMode
 				);
-				com.reachcrafting.ReachCraftingMod.LOGGER.info(
+				com.reachcrafting.ReachCraftingMod.diag(
 					"[bulk_session] transition_output current_output={} new_output={} requested={} completed={} remaining={} refillable={}",
 					previousOutputName,
 					expectedCopy.getHoverName().getString(),
@@ -158,7 +158,7 @@ public final class BulkAutoCraftController {
 		}
 
 		activeSession = activeSession.withUpdatedCycle(action, allowNearby, requestedRecipeCopies, refillableBulkMaxMode, variantContinuationMode);
-		com.reachcrafting.ReachCraftingMod.LOGGER.info(
+		com.reachcrafting.ReachCraftingMod.diag(
 			"[bulk_session] updated requested={} completed={} remaining={} refillable={}",
 			activeSession.requestedRecipeCopies(),
 			activeSession.completedRecipeCopies(),
@@ -259,7 +259,7 @@ public final class BulkAutoCraftController {
 		int outputSlots = (int) ((totalOutputCount + maxStack - 1) / maxStack);
 		
 		int total = ingredientSlots + outputSlots;
-		com.reachcrafting.ReachCraftingMod.LOGGER.info("[bulk_budget] remaining={} target={} ingredients={} output={} total={}", remaining, batchTarget, ingredientSlots, outputSlots, total);
+		com.reachcrafting.ReachCraftingMod.diag("[bulk_budget] remaining={} target={} ingredients={} output={} total={}", remaining, batchTarget, ingredientSlots, outputSlots, total);
 		return total;
 	}
 
@@ -287,7 +287,7 @@ public final class BulkAutoCraftController {
 	static void addEjectedOutput(int count) {
 		if (activeSession != null) {
 			activeSession = activeSession.withEjected(activeSession.ejectedOutputCount() + count, activeSession.totalEjectedOutputCount() + count);
-			com.reachcrafting.ReachCraftingMod.LOGGER.info(
+			com.reachcrafting.ReachCraftingMod.diag(
 				"[bulk_craft] Ejected output noted: count={} total_ejected_this_batch={} total_ejected_session={}",
 				count,
 				activeSession.ejectedOutputCount(),
@@ -346,7 +346,7 @@ public final class BulkAutoCraftController {
 				? BulkOutputDisposition.PARTIAL_STACK_KEEP
 				: BulkOutputDisposition.DIRECT_EJECT_BATCH;
 
-		com.reachcrafting.ReachCraftingMod.LOGGER.info(
+		com.reachcrafting.ReachCraftingMod.diag(
 			"[bulk_craft] batch_disposition={} staged_copies={} remaining_copies={} partial_stack_room={} reserved_output_slots={} result={}",
 			currentBatchOutputDisposition,
 			stagedCraftCopies,
@@ -461,7 +461,7 @@ public final class BulkAutoCraftController {
 		budgetRetryCount++;
 		resetCurrentBatchOutputDisposition();
 		postAutoMoveDelayTicks = PlaceRecipeBudget.suggestedBackoffTicks();
-		com.reachcrafting.ReachCraftingMod.LOGGER.info(
+		com.reachcrafting.ReachCraftingMod.diag(
 			"[bulk_craft] budget_backoff retry={}/{} delay_ticks={} completed={}/{}",
 			budgetRetryCount, MAX_BUDGET_RETRIES, postAutoMoveDelayTicks,
 			activeSession.completedRecipeCopies(), activeSession.requestedRecipeCopies());
@@ -485,7 +485,7 @@ public final class BulkAutoCraftController {
 		int gainedOutputCount = inventoryIncrease + activeSession.ejectedOutputCount();
 		int craftedCopies = gainedOutputCount / outputPerCraft;
 
-		com.reachcrafting.ReachCraftingMod.LOGGER.info(
+		com.reachcrafting.ReachCraftingMod.diag(
 			"[bulk_craft] onAutoMoveFinished success={} bulk_enabled={} supported_screen={} inventory_increase={} ejected={} current_output={} last_output={} crafted_copies={}",
 			success,
 			bulkEnabled,
@@ -516,7 +516,7 @@ public final class BulkAutoCraftController {
 		}
 
 		if (craftedCopies <= 0) {
-			com.reachcrafting.ReachCraftingMod.LOGGER.info(
+			com.reachcrafting.ReachCraftingMod.diag(
 				"[bulk_craft] No progress detected. inventory_increase={} ejected={} current_output={} last_output={} output_per_craft={}",
 				inventoryIncrease,
 				activeSession.ejectedOutputCount(),
@@ -549,7 +549,7 @@ public final class BulkAutoCraftController {
 		if (craftedCopies > 0) {
 			sessionBatchSizes.add(craftedCopies);
 		}
-		com.reachcrafting.ReachCraftingMod.LOGGER.info("[bulk_craft] SUCCESS: crafted_this_batch={} (gained={} ejected={}) total_completed={}/{} inv_count={}",
+		com.reachcrafting.ReachCraftingMod.diag("[bulk_craft] SUCCESS: crafted_this_batch={} (gained={} ejected={}) total_completed={}/{} inv_count={}",
 			craftedCopies, gainedOutputCount, activeSession.ejectedOutputCount(), completedRecipeCopies, activeSession.requestedRecipeCopies(), currentOutputCount);
 
 		resetCurrentBatchOutputDisposition();
@@ -567,7 +567,7 @@ public final class BulkAutoCraftController {
 		postAutoMoveDelayTicks = fastReservedOutputFollowup ? 0 : 1;
 		if (postAutoMoveDelayTicks == 0) {
 			topUpRequestedCopiesIfNeeded("pre_replay");
-			com.reachcrafting.ReachCraftingMod.LOGGER.info(
+			com.reachcrafting.ReachCraftingMod.diag(
 				"[bulk_craft] Immediate next batch trigger. remaining={} action_recipe={} allow_nearby={} refillable={}",
 				activeSession.requestedRecipeCopies() - activeSession.completedRecipeCopies(),
 				activeSession.action().recipeId(),
@@ -593,13 +593,13 @@ public final class BulkAutoCraftController {
 			int loads = sessionBatchSizes.size();
 			int total = sessionBatchSizes.stream().mapToInt(Integer::intValue).sum();
 			int largest = sessionBatchSizes.stream().mapToInt(Integer::intValue).max().orElse(0);
-			com.reachcrafting.ReachCraftingMod.LOGGER.info(
+			com.reachcrafting.ReachCraftingMod.diag(
 				"[bulk_craft] staging_summary grid_loads={} total_crafted={} largest_load={} avg_per_load={} sizes={}",
 				loads, total, largest,
 				loads > 0 ? String.format("%.1f", (double) total / loads) : "0",
 				sessionBatchSizes
 			);
-			com.reachcrafting.ReachCraftingMod.LOGGER.info(
+			com.reachcrafting.ReachCraftingMod.diag(
 				"[bulk_craft] STOP aborted={} reason={} completed={}/{} expected_output={} disposition={} refillable={} allow_nearby={}",
 				aborted,
 				reason,
@@ -614,7 +614,7 @@ public final class BulkAutoCraftController {
 			budgetRetryCount = 0;
 			activeSessionIngredientSummary = null;
 		} else {
-			com.reachcrafting.ReachCraftingMod.LOGGER.info("[bulk_craft] STOP aborted={} reason={} activeSession=false", aborted, reason);
+			com.reachcrafting.ReachCraftingMod.diag("[bulk_craft] STOP aborted={} reason={} activeSession=false", aborted, reason);
 		}
 		if (activeSession != null) {
 			if (activeSession.completedRecipeCopies() > 0) {
@@ -737,7 +737,7 @@ public final class BulkAutoCraftController {
 					// replay anyway cost a failed placement cascade and a ~2s
 					// tail after the visibly-last craft — during which ESC
 					// reported a COMPLETED run as aborted.
-					com.reachcrafting.ReachCraftingMod.LOGGER.info(
+					com.reachcrafting.ReachCraftingMod.diag(
 						"[bulk_craft] eager_finish reason=materials_exhausted completed={}/{}",
 						activeSession.completedRecipeCopies(),
 						activeSession.requestedRecipeCopies()
@@ -747,7 +747,7 @@ public final class BulkAutoCraftController {
 					previousSnapshot.clear();
 					return;
 				}
-				com.reachcrafting.ReachCraftingMod.LOGGER.info(
+				com.reachcrafting.ReachCraftingMod.diag(
 					"[bulk_craft] Delay finished. Triggering next batch. remaining={} action_recipe={} allow_nearby={} refillable={}",
 					activeSession.requestedRecipeCopies() - activeSession.completedRecipeCopies(),
 					activeSession.action().recipeId(),
@@ -766,7 +766,7 @@ public final class BulkAutoCraftController {
 		}
 
 		// tickCounter++;
-		// com.reachcrafting.ReachCraftingMod.LOGGER.info("#### TICK {} ####", tickCounter);
+		// com.reachcrafting.ReachCraftingMod.diag("#### TICK {} ####", tickCounter);
 
 		// net.minecraft.world.inventory.AbstractContainerMenu menu = client.player.containerMenu;
 
@@ -830,7 +830,7 @@ public final class BulkAutoCraftController {
 			}
 		}
 		if (first) sb.append("empty");
-		com.reachcrafting.ReachCraftingMod.LOGGER.info(sb.toString());
+		com.reachcrafting.ReachCraftingMod.diag(sb.toString());
 	}
 
 	private static void logCraftingGrid(net.minecraft.world.inventory.AbstractContainerMenu menu) {
@@ -853,7 +853,7 @@ public final class BulkAutoCraftController {
 			}
 		}
 		if (first) sb.append("empty");
-		com.reachcrafting.ReachCraftingMod.LOGGER.info(sb.toString());
+		com.reachcrafting.ReachCraftingMod.diag(sb.toString());
 	}
 	*/
 
@@ -973,7 +973,7 @@ public final class BulkAutoCraftController {
 		}
 
 		activeSession = activeSession.withRequestedRecipeCopies(refilledRequested);
-		com.reachcrafting.ReachCraftingMod.LOGGER.info(
+		com.reachcrafting.ReachCraftingMod.diag(
 			"[bulk_refill] reason={} completed={} previous_requested={} previous_remaining={} new_requested={} new_remaining={}",
 			reason,
 			activeSession.completedRecipeCopies(),

@@ -109,7 +109,7 @@ final class ManualRecipePlacer {
 		// (2x2 in a 3x3 menu -> slots 1,2,4,5). gridSlotIndices owns that map.
 		List<Integer> gridIndices = summary.gridSlotIndices(gridSlotCount);
 		if (gridIndices.size() != slotItemIds.size()) {
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.diag(
 				"[manual_place] shape_unmappable output={} slots={} mapped={} grid={}",
 				label, slotItemIds.size(), gridIndices.size(), gridSlotCount
 			);
@@ -127,7 +127,7 @@ final class ManualRecipePlacer {
 			String expected = mapped >= 0 ? slotItemIds.get(mapped) : null;
 			if (!allowPartiallyStaged || expected == null
 				|| !expected.equals(itemIdOf(inGrid)) || inGrid.getCount() > maxCopies) {
-				ReachCraftingMod.LOGGER.info("[manual_place] grid_not_empty slot={}", i);
+				ReachCraftingMod.diag("[manual_place] grid_not_empty slot={}", i);
 				return 0;
 			}
 		}
@@ -157,7 +157,7 @@ final class ManualRecipePlacer {
 				alreadyEach + countSources(menu, entry.getKey(), pristineOnly) / entry.getValue());
 		}
 		if (copies <= 0) {
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.diag(
 				"[manual_place] no_inputs output={} needed={} pristine_only={}",
 				label, slotsPerItem, pristineOnly
 			);
@@ -199,7 +199,7 @@ final class ManualRecipePlacer {
 		// per-slot cost of SINGLE-slot ingredient groups (no drag partner, so
 		// one click per item) is invisible until it causes a decline.
 		int clickWindowAfter = GridTopUp.clickWindowCount();
-		ReachCraftingMod.LOGGER.info(
+		ReachCraftingMod.diag(
 			"[manual_place] staged output={} copies={} clicks={} window={}/{} groups={} slots={} grid_slots={}",
 			label,
 			copies,

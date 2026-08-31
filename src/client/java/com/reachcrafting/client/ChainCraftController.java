@@ -174,13 +174,98 @@ public final class ChainCraftController {
 		}
 		int remaining = Math.max(activeRun.scheduledBatchCopies() - activeRun.observedProducedRecipeCopies(), 1);
 		int staged = ManualRecipePlacer.placeStepCrafts(client, step, remaining);
-		ReachCraftingMod.LOGGER.info(
+		ReachCraftingMod.diag(
 			"[chain_execute] manual_self_ref_placement output={} staged={} remaining={}",
 			ContainerUtils.formatStack(step.displayStack()),
 			staged,
 			remaining
 		);
 		return true;
+	}
+
+	/**
+	 * Place a chain step's planned inputs client-side when the server's own
+	 * recipe placement could substitute a deprioritised item for the planned
+	 * one.
+	 *
+	 * <p>handlePlaceRecipe lets the SERVER fill the grid, and it picks freely
+	 * from anything the slot accepts -- so a planks step planned against plain
+	 * oak logs would still happily eat the stripped ones. The direct path never
+	 * had this problem because SearchSession stages its SlotTargets itself;
+	 * nothing in chain execution consumed them. Same shape as the
+	 * self-referential case above, same remedy.</p>
+	 *
+	 * <p>Strictly a fallback-safe optimisation: returns false whenever the step
+	 * has no such ambiguity, the click budget is tight, or staging placed
+	 * nothing, and the caller then runs its normal placement path. Steps
+	 * without a mixed slot (a sticky piston's slime ball and piston) never
+	 * reach it, so the counted T1 path is untouched for them.</p>
+	 */
+	static boolean tryManualLastResortPlacement(Minecraft client, String outputItemId) {
+		if (activeRun == null || client.player == null || client.gameMode == null || !activeRun.waitingForStep()) {
+			return false;
+		}
+		ChainCraftPlan.Step step = activeRun.currentStep();
+		if (step == null || isSelfReferentialStep(step) || !hasLastResortAmbiguity(step)) {
+			return false;
+		}
+		if (outputItemId != null && !outputItemId.equals(itemIdOf(step.displayStack()))) {
+			return false;
+		}
+		int remaining = Math.max(activeRun.scheduledBatchCopies() - activeRun.observedProducedRecipeCopies(), 1);
+		int occupiedSlots = (int) step.ingredientSummary().slots().stream()
+			.filter(slot -> !slot.isEmpty())
+			.count();
+		if (!GridTopUp.clickBudgetAllows(Math.max(occupiedSlots, 1) * 2)) {
+			ReachCraftingMod.diag(
+				"[chain_execute] manual_last_resort skipped reason=click_budget output={} remaining={}",
+				ContainerUtils.formatStack(step.displayStack()),
+				remaining
+			);
+			return false;
+		}
+		int staged = ManualRecipePlacer.placeStepCrafts(client, step, remaining);
+		ReachCraftingMod.diag(
+			"[chain_execute] manual_last_resort output={} staged={} remaining={} inputs={}",
+			ContainerUtils.formatStack(step.displayStack()),
+			staged,
+			remaining,
+			step.requiredInputs()
+		);
+		// Unlike the self-referential case, staging nothing here is NOT
+		// "handled": the ordinary placement path is a correct craft, just one
+		// that may spend the wrong logs. Falling back beats failing the step.
+		return staged > 0;
+	}
+
+	/**
+	 * True when some slot of the step accepts BOTH a deprioritised item and an
+	 * ordinary one, which is exactly when the server's free choice can differ
+	 * from what the planner picked.
+	 */
+	private static boolean hasLastResortAmbiguity(ChainCraftPlan.Step step) {
+		java.util.Set<String> categories = LastResortIngredients.activeCategories(ReachCraftingConfig.get());
+		if (categories.isEmpty()) {
+			return false;
+		}
+		for (RecipeIngredientSummary.IngredientSlot slot : step.ingredientSummary().slots()) {
+			if (slot.isEmpty()) {
+				continue;
+			}
+			boolean sawLastResort = false;
+			boolean sawOrdinary = false;
+			for (String itemId : slot.itemIds()) {
+				if (LastResortIngredients.isLastResort(itemId, categories)) {
+					sawLastResort = true;
+				} else {
+					sawOrdinary = true;
+				}
+			}
+			if (sawLastResort && sawOrdinary) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private static boolean isSelfReferentialStep(ChainCraftPlan.Step step) {
@@ -249,7 +334,7 @@ public final class ChainCraftController {
 			expectedOutput.copy(),
 			baselineOutputCount
 		);
-		ReachCraftingMod.LOGGER.info(
+		ReachCraftingMod.diag(
 			"[chain_retry] armed_after_nearby_warmup recipe={} clicks={} output={} baseline_count={}",
 			action.recipeId(),
 			remainingClicks,
@@ -272,7 +357,7 @@ public final class ChainCraftController {
 		if (!ItemStack.isSameItem(sessionOutput, pendingWarmupRetry.expectedOutput())) {
 			return;
 		}
-		ReachCraftingMod.LOGGER.info(
+		ReachCraftingMod.diag(
 			"[chain_retry] disarmed reason=flat_bulk_progress recipe={} output={} completed_copies={}",
 			pendingWarmupRetry.action().recipeId(),
 			ContainerUtils.formatStack(pendingWarmupRetry.expectedOutput()),
@@ -293,12 +378,7 @@ public final class ChainCraftController {
 			activeRun = activeRun.withSettlingBatch();
 			return;
 		}
-		activeRun = activeRun.withCompletedBatch();
-		if (activeRun == null || activeRun.currentStepIndex() >= activeRun.plan().steps().size()) {
-			activeRun = null;
-			return;
-		}
-		activeRun = activeRun.withWaiting(false, 0);
+		advancePastCompletedBatch();
 	}
 
 	private static void tick(Minecraft client) {
@@ -332,7 +412,7 @@ public final class ChainCraftController {
 					return;
 				}
 				boolean fullyAvailable = ChainCraftStagingPlanner.isFullyAvailableLocally(client, activeRun.plan());
-				ReachCraftingMod.LOGGER.info(
+				ReachCraftingMod.diag(
 					"[chain_stage] completed available={} missing={}",
 					fullyAvailable,
 					AvailableItemSnapshot.formatCounts(ChainCraftStagingPlanner.missingStagingCounts(client, activeRun.plan()))
@@ -346,7 +426,7 @@ public final class ChainCraftController {
 					activeRun = activeRun.withStagingComplete(true);
 					return;
 				}
-				ReachCraftingMod.LOGGER.info("[chain_stage] request missing={}", AvailableItemSnapshot.formatCounts(missingCounts));
+				ReachCraftingMod.diag("[chain_stage] request missing={}", AvailableItemSnapshot.formatCounts(missingCounts));
 				NearbyContainerDryRun.startCountStaging(missingCounts, "chain_crafting");
 				if (NearbyContainerDryRun.isActiveSessionRunning()) {
 					activeRun = activeRun.withWaitingForStaging();
@@ -386,7 +466,7 @@ public final class ChainCraftController {
 		}
 		int observedCopies = activeRun.observedProducedRecipeCopies();
 		if (observedCopies >= activeRun.scheduledBatchCopies()) {
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.diag(
 				"[chain_execute] batch_settled reason=observed_target index={} observed_copies={} scheduled_copies={}",
 				activeRun.currentStepIndex(),
 				observedCopies,
@@ -404,7 +484,7 @@ public final class ChainCraftController {
 		if (!ContainerUtils.isAutoMovePending()
 			&& resultSlot.hasItem()
 			&& ItemStack.isSameItemSameTags(resultSlot.getItem(), activeRun.currentStep().displayStack())) {
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.diag(
 				"[chain_execute] batch_settle_auto_move index={} observed_copies={} scheduled_copies={} result={}",
 				activeRun.currentStepIndex(),
 				observedCopies,
@@ -421,7 +501,7 @@ public final class ChainCraftController {
 			: activeRun.settleQuietTicks() + 1;
 		activeRun = activeRun.withSettlingBatchProgress(observedCopies, quietTicks);
 		if (quietTicks >= BATCH_SETTLE_QUIET_TICKS) {
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.diag(
 				"[chain_execute] batch_settled reason=quiet index={} observed_copies={} scheduled_copies={} quiet_ticks={}",
 				activeRun.currentStepIndex(),
 				observedCopies,
@@ -436,9 +516,31 @@ public final class ChainCraftController {
 		if (activeRun == null) {
 			return;
 		}
+		advancePastCompletedBatch();
+	}
+
+	/**
+	 * Step past the batch just finished, and announce the run when that was
+	 * the last one.
+	 *
+	 * <p>A plain chain had no success signal at all -- only failure and abort
+	 * spoke -- so anything driving one had nothing to wait for, and the two
+	 * call sites had drifted into identical copies of this logic.</p>
+	 */
+	private static void advancePastCompletedBatch() {
+		if (activeRun == null) {
+			return;
+		}
+		ChainCraftPlan plan = activeRun.plan();
 		activeRun = activeRun.withCompletedBatch();
-		if (activeRun == null || activeRun.currentStepIndex() >= activeRun.plan().steps().size()) {
+		if (activeRun == null || activeRun.currentStepIndex() >= plan.steps().size()) {
 			activeRun = null;
+			ReachCraftingMod.diag(
+				"[chain_execute] run_complete output={} copies={} steps={}",
+				ContainerUtils.formatStack(plan.finalOutput()),
+				plan.finalRecipeCopies(),
+				plan.steps().size()
+			);
 			return;
 		}
 		activeRun = activeRun.withWaiting(false, 0);
@@ -460,7 +562,7 @@ public final class ChainCraftController {
 		PendingWarmupRetry retry = pendingWarmupRetry;
 		pendingWarmupRetry = null;
 		if (BulkAutoCraftController.isActive()) {
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.diag(
 				"[chain_retry] skip_after_warmup reason=flat_bulk_session_active recipe={} output={}",
 				retry.action().recipeId(),
 				ContainerUtils.formatStack(retry.expectedOutput())
@@ -469,7 +571,7 @@ public final class ChainCraftController {
 		}
 		int currentOutputCount = countAccessibleOutput(client, retry.expectedOutput());
 		if (currentOutputCount > retry.baselineOutputCount()) {
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.diag(
 				"[chain_retry] skip_after_warmup reason=output_already_created recipe={} output={} baseline_count={} current_count={}",
 				retry.action().recipeId(),
 				ContainerUtils.formatStack(retry.expectedOutput()),
@@ -478,7 +580,7 @@ public final class ChainCraftController {
 			);
 			return;
 		}
-		ReachCraftingMod.LOGGER.info(
+		ReachCraftingMod.diag(
 			"[chain_retry] replay_after_nearby_warmup recipe={} clicks={} output={}",
 			retry.action().recipeId(),
 			retry.remainingClicks(),
@@ -508,7 +610,7 @@ public final class ChainCraftController {
 		if (destination == null) {
 			return false;
 		}
-		ReachCraftingMod.LOGGER.info(
+		ReachCraftingMod.diag(
 			"[chain_execute] stow_carried item={} count={} dest_slot={}",
 			itemId,
 			carried.getCount(),
@@ -537,7 +639,7 @@ public final class ChainCraftController {
 		int baselineOutputCount = countAccessibleOutput(client, step.displayStack());
 		RecipeBookClickCapture.HeldRecipeAction action = resolveExecutableAction(client, step);
 		if (action == null) {
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.diag(
 				"[chain_execute] step_unavailable recipe={} output={} ingredients={} known_recipes={}",
 				step.recipeId(),
 				ContainerUtils.formatStack(step.displayStack()),
@@ -547,7 +649,7 @@ public final class ChainCraftController {
 			failCurrentStep();
 			return;
 		}
-		ReachCraftingMod.LOGGER.info(
+		ReachCraftingMod.diag(
 			"[chain_execute] schedule_step index={} recipe={} output={} batch_copies={} remaining_copies={} final_step={}",
 			activeRun.currentStepIndex(),
 			step.recipeId(),
@@ -597,7 +699,7 @@ public final class ChainCraftController {
 				if (!matchesStep(client, step, recipe, registryAccess, gridSlotCount)) {
 					continue;
 				}
-				ReachCraftingMod.LOGGER.info(
+				ReachCraftingMod.diag(
 					"[chain_execute] resolved_dynamic planned_recipe={} executable_recipe={} output={}",
 					step.recipeId(),
 					recipe.getId(),
@@ -651,7 +753,7 @@ public final class ChainCraftController {
 		// summary is the user-facing outcome. Chatting "stopped" here reads
 		// as a false alarm right before "complete".
 		if (BulkChainCraftController.isActive()) {
-			ReachCraftingMod.LOGGER.info("[chain_execute] step_failed_during_bulk_chain item={}", itemName);
+			ReachCraftingMod.diag("[chain_execute] step_failed_during_bulk_chain item={}", itemName);
 		} else {
 			ReachCraftingModClient.sendChat(Component.translatable("message.reachcrafting.chain_crafting.failed", itemName).getString());
 		}
@@ -735,7 +837,7 @@ public final class ChainCraftController {
 
 		ChainCraftRun withSettlingBatch() {
 			int observedCopies = observedProducedRecipeCopies();
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.diag(
 				"[chain_execute] batch_settling index={} scheduled_copies={} observed_copies={} remaining_before={}",
 				currentStepIndex,
 				scheduledBatchCopies,
@@ -761,7 +863,7 @@ public final class ChainCraftController {
 			// iteration, compounding across runs until the budget pinned at
 			// its floor (field: "first run much faster than subsequent").
 			int remaining = remainingStepCopies - Math.max(completedCopies, producedCopies);
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.diag(
 				"[chain_execute] batch_finished index={} scheduled_copies={} observed_copies={} completed_copies={} remaining_before={}",
 				currentStepIndex,
 				scheduledBatchCopies,
@@ -770,7 +872,7 @@ public final class ChainCraftController {
 				remainingStepCopies
 			);
 			if (remaining > 0) {
-				ReachCraftingMod.LOGGER.info(
+				ReachCraftingMod.diag(
 					"[chain_execute] step_batch_complete index={} remaining_copies={}",
 					currentStepIndex,
 					remaining
@@ -780,10 +882,10 @@ public final class ChainCraftController {
 			int nextIndex = currentStepIndex + 1;
 			if (nextIndex >= plan.steps().size()) {
 				ReachCraftingConfig.get().noteRecentRecipe(currentStep().recipeId());
-				ReachCraftingMod.LOGGER.info("[chain_execute] complete steps={}", plan.steps().size());
+				ReachCraftingMod.diag("[chain_execute] complete steps={}", plan.steps().size());
 				return null;
 			}
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.diag(
 				"[chain_execute] step_complete index={} next_index={}",
 				currentStepIndex,
 				nextIndex

@@ -94,7 +94,7 @@ public final class RecipeBookChunkedScheduler {
 	}
 
 	public static void resetFrozenPageState(String reason) {
-		// com.reachcrafting.ReachCraftingMod.LOGGER.info(
+		// com.reachcrafting.ReachCraftingMod.diag(
 		// 	"[recipe_sort] reset_frozen_state reason={} previous_page={} frozen_page={} freeze_before_clear={}",
 		// 	reason,
 		// 	lastObservedPageIndex,
@@ -117,7 +117,7 @@ public final class RecipeBookChunkedScheduler {
 			frozenPageIndex = 0;
 		}
 		if (previousPageIndex != lastObservedPageIndex) {
-			// com.reachcrafting.ReachCraftingMod.LOGGER.info(
+			// com.reachcrafting.ReachCraftingMod.diag(
 			// 	"[recipe_sort] visible_page changed previous={} current={} frozen_page={} freeze={}",
 			// 	previousPageIndex,
 			// 	lastObservedPageIndex,
@@ -128,7 +128,7 @@ public final class RecipeBookChunkedScheduler {
 	}
 
 	public static void onRecipeBookVisibilityChanged(boolean visible) {
-		// com.reachcrafting.ReachCraftingMod.LOGGER.info(
+		// com.reachcrafting.ReachCraftingMod.diag(
 		// 	"[recipe_sort] recipe_book visibility={} page={} frozen_page={} freeze_before_clear={}",
 		// 	visible,
 		// 	lastObservedPageIndex,
@@ -143,23 +143,23 @@ public final class RecipeBookChunkedScheduler {
 	public static void onRecentRecipesChanged() {
 		Minecraft client = Minecraft.getInstance();
 		if (ContainerUtils.isAnySessionActive()) {
-			ReachCraftingMod.LOGGER.info("[recipe_sort] recent_change skipped reason=active_session");
+			ReachCraftingMod.diag("[recipe_sort] recent_change skipped reason=active_session");
 			return;
 		}
 		if (shouldFreezeResort()) {
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.diag(
 				"[recipe_sort] recent_change skipped reason=frozen page={} freeze={}",
 				frozenPageIndex,
 				freezeResortUntilManualReopen
 			);
 			return;
 		}
-		ReachCraftingMod.LOGGER.info("[recipe_sort] recent_change requesting refresh");
+		ReachCraftingMod.diag("[recipe_sort] recent_change requesting refresh");
 		requestRefresh(client);
 	}
 
 	public static void forceVisibleRecipeBookRefresh() {
-		ReachCraftingMod.LOGGER.info("[retrieval_virtual] forceVisibleRecipeBookRefresh");
+		ReachCraftingMod.diag("[retrieval_virtual] forceVisibleRecipeBookRefresh");
 		requestRefresh(Minecraft.getInstance(), true);
 	}
 
@@ -214,26 +214,26 @@ public final class RecipeBookChunkedScheduler {
 
 	private static void requestRefresh(Minecraft client, boolean force) {
 		if (ContainerUtils.isAnySessionActive()) {
-			ReachCraftingMod.LOGGER.info("[retrieval_virtual] refresh skipped reason=active_session_excluding_retrieval force={}", force);
+			ReachCraftingMod.diag("[retrieval_virtual] refresh skipped reason=active_session_excluding_retrieval force={}", force);
 			return;
 		}
 		if (!force && shouldFreezeResort()) {
-			ReachCraftingMod.LOGGER.info("[retrieval_virtual] refresh skipped reason=frozen force={} page={} freeze={}", force, frozenPageIndex, freezeResortUntilManualReopen);
+			ReachCraftingMod.diag("[retrieval_virtual] refresh skipped reason=frozen force={} page={} freeze={}", force, frozenPageIndex, freezeResortUntilManualReopen);
 			return;
 		}
 		if (!(client.screen instanceof RecipeUpdateListener recipeBookScreen) || client.player == null) {
-			ReachCraftingMod.LOGGER.info("[retrieval_virtual] refresh skipped reason=unsupported_screen force={} screen={} player={}", force, client.screen != null ? client.screen.getClass().getSimpleName() : "null", client.player != null);
+			ReachCraftingMod.diag("[retrieval_virtual] refresh skipped reason=unsupported_screen force={} screen={} player={}", force, client.screen != null ? client.screen.getClass().getSimpleName() : "null", client.player != null);
 			return;
 		}
 
 		RecipeBookComponent component = recipeBookScreen.getRecipeBookComponent();
 		if (component == null || !component.isVisible()) {
-			ReachCraftingMod.LOGGER.info("[retrieval_virtual] refresh skipped reason=recipe_book_hidden force={} component={} visible={}", force, component != null, component != null && component.isVisible());
+			ReachCraftingMod.diag("[retrieval_virtual] refresh skipped reason=recipe_book_hidden force={} component={} visible={}", force, component != null, component != null && component.isVisible());
 			return;
 		}
 
 		RecipeBookComponentAccessor accessor = (RecipeBookComponentAccessor) component;
-		ReachCraftingMod.LOGGER.info("[retrieval_virtual] refresh invokeUpdateCollections force={} page={} frozen_page={} freeze={}", force, lastObservedPageIndex, frozenPageIndex, freezeResortUntilManualReopen);
+		ReachCraftingMod.diag("[retrieval_virtual] refresh invokeUpdateCollections force={} page={} frozen_page={} freeze={}", force, lastObservedPageIndex, frozenPageIndex, freezeResortUntilManualReopen);
 		accessor.invokeUpdateCollections(force);
 	}
 

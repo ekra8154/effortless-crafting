@@ -33,14 +33,14 @@ public final class RecipeBookSmartSorter {
 			return collections;
 		}
 		if (RecipeBookChunkedScheduler.shouldFreezeResort()) {
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.diag(
 				"[recipe_sort] preserve reason=frozen_page collections={} freeze=true",
 				collections.size()
 			);
 			return preservePresentedOrder(collections);
 		}
 		if (ContainerUtils.isAnySessionActive()) {
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.diag(
 				"[recipe_sort] preserve reason=active_session collections={} freeze={}",
 				collections.size(),
 				RecipeBookChunkedScheduler.shouldFreezeResort()
@@ -74,7 +74,7 @@ public final class RecipeBookSmartSorter {
 					+ " chain_memo=" + sortContext.chainCraftableByRecipe.size()
 					+ " collection_memo=" + sortContext.collectionCraftability.size()
 			);
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.diag(
 				"[recipe_sort] sorted mode=eager collections={} chain_memo={} collection_memo={}",
 				collections.size(),
 				sortContext.chainCraftableByRecipe.size(),
@@ -103,7 +103,7 @@ public final class RecipeBookSmartSorter {
 				+ " settled=" + passSnapshot.settledCount()
 				+ " pending=" + passSnapshot.pendingCount()
 		);
-		ReachCraftingMod.LOGGER.info(
+		ReachCraftingMod.diag(
 			"[recipe_sort] sorted mode=chunked collections={} settled={} pending={}",
 			collections.size(),
 			passSnapshot.settledCount(),

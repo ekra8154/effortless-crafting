@@ -53,7 +53,7 @@ final class PerformanceProfiler {
 		}
 
 		long durationNanos = System.nanoTime() - startNanos;
-		ReachCraftingMod.LOGGER.info(
+		ReachCraftingMod.diag(
 			"[perf] {} took={}ms{}",
 			key,
 			formatMillis(durationNanos),
@@ -69,7 +69,7 @@ final class PerformanceProfiler {
 
 		for (Map.Entry<String, Aggregate> entry : AGGREGATES.entrySet()) {
 			Aggregate aggregate = entry.getValue();
-			ReachCraftingMod.LOGGER.info(
+			ReachCraftingMod.diag(
 				"[perf] {} calls={} total={}ms avg={}ms max={}ms{}",
 				entry.getKey(),
 				aggregate.count,

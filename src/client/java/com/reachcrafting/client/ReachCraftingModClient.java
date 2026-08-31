@@ -60,6 +60,8 @@ public class ReachCraftingModClient implements ClientModInitializer {
 	@Override
 	public void onInitializeClient() {
 		ReachCraftingConfig.load();
+		com.reachcrafting.ReachCraftingMod.setDiagnosticLoggingGate(
+			() -> ReachCraftingConfig.get().diagnosticLoggingEnabled());
 		NearbyContainerCache.init();
 		RecipeBookClickCapture.init();
 		NearbyContainerDryRun.init();

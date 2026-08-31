@@ -61,7 +61,7 @@ final class RecipeBookInputController {
 				// bulk-sized request execute without bulk's fit protection.
 				int queueLimit = resolveQueueLimit(client, state.pendingHeldRecipe().action());
 				if (state.pendingHeldRecipe().clickCount() > queueLimit) {
-					com.reachcrafting.ReachCraftingMod.LOGGER.info(
+					com.reachcrafting.ReachCraftingMod.diag(
 						"[recipe_input] queued_count_clamped from={} to={} bulk_enabled={}",
 						state.pendingHeldRecipe().clickCount(),
 						queueLimit,
@@ -171,7 +171,7 @@ final class RecipeBookInputController {
 		int requestedClicks = maxCraftRequested
 			? resolveMaxCraftRequestCount(minecraft, player, recipe, collection, displayStack, explicitVariantSelection, allowNearbyChests)
 			: 1;
-		com.reachcrafting.ReachCraftingMod.LOGGER.info(
+		com.reachcrafting.ReachCraftingMod.diag(
 			"[recipe_input] mod_click recipe={} explicit_variant={} auto_requested={} instant_setting={} max_requested={} allow_nearby={} requested_clicks={} grid_empty={}",
 			recipe.getId(),
 			explicitVariantSelection,
@@ -245,7 +245,7 @@ final class RecipeBookInputController {
 			return;
 		}
 		if (RecipeBookClickCapture.consumeSuppressedVanillaRecipeClick()) {
-			com.reachcrafting.ReachCraftingMod.LOGGER.info(
+			com.reachcrafting.ReachCraftingMod.diag(
 				"[recipe_input] suppressed vanilla_click recipe={} explicit_variant={}",
 				recipe != null ? recipe.getId() : null,
 				explicitVariantSelection
@@ -415,7 +415,7 @@ final class RecipeBookInputController {
 
 		if (!ContainerUtils.isGridEmpty(minecraft.player.containerMenu)
 			&& !GridTopUp.isRingForRecipe(minecraft, minecraft.player, action.recipeId(), action.collection())) {
-			com.reachcrafting.ReachCraftingMod.LOGGER.info(
+			com.reachcrafting.ReachCraftingMod.diag(
 				"[recipe_replay] flushing grid before replay remainingClicks={} allowNearby={} craftAll={} refillable={} bulkActive={}",
 				remainingClicks,
 				allowNearby,
@@ -435,7 +435,7 @@ final class RecipeBookInputController {
 			}
 		}
 
-		com.reachcrafting.ReachCraftingMod.LOGGER.info(
+		com.reachcrafting.ReachCraftingMod.diag(
 			"[recipe_replay] scheduleReplay remainingClicks={} allowNearby={} craftAll={} refillable={} recipe={}",
 			remainingClicks,
 			allowNearby,
@@ -562,7 +562,7 @@ final class RecipeBookInputController {
 		// session started) must not fire: the grid flush below would return
 		// the session's staged materials to chests mid-run.
 		if (isCraftingSessionControllerActive()) {
-			com.reachcrafting.ReachCraftingMod.LOGGER.info(
+			com.reachcrafting.ReachCraftingMod.diag(
 				"[recipe_input] pending_queue_dropped_session_active recipe={} count={}",
 				state.pendingHeldRecipe().action().recipeId(),
 				state.pendingHeldRecipe().clickCount()
@@ -630,7 +630,7 @@ final class RecipeBookInputController {
 		// exceed the plain per-recipe queue limit.
 		if (!isCraftingSessionControllerActive()) {
 			if (replayBatch.refillableBulkMaxMode() && !AutoCraftController.isBulkModeEnabled()) {
-				com.reachcrafting.ReachCraftingMod.LOGGER.info(
+				com.reachcrafting.ReachCraftingMod.diag(
 					"[recipe_replay] dropped_stale_bulk_batch recipe={} remaining_clicks={}",
 					replayBatch.action().recipeId(),
 					replayBatch.remainingClicks()
@@ -643,7 +643,7 @@ final class RecipeBookInputController {
 			// may legitimately exceed the per-recipe scroll queue limit.
 			int queueLimit = resolveQueueLimit(minecraft, replayBatch.action());
 			if (!replayBatch.craftAll() && replayBatch.remainingClicks() > queueLimit) {
-				com.reachcrafting.ReachCraftingMod.LOGGER.info(
+				com.reachcrafting.ReachCraftingMod.diag(
 					"[recipe_replay] clamped_stale_batch recipe={} from={} to={}",
 					replayBatch.action().recipeId(),
 					replayBatch.remainingClicks(),
@@ -689,7 +689,7 @@ final class RecipeBookInputController {
 		if (state.replayBatch() == replayBatch) {
 			state.setReplayBatch(null);
 		} else {
-			com.reachcrafting.ReachCraftingMod.LOGGER.info(
+			com.reachcrafting.ReachCraftingMod.diag(
 				"[recipe_replay] preserved_replacement old_recipe={} new_recipe={}",
 				replayBatch.action().recipeId(),
 				state.replayBatch() != null ? state.replayBatch().action().recipeId() : "<none>"

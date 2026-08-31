@@ -172,6 +172,60 @@ public final class RecipeVariantResolver {
 			.orElse(exactSelection);
 	}
 
+	/**
+	 * Every variant of the clicked recipe's canonical collection, scored
+	 * against the same availability the click itself was resolved with.
+	 *
+	 * <p>{@link #resolve} only ever returns ONE recipe, and when nothing in the
+	 * collection is directly craftable that one is the clicked variant. The
+	 * collection's chain indicator, however, lights up when ANY variant is
+	 * chain-craftable, so the chain-craft path needs the whole list to make
+	 * good on what the icon promised.</p>
+	 */
+	public static List<Selection> collectionCandidates(
+		Minecraft minecraft,
+		LocalPlayer player,
+		Recipe<?> clickedRecipe,
+		RecipeCollection collection,
+		ItemStack clickedDisplayStack,
+		AvailableItemSnapshot availableItems,
+		Map<String, Integer> usableCounts,
+		Map<String, Integer> preferenceTotals,
+		boolean craftAll,
+		int desiredCopiesPerSlot
+	) {
+		if (minecraft.level == null || clickedRecipe == null) {
+			return List.of();
+		}
+
+		RecipeCollection canonical = resolveCanonicalCollection(player, collection, clickedRecipe);
+		if (canonical == null) {
+			return List.of();
+		}
+
+		return canonical.getRecipes().stream()
+			.map(recipe -> toSelection(
+				minecraft,
+				recipe,
+				recipe.getId().equals(clickedRecipe.getId()) ? clickedDisplayStack : ItemStack.EMPTY,
+				availableItems,
+				usableCounts,
+				preferenceTotals,
+				craftAll,
+				desiredCopiesPerSlot
+			))
+			.toList();
+	}
+
+	/**
+	 * The order {@link #resolve} would rank variants in, best first, so callers
+	 * that walk the collection themselves agree with the count preference the
+	 * single-selection path uses.
+	 */
+	public static Comparator<Selection> preferenceOrder() {
+		return compareSelections(ReachCraftingConfig.get().countPreference(), false).reversed();
+	}
+
 	public static Selection resolveMatchForGrid(
 		Minecraft minecraft,
 		LocalPlayer player,
