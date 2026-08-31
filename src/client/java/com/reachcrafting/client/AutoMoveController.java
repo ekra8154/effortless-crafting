@@ -985,6 +985,7 @@ final class AutoMoveController {
 				int oldCount = autoMoveSnapshotCounts.getOrDefault(i, 0);
 
 				if (currentCount > oldCount) {
+					autoMoveTargetArrivalObserved = true;
 					com.reachcrafting.ReachCraftingMod.diag(
 						"[auto_move] source candidate inv={} slot={} oldCount={} currentCount={} hotbar={} snapshot={}",
 						i,
@@ -1103,7 +1104,8 @@ final class AutoMoveController {
 				resultSlot.hasItem() ? ContainerUtils.formatStack(resultSlot.getItem()) : "<empty>",
 				ContainerUtils.formatStack(client.player.containerMenu.getCarried())
 			);
-			if (!hasObservedAutoMoveTargetArrival(menu) && autoMoveWaitingTicks <= ORGANIZE_TARGET_ARRIVAL_WAIT_TICKS) {
+			boolean observedTargetArrival = autoMoveTargetArrivalObserved || hasObservedAutoMoveTargetArrival(menu);
+			if (!observedTargetArrival && autoMoveWaitingTicks <= ORGANIZE_TARGET_ARRIVAL_WAIT_TICKS) {
 				com.reachcrafting.ReachCraftingMod.diag(
 					"[auto_move] organize waiting for target arrival: waitTicks={} target={} snapshot_known_slots={}",
 					autoMoveWaitingTicks,
@@ -1112,7 +1114,7 @@ final class AutoMoveController {
 				);
 				return;
 			}
-			if (!autoMoveTargetArrivalObserved && hasObservedAutoMoveTargetArrival(menu)) {
+			if (!autoMoveTargetArrivalObserved && observedTargetArrival) {
 				autoMoveTargetArrivalObserved = true;
 				com.reachcrafting.ReachCraftingMod.diag(
 					"[auto_move] organize observed target arrival: waitTicks={} target={}",
