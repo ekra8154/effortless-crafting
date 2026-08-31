@@ -19,6 +19,15 @@ public final class ChainCraftPopupController {
 	private static ChainCraftPlan pendingStartPlan;
 	private static BulkChainRequest pendingBulkChainStart;
 	private static boolean openingConfirmPopup;
+	// The confirm here is a ConfirmScreen, which REPLACES the crafting screen
+	// rather than overlaying it the way 1.21.2+'s PopupScreen does, and the
+	// restore is queued with client.tell() so the trailing char event lands on
+	// the closing popup. That leaves a window where the plan is pending but
+	// client.screen is still the popup -- and tick() read that as the player
+	// having navigated away, so a confirmed chain died with "crafting screen
+	// changed" instead of starting. Wait for the queued restore instead.
+	private static int awaitingBackgroundRestoreTicks;
+	private static final int BACKGROUND_RESTORE_WAIT_TICKS = 20;
 
 	private ChainCraftPopupController() {
 	}
@@ -104,6 +113,7 @@ public final class ChainCraftPopupController {
 			} else {
 				sendDeferredMissing(pending);
 			}
+			awaitingBackgroundRestoreTicks = BACKGROUND_RESTORE_WAIT_TICKS;
 			// Defer the screen swap to the next tick: when the popup is confirmed with Space/Enter,
 			// GLFW still delivers the trailing char event this frame, and a synchronous swap would
 			// route that character into the restored screen's focused search box (replacing its
@@ -220,12 +230,21 @@ public final class ChainCraftPopupController {
 		if (pendingStartPlan == null && pendingBulkChainStart == null) {
 			return;
 		}
-		if (client.player == null || (!(client.screen instanceof CraftingScreen) && !(client.screen instanceof InventoryScreen))) {
+		boolean onCraftingScreen = client.screen instanceof CraftingScreen || client.screen instanceof InventoryScreen;
+		if (client.player != null && !onCraftingScreen && awaitingBackgroundRestoreTicks > 0) {
+			// The queued setScreen(background) has not run yet; this is the
+			// popup on its way out, not the player leaving.
+			awaitingBackgroundRestoreTicks--;
+			return;
+		}
+		if (client.player == null || !onCraftingScreen) {
 			pendingStartPlan = null;
 			pendingBulkChainStart = null;
+			awaitingBackgroundRestoreTicks = 0;
 			ReachCraftingModClient.sendChat(Component.translatable("message.reachcrafting.chain_crafting.context_lost").getString());
 			return;
 		}
+		awaitingBackgroundRestoreTicks = 0;
 		if (pendingBulkChainStart != null) {
 			BulkChainRequest request = pendingBulkChainStart;
 			pendingBulkChainStart = null;
