@@ -4,6 +4,7 @@
 	"compatibilityLevel": "JAVA_21",
 	"client": [
 		"MouseHandlerMixin",
+		"ClientRecipeBookAccessor",
 		"WindowMixin",
 		"AbstractContainerMenuMixin",
 		"AbstractContainerScreenMixin",
