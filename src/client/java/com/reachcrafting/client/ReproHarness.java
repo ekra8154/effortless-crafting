@@ -37,6 +37,7 @@ public final class ReproHarness {
 	private static int pollCounter;
 	private static String pendingBulkItem;
 	private static boolean pendingCtrl;
+	private static boolean pendingBulkLatch = true;
 	private static int pendingTimeoutTicks;
 	private static int autoConfirmTicks;
 	// While a scripted run is in flight, suppress the window-focus guard so a
@@ -74,8 +75,13 @@ public final class ReproHarness {
 		if (!FabricLoader.getInstance().isDevelopmentEnvironment()) {
 			return;
 		}
+		// The functional suite asserts on per-craft diagnostics (post_place
+		// counts, slow-path detection, harness state). Those are gated off for
+		// players now, so the dev environment force-enables them rather than
+		// making all ten version worktrees carry a config override.
+		ReachCraftingMod.setDiagnosticLoggingGate(() -> true);
 		cmdFile = FabricLoader.getInstance().getGameDir().resolve("repro-cmd.txt");
-		ReachCraftingMod.LOGGER.info("[repro_harness] armed cmd_file={} quiet_launch={} free_mouse={} (F6 toggles)", cmdFile, QUIET_LAUNCH, freeMouse);
+		ReachCraftingMod.diag("[repro_harness] armed cmd_file={} quiet_launch={} free_mouse={} (F6 toggles)", cmdFile, QUIET_LAUNCH, freeMouse);
 		ClientTickEvents.END_CLIENT_TICK.register(ReproHarness::tick);
 	}
 
@@ -89,7 +95,7 @@ public final class ReproHarness {
 			} else {
 				client.mouseHandler.grabMouse();
 			}
-			ReachCraftingMod.LOGGER.info("[repro_harness] free-mouse {} (F6)", freeMouse ? "ON" : "OFF");
+			ReachCraftingMod.diag("[repro_harness] free-mouse {} (F6)", freeMouse ? "ON" : "OFF");
 		}
 		freeMouseKeyWasDown = down;
 	}
@@ -111,7 +117,7 @@ public final class ReproHarness {
 		if (command == null || command.isBlank()) {
 			return;
 		}
-		ReachCraftingMod.LOGGER.info("[repro_harness] command={}", command);
+		ReachCraftingMod.diag("[repro_harness] command={}", command);
 		String[] parts = command.trim().split("\\s+");
 		switch (parts[0]) {
 			case "open" -> openNearestCraftingTable(client);
@@ -121,7 +127,7 @@ public final class ReproHarness {
 				if (client.screen != null) {
 					client.player.closeContainer();
 				}
-				ReachCraftingMod.LOGGER.info("[repro_harness] closed container");
+				ReachCraftingMod.diag("[repro_harness] closed container");
 			}
 			case "clearcache" -> {
 				// The repro reuses the same chest positions every run with
@@ -129,14 +135,19 @@ public final class ReproHarness {
 				// nearby-container cache, so it would withdraw against stale
 				// data. Clear it so the next craft rescans the real contents.
 				NearbyContainerCache.clear();
-				ReachCraftingMod.LOGGER.info("[repro_harness] cleared nearby container cache");
+				ReachCraftingMod.diag("[repro_harness] cleared nearby container cache");
 			}
-			case "bulk" -> {
+			case "bulk", "chain" -> {
 				if (parts.length < 2) {
-					ReachCraftingMod.LOGGER.warn("[repro_harness] bulk requires an item id");
+					ReachCraftingMod.LOGGER.warn("[repro_harness] {} requires an item id", parts[0]);
 					return;
 				}
 				pendingBulkItem = parts[1];
+				// "chain" drives the NON-bulk request path: alt held for the
+				// craft, no sticky bulk latch. That combination is its own
+				// execution path (bulk_mode=false) and had no coverage, which
+				// is how a final step with no fast placement branch shipped.
+				pendingBulkLatch = parts[0].equals("bulk");
 				pendingCtrl = parts.length > 2 && parts[2].equals("ctrl");
 				pendingTimeoutTicks = 100;
 				// Keep automation alive while the window is backgrounded for
@@ -160,7 +171,7 @@ public final class ReproHarness {
 			autoConfirmTicks--;
 			if (client.screen instanceof net.minecraft.client.gui.components.PopupScreen popup
 				&& ChainCraftPopupController.isChainCraftPopup(popup)) {
-				ReachCraftingMod.LOGGER.info("[repro_harness] auto-confirming chain popup");
+				ReachCraftingMod.diag("[repro_harness] auto-confirming chain popup");
 				ChainCraftPopupController.confirm(popup);
 				autoConfirmTicks = 0;
 			}
@@ -178,11 +189,12 @@ public final class ReproHarness {
 		}
 		String itemId = pendingBulkItem;
 		boolean ctrl = pendingCtrl;
+		boolean bulkLatch = pendingBulkLatch;
 		pendingBulkItem = null;
-		clickRecipeByItemId(client, itemId, ctrl);
+		clickRecipeByItemId(client, itemId, ctrl, bulkLatch);
 	}
 
-	private static void clickRecipeByItemId(Minecraft client, String itemId, boolean ctrl) {
+	private static void clickRecipeByItemId(Minecraft client, String itemId, boolean ctrl, boolean bulkLatch) {
 		ContextMap context = SlotDisplayContext.fromLevel(client.level);
 		for (RecipeCollection collection : client.player.getRecipeBook().getCollections()) {
 			for (RecipeDisplayEntry entry : collection.getRecipes()) {
@@ -190,14 +202,19 @@ public final class ReproHarness {
 				if (stack.isEmpty() || !itemId.equals(stack.getItem().builtInRegistryHolder().key().location().toString())) {
 					continue;
 				}
-				ReachCraftingMod.LOGGER.info(
-					"[repro_harness] clicking recipe id={} item={} shift=true ctrl={}", entry.id(), itemId, ctrl);
+				ReachCraftingMod.diag(
+					"[repro_harness] clicking recipe id={} item={} shift=true ctrl={} bulk_latch={}",
+					entry.id(), itemId, ctrl, bulkLatch);
 				// Arm the sticky bulk latch the same way a user's physical
 				// alt-hold does, so the click runs a refillable bulk session.
-				AutoCraftController.setEnabledMode(ReachCraftingConfig.AutoCraftMode.BULK);
+				// Without it the request stays on the NORMAL path and alt has
+				// to be pressed for the click to count as a craft request.
+				AutoCraftController.setEnabledMode(bulkLatch
+					? ReachCraftingConfig.AutoCraftMode.BULK
+					: ReachCraftingConfig.AutoCraftMode.NORMAL);
 				autoConfirmTicks = 200;
 				RecipeBookClickCapture.onRecipeButtonClicked(
-					entry.id(), collection, stack, 0, true, ctrl, false, false);
+					entry.id(), collection, stack, 0, true, ctrl, !bulkLatch, false);
 				return;
 			}
 		}

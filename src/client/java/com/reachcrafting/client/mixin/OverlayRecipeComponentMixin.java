@@ -39,7 +39,7 @@ public abstract class OverlayRecipeComponentMixin {
 			|| com.reachcrafting.client.ContainerUtils.isExistingOutputRetrievalEnabled()
 			|| (shiftDown && RecipeBookClickCapture.isBulkModeEnabled())
 			|| (altDown && ReachCraftingConfig.get().altAsRequestKey());
-		com.reachcrafting.ReachCraftingMod.LOGGER.info(
+		com.reachcrafting.ReachCraftingMod.diag(
 			"[overlay_click] head recipe={} ctrl={} shift={} alt={} intercept={} collection_size={}",
 			recipeId,
 			ctrlDown,
@@ -100,7 +100,7 @@ public abstract class OverlayRecipeComponentMixin {
 		boolean ctrlDown = Screen.hasControlDown();
 		boolean shiftDown = Screen.hasShiftDown();
 		boolean altDown = Screen.hasAltDown();
-		com.reachcrafting.ReachCraftingMod.LOGGER.info(
+		com.reachcrafting.ReachCraftingMod.diag(
 			"[overlay_click] return recipe={} ctrl={} shift={} alt={} vanillaAccepted={}",
 			recipeId,
 			ctrlDown,
