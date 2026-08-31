@@ -1,6 +1,7 @@
 package com.reachcrafting.client;
 
 import com.reachcrafting.ReachCraftingMod;
+import com.reachcrafting.client.mixin.ClientRecipeBookAccessor;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -91,24 +92,33 @@ final class ChainCraftPlanner {
 		this.gridSlotCount = gridSlotCount;
 		this.registryAccess = minecraft.level.registryAccess();
 		this.allowSingleStepPlan = allowSingleStepPlan;
-		// NB: the modern trees' index cache (keyed on ClientRecipeBookAccessor.getKnown())
-		// is intentionally dropped here — that accessor is not registered in this
-		// branch's mixins.json, and the per-batch rebuild cost is not a concern on
-		// this low-traffic version.
-		this.recipesByOutput = buildRecipeIndex();
-		int candidateCount = this.recipesByOutput.values().stream().mapToInt(List::size).sum();
-		ReachCraftingMod.diag(
-			"[chain_debug] index outputs={} candidates={} grid_slots={} allow_nearby={}",
-			this.recipesByOutput.size(),
-			candidateCount,
-			gridSlotCount,
-			allowNearby
-		);
-		PerformanceProfiler.record(
-			"chain.planner_construct",
-			startNanos,
-			"outputs=" + this.recipesByOutput.size() + " candidates=" + candidateCount + " allow_nearby=" + allowNearby
-		);
+		int knownSize = ((ClientRecipeBookAccessor) player.getRecipeBook()).getKnown().size();
+		boolean reused = cachedIndex != null
+			&& cachedIndexKnownSize == knownSize
+			&& cachedIndexGridSlots == gridSlotCount
+			&& cachedIndexLevel.get() == minecraft.level
+			&& System.currentTimeMillis() - cachedIndexBuiltMillis < INDEX_CACHE_TTL_MS;
+		this.recipesByOutput = reused ? cachedIndex : buildRecipeIndex();
+		if (!reused) {
+			cachedIndex = this.recipesByOutput;
+			cachedIndexKnownSize = knownSize;
+			cachedIndexGridSlots = gridSlotCount;
+			cachedIndexLevel = new java.lang.ref.WeakReference<>(minecraft.level);
+			cachedIndexBuiltMillis = System.currentTimeMillis();
+			int candidateCount = this.recipesByOutput.values().stream().mapToInt(List::size).sum();
+			ReachCraftingMod.diag(
+				"[chain_debug] index outputs={} candidates={} grid_slots={} allow_nearby={}",
+				this.recipesByOutput.size(),
+				candidateCount,
+				gridSlotCount,
+				allowNearby
+			);
+			PerformanceProfiler.record(
+				"chain.planner_construct",
+				startNanos,
+				"outputs=" + this.recipesByOutput.size() + " candidates=" + candidateCount + " allow_nearby=" + allowNearby
+			);
+		}
 	}
 
 	static Optional<ChainCraftPlan> plan(
