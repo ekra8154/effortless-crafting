@@ -86,8 +86,13 @@ public final class RecipeOutputCounter {
 	}
 
 	private static void renderCount(GuiGraphics guiGraphics, Font font, int count, int slotX, int slotY, int color) {
-		String text = count > 999 ? (count / 1000) + "k" : String.valueOf(count);
-		float scale = 0.8f;
+		// Always the exact count. The old "1k" form used integer division, so
+		// 1999 and 1000 both read "1k" - it hid the digits that matter when
+		// you are checking what a request will actually produce.
+		String text = String.valueOf(count);
+		// Longer numbers shrink to keep roughly the old footprint beside the
+		// slot, with a floor so they stay readable rather than vanishing.
+		float scale = text.length() <= 3 ? 0.8f : Math.max(0.5f, 2.4f / text.length());
 		
 		// Position further up and to the right, mostly outside the 16x16 slot
 		float x = slotX + 17;
