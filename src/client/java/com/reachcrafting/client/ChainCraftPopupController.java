@@ -5,7 +5,13 @@ import net.minecraft.client.gui.screens.ConfirmScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.CraftingScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import org.lwjgl.glfw.GLFW;
 
 /**
  * Handles the chain-craft confirmation flow.
@@ -164,27 +170,53 @@ public final class ChainCraftPopupController {
 		return openingConfirmPopup;
 	}
 
+	/**
+	 * Names the raw material that ran out, when the planner identified one.
+	 * "Not enough Leather for 57 Lectern" is the same length as "Not enough
+	 * resources for 57 Lectern" and tells the player what to go and get.
+	 * Falls back to the generic wording when nothing identifiable ran short.
+	 */
+	private static Component partial(String baseKey, ChainCraftPlan plan, int requested, int achievable) {
+		String itemName = plan.finalOutput().getHoverName().getString();
+		String limiting = limitingItemName(plan);
+		if (limiting == null) {
+			return Component.translatable(baseKey, requested, itemName, achievable);
+		}
+		return Component.translatable(baseKey + "_limited", limiting, requested, itemName, achievable);
+	}
+
+	private static String limitingItemName(ChainCraftPlan plan) {
+		if (plan.limitingItemId() == null) {
+			return null;
+		}
+		ResourceLocation id = ResourceLocation.tryParse(plan.limitingItemId());
+		if (id == null) {
+			return null;
+		}
+		Item item = BuiltInRegistries.ITEM.get(id);
+		// An unregistered id would render as "air"; better to say nothing.
+		return item == null || item == Items.AIR ? null : new ItemStack(item).getHoverName().getString();
+	}
+
 	private static Component messageFor(ChainCraftPlan plan, int requestedRecipeCopies) {
 		if (requestedRecipeCopies <= plan.finalRecipeCopies()) {
 			return Component.translatable("popup.reachcrafting.chain_crafting.message");
 		}
 		int outputPerCraft = Math.max(plan.finalOutput().getCount(), 1);
-		String itemName = plan.finalOutput().getHoverName().getString();
-		return Component.translatable(
+		return partial(
 			"popup.reachcrafting.chain_crafting.partial_message",
+			plan,
 			requestedRecipeCopies * outputPerCraft,
-			itemName,
 			plan.finalRecipeCopies() * outputPerCraft
 		);
 	}
 
 	private static Component alwaysPartialMessage(ChainCraftPlan plan, int requestedRecipeCopies) {
 		int outputPerCraft = Math.max(plan.finalOutput().getCount(), 1);
-		String itemName = plan.finalOutput().getHoverName().getString();
-		return Component.translatable(
+		return partial(
 			"message.reachcrafting.chain_crafting.partial_always",
+			plan,
 			requestedRecipeCopies * outputPerCraft,
-			itemName,
 			plan.finalRecipeCopies() * outputPerCraft
 		);
 	}
@@ -207,21 +239,20 @@ public final class ChainCraftPopupController {
 				itemName
 			);
 		}
-		return Component.translatable(
+		return partial(
 			"popup.reachcrafting.chain_crafting.bulk_partial_message",
+			plan,
 			requestedRecipeCopies * outputPerCraft,
-			itemName,
 			achievableItems
 		);
 	}
 
 	private static Component bulkAlwaysPartialMessage(ChainCraftPlan plan, int requestedRecipeCopies) {
 		int outputPerCraft = Math.max(plan.finalOutput().getCount(), 1);
-		String itemName = plan.finalOutput().getHoverName().getString();
-		return Component.translatable(
+		return partial(
 			"message.reachcrafting.chain_crafting.bulk_partial_always",
+			plan,
 			requestedRecipeCopies * outputPerCraft,
-			itemName,
 			plan.finalRecipeCopies() * outputPerCraft
 		);
 	}
