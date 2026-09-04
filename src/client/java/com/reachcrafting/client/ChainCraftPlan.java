@@ -6,10 +6,28 @@ import net.minecraft.client.gui.screens.recipebook.RecipeCollection;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.display.RecipeDisplayId;
 
-record ChainCraftPlan(List<ChainCraftPlan.Step> steps, ItemStack finalOutput, int finalRecipeCopies) {
+/**
+ * @param limitingItemId the raw material that stopped the plan going further,
+ *     or null when the full request was satisfied (or nothing identifiable ran
+ *     out). Only ever a base material - see ChainCraftPlanner.baseShortfalls.
+ */
+record ChainCraftPlan(
+	List<ChainCraftPlan.Step> steps,
+	ItemStack finalOutput,
+	int finalRecipeCopies,
+	String limitingItemId
+) {
 	ChainCraftPlan {
 		steps = List.copyOf(steps);
 		finalOutput = finalOutput != null ? finalOutput.copy() : ItemStack.EMPTY;
+	}
+
+	ChainCraftPlan(List<ChainCraftPlan.Step> steps, ItemStack finalOutput, int finalRecipeCopies) {
+		this(steps, finalOutput, finalRecipeCopies, null);
+	}
+
+	ChainCraftPlan withLimitingItem(String itemId) {
+		return new ChainCraftPlan(steps, finalOutput, finalRecipeCopies, itemId);
 	}
 
 	record Step(
