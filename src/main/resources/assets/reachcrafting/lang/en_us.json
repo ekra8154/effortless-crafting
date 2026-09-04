@@ -165,5 +165,9 @@
   "tooltip.reachcrafting.click_budget_per_window": "How many container clicks automated crafting may send in a 7-second window. Paper servers kick above 500 per 7 seconds by default and that budget is shared with all other packets, so 450 leaves a small margin. Raise it on servers with no packet limiter (vanilla and Fabric servers have none); lower it if an anti-cheat plugin disconnects you. Unlike the place-packet rate this is not learned automatically, because exceeding it disconnects rather than dropping a packet. Has no effect in singleplayer, where nothing is rationed.",
   "option.reachcrafting.packet_budget_adaptive": "Adaptive Rate Learning",
   "tooltip.reachcrafting.packet_budget_adaptive": "When on, the mod probes each server's real placement-packet limit and remembers it per server. Turn off to pin the rate to the Initial value above (no probing, no learning, nothing saved) - useful if you already know your server's limit.",
-  "text.reachcrafting.packet_budget_no_server": "Not connected to a rate-limited server (learned rates are stored per server in effortless-crafting-server-budgets.json)."
+  "text.reachcrafting.packet_budget_no_server": "Not connected to a rate-limited server (learned rates are stored per server in effortless-crafting-server-budgets.json).",
+  "popup.reachcrafting.chain_crafting.partial_message_limited": "Not enough %s for %s %s. Craft %s instead?",
+  "popup.reachcrafting.chain_crafting.bulk_partial_message_limited": "Not enough %s for %s %s. Bulk chain craft %s instead?",
+  "message.reachcrafting.chain_crafting.partial_always_limited": "Not enough %s for %s %s. Proceeding with %s instead.",
+  "message.reachcrafting.chain_crafting.bulk_partial_always_limited": "Not enough %s for %s %s. Bulk chain crafting %s instead."
 }
