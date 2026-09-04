@@ -61,6 +61,13 @@ final class ChainCraftPlanner {
 	private int planAttemptsRemaining;
 	private boolean planBudgetExhaustedLogged;
 	private final Map<String, FailedEnsure> failedEnsureMemo = new HashMap<>();
+	// What ran short on this probe: item -> (required, available).
+	//
+	// Picking the "deepest leaf nothing produces" is wrong. Leather IS
+	// craftable (4 rabbit hide), so a player holding 9 leather and no rabbit
+	// hide got told "not enough Rabbit Hide" - true of the search, useless to
+	// them. What they want named is the thing they have and ran out of.
+	private final Map<String, int[]> shortfalls = new HashMap<>();
 
 	// An ensure that failed for requiredCount copies while availableAtFailure
 	// were on hand also fails for any sibling path asking for at least as
@@ -217,6 +224,8 @@ final class ChainCraftPlanner {
 		// search; each probe only needs fresh planning state.
 		ChainCraftPlanner planner = new ChainCraftPlanner(minecraft, player, allowNearby, gridSlotCount, allowSingleStepPlan);
 		ChainCraftPlan bestPlan = null;
+		String limitingItemId = null;
+		int limitingProbe = Integer.MAX_VALUE;
 		int low = 0;
 		while (low < high) {
 			int mid = (low + high + 1) / 2;
@@ -226,7 +235,18 @@ final class ChainCraftPlanner {
 				low = mid;
 			} else {
 				high = mid - 1;
+				// Keep the limiter from the SMALLEST failing probe: that is the
+				// one nearest the count actually offered, so it names what is
+				// blocking the next copy rather than what blocks 5000 of them.
+				String limiter = planner.limitingItemId();
+				if (limiter != null && mid < limitingProbe) {
+					limitingItemId = limiter;
+					limitingProbe = mid;
+				}
 			}
+		}
+		if (bestPlan != null && limitingItemId != null) {
+			bestPlan = bestPlan.withLimitingItem(limitingItemId);
 		}
 		return Optional.ofNullable(bestPlan);
 	}
@@ -240,6 +260,7 @@ final class ChainCraftPlanner {
 		planAttemptsRemaining = PLAN_ATTEMPT_BUDGET;
 		planBudgetExhaustedLogged = false;
 		failedEnsureMemo.clear();
+		shortfalls.clear();
 		PlanningState state = new PlanningState(new LinkedHashMap<>(availableCounts), new LinkedHashMap<>());
 		Candidate finalCandidate = new Candidate(
 			finalSelection.recipeId(),
@@ -483,6 +504,10 @@ final class ChainCraftPlanner {
 				);
 			}
 			ReachCraftingMod.diag("[chain_debug] ensure_fail reason=no_candidate_succeeded item={} candidates={}", itemId, formatCandidates(candidates));
+			int[] prev = shortfalls.get(itemId);
+			if (prev == null || requiredCount - available > prev[0] - prev[1]) {
+				shortfalls.put(itemId, new int[] {requiredCount, available});
+			}
 			FailedEnsure existing = failedEnsureMemo.get(itemId);
 			if (existing == null || requiredCount < existing.requiredCount()) {
 				failedEnsureMemo.put(itemId, new FailedEnsure(requiredCount, available));
@@ -491,6 +516,33 @@ final class ChainCraftPlanner {
 		} finally {
 			resolvingItemIds.remove(itemId);
 		}
+	}
+
+	/**
+	 * The material to blame for the most recent probe failing.
+	 *
+	 * Two tiers, and the tiering is the whole point: something the player
+	 * HOLDS and ran out of beats something they have none of. Holding none of
+	 * an item usually means it is a route they were never using -- rabbit hide
+	 * for leather, say -- while the thing they had nine of is what actually
+	 * stopped them. Within a tier, most short relative to what was there.
+	 */
+	private String limitingItemId() {
+		String best = null;
+		double bestRatio = -1;
+		boolean bestHeld = false;
+		for (Map.Entry<String, int[]> e : shortfalls.entrySet()) {
+			int required = e.getValue()[0];
+			int available = e.getValue()[1];
+			boolean held = available > 0;
+			double ratio = required / (double) Math.max(available, 1);
+			if (held != bestHeld ? held : ratio > bestRatio) {
+				best = e.getKey();
+				bestRatio = ratio;
+				bestHeld = held;
+			}
+		}
+		return best;
 	}
 
 	private List<String> orderedIngredientItems(
