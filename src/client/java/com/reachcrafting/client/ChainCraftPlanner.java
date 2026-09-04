@@ -246,6 +246,10 @@ final class ChainCraftPlanner {
 		}
 		if (bestPlan != null && limitingItemId != null) {
 			bestPlan = bestPlan.withLimitingItem(limitingItemId);
+			ReachCraftingMod.diag(
+				"[chain_debug] plan_max limited_by={} at_probe={} offering={}",
+				limitingItemId, limitingProbe, bestPlan.finalRecipeCopies()
+			);
 		}
 		return Optional.ofNullable(bestPlan);
 	}
