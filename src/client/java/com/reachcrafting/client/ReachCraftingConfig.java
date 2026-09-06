@@ -31,6 +31,8 @@ public final class ReachCraftingConfig {
 	private static final boolean DEFAULT_DIAGNOSTIC_LOGGING_ENABLED = false;
 	private static final boolean DEFAULT_SHOW_NEARBY_CRAFTABLE_INDICATOR = true;
 	private static final boolean DEFAULT_ENABLE_EXISTING_OUTPUT_RETRIEVAL = true;
+	private static final boolean DEFAULT_SHOW_RETRIEVABLE_INDICATOR = true;
+	private static final ExistingOutputHandling DEFAULT_EXISTING_OUTPUT_HANDLING = ExistingOutputHandling.RETRIEVE_THEN_ASK;
 	private static final boolean DEFAULT_CACHE_CONTAINERS_FOR_FASTER_SEARCH = true;
 	private static final ContainerDrainOrder DEFAULT_CONTAINER_DRAIN_ORDER = ContainerDrainOrder.SMALLEST_FIRST;
 	private static final boolean DEFAULT_REACH_CRAFT_HOLD_AND_RELEASE = true;
@@ -102,6 +104,8 @@ public final class ReachCraftingConfig {
 	private IngredientPlanning.CountPreference countPreference;
 	private boolean showNearbyCraftableIndicator;
 	private boolean enableExistingOutputRetrieval;
+	private boolean showRetrievableIndicator;
+	private ExistingOutputHandling existingOutputHandling;
 	private boolean cacheContainersForFasterSearch;
 	private ContainerDrainOrder containerDrainOrder;
 	private boolean reachCraftHoldAndRelease;
@@ -181,6 +185,8 @@ public final class ReachCraftingConfig {
 				: DEFAULT_COUNT_PREFERENCE;
 			instance.showNearbyCraftableIndicator = stored.showNearbyCraftableIndicator != null ? stored.showNearbyCraftableIndicator : DEFAULT_SHOW_NEARBY_CRAFTABLE_INDICATOR;
 			instance.enableExistingOutputRetrieval = stored.enableExistingOutputRetrieval != null ? stored.enableExistingOutputRetrieval : DEFAULT_ENABLE_EXISTING_OUTPUT_RETRIEVAL;
+			instance.showRetrievableIndicator = stored.showRetrievableIndicator != null ? stored.showRetrievableIndicator : DEFAULT_SHOW_RETRIEVABLE_INDICATOR;
+			instance.existingOutputHandling = stored.existingOutputHandling != null ? stored.existingOutputHandling : DEFAULT_EXISTING_OUTPUT_HANDLING;
 			instance.cacheContainersForFasterSearch = stored.cacheContainersForFasterSearch != null
 				? stored.cacheContainersForFasterSearch
 				: DEFAULT_CACHE_CONTAINERS_FOR_FASTER_SEARCH;
@@ -352,6 +358,23 @@ public final class ReachCraftingConfig {
 	public void setShowNearbyCraftableIndicator(boolean showNearbyCraftableIndicator) {
 		this.showNearbyCraftableIndicator = showNearbyCraftableIndicator;
 		RecipeButtonNearbyIndicator.clearCaches();
+	}
+
+	public boolean showRetrievableIndicator() {
+		return showRetrievableIndicator;
+	}
+
+	public void setShowRetrievableIndicator(boolean showRetrievableIndicator) {
+		this.showRetrievableIndicator = showRetrievableIndicator;
+		RecipeButtonNearbyIndicator.clearCaches();
+	}
+
+	public ExistingOutputHandling existingOutputHandling() {
+		return existingOutputHandling != null ? existingOutputHandling : DEFAULT_EXISTING_OUTPUT_HANDLING;
+	}
+
+	public void setExistingOutputHandling(ExistingOutputHandling existingOutputHandling) {
+		this.existingOutputHandling = existingOutputHandling != null ? existingOutputHandling : DEFAULT_EXISTING_OUTPUT_HANDLING;
 	}
 
 	public boolean enableExistingOutputRetrieval() {
@@ -888,6 +911,8 @@ public final class ReachCraftingConfig {
 		defaults.countPreference = DEFAULT_COUNT_PREFERENCE;
 		defaults.showNearbyCraftableIndicator = DEFAULT_SHOW_NEARBY_CRAFTABLE_INDICATOR;
 		defaults.enableExistingOutputRetrieval = DEFAULT_ENABLE_EXISTING_OUTPUT_RETRIEVAL;
+		defaults.showRetrievableIndicator = DEFAULT_SHOW_RETRIEVABLE_INDICATOR;
+		defaults.existingOutputHandling = DEFAULT_EXISTING_OUTPUT_HANDLING;
 		defaults.cacheContainersForFasterSearch = DEFAULT_CACHE_CONTAINERS_FOR_FASTER_SEARCH;
 		defaults.containerDrainOrder = DEFAULT_CONTAINER_DRAIN_ORDER;
 		defaults.reachCraftHoldAndRelease = DEFAULT_REACH_CRAFT_HOLD_AND_RELEASE;
@@ -1119,6 +1144,14 @@ public final class ReachCraftingConfig {
 		ALWAYS
 	}
 
+	/** What a Ctrl-assisted recipe click does about copies of the output that already sit in nearby containers. */
+	public enum ExistingOutputHandling {
+		CRAFT_ONLY,
+		RETRIEVE_THEN_ASK,
+		RETRIEVE_THEN_CRAFT,
+		RETRIEVE_ONLY
+	}
+
 	public enum AutoCraftMode {
 		NORMAL,
 		BULK
@@ -1139,6 +1172,8 @@ public final class ReachCraftingConfig {
 		private IngredientPlanning.CountPreference countPreference;
 		private Boolean showNearbyCraftableIndicator;
 		private Boolean enableExistingOutputRetrieval;
+		private Boolean showRetrievableIndicator;
+		private ExistingOutputHandling existingOutputHandling;
 		private Boolean cacheContainersForFasterSearch;
 		private ContainerDrainOrder containerDrainOrder;
 		private Boolean reachCraftHoldAndRelease;
@@ -1199,6 +1234,8 @@ public final class ReachCraftingConfig {
 			this.countPreference = config.countPreference;
 			this.showNearbyCraftableIndicator = config.showNearbyCraftableIndicator;
 			this.enableExistingOutputRetrieval = config.enableExistingOutputRetrieval;
+			this.showRetrievableIndicator = config.showRetrievableIndicator;
+			this.existingOutputHandling = config.existingOutputHandling;
 			this.cacheContainersForFasterSearch = config.cacheContainersForFasterSearch;
 			this.containerDrainOrder = config.containerDrainOrder;
 			this.reachCraftHoldAndRelease = config.reachCraftHoldAndRelease;

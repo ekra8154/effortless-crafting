@@ -103,6 +103,10 @@ public final class NearbyContainerDryRun {
 		));
 	}
 
+	static void startExistingOutputRetrieval(ExistingOutputRetrievalRequest request) {
+		COORDINATOR.startExistingOutputRetrieval(request);
+	}
+
 	public static void cancelCurrent() {
 		COORDINATOR.cancelCurrent();
 	}

@@ -148,13 +148,26 @@ Scroll to pull is a specialized fast-output workflow that pairs well with the `S
 
 ---
 
+## Retrieving Existing Items
+
+If copies of what you are about to craft already sit in a nearby chest, a `Ctrl`-assisted recipe click can pull them out instead of crafting duplicates. Plain clicks are never affected.
+
+- **Existing Output Handling** (mod settings) decides what a `Ctrl` click does when the green dot shows:
+  - **Retrieve, Then Ask** (default): pull up to the requested amount, then ask whether to craft the rest. Requesting 32 stairs with 25 in a chest pulls the 25 and offers to craft the remaining 7.
+  - **Retrieve, Then Craft**: same, but the rest is crafted without asking.
+  - **Retrieve Only**: pull up to the requested amount and stop, so you decide separately how many more to craft. Once nothing is nearby the click is an ordinary craft.
+  - **Craft Only**: never look in chests for the output (the previous behavior).
+- **Count-bound**: the pull never exceeds what you asked for. `Ctrl + Shift + click` pulls everything nearby before the max craft. A craft click's pull never throws items on the ground; it fills your inventory and stops.
+- **Green dot**: drawn just below and right of the craftable dot on any recipe whose output is in a nearby chest, so both facts show at once. Turn it off with **Retrievable Indicator**.
+
 ## Retrieval Mode
 
-Retrieval Mode is a state exclusive to nearby crafting that lets you pull existing items directly from nearby chests instead of crafting them.
+Retrieval Mode is the explicit form of the above: every recipe click retrieves instead of crafting, and items with no recipe appear too.
 
 - **Enable retrieval mode**: Hold `Ctrl` and click the result slot, or double-tap `Ctrl` (ensure neither autocraft nor bulk craft are toggled on).
 - **What retrieval changes**: Indicated by an 'X' in the result slot, this mode tells the recipe book to retrieve items from nearby containers into your inventory instead of crafting them. Manual crafting remains possible while this mode is active.
-- **Expanded visibility**: Shows icons for all items you have seen at least once in-game, including those with no crafting recipes.
+- **Uncapped**: `Shift + click` retrieves everything nearby, and `Ctrl + scroll` counts as high as bulk crafting does. When your inventory fills and **Eject New Items When Inventory Full** is on, the rest is thrown on the ground straight from the chest; with it off the session stops at the full inventory.
+- **Expanded visibility**: Shows icons for all items you have seen at least once in-game, including those with no crafting recipes. These no-recipe entries exist only in this mode.
 - **Availability indicators**: A green dot on an item icon denotes that at least 1 of that item is currently available in nearby containers to be retrieved.
 
 ---
@@ -189,6 +202,7 @@ Retrieval Mode is a state exclusive to nearby crafting that lets you pull existi
 - **Search history**: Use the up and down arrows to cycle through previous recipe book searches.
 - **Smart recipe sorting**: The recipe book can prioritize recent crafts, directly craftable recipes, chain-craftable recipes, and nearby-craftable recipes while keeping vanilla sorting available in settings.
 - **3x3 auto-focus**: The search bar is automatically focused when opening a crafting table.
+- **Craftable indicator**: A dot in the corner of a recipe says how a `Ctrl` click would craft it. A filled dot means it crafts from your inventory alone; a plus shape means nearby containers will be opened. Yellow is a direct craft, orange a chain craft. A green dot underneath means copies of the output are already in a nearby chest.
 - **Yield and queue indicators**: The UI can show output totals and queued counts directly on recipes.
 - **Chat feedback**: Missing ingredient reports and bulk craft summaries are surfaced in chat.
 - **Recipe filter toggle**: `Spacebar` still supports the craftable/uncraftable recipe filter toggle when not being used for request scaling.

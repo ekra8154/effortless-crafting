@@ -100,8 +100,8 @@ final class ExistingOutputRetrievalSession extends BaseCraftSession {
 		return !player.isSpectator() && !player.isHandsBusy() && player.containerMenu.getCarried().isEmpty();
 	}
 
-	private static boolean ejectAllowed() {
-		return ReachCraftingConfig.get().ejectItemsWhenFull();
+	private boolean ejectAllowed() {
+		return ReachCraftingConfig.get().ejectItemsWhenFull() && !request.fillOnly();
 	}
 
 	@Override
@@ -113,11 +113,12 @@ final class ExistingOutputRetrievalSession extends BaseCraftSession {
 			return;
 		}
 		ReachCraftingMod.diag(
-			"[retrieve_existing] start item={} requested={} candidates={} eject_allowed={}",
+			"[retrieve_existing] start item={} requested={} candidates={} eject_allowed={} fill_only={}",
 			request.outputItemId(),
 			remainingCount,
 			candidates.size(),
-			ejectAllowed()
+			ejectAllowed(),
+			request.fillOnly()
 		);
 		sendDebugChat("Retrieving existing: " + request.outputLabel());
 	}
@@ -313,6 +314,7 @@ final class ExistingOutputRetrievalSession extends BaseCraftSession {
 				state,
 				ContainerUtils.formatStack(player.containerMenu.getCarried())
 			);
+			notifyFollowUp(true);
 		}
 		if (despawnClockArmed) {
 			BulkDespawnWarning.clear();
@@ -323,9 +325,16 @@ final class ExistingOutputRetrievalSession extends BaseCraftSession {
 		}
 	}
 
+	private void notifyFollowUp(boolean aborted) {
+		if (request.followUp() != null) {
+			RetrieveThenCraftController.onRetrievalFinished(request.followUp(), retrievedCount + ejectedCount, aborted);
+		}
+	}
+
 	/** One line per finished session, in a fixed key=value shape the e2e driver parses. */
 	private void logComplete(String outcome) {
 		finished = true;
+		notifyFollowUp(false);
 		ReachCraftingMod.diag(
 			"[retrieve_existing] retrieve_complete outcome={} item={} requested={} retrieved={} ejected={} remaining={} visits={} budget_waits={} space_blocked={} ms={}",
 			outcome,

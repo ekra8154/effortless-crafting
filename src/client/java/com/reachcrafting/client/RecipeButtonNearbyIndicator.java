@@ -27,16 +27,25 @@ public final class RecipeButtonNearbyIndicator {
 		NEARBY_CRAFTABLE
 	}
 
-	private enum IndicatorState {
-		NONE,
-		RETRIEVABLE,
+	/**
+	 * How this click would craft, independent of retrieval. Shape tells the
+	 * player whether a chest gets opened: filled dot = from the inventory,
+	 * plus = nearby containers required (hold Ctrl). Colour tells direct
+	 * (yellow) from chain (orange). Ordered best-first for collections.
+	 */
+	enum IndicatorState {
+		LOCAL,
 		NEARBY,
-		CHAIN
+		CHAIN_LOCAL,
+		CHAIN_NEARBY,
+		NONE
 	}
 
 	private static final Map<RecipeDisplayId, Craftability> mainCache = new java.util.HashMap<>();
 	private static final Map<RecipeDisplayId, Craftability> overlayCache = new java.util.HashMap<>();
+	private static final Map<RecipeDisplayId, Boolean> retrievableCache = new java.util.HashMap<>();
 	private static final Map<RecipeCollection, IndicatorState> collectionIndicatorCache = new IdentityHashMap<>();
+	private static final Map<RecipeCollection, Boolean> collectionRetrievableCache = new IdentityHashMap<>();
 	private static final Map<RecipeCollection, Craftability> collectionCraftabilityCache = new IdentityHashMap<>();
 
 	private RecipeButtonNearbyIndicator() {
@@ -47,20 +56,32 @@ public final class RecipeButtonNearbyIndicator {
 		currentContext = null;
 		mainCache.clear();
 		overlayCache.clear();
+		retrievableCache.clear();
 		collectionIndicatorCache.clear();
+		collectionRetrievableCache.clear();
 		collectionCraftabilityCache.clear();
 	}
 
 	public static boolean shouldShow(RecipeButton button) {
-		return resolveIndicatorState(button) == IndicatorState.NEARBY;
+		IndicatorState state = resolveIndicatorState(button);
+		return state == IndicatorState.LOCAL || state == IndicatorState.NEARBY;
 	}
 
 	public static boolean isRetrievable(RecipeButton button) {
-		return resolveIndicatorState(button) == IndicatorState.RETRIEVABLE;
+		return resolveRetrievable(button);
 	}
 
 	public static boolean isChainCraftable(RecipeButton button) {
-		return resolveIndicatorState(button) == IndicatorState.CHAIN;
+		IndicatorState state = resolveIndicatorState(button);
+		return state == IndicatorState.CHAIN_LOCAL || state == IndicatorState.CHAIN_NEARBY;
+	}
+
+	/** Dev harness: the state and retrievable flag for one recipe, as the book would show it. */
+	static String describe(RecipeDisplayId recipe, RecipeCollection collection) {
+		boolean explicit = collection != null && collection.getRecipes().size() > 1;
+		IndicatorState state = indicatorStateForRecipe(recipe, collection, ItemStack.EMPTY, explicit);
+		boolean retrievable = hasRetrievableOutput(recipe, collection, ItemStack.EMPTY, explicit);
+		return "state=" + state + " retrievable=" + retrievable;
 	}
 
 	public static void renderButton(net.minecraft.client.gui.GuiGraphicsExtractor guiGraphics, RecipeButton button) {
@@ -69,17 +90,35 @@ public final class RecipeButtonNearbyIndicator {
 		}
 
 		IndicatorState indicatorState = resolveIndicatorState(button);
-		if (indicatorState == IndicatorState.NONE) {
+		boolean retrievable = resolveRetrievable(button);
+		if (indicatorState == IndicatorState.NONE && !retrievable) {
 			return;
 		}
 
 		AbstractWidget widget = (AbstractWidget) (Object) button;
-		if (indicatorState == IndicatorState.RETRIEVABLE) {
-			renderGreenDot(guiGraphics, widget.getX() + 3, widget.getY() + 3);
-		} else if (indicatorState == IndicatorState.NEARBY) {
-			renderDot(guiGraphics, widget.getX() + 3, widget.getY() + 3);
-		} else {
-			renderChainDot(guiGraphics, widget.getX() + 3, widget.getY() + 3);
+		renderIndicators(guiGraphics, widget.getX() + 3, widget.getY() + 3, indicatorState, retrievable);
+	}
+
+	/**
+	 * Green (retrievable) sits two pixels down-right of the craft dot and is
+	 * drawn first, so the yellow/orange dot covers most of it and the green
+	 * shows as a crescent along its lower-right edge. In retrieval mode the
+	 * craft dot is hidden and the green stands alone at the same spot.
+	 */
+	private static void renderIndicators(net.minecraft.client.gui.GuiGraphicsExtractor guiGraphics, int x, int y, IndicatorState state, boolean retrievable) {
+		if (retrievable) {
+			renderGreenDot(guiGraphics, x + 2, y + 2);
+		}
+		if (ExistingOutputRetrievalController.isEnabled()) {
+			return;
+		}
+		switch (state) {
+			case LOCAL -> renderDot(guiGraphics, x, y);
+			case NEARBY -> renderPlusDot(guiGraphics, x, y, 0xCC8B7B00, 0xFFFFDD00);
+			case CHAIN_LOCAL -> renderChainDot(guiGraphics, x, y);
+			case CHAIN_NEARBY -> renderPlusDot(guiGraphics, x, y, 0xCC8B4400, 0xFFFF8800);
+			case NONE -> {
+			}
 		}
 	}
 
@@ -116,9 +155,10 @@ public final class RecipeButtonNearbyIndicator {
 		if (!stateKey.equals(currentStateKey)) {
 			mainCache.clear();
 			overlayCache.clear();
+			retrievableCache.clear();
 			collectionIndicatorCache.clear();
+			collectionRetrievableCache.clear();
 			collectionCraftabilityCache.clear();
-		collectionCraftabilityCache.clear();
 			currentStateKey = stateKey;
 			currentContext = null;
 		}
@@ -141,17 +181,19 @@ public final class RecipeButtonNearbyIndicator {
 	}
 
 	public static void renderOverlayButton(net.minecraft.client.gui.GuiGraphicsExtractor guiGraphics, int x, int y, int width, RecipeDisplayId recipe, RecipeCollection collection) {
-		if (!ReachCraftingConfig.get().showNearbyCraftableIndicator()) {
+		IndicatorState indicatorState = ReachCraftingConfig.get().showNearbyCraftableIndicator()
+			? indicatorStateForRecipe(recipe, collection, ItemStack.EMPTY, true)
+			: IndicatorState.NONE;
+		boolean retrievable = retrievableIndicatorEnabled()
+			&& retrievableCache.computeIfAbsent(recipe, id -> hasRetrievableOutput(id, collection, ItemStack.EMPTY, true));
+		if (indicatorState == IndicatorState.NONE && !retrievable) {
 			return;
 		}
-		IndicatorState indicatorState = indicatorStateForRecipe(recipe, collection, ItemStack.EMPTY, true);
-		if (indicatorState == IndicatorState.RETRIEVABLE) {
-			renderGreenDot(guiGraphics, x, y);
-		} else if (indicatorState == IndicatorState.NEARBY) {
-			renderDot(guiGraphics, x, y);
-		} else if (indicatorState == IndicatorState.CHAIN) {
-			renderChainDot(guiGraphics, x, y);
-		}
+		renderIndicators(guiGraphics, x, y, indicatorState, retrievable);
+	}
+
+	private static boolean retrievableIndicatorEnabled() {
+		return ReachCraftingConfig.get().showRetrievableIndicator() || ExistingOutputRetrievalController.isEnabled();
 	}
 
 	private static IndicatorState resolveIndicatorState(RecipeButton button) {
@@ -169,6 +211,32 @@ public final class RecipeButtonNearbyIndicator {
 		}
 
 		return indicatorStateForRecipe(button.getCurrentRecipe(), collection, button.getDisplayStack().copy(), false);
+	}
+
+	private static boolean resolveRetrievable(RecipeButton button) {
+		if (!retrievableIndicatorEnabled()) {
+			return false;
+		}
+		RecipeCollection collection = button.getCollection();
+		if (collection == null) {
+			return false;
+		}
+		if (collection.getRecipes().size() > 1) {
+			return collectionRetrievableCache.computeIfAbsent(collection, col -> {
+				for (RecipeDisplayEntry entry : col.getRecipes()) {
+					if (hasRetrievableOutput(entry.id(), col, ItemStack.EMPTY, true)) {
+						return true;
+					}
+				}
+				return false;
+			});
+		}
+		RecipeDisplayId recipe = button.getCurrentRecipe();
+		if (recipe == null) {
+			return false;
+		}
+		ItemStack displayStack = button.getDisplayStack().copy();
+		return retrievableCache.computeIfAbsent(recipe, id -> hasRetrievableOutput(id, collection, displayStack, false));
 	}
 
 	/**
@@ -208,36 +276,31 @@ public final class RecipeButtonNearbyIndicator {
 	}
 
 	private static IndicatorState resolveCollectionIndicatorState(RecipeCollection collection) {
-		if (ExistingOutputRetrievalController.isEnabled()) {
-			for (RecipeDisplayEntry entry : collection.getRecipes()) {
-				if (hasRetrievableOutput(entry.id(), collection, ItemStack.EMPTY, true)) {
-					return IndicatorState.RETRIEVABLE;
-				}
-			}
-			return IndicatorState.NONE;
-		}
-
+		IndicatorState best = IndicatorState.NONE;
 		for (RecipeDisplayEntry entry : collection.getRecipes()) {
-			if (getCraftability(entry.id(), collection, ItemStack.EMPTY, true) != Craftability.NOT_CRAFTABLE) {
-				return IndicatorState.NEARBY;
+			IndicatorState state = indicatorStateForRecipe(entry.id(), collection, ItemStack.EMPTY, true);
+			if (state.ordinal() < best.ordinal()) {
+				best = state;
+			}
+			if (best == IndicatorState.LOCAL) {
+				break;
 			}
 		}
-		for (RecipeDisplayEntry entry : collection.getRecipes()) {
-			if (ChainCraftabilityCache.isChainCraftable(entry.id())) {
-				return IndicatorState.CHAIN;
-			}
-		}
-		return IndicatorState.NONE;
+		return best;
 	}
 
 	private static IndicatorState indicatorStateForRecipe(RecipeDisplayId recipe, RecipeCollection collection, ItemStack displayStack, boolean explicitVariantSelection) {
-		if (ExistingOutputRetrievalController.isEnabled()) {
-			return hasRetrievableOutput(recipe, collection, displayStack, explicitVariantSelection) ? IndicatorState.RETRIEVABLE : IndicatorState.NONE;
+		Craftability craftability = getCraftability(recipe, collection, displayStack, explicitVariantSelection);
+		if (craftability == Craftability.LOCALLY_CRAFTABLE) {
+			return IndicatorState.LOCAL;
 		}
-		if (getCraftability(recipe, collection, displayStack, explicitVariantSelection) != Craftability.NOT_CRAFTABLE) {
+		if (craftability == Craftability.NEARBY_CRAFTABLE) {
 			return IndicatorState.NEARBY;
 		}
-		return ChainCraftabilityCache.isChainCraftable(recipe) ? IndicatorState.CHAIN : IndicatorState.NONE;
+		if (ChainCraftabilityCache.isChainCraftableLocally(recipe)) {
+			return IndicatorState.CHAIN_LOCAL;
+		}
+		return ChainCraftabilityCache.isChainCraftable(recipe) ? IndicatorState.CHAIN_NEARBY : IndicatorState.NONE;
 	}
 
 	public static boolean hasRetrievableOutput(RecipeDisplayId recipe, RecipeCollection collection, ItemStack displayStack, boolean explicitVariantSelection) {
@@ -460,6 +523,16 @@ public final class RecipeButtonNearbyIndicator {
 		guiGraphics.fill(x + 1, y + 4, x + 4, y + 5, outer);
 
 		guiGraphics.fill(x + 1, y + 1, x + 4, y + 4, inner);
+	}
+
+	/** Same 5x5 outline as {@link #renderDot}; the inner 3x3 becomes a plus (center + four neighbours). */
+	public static void renderPlusDot(net.minecraft.client.gui.GuiGraphicsExtractor guiGraphics, int x, int y, int outer, int inner) {
+		guiGraphics.fill(x + 1, y, x + 4, y + 1, outer);
+		guiGraphics.fill(x, y + 1, x + 5, y + 4, outer);
+		guiGraphics.fill(x + 1, y + 4, x + 4, y + 5, outer);
+
+		guiGraphics.fill(x + 2, y + 1, x + 3, y + 4, inner);
+		guiGraphics.fill(x + 1, y + 2, x + 4, y + 3, inner);
 	}
 
 	public static void renderGreenDot(net.minecraft.client.gui.GuiGraphicsExtractor guiGraphics, int x, int y) {

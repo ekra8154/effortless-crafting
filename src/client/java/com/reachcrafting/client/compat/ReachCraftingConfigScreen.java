@@ -354,6 +354,26 @@ public final class ReachCraftingConfigScreen {
 			.setSaveConsumer(config::setEnableExistingOutputRetrieval)
 			.build());
 
+		nearbyGroup.add(entries.startEnumSelector(
+				Component.translatable("option.reachcrafting.existing_output_handling"),
+				ReachCraftingConfig.ExistingOutputHandling.class,
+				config.existingOutputHandling()
+			)
+			.setDefaultValue(ReachCraftingConfig.ExistingOutputHandling.RETRIEVE_THEN_ASK)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.existing_output_handling"))
+			.setSaveConsumer(config::setExistingOutputHandling)
+			.setEnumNameProvider(value -> Component.translatable("enum.reachcrafting.existing_output_handling." + value.name().toLowerCase()))
+			.build());
+
+		nearbyGroup.add(entries.startBooleanToggle(
+				Component.translatable("option.reachcrafting.show_retrievable_indicator"),
+				config.showRetrievableIndicator()
+			)
+			.setDefaultValue(true)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.show_retrievable_indicator"))
+			.setSaveConsumer(config::setShowRetrievableIndicator)
+			.build());
+
 		nearbyGroup.add(entries.startBooleanToggle(
 				Component.translatable("option.reachcrafting.cache_containers_for_faster_search"),
 				config.cacheContainersForFasterSearch()

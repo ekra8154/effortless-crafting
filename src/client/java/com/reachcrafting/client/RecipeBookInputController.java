@@ -250,6 +250,7 @@ final class RecipeBookInputController {
 			requestedClicks,
 			refillableBulkMaxMode,
 			autoCraftRequested,
+			false,
 			state
 		);
 	}
@@ -429,6 +430,10 @@ final class RecipeBookInputController {
 	}
 
 	void scheduleReplay(RecipeBookClickCapture.HeldRecipeAction action, int remainingClicks, boolean allowNearby, boolean craftAll, boolean refillableBulkMaxMode, boolean autoCraftRequested) {
+		scheduleReplay(action, remainingClicks, allowNearby, craftAll, refillableBulkMaxMode, autoCraftRequested, false);
+	}
+
+	void scheduleReplay(RecipeBookClickCapture.HeldRecipeAction action, int remainingClicks, boolean allowNearby, boolean craftAll, boolean refillableBulkMaxMode, boolean autoCraftRequested, boolean retrievalDone) {
 		if (!ReachCraftingConfig.get().enabled() || action == null || remainingClicks <= 0) {
 			return;
 		}
@@ -468,7 +473,7 @@ final class RecipeBookInputController {
 			refillableBulkMaxMode,
 			action.recipeId()
 		);
-		state.setReplayBatch(new RecipeBookClickCapture.ReplayBatch(action, remainingClicks, allowNearby, craftAll, refillableBulkMaxMode, autoCraftRequested));
+		state.setReplayBatch(new RecipeBookClickCapture.ReplayBatch(action, remainingClicks, allowNearby, craftAll, refillableBulkMaxMode, autoCraftRequested, retrievalDone));
 	}
 
 	boolean hasPendingHeldRecipe(
@@ -610,6 +615,17 @@ final class RecipeBookInputController {
 		ItemStack displayStack,
 		int count
 	) {
+		harnessQueueAndRelease(recipeId, collection, displayStack, count, false, false);
+	}
+
+	void harnessQueueAndRelease(
+		RecipeDisplayId recipeId,
+		net.minecraft.client.gui.screens.recipebook.RecipeCollection collection,
+		ItemStack displayStack,
+		int count,
+		boolean ctrl,
+		boolean alt
+	) {
 		Minecraft minecraft = Minecraft.getInstance();
 		RecipeBookClickCapture.HeldRecipeAction action = new RecipeBookClickCapture.HeldRecipeAction(
 			recipeId,
@@ -624,7 +640,10 @@ final class RecipeBookInputController {
 			"[recipe_input] harness_queue recipe={} requested={} queue_limit={} queued={}",
 			recipeId, count, queueLimit, queued);
 		state.setPendingHeldRecipe(new RecipeBookClickCapture.PendingHeldRecipe(action, queued, queued >= 2));
-		releasePendingHeldRecipe(currentModifierState(false, false, false));
+		if (alt) {
+			AutoCraftController.consumeQuickCraft();
+		}
+		releasePendingHeldRecipe(currentModifierState(ctrl, false, alt));
 	}
 
 	private void releasePendingHeldRecipe(ModifierState modifierState) {
@@ -740,7 +759,8 @@ final class RecipeBookInputController {
 					replayBatch.allowNearby(),
 					replayBatch.craftAll(),
 					replayBatch.refillableBulkMaxMode(),
-					replayBatch.autoCraftRequested()
+					replayBatch.autoCraftRequested(),
+					replayBatch.retrievalDone()
 				);
 				state.setReplayBatch(replayBatch);
 			}
@@ -769,6 +789,7 @@ final class RecipeBookInputController {
 			replayBatch.remainingClicks(),
 			replayBatch.refillableBulkMaxMode(),
 			replayBatch.autoCraftRequested(),
+			replayBatch.retrievalDone(),
 			state
 		);
 		if (state.replayBatch() == replayBatch) {

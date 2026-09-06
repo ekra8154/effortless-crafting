@@ -47,6 +47,7 @@ final class RecipeClickExecutor {
 		int requestedClicks,
 		boolean refillableBulkMaxMode,
 		boolean autoCraftRequested,
+		boolean retrievalDone,
 		HeldRecipeQueueState state
 	) {
 		AvailableItemSnapshot availableItems = AvailableItemSnapshot.capture(player, screen);
@@ -165,6 +166,67 @@ final class RecipeClickExecutor {
 				tryCloseOverlayAfterRelease();
 			}
 			return;
+		}
+
+		// Retrieve-first step (existingOutputHandling). Only on a click that
+		// already allows nearby containers, never on the replay it schedules
+		// for the remainder, and never underneath a running session.
+		ReachCraftingConfig.ExistingOutputHandling outputHandling = ReachCraftingConfig.get().existingOutputHandling();
+		if (outputHandling != ReachCraftingConfig.ExistingOutputHandling.CRAFT_ONLY
+			&& !retrievalDone
+			&& allowNearbyChests
+			&& ReachCraftingConfig.get().enableNearbyContainerUsage()
+			&& ReachCraftingConfig.get().cacheContainersForFasterSearch()
+			&& !ChainCraftController.isActive()
+			&& !BulkAutoCraftController.isActive()
+			&& !BulkChainCraftController.isActive()
+			&& !RetrieveThenCraftController.isActive()) {
+			int outputPerCraft = Math.max(resolvedDisplayStack.getCount(), 1);
+			int targetItems = craftAll ? bulkRecipeQueueLimit() : Math.max(requestedClicks, 1) * outputPerCraft;
+			NearbyContainerCache.ReachableView outputView = NearbyContainerCache.getReachableView(minecraft.level, minecraft.getCameraEntity(), player.blockInteractionRange());
+			int nearbyOutput = outputView.aggregateCounts().getOrDefault(resolvedItemId, 0);
+			boolean cacheComplete = outputView.snapshotsByKey().size() >= outputView.nearestAccessByKey().size();
+			if (nearbyOutput <= 0 && cacheComplete) {
+				RetrieveThenCraftController.logNoneNearby(resolvedItemId, targetItems, outputHandling);
+			} else {
+				RetrieveThenCraftController.start(
+					new RetrieveThenCraftController.FollowUp(
+						new RecipeBookClickCapture.HeldRecipeAction(
+							recipeId,
+							collection,
+							displayStack != null ? displayStack.copy() : ItemStack.EMPTY,
+							mouseButton,
+							explicitVariantSelection
+						),
+						requestedClicks,
+						allowNearbyChests,
+						craftAll,
+						refillableBulkMaxMode,
+						autoCraftRequested,
+						outputPerCraft,
+						targetItems,
+						resolvedItemId,
+						resolvedDisplayStack.copy(),
+						outputHandling,
+						selectedRecipe.recipeId()
+					),
+					!AutoCraftController.isBulkModeEnabled()
+				);
+				if (explicitVariantSelection) {
+					tryCloseOverlayAfterRelease();
+				}
+				return;
+			}
+		} else {
+			ReachCraftingMod.diag(
+				"[retrieve_then_craft] rtc_skipped reason={} item={} clicks={}",
+				outputHandling == ReachCraftingConfig.ExistingOutputHandling.CRAFT_ONLY ? "craft_only"
+					: retrievalDone ? "remainder_replay"
+					: !allowNearbyChests ? "no_ctrl"
+					: "session_active",
+				resolvedItemId,
+				requestedClicks
+			);
 		}
 
 		ReachCraftingMod.LOGGER.debug(

@@ -77,7 +77,7 @@ public final class ChainCraftPopupController {
 			return;
 		}
 
-		showConfirmPopup(messageFor(plan, requestedRecipeCopies), new PendingPopup(plan, deferredMissingMessage, null));
+		showConfirmPopup(messageFor(plan, requestedRecipeCopies), new PendingPopup(plan, deferredMissingMessage, null, null, null));
 	}
 
 	static void handleBulkChainPlan(
@@ -107,20 +107,37 @@ public final class ChainCraftPopupController {
 
 		showConfirmPopup(
 			bulkMessageFor(plan, requestedRecipeCopies, maxRequest),
-			new PendingPopup(null, deferredMissingMessage, new BulkChainRequest(selection, allowNearby, plan.finalRecipeCopies()))
+			new PendingPopup(null, deferredMissingMessage, new BulkChainRequest(selection, allowNearby, plan.finalRecipeCopies()), null, null)
 		);
 	}
 
+	/**
+	 * A Yes/No popup for another feature (retrieve-then-craft) that wants the
+	 * same keyboard, click-outside and harness handling as the chain popup.
+	 * Exactly one of the two callbacks runs: confirm on Yes/Enter/Space,
+	 * cancel on No/Esc/click-outside/close.
+	 */
+	static void showConfirm(Component title, Component message, Runnable onConfirm, Runnable onCancel) {
+		showConfirmPopup(title, message, new PendingPopup(null, null, null, onConfirm, onCancel));
+	}
+
 	private static void showConfirmPopup(Component message, PendingPopup pending) {
+		showConfirmPopup(Component.translatable("popup.reachcrafting.chain_crafting.title"), message, pending);
+	}
+
+	private static void showConfirmPopup(Component title, Component message, PendingPopup pending) {
 		Minecraft client = Minecraft.getInstance();
 		Screen background = client.gui.screen();
 		if (!(background instanceof CraftingScreen) && !(background instanceof InventoryScreen)) {
+			if (pending.onCancel() != null) {
+				pending.onCancel().run();
+			}
 			return;
 		}
 
 		PopupScreen popup = new PopupScreen.Builder(
 			background,
-			Component.translatable("popup.reachcrafting.chain_crafting.title")
+			title
 		)
 			.setWidth(260)
 			.addMessage(message)
@@ -238,7 +255,9 @@ public final class ChainCraftPopupController {
 		if (pending == null) {
 			return false;
 		}
-		if (pending.bulkChain() != null) {
+		if (pending.onConfirm() != null) {
+			pending.onConfirm().run();
+		} else if (pending.bulkChain() != null) {
 			pendingBulkChainStart = pending.bulkChain();
 		} else {
 			pendingStartPlan = pending.plan();
@@ -290,12 +309,15 @@ public final class ChainCraftPopupController {
 	}
 
 	private static void sendDeferredMissing(PendingPopup pending) {
+		if (pending.onCancel() != null) {
+			pending.onCancel().run();
+		}
 		if (pending.deferredMissingMessage() != null && !pending.deferredMissingMessage().isBlank()) {
 			ReachCraftingModClient.sendMissingIngredientsChat(pending.deferredMissingMessage());
 		}
 	}
 
-	private record PendingPopup(ChainCraftPlan plan, String deferredMissingMessage, BulkChainRequest bulkChain) {
+	private record PendingPopup(ChainCraftPlan plan, String deferredMissingMessage, BulkChainRequest bulkChain, Runnable onConfirm, Runnable onCancel) {
 	}
 
 	private record BulkChainRequest(RecipeVariantResolver.Selection selection, boolean allowNearby, int targetCopies) {

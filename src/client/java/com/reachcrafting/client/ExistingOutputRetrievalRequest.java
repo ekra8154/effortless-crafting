@@ -12,7 +12,22 @@ record ExistingOutputRetrievalRequest(
 	String outputItemId,
 	String outputLabel,
 	ItemStack displayStack,
-	int requestedCount
+	int requestedCount,
+	boolean fillOnly,
+	RetrieveThenCraftController.FollowUp followUp
 ) {
+	/** A plain retrieval: eject per the setting, nobody waiting on the result. */
+	ExistingOutputRetrievalRequest(
+		RecipeDisplayId requestedRecipeId,
+		RecipeDisplayId resolvedRecipeId,
+		RecipeCollection recipeCollection,
+		boolean explicitVariantSelection,
+		String outputItemId,
+		String outputLabel,
+		ItemStack displayStack,
+		int requestedCount
+	) {
+		this(requestedRecipeId, resolvedRecipeId, recipeCollection, explicitVariantSelection, outputItemId, outputLabel, displayStack, requestedCount, false, null);
+	}
 }
 
