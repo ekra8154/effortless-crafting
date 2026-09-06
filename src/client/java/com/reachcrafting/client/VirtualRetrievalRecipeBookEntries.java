@@ -173,7 +173,8 @@ public final class VirtualRetrievalRecipeBookEntries {
 		if (stack == null || stack.isEmpty()) {
 			return 1;
 		}
-		return shiftRequested ? Math.max(stack.getMaxStackSize(), 1) : 1;
+		// Shift = all of it; the session stops when nearby stock runs out.
+		return shiftRequested ? RecipeClickExecutor.bulkRecipeQueueLimit() : 1;
 	}
 
 	static void startRetrievalForSynthetic(RecipeDisplayId recipeId, ItemStack displayStack, int requestedCount) {

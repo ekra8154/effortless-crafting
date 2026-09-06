@@ -29,13 +29,22 @@ import java.nio.file.Path;
  *   bulk <item_id> [ctrl]         - open table if needed, then shift-click
  *                                   (craft-max) the recipe producing item_id;
  *                                   "ctrl" also enables nearby containers
+ *   retrieve <item_id> [count=N]  - open table, switch retrieval mode on, then
+ *                                   shift-click the recipe (retrieve all) or,
+ *                                   with count, queue N and release the way a
+ *                                   Ctrl+scroll accumulation would
+ *   set eject on|off              - flip ejectItemsWhenFull in memory only
  * Progress is logged with the [repro_harness] tag so external scripts can
  * follow the run in logs/latest.log.
  */
 public final class ReproHarness {
+	private enum PendingKind { CRAFT, RETRIEVE }
+
 	private static Path cmdFile;
 	private static int pollCounter;
 	private static String pendingBulkItem;
+	private static PendingKind pendingKind = PendingKind.CRAFT;
+	private static int pendingRetrieveCount = -1;
 	private static boolean pendingCtrl;
 	private static boolean pendingBulkLatch = true;
 	private static int pendingTimeoutTicks;
@@ -153,6 +162,10 @@ public final class ReproHarness {
 					return;
 				}
 				pendingBulkItem = parts[1];
+				pendingKind = PendingKind.CRAFT;
+				// A retrieve run leaves retrieval mode latched (it is a mode,
+				// not a session); a craft run after it must not be rerouted.
+				ExistingOutputRetrievalController.setEnabled(false);
 				// "chain" drives the NON-bulk request path: alt held for the
 				// craft, no sticky bulk latch. That combination is its own
 				// execution path (bulk_mode=false) and had no coverage, which
@@ -169,6 +182,41 @@ public final class ReproHarness {
 					client.player.closeContainer();
 				}
 				openNearestCraftingTable(client);
+			}
+			case "retrieve" -> {
+				if (parts.length < 2) {
+					ReachCraftingMod.LOGGER.warn("[repro_harness] retrieve requires an item id");
+					return;
+				}
+				pendingBulkItem = parts[1];
+				pendingKind = PendingKind.RETRIEVE;
+				pendingRetrieveCount = -1;
+				for (int i = 2; i < parts.length; i++) {
+					if (parts[i].startsWith("count=")) {
+						pendingRetrieveCount = Integer.parseInt(parts[i].substring("count=".length()));
+					}
+				}
+				pendingBulkLatch = false;
+				pendingCtrl = false;
+				pendingTimeoutTicks = 100;
+				// Keep automation alive while the window is backgrounded for
+				// the duration of this run (dev-only focus-guard bypass).
+				focusBypassTicks = 6000;
+				// Always start from a fresh container session so leftover
+				// screens/grids from a previous run can't contaminate the test.
+				if (client.gui.screen() != null) {
+					client.player.closeContainer();
+				}
+				openNearestCraftingTable(client);
+			}
+			case "set" -> {
+				if (parts.length == 3 && parts[1].equals("eject")) {
+					boolean on = parts[2].equals("on");
+					ReachCraftingConfig.get().setEjectItemsWhenFull(on);
+					ReachCraftingMod.diag("[repro_harness] set eject_items_when_full={}", on);
+				} else {
+					ReachCraftingMod.LOGGER.warn("[repro_harness] unknown set target {}", command);
+				}
 			}
 			default -> ReachCraftingMod.LOGGER.warn("[repro_harness] unknown command {}", parts[0]);
 		}
@@ -190,7 +238,8 @@ public final class ReproHarness {
 			return;
 		}
 		if (--pendingTimeoutTicks <= 0) {
-			ReachCraftingMod.LOGGER.warn("[repro_harness] bulk timed out waiting for crafting screen item={}", pendingBulkItem);
+			ReachCraftingMod.LOGGER.warn("[repro_harness] {} timed out waiting for crafting screen item={}",
+				pendingKind == PendingKind.RETRIEVE ? "retrieve" : "bulk", pendingBulkItem);
 			pendingBulkItem = null;
 			return;
 		}
@@ -201,7 +250,39 @@ public final class ReproHarness {
 		boolean ctrl = pendingCtrl;
 		boolean bulkLatch = pendingBulkLatch;
 		pendingBulkItem = null;
+		if (pendingKind == PendingKind.RETRIEVE) {
+			retrieveRecipeByItemId(client, itemId, pendingRetrieveCount);
+			return;
+		}
 		clickRecipeByItemId(client, itemId, ctrl, bulkLatch);
+	}
+
+	private static void retrieveRecipeByItemId(Minecraft client, String itemId, int count) {
+		ContextMap context = SlotDisplayContext.fromLevel(client.level);
+		for (RecipeCollection collection : client.player.getRecipeBook().getCollections()) {
+			for (RecipeDisplayEntry entry : collection.getRecipes()) {
+				ItemStack stack = RecipeVariantResolver.resolveDisplayStack(entry.display(), context);
+				if (stack.isEmpty() || !itemId.equals(stack.getItem().builtInRegistryHolder().key().identifier().toString())) {
+					continue;
+				}
+				// Retrieval is a mode the player toggles with Ctrl double-tap;
+				// arm it directly, then drive the same click paths a user would.
+				ExistingOutputRetrievalController.setEnabled(true);
+				ReachCraftingMod.diag(
+					"[repro_harness] retrieve armed recipe id={} item={} count={} retrieval_enabled={}",
+					entry.id(), itemId, count < 0 ? "all" : String.valueOf(count),
+					ExistingOutputRetrievalController.isEnabled());
+				if (count < 0) {
+					RecipeBookClickCapture.onRecipeButtonClicked(
+						entry.id(), collection, stack, 0, true, false, false, false);
+				} else {
+					RecipeBookInputController.getInstance().harnessQueueAndRelease(
+						entry.id(), collection, stack, count);
+				}
+				return;
+			}
+		}
+		ReachCraftingMod.LOGGER.warn("[repro_harness] no recipe collection found for {}", itemId);
 	}
 
 	private static void clickRecipeByItemId(Minecraft client, String itemId, boolean ctrl, boolean bulkLatch) {

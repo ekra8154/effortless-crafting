@@ -43,6 +43,9 @@ final class ExistingOutputRetrievalSession extends BaseCraftSession {
 	private int reopenSettledTicks;
 	private int remainingCount;
 	private int retrievedCount;
+	private int containerVisits;
+	private final long startedAtMillis = System.currentTimeMillis();
+	private boolean finished;
 	private BlockPos pendingContainerPos;
 	private boolean inventorySpaceBlocked;
 	private RetrievalState state = RetrievalState.OPEN_NEXT;
@@ -78,6 +81,7 @@ final class ExistingOutputRetrievalSession extends BaseCraftSession {
 	public void start() {
 		if (candidates.isEmpty()) {
 			sendMissingIngredientsChat("No nearby containers available for retrieval.");
+			logComplete("no_candidates");
 			finishSession(false);
 			return;
 		}
@@ -180,7 +184,18 @@ final class ExistingOutputRetrievalSession extends BaseCraftSession {
 
 		Map<String, Integer> allItems = ContainerUtils.collectAllItems(menu);
 		NearbyContainerCache.recordObservedContents(level, pendingContainerPos, allItems);
-		Map<String, Integer> executed = executeWithdrawalPlan(menu, buildWithdrawalPlan(menu));
+		containerVisits++;
+		WithdrawalPlan plan = buildWithdrawalPlan(menu);
+		Map<String, Integer> executed = executeWithdrawalPlan(menu, plan);
+		ReachCraftingMod.diag(
+			"[retrieve_existing] visit pos={} available={} planned={} moved={} remaining_before={} space_blocked={}",
+			ContainerUtils.formatPos(pendingContainerPos),
+			allItems.getOrDefault(request.outputItemId(), 0),
+			plan.withdrawnCounts().getOrDefault(request.outputItemId(), 0),
+			executed.getOrDefault(request.outputItemId(), 0),
+			remainingCount,
+			plan.inventorySpaceBlocked()
+		);
 		applyWithdrawalResults(executed);
 		player.closeContainer();
 		pendingContainerPos = null;
@@ -190,9 +205,41 @@ final class ExistingOutputRetrievalSession extends BaseCraftSession {
 
 	@Override
 	public void stop(boolean closeContainer) {
+		if (!finished) {
+			// Reached only through cancelCurrent/abortAllSessions: the normal
+			// path logs retrieve_complete first and sets finished.
+			finished = true;
+			ReachCraftingMod.diag(
+				"[retrieve_existing] retrieve_aborted item={} requested={} retrieved={} remaining={} visits={} state={} carried={}",
+				request.outputItemId(),
+				request.requestedCount(),
+				retrievedCount,
+				remainingCount,
+				containerVisits,
+				state,
+				ContainerUtils.formatStack(player.containerMenu.getCarried())
+			);
+		}
 		if (closeContainer && player.containerMenu != player.inventoryMenu) {
 			player.closeContainer();
 		}
+	}
+
+	/** One line per finished session, in a fixed key=value shape the e2e driver parses. */
+	private void logComplete(String outcome) {
+		finished = true;
+		ReachCraftingMod.diag(
+			"[retrieve_existing] retrieve_complete outcome={} item={} requested={} retrieved={} ejected={} remaining={} visits={} space_blocked={} ms={}",
+			outcome,
+			request.outputItemId(),
+			request.requestedCount(),
+			retrievedCount,
+			0,
+			remainingCount,
+			containerVisits,
+			inventorySpaceBlocked,
+			System.currentTimeMillis() - startedAtMillis
+		);
 	}
 
 	private void beginResume() {
@@ -204,18 +251,24 @@ final class ExistingOutputRetrievalSession extends BaseCraftSession {
 	}
 
 	private void finishAfterResume() {
+		String outcome;
 		if (retrievedCount <= 0) {
 			sendMissingIngredientsChat("No matching existing items nearby.");
+			outcome = "none_found";
 		} else if (inventorySpaceBlocked) {
 			sendChat("Retrieved " + ContainerUtils.formatStackBreakdown(retrievedCount) + " " + ContainerUtils.getItemName(request.outputItemId()) + ", then ran out of inventory space.");
+			outcome = "inventory_full";
 		} else if (remainingCount > 0) {
 			sendChat("Retrieved " + ContainerUtils.formatStackBreakdown(retrievedCount) + " " + ContainerUtils.getItemName(request.outputItemId()) + ".");
+			outcome = "stock_exhausted";
 		} else {
 			sendChat("Retrieved " + ContainerUtils.formatStackBreakdown(retrievedCount) + " " + ContainerUtils.getItemName(request.outputItemId()) + ".");
+			outcome = "satisfied";
 		}
 		if (retrievedCount > 0 && request.requestedRecipeId() != null) {
 			ReachCraftingConfig.get().noteRecentRecipe(request.requestedRecipeId());
 		}
+		logComplete(outcome);
 		finishSession(false);
 	}
 
