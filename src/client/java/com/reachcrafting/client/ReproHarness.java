@@ -295,17 +295,38 @@ public final class ReproHarness {
 					"[repro_harness] retrieve armed recipe id={} item={} count={} retrieval_enabled={}",
 					entry.id(), itemId, count < 0 ? "all" : String.valueOf(count),
 					ExistingOutputRetrievalController.isEnabled());
-				if (count < 0) {
-					RecipeBookClickCapture.onRecipeButtonClicked(
-						entry.id(), collection, stack, 0, true, false, false, false);
-				} else {
-					RecipeBookInputController.getInstance().harnessQueueAndRelease(
-						entry.id(), collection, stack, count);
-				}
+				driveRetrieveClick(entry.id(), collection, stack, count);
 				return;
 			}
 		}
+		// No recipe makes this item (eggs, ender pearls...). Retrieval mode
+		// injects a synthetic entry for such items; click that instead, the
+		// way the player would from the retrieval-mode book.
+		RecipeCollection synthetic = VirtualRetrievalRecipeBookEntries.harnessSyntheticCollection(itemId);
+		if (synthetic != null && !synthetic.getRecipes().isEmpty()) {
+			ExistingOutputRetrievalController.setEnabled(true);
+			RecipeDisplayEntry entry = synthetic.getRecipes().getFirst();
+			ItemStack stack = RecipeVariantResolver.resolveDisplayStack(entry.display(), context);
+			ReachCraftingMod.diag(
+				"[repro_harness] retrieve armed SYNTHETIC id={} item={} count={} display={}",
+				entry.id(), itemId, count < 0 ? "all" : String.valueOf(count), ContainerUtils.formatStack(stack));
+			driveRetrieveClick(entry.id(), synthetic, stack, count);
+			return;
+		}
 		ReachCraftingMod.LOGGER.warn("[repro_harness] no recipe collection found for {}", itemId);
+	}
+
+	private static void driveRetrieveClick(
+		net.minecraft.world.item.crafting.display.RecipeDisplayId recipeId,
+		RecipeCollection collection,
+		ItemStack stack,
+		int count
+	) {
+		if (count < 0) {
+			RecipeBookClickCapture.onRecipeButtonClicked(recipeId, collection, stack, 0, true, false, false, false);
+		} else {
+			RecipeBookInputController.getInstance().harnessQueueAndRelease(recipeId, collection, stack, count);
+		}
 	}
 
 	private static void clickRecipeByItemId(Minecraft client, String itemId, boolean ctrl, boolean bulkLatch) {

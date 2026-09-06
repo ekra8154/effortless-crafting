@@ -696,6 +696,18 @@ final class RecipeBookInputController {
 		NearbyContainerDryRun.runPendingPostReturnCompaction(minecraft);
 
 		RecipeBookClickCapture.ReplayBatch replayBatch = state.replayBatch();
+		// A queued count on a synthetic (no-recipe) retrieval entry: there is
+		// nothing to resolve or place, so start the retrieval directly, the
+		// same way a plain click on that entry does.
+		if (VirtualRetrievalRecipeBookEntries.isSyntheticRecipeId(replayBatch.action().recipeId())) {
+			state.setReplayBatch(null);
+			VirtualRetrievalRecipeBookEntries.startRetrievalForSynthetic(
+				replayBatch.action().recipeId(),
+				replayBatch.action().displayStack(),
+				Math.max(replayBatch.remainingClicks(), 1)
+			);
+			return;
+		}
 		// Batches capture mode-dependent state at request time but can sit
 		// through a grid-flush delay or dry-run stall, during which the bulk
 		// latch may drop (Alt tap, gesture kill orphaning a session's batch).
