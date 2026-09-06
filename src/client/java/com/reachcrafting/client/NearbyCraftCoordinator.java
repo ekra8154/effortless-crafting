@@ -200,6 +200,11 @@ final class NearbyCraftCoordinator {
 		return activeSession != null;
 	}
 
+	/** True while a retrieval session owns the inventory and the screen. */
+	boolean isRetrievalSessionRunning() {
+		return activeSession instanceof ExistingOutputRetrievalSession;
+	}
+
 	boolean shouldBlockWorldInteraction() {
 		return activeSession != null || interactionBlockTicks > 0;
 	}

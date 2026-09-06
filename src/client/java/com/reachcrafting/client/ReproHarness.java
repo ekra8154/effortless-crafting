@@ -34,6 +34,9 @@ import java.nio.file.Path;
  *                                   with count, queue N and release the way a
  *                                   Ctrl+scroll accumulation would
  *   set eject on|off              - flip ejectItemsWhenFull in memory only
+ *   set budget <n>                - clickBudgetPerWindow in memory only
+ *   warmcache                     - scan uncached containers (logs "warmup finish")
+ *   abort                         - what Esc does: abort all sessions, close screen
  * Progress is logged with the [repro_harness] tag so external scripts can
  * follow the run in logs/latest.log.
  */
@@ -209,14 +212,34 @@ public final class ReproHarness {
 				}
 				openNearestCraftingTable(client);
 			}
+			case "warmcache" -> {
+				// Scan every uncached container in reach so a following
+				// retrieve runs against a warm cache. Logs "warmup finish"
+				// when done (see CacheWarmupSession).
+				NearbyContainerDryRun.startCacheWarmup("harness");
+				ReachCraftingMod.diag("[repro_harness] cache warmup started");
+			}
 			case "set" -> {
 				if (parts.length == 3 && parts[1].equals("eject")) {
 					boolean on = parts[2].equals("on");
 					ReachCraftingConfig.get().setEjectItemsWhenFull(on);
 					ReachCraftingMod.diag("[repro_harness] set eject_items_when_full={}", on);
+				} else if (parts.length == 3 && parts[1].equals("budget")) {
+					int budget = Integer.parseInt(parts[2]);
+					ReachCraftingConfig.get().setClickBudgetPerWindow(budget);
+					ReachCraftingMod.diag("[repro_harness] set click_budget_per_window={}", budget);
 				} else {
 					ReachCraftingMod.LOGGER.warn("[repro_harness] unknown set target {}", command);
 				}
+			}
+			case "abort" -> {
+				// What Esc does mid-session (AbstractContainerScreenMixin):
+				// abort every session, then close whatever screen is up.
+				ContainerUtils.abortAllSessions();
+				if (client.gui.screen() != null) {
+					client.player.closeContainer();
+				}
+				ReachCraftingMod.diag("[repro_harness] aborted sessions");
 			}
 			default -> ReachCraftingMod.LOGGER.warn("[repro_harness] unknown command {}", parts[0]);
 		}

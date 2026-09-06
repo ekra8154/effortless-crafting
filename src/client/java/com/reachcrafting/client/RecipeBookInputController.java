@@ -802,7 +802,11 @@ final class RecipeBookInputController {
 	private boolean isCraftingSessionControllerActive() {
 		return BulkAutoCraftController.isActive()
 			|| ChainCraftController.isActive()
-			|| BulkChainCraftController.isActive();
+			|| BulkChainCraftController.isActive()
+			// A retrieval walks chests for as long as a bulk craft does; a
+			// queue release landing mid-walk must not flush the grid or
+			// start a competing request underneath it.
+			|| NearbyContainerDryRun.isRetrievalSessionRunning();
 	}
 
 	private boolean adjustHeldRecipeCount(Minecraft minecraft, RecipeBookClickCapture.HeldRecipeAction action, int delta) {

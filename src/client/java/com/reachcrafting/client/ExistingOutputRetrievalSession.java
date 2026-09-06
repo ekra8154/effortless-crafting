@@ -19,6 +19,7 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
@@ -26,12 +27,28 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 
+/**
+ * Pulls already-crafted copies of a recipe output out of nearby containers.
+ *
+ * <p>Requests are never capped: the session walks containers (cache-priority
+ * order) until the request is met or nearby stock runs out. Within one
+ * container the inventory is filled first; once it has no room left for the
+ * item and {@code ejectItemsWhenFull} is on, the remaining stacks are thrown
+ * onto the ground straight from the container slot (one THROW per stack,
+ * nothing ever on the cursor). A session that ejected anything therefore ends
+ * with the inventory still full. With eject off it stops at the first full
+ * inventory, as it always did.</p>
+ */
 final class ExistingOutputRetrievalSession extends BaseCraftSession {
 	private static final int OPEN_TIMEOUT_TICKS = 40;
 	private static final int RESUME_DELAY_TICKS = 5;
 	private static final int REOPEN_TIMEOUT_TICKS = 20;
 	private static final int REOPEN_SETTLE_TICKS = 2;
 	private static final int MAX_REOPEN_ATTEMPTS = 3;
+	// The click governor's window is a 7 s sliding expiry, so a wait longer
+	// than the window is the only wait that can ever succeed; past that we
+	// proceed anyway (a slow retrieval beats a lost one).
+	private static final int BUDGET_WAIT_LIMIT_TICKS = 200;
 
 	private final ExistingOutputRetrievalRequest request;
 	private final ScreenContextSnapshot originalContext;
@@ -43,10 +60,16 @@ final class ExistingOutputRetrievalSession extends BaseCraftSession {
 	private int reopenSettledTicks;
 	private int remainingCount;
 	private int retrievedCount;
+	private int ejectedCount;
 	private int containerVisits;
+	private int budgetWaits;
+	private int budgetWaitTicks;
 	private final long startedAtMillis = System.currentTimeMillis();
 	private boolean finished;
+	private boolean despawnClockArmed;
 	private BlockPos pendingContainerPos;
+	private AbstractContainerMenu pendingMenu;
+	private RetrievalPlan pendingPlan;
 	private boolean inventorySpaceBlocked;
 	private RetrievalState state = RetrievalState.OPEN_NEXT;
 
@@ -77,6 +100,10 @@ final class ExistingOutputRetrievalSession extends BaseCraftSession {
 		return !player.isSpectator() && !player.isHandsBusy() && player.containerMenu.getCarried().isEmpty();
 	}
 
+	private static boolean ejectAllowed() {
+		return ReachCraftingConfig.get().ejectItemsWhenFull();
+	}
+
 	@Override
 	public void start() {
 		if (candidates.isEmpty()) {
@@ -86,10 +113,11 @@ final class ExistingOutputRetrievalSession extends BaseCraftSession {
 			return;
 		}
 		ReachCraftingMod.diag(
-			"[retrieve_existing] start item={} requested={} candidates={}",
+			"[retrieve_existing] start item={} requested={} candidates={} eject_allowed={}",
 			request.outputItemId(),
 			remainingCount,
-			candidates.size()
+			candidates.size(),
+			ejectAllowed()
 		);
 		sendDebugChat("Retrieving existing: " + request.outputLabel());
 	}
@@ -100,9 +128,12 @@ final class ExistingOutputRetrievalSession extends BaseCraftSession {
 			finishSession(false);
 			return;
 		}
+		if (despawnClockArmed) {
+			BulkDespawnWarning.tick();
+		}
 
 		if (state == RetrievalState.OPEN_NEXT) {
-			if (remainingCount <= 0 || inventorySpaceBlocked) {
+			if (remainingCount <= 0 || (inventorySpaceBlocked && !ejectAllowed())) {
 				beginResume();
 				return;
 			}
@@ -116,6 +147,28 @@ final class ExistingOutputRetrievalSession extends BaseCraftSession {
 			timeoutTicks--;
 			if (timeoutTicks <= 0) {
 				onOpenFailed("timeout");
+			}
+			return;
+		}
+
+		if (state == RetrievalState.WAITING_FOR_BUDGET) {
+			if (pendingMenu == null || player.containerMenu != pendingMenu) {
+				onOpenFailed("container_closed_during_budget_wait");
+				return;
+			}
+			budgetWaitTicks++;
+			int estimate = pendingPlan.estimatedClicks();
+			if (GridTopUp.clickBudgetAllowsQuietly(estimate) || budgetWaitTicks >= BUDGET_WAIT_LIMIT_TICKS) {
+				ReachCraftingMod.diag(
+					"[retrieve_existing] budget_wait_end pos={} waited_ticks={} estimate={} window={}/{} forced={}",
+					ContainerUtils.formatPos(pendingContainerPos),
+					budgetWaitTicks,
+					estimate,
+					GridTopUp.clickWindowCount(),
+					GridTopUp.clickWindowCap(),
+					budgetWaitTicks >= BUDGET_WAIT_LIMIT_TICKS
+				);
+				executePendingPlan();
 			}
 			return;
 		}
@@ -165,6 +218,8 @@ final class ExistingOutputRetrievalSession extends BaseCraftSession {
 			reason
 		);
 		pendingContainerPos = null;
+		pendingMenu = null;
+		pendingPlan = null;
 		timeoutTicks = 0;
 		state = RetrievalState.OPEN_NEXT;
 	}
@@ -185,20 +240,58 @@ final class ExistingOutputRetrievalSession extends BaseCraftSession {
 		Map<String, Integer> allItems = ContainerUtils.collectAllItems(menu);
 		NearbyContainerCache.recordObservedContents(level, pendingContainerPos, allItems);
 		containerVisits++;
-		WithdrawalPlan plan = buildWithdrawalPlan(menu);
-		Map<String, Integer> executed = executeWithdrawalPlan(menu, plan);
+		pendingMenu = menu;
+		pendingPlan = buildPlan(menu);
+		int estimate = pendingPlan.estimatedClicks();
+		if (estimate > 0 && !GridTopUp.clickBudgetAllowsQuietly(estimate)) {
+			budgetWaits++;
+			budgetWaitTicks = 0;
+			ReachCraftingMod.diag(
+				"[retrieve_existing] budget_wait pos={} estimate={} window={}/{}",
+				ContainerUtils.formatPos(pendingContainerPos),
+				estimate,
+				GridTopUp.clickWindowCount(),
+				GridTopUp.clickWindowCap()
+			);
+			state = RetrievalState.WAITING_FOR_BUDGET;
+			return;
+		}
+		executePendingPlan();
+	}
+
+	private void executePendingPlan() {
+		AbstractContainerMenu menu = pendingMenu;
+		RetrievalPlan plan = pendingPlan;
+		int available = 0;
+		for (Slot slot : menu.slots) {
+			if (!(slot.container instanceof Inventory) && slot.hasItem() && isRequestedItem(slot.getItem())) {
+				available += slot.getItem().getCount();
+			}
+		}
+		long clicksBefore = MenuTransferHelper.clicksIssued();
+		int moved = executeFills(menu, plan.fills());
+		int ejected = executeEjects(menu, plan.ejects());
+		long transferClicks = MenuTransferHelper.clicksIssued() - clicksBefore;
+		for (long i = 0; i < transferClicks; i++) {
+			GridTopUp.recordClick();
+		}
 		ReachCraftingMod.diag(
-			"[retrieve_existing] visit pos={} available={} planned={} moved={} remaining_before={} space_blocked={}",
+			"[retrieve_existing] visit pos={} available={} planned={} moved={} planned_eject={} ejected={} clicks={} remaining_before={} space_blocked={}",
 			ContainerUtils.formatPos(pendingContainerPos),
-			allItems.getOrDefault(request.outputItemId(), 0),
-			plan.withdrawnCounts().getOrDefault(request.outputItemId(), 0),
-			executed.getOrDefault(request.outputItemId(), 0),
+			available,
+			plan.fillCount(),
+			moved,
+			plan.ejectCount(),
+			ejected,
+			transferClicks + plan.ejectClicksIssued(),
 			remainingCount,
 			plan.inventorySpaceBlocked()
 		);
-		applyWithdrawalResults(executed);
+		applyResults(moved, ejected);
 		player.closeContainer();
 		pendingContainerPos = null;
+		pendingMenu = null;
+		pendingPlan = null;
 		timeoutTicks = 0;
 		state = RetrievalState.OPEN_NEXT;
 	}
@@ -210,15 +303,20 @@ final class ExistingOutputRetrievalSession extends BaseCraftSession {
 			// path logs retrieve_complete first and sets finished.
 			finished = true;
 			ReachCraftingMod.diag(
-				"[retrieve_existing] retrieve_aborted item={} requested={} retrieved={} remaining={} visits={} state={} carried={}",
+				"[retrieve_existing] retrieve_aborted item={} requested={} retrieved={} ejected={} remaining={} visits={} state={} carried={}",
 				request.outputItemId(),
 				request.requestedCount(),
 				retrievedCount,
+				ejectedCount,
 				remainingCount,
 				containerVisits,
 				state,
 				ContainerUtils.formatStack(player.containerMenu.getCarried())
 			);
+		}
+		if (despawnClockArmed) {
+			BulkDespawnWarning.clear();
+			despawnClockArmed = false;
 		}
 		if (closeContainer && player.containerMenu != player.inventoryMenu) {
 			player.closeContainer();
@@ -229,14 +327,15 @@ final class ExistingOutputRetrievalSession extends BaseCraftSession {
 	private void logComplete(String outcome) {
 		finished = true;
 		ReachCraftingMod.diag(
-			"[retrieve_existing] retrieve_complete outcome={} item={} requested={} retrieved={} ejected={} remaining={} visits={} space_blocked={} ms={}",
+			"[retrieve_existing] retrieve_complete outcome={} item={} requested={} retrieved={} ejected={} remaining={} visits={} budget_waits={} space_blocked={} ms={}",
 			outcome,
 			request.outputItemId(),
 			request.requestedCount(),
 			retrievedCount,
-			0,
+			ejectedCount,
 			remainingCount,
 			containerVisits,
+			budgetWaits,
 			inventorySpaceBlocked,
 			System.currentTimeMillis() - startedAtMillis
 		);
@@ -251,21 +350,26 @@ final class ExistingOutputRetrievalSession extends BaseCraftSession {
 	}
 
 	private void finishAfterResume() {
+		String itemName = ContainerUtils.getItemName(request.outputItemId());
 		String outcome;
-		if (retrievedCount <= 0) {
+		if (retrievedCount <= 0 && ejectedCount <= 0) {
 			sendMissingIngredientsChat("No matching existing items nearby.");
 			outcome = "none_found";
+		} else if (ejectedCount > 0) {
+			sendChat("Retrieved " + ContainerUtils.formatStackBreakdown(retrievedCount) + " " + itemName
+				+ ", " + ContainerUtils.formatStackBreakdown(ejectedCount) + " more ejected to the ground.");
+			outcome = "ejected";
 		} else if (inventorySpaceBlocked) {
-			sendChat("Retrieved " + ContainerUtils.formatStackBreakdown(retrievedCount) + " " + ContainerUtils.getItemName(request.outputItemId()) + ", then ran out of inventory space.");
+			sendChat("Retrieved " + ContainerUtils.formatStackBreakdown(retrievedCount) + " " + itemName + ", then ran out of inventory space.");
 			outcome = "inventory_full";
 		} else if (remainingCount > 0) {
-			sendChat("Retrieved " + ContainerUtils.formatStackBreakdown(retrievedCount) + " " + ContainerUtils.getItemName(request.outputItemId()) + ".");
+			sendChat("Retrieved " + ContainerUtils.formatStackBreakdown(retrievedCount) + " " + itemName + ".");
 			outcome = "stock_exhausted";
 		} else {
-			sendChat("Retrieved " + ContainerUtils.formatStackBreakdown(retrievedCount) + " " + ContainerUtils.getItemName(request.outputItemId()) + ".");
+			sendChat("Retrieved " + ContainerUtils.formatStackBreakdown(retrievedCount) + " " + itemName + ".");
 			outcome = "satisfied";
 		}
-		if (retrievedCount > 0 && request.requestedRecipeId() != null) {
+		if ((retrievedCount > 0 || ejectedCount > 0) && request.requestedRecipeId() != null) {
 			ReachCraftingConfig.get().noteRecentRecipe(request.requestedRecipeId());
 		}
 		logComplete(outcome);
@@ -295,9 +399,21 @@ final class ExistingOutputRetrievalSession extends BaseCraftSession {
 
 	private boolean openNextContainer() {
 		Vec3 eyePos = cameraEntity.getEyePosition(0);
+		// Re-read per open: every withdrawal bumps the cache revision.
+		NearbyContainerCache.ReachableView reachableView = NearbyContainerCache.getReachableView(level, cameraEntity, player.blockInteractionRange());
+		Set<String> wanted = Set.of(request.outputItemId());
 		while (nextCandidateIndex < candidates.size()) {
 			BlockPos pos = candidates.get(nextCandidateIndex++);
 			if (visited.contains(pos)) {
+				continue;
+			}
+			// A container the cache has already seen and knows holds none of
+			// the item is not worth a screen flash and an open/close packet
+			// pair. Uncached containers are still visited so a cold cache
+			// discovers stock; cached ones with stock are visited as usual.
+			if (isCachedWithoutItem(reachableView, pos, wanted)) {
+				markVisited(pos);
+				ReachCraftingMod.diag("[retrieve_existing] skip_cached_empty pos={}", ContainerUtils.formatPos(pos));
 				continue;
 			}
 
@@ -336,62 +452,114 @@ final class ExistingOutputRetrievalSession extends BaseCraftSession {
 		return false;
 	}
 
+	private static boolean isCachedWithoutItem(NearbyContainerCache.ReachableView reachableView, BlockPos pos, Set<String> wanted) {
+		NearbyContainerCache.ContainerKey key = reachableView.accessKeyByPos().get(pos);
+		if (key == null || !reachableView.snapshotsByKey().containsKey(key)) {
+			return false;
+		}
+		return reachableView.relevantCountAt(pos, wanted) <= 0;
+	}
+
 	private void markVisited(BlockPos pos) {
 		visited.add(pos);
 		ContainerUtils.getOtherHalfOfLargeChest(level, pos).ifPresent(visited::add);
 	}
 
-	private WithdrawalPlan buildWithdrawalPlan(AbstractContainerMenu menu) {
-		Map<String, Integer> plannedWithdrawals = new LinkedHashMap<>();
-		List<WithdrawalPlan.PlannedMove> moves = new ArrayList<>();
-		Map<Integer, Integer> virtualPlayerCounts = capturePlayerOccupancy(menu);
-		Map<Integer, String> virtualPlayerItemIds = capturePlayerItemIds(menu);
+	private boolean isRequestedItem(ItemStack stack) {
+		return !stack.isEmpty()
+			&& request.outputItemId().equals(net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).toString());
+	}
+
+	/**
+	 * Fill moves first (into the inventory, per-stack room measured against
+	 * the ITEM's max stack size so 1-, 16- and 64-stack items all plan
+	 * correctly), then, only when the inventory has no room left and eject is
+	 * allowed, eject moves for what is still owed. Virtual player stacks are
+	 * real {@link ItemStack} copies so a chest stack with different components
+	 * (renamed, damaged) is never planned into a slot the move would refuse.
+	 */
+	private RetrievalPlan buildPlan(AbstractContainerMenu menu) {
+		Map<Integer, ItemStack> virtualPlayerStacks = capturePlayerVirtualStacks(menu);
+		List<WithdrawalPlan.PlannedMove> fills = new ArrayList<>();
+		List<EjectMove> ejects = new ArrayList<>();
+		Map<Integer, Integer> plannedFromSource = new HashMap<>();
 		boolean blockedByInventory = false;
 		int stillNeeded = remainingCount;
+		int fillCount = 0;
+		int ejectCount = 0;
+		int ejectClicks = 0;
+		int splitMoves = 0;
 
-		for (Slot sourceSlot : sortedMatchingContainerSources(menu, request.outputItemId())) {
-			if (stillNeeded <= 0) {
+		List<Slot> sources = sortedMatchingContainerSources(menu, request.outputItemId());
+		for (Slot sourceSlot : sources) {
+			if (stillNeeded <= 0 || blockedByInventory) {
 				break;
 			}
-
-			int sourceRemaining = sourceSlot.getItem().getCount();
+			ItemStack sourceStack = sourceSlot.getItem();
+			int sourceRemaining = sourceStack.getCount();
 			while (sourceRemaining > 0 && stillNeeded > 0) {
-				Slot targetSlot = findPlannedDestinationSlot(menu, request.outputItemId(), virtualPlayerCounts, virtualPlayerItemIds);
+				Slot targetSlot = findPlannedDestinationSlot(menu, sourceStack, virtualPlayerStacks);
 				if (targetSlot == null) {
 					blockedByInventory = true;
 					break;
 				}
 
-				int currentTargetCount = virtualPlayerCounts.getOrDefault(targetSlot.index, targetSlot.hasItem() ? targetSlot.getItem().getCount() : 0);
-				int maxTargetCount = targetSlot.hasItem()
-					? Math.min(targetSlot.getMaxStackSize(), targetSlot.getItem().getMaxStackSize())
-					: Math.min(targetSlot.getMaxStackSize(), sourceSlot.getItem().getMaxStackSize());
+				ItemStack virtualTarget = virtualPlayerStacks.getOrDefault(targetSlot.index, ItemStack.EMPTY);
+				int currentTargetCount = virtualTarget.isEmpty() ? 0 : virtualTarget.getCount();
+				int maxTargetCount = Math.min(targetSlot.getMaxStackSize(), sourceStack.getMaxStackSize());
 				int roomInTarget = maxTargetCount - currentTargetCount;
 				int moveCount = Math.min(stillNeeded, Math.min(sourceRemaining, roomInTarget));
 				if (moveCount <= 0) {
+					// Defensive: the destination finder only returns slots with room.
+					blockedByInventory = true;
 					break;
 				}
 
-				moves.add(new WithdrawalPlan.PlannedMove(sourceSlot, targetSlot, request.outputItemId(), moveCount));
-				virtualPlayerCounts.put(targetSlot.index, currentTargetCount + moveCount);
-				virtualPlayerItemIds.put(targetSlot.index, request.outputItemId());
-				plannedWithdrawals.merge(request.outputItemId(), moveCount, Integer::sum);
+				fills.add(new WithdrawalPlan.PlannedMove(sourceSlot, targetSlot, request.outputItemId(), moveCount));
+				virtualPlayerStacks.put(targetSlot.index, sourceStack.copyWithCount(currentTargetCount + moveCount));
+				plannedFromSource.merge(sourceSlot.index, moveCount, Integer::sum);
+				if (moveCount != sourceStack.getCount()) {
+					splitMoves++;
+				}
 				sourceRemaining -= moveCount;
 				stillNeeded -= moveCount;
-			}
-
-			if (blockedByInventory) {
-				break;
+				fillCount += moveCount;
 			}
 		}
 
-		Map<String, Integer> unresolvedNeeds = stillNeeded > 0 ? Map.of(request.outputItemId(), stillNeeded) : Map.of();
-		return new WithdrawalPlan(moves, plannedWithdrawals, unresolvedNeeds, blockedByInventory);
+		if (blockedByInventory && stillNeeded > 0 && ejectAllowed()) {
+			for (Slot sourceSlot : sources) {
+				if (stillNeeded <= 0) {
+					break;
+				}
+				int left = sourceSlot.getItem().getCount() - plannedFromSource.getOrDefault(sourceSlot.index, 0);
+				if (left <= 0) {
+					continue;
+				}
+				if (left <= stillNeeded) {
+					ejects.add(new EjectMove(sourceSlot, left, true));
+					ejectClicks += 1;
+					stillNeeded -= left;
+					ejectCount += left;
+				} else {
+					// Exact remainder: one single-item throw per unit.
+					ejects.add(new EjectMove(sourceSlot, stillNeeded, false));
+					ejectClicks += stillNeeded;
+					ejectCount += stillNeeded;
+					stillNeeded = 0;
+				}
+			}
+		}
+
+		// 2 clicks per whole-stack move; a split costs a few more (the helper
+		// picks the cheapest of three strategies, all under ~4 for one split).
+		int estimatedClicks = fills.size() * 2 + splitMoves * 2 + ejectClicks;
+		return new RetrievalPlan(fills, ejects, fillCount, ejectCount, blockedByInventory, estimatedClicks, ejectClicks);
 	}
 
-	private Map<String, Integer> executeWithdrawalPlan(AbstractContainerMenu menu, WithdrawalPlan plan) {
-		Map<String, Integer> executedWithdrawals = new LinkedHashMap<>();
-		for (WithdrawalPlan.PlannedMove move : plan.moves()) {
+	private int executeFills(AbstractContainerMenu menu, List<WithdrawalPlan.PlannedMove> fills) {
+		int moved = 0;
+		for (WithdrawalPlan.PlannedMove move : fills) {
 			if (!move.source().hasItem() || !move.source().mayPickup(player)) {
 				break;
 			}
@@ -407,56 +575,102 @@ final class ExistingOutputRetrievalSession extends BaseCraftSession {
 			if (result.moved() <= 0) {
 				break;
 			}
-			executedWithdrawals.merge(move.itemId(), result.moved(), Integer::sum);
+			moved += result.moved();
 		}
-		return executedWithdrawals;
+		return moved;
 	}
 
-	private void applyWithdrawalResults(Map<String, Integer> executedWithdrawals) {
-		if (executedWithdrawals.isEmpty()) {
-			return;
-		}
-
-		int moved = executedWithdrawals.getOrDefault(request.outputItemId(), 0);
-		if (moved <= 0) {
-			return;
-		}
-
-		retrievedCount += moved;
-		remainingCount = Math.max(remainingCount - moved, 0);
-		NearbyContainerCache.applyWithdrawals(level, pendingContainerPos, executedWithdrawals);
-		if (remainingCount > 0) {
-			WithdrawalPlan probePlan = buildWithdrawalPlan(player.containerMenu);
-			inventorySpaceBlocked = probePlan.inventorySpaceBlocked();
-		}
-	}
-
-	private static Map<Integer, Integer> capturePlayerOccupancy(AbstractContainerMenu menu) {
-		Map<Integer, Integer> occupancy = new HashMap<>();
-		for (Slot slot : menu.slots) {
-			if (slot.container instanceof Inventory) {
-				occupancy.put(slot.index, slot.hasItem() ? slot.getItem().getCount() : 0);
-			}
-		}
-		return occupancy;
-	}
-
-	private static Map<Integer, String> capturePlayerItemIds(AbstractContainerMenu menu) {
-		Map<Integer, String> itemIds = new HashMap<>();
-		for (Slot slot : menu.slots) {
-			if (!(slot.container instanceof Inventory) || !slot.hasItem()) {
+	/**
+	 * THROW straight from the container slot: button 1 drops the whole stack,
+	 * button 0 drops one item. The client applies the click locally, so the
+	 * slot's count after the click is the ejected amount.
+	 */
+	private int executeEjects(AbstractContainerMenu menu, List<EjectMove> ejects) {
+		int ejected = 0;
+		for (EjectMove eject : ejects) {
+			Slot source = eject.source();
+			if (!source.hasItem() || !source.mayPickup(player) || !isRequestedItem(source.getItem())) {
 				continue;
 			}
-			itemIds.put(slot.index, net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(slot.getItem().getItem()).toString());
+			if (!player.containerMenu.getCarried().isEmpty()) {
+				ReachCraftingMod.diag("[retrieve_existing] eject skipped: cursor holds {}", ContainerUtils.formatStack(player.containerMenu.getCarried()));
+				break;
+			}
+			int before = source.getItem().getCount();
+			if (eject.wholeStack()) {
+				gameMode.handleContainerInput(menu.containerId, source.index, 1, ContainerInput.THROW, player);
+				GridTopUp.recordClick();
+			} else {
+				for (int i = 0; i < eject.count() && source.hasItem(); i++) {
+					gameMode.handleContainerInput(menu.containerId, source.index, 0, ContainerInput.THROW, player);
+					GridTopUp.recordClick();
+				}
+			}
+			int after = source.hasItem() ? source.getItem().getCount() : 0;
+			int thrown = Math.max(before - after, 0);
+			if (thrown > 0 && !despawnClockArmed) {
+				despawnClockArmed = true;
+				BulkDespawnWarning.noteSessionStart();
+			}
+			ejected += thrown;
 		}
-		return itemIds;
+		return ejected;
+	}
+
+	private void applyResults(int moved, int ejected) {
+		int total = moved + ejected;
+		if (total <= 0) {
+			return;
+		}
+		retrievedCount += moved;
+		ejectedCount += ejected;
+		remainingCount = Math.max(remainingCount - total, 0);
+		NearbyContainerCache.applyWithdrawals(level, pendingContainerPos, Map.of(request.outputItemId(), total));
+		if (remainingCount > 0) {
+			inventorySpaceBlocked = !inventoryHasRoom(player.containerMenu);
+		}
+	}
+
+	/** True if any player slot could take at least one more of the requested item. */
+	private boolean inventoryHasRoom(AbstractContainerMenu menu) {
+		ItemStack sample = request.displayStack().isEmpty()
+			? ItemStack.EMPTY
+			: request.displayStack().copyWithCount(1);
+		for (Slot slot : menu.slots) {
+			if (!(slot.container instanceof Inventory)) {
+				continue;
+			}
+			if (!slot.hasItem()) {
+				return true;
+			}
+			ItemStack stack = slot.getItem();
+			if (!isRequestedItem(stack)) {
+				continue;
+			}
+			if (!sample.isEmpty() && !ItemStack.isSameItemSameComponents(stack, sample)) {
+				continue;
+			}
+			if (stack.getCount() < Math.min(slot.getMaxStackSize(), stack.getMaxStackSize())) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private static Map<Integer, ItemStack> capturePlayerVirtualStacks(AbstractContainerMenu menu) {
+		Map<Integer, ItemStack> stacks = new HashMap<>();
+		for (Slot slot : menu.slots) {
+			if (slot.container instanceof Inventory) {
+				stacks.put(slot.index, slot.hasItem() ? slot.getItem().copy() : ItemStack.EMPTY);
+			}
+		}
+		return stacks;
 	}
 
 	private static Slot findPlannedDestinationSlot(
 		AbstractContainerMenu menu,
-		String itemId,
-		Map<Integer, Integer> virtualPlayerCounts,
-		Map<Integer, String> virtualPlayerItemIds
+		ItemStack sourceStack,
+		Map<Integer, ItemStack> virtualPlayerStacks
 	) {
 		Slot emptySlot = null;
 		for (Slot slot : menu.slots) {
@@ -464,23 +678,20 @@ final class ExistingOutputRetrievalSession extends BaseCraftSession {
 				continue;
 			}
 
-			String virtualItemId = virtualPlayerItemIds.get(slot.index);
-			int virtualCount = virtualPlayerCounts.getOrDefault(slot.index, 0);
-			if (virtualItemId == null || virtualCount <= 0) {
+			ItemStack virtualStack = virtualPlayerStacks.getOrDefault(slot.index, ItemStack.EMPTY);
+			if (virtualStack.isEmpty()) {
 				if (emptySlot == null) {
 					emptySlot = slot;
 				}
 				continue;
 			}
 
-			if (!itemId.equals(virtualItemId)) {
+			if (!ItemStack.isSameItemSameComponents(virtualStack, sourceStack)) {
 				continue;
 			}
 
-			int maxCount = slot.hasItem()
-				? Math.min(slot.getMaxStackSize(), slot.getItem().getMaxStackSize())
-				: slot.getMaxStackSize();
-			if (virtualCount < maxCount) {
+			int maxCount = Math.min(slot.getMaxStackSize(), sourceStack.getMaxStackSize());
+			if (virtualStack.getCount() < maxCount) {
 				return slot;
 			}
 		}
@@ -502,9 +713,24 @@ final class ExistingOutputRetrievalSession extends BaseCraftSession {
 		return matchingSources;
 	}
 
+	private record EjectMove(Slot source, int count, boolean wholeStack) {
+	}
+
+	private record RetrievalPlan(
+		List<WithdrawalPlan.PlannedMove> fills,
+		List<EjectMove> ejects,
+		int fillCount,
+		int ejectCount,
+		boolean inventorySpaceBlocked,
+		int estimatedClicks,
+		int ejectClicksIssued
+	) {
+	}
+
 	private enum RetrievalState {
 		OPEN_NEXT,
 		WAITING_FOR_CONTAINER,
+		WAITING_FOR_BUDGET,
 		RESUME_CONTEXT,
 		WAITING_FOR_REOPEN
 	}

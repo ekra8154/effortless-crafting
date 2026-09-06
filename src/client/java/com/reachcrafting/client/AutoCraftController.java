@@ -102,7 +102,8 @@ final class AutoCraftController {
 	private static boolean isBulkOrChainSessionRunning() {
 		return BulkAutoCraftController.isActive()
 			|| BulkChainCraftController.isActive()
-			|| ChainCraftController.isActive();
+			|| ChainCraftController.isActive()
+			|| NearbyContainerDryRun.isRetrievalSessionRunning();
 	}
 
 	static void cancelToggle() {

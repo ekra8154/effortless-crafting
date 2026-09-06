@@ -115,6 +115,10 @@ public final class NearbyContainerDryRun {
 		return COORDINATOR.isActiveSessionRunning();
 	}
 
+	public static boolean isRetrievalSessionRunning() {
+		return COORDINATOR.isRetrievalSessionRunning();
+	}
+
 	public static boolean shouldBlockWorldInteraction() {
 		return COORDINATOR.shouldBlockWorldInteraction();
 	}
