@@ -285,6 +285,69 @@ final class RecipeClickExecutor {
 				? deficitReport.possibleCopies()
 				: requestedClicks;
 
+		// Output variant switching for a plain (non-bulk) auto craft. When the
+		// resolved variant cannot cover the request, craft what it can and let
+		// OutputVariantContinuationController replay the remainder; that pass
+		// resolves the next variant. A continuation pass that finds no
+		// craftable variant ends the run quietly (the player got the max).
+		boolean continuationPass = OutputVariantContinuationController.consumeFiring();
+		boolean variantContinuationEligible = !AutoCraftController.isBulkModeEnabled()
+			&& !ChainCraftController.isActive()
+			&& !BulkChainCraftController.isActive()
+			&& !BulkAutoCraftController.isActive()
+			&& (autoCraftRequested || AutoCraftController.isEnabled())
+			&& ReachCraftingConfig.get().outputVariantSwitching()
+			&& !explicitVariantSelection
+			&& collection != null
+			&& collection.getRecipes().size() > 1
+			&& BulkAutoCraftController.determineVariantContinuationMode(recipeId, selectedRecipe.recipeId(), explicitVariantSelection)
+				== BulkAutoCraftController.VariantContinuationMode.FAMILY_FALLBACK;
+		if (variantContinuationEligible) {
+			int possibleCopies = deficitReport.possibleCopies();
+			RecipeBookClickCapture.HeldRecipeAction continuationAction = new RecipeBookClickCapture.HeldRecipeAction(
+				recipeId,
+				collection,
+				displayStack != null ? displayStack.copy() : ItemStack.EMPTY,
+				mouseButton,
+				explicitVariantSelection
+			);
+			if (possibleCopies <= 0) {
+				if (continuationPass) {
+					OutputVariantContinuationController.end("no_viable_variant", resolvedItemId);
+					ReachCraftingModClient.sendDebugChat("Output variant switching: no craftable variant left.");
+					return;
+				}
+			} else if (effectiveCraftAll) {
+				OutputVariantContinuationController.arm(continuationAction, -1, true, allowNearbyChests, autoCraftRequested, continuationPass, resolvedItemId, possibleCopies);
+			} else if (possibleCopies < effectiveRequestedClicks) {
+				OutputVariantContinuationController.arm(continuationAction, effectiveRequestedClicks - possibleCopies, false, allowNearbyChests, autoCraftRequested, continuationPass, resolvedItemId, possibleCopies);
+				// Re-enter with the count this variant can actually make, so
+				// the craft completes cleanly instead of reporting a shortfall.
+				executeRecipeButtonClick(
+					minecraft,
+					player,
+					screen,
+					recipeId,
+					collection,
+					displayStack,
+					mouseButton,
+					craftAll,
+					allowNearbyChests,
+					forceDryRun,
+					explicitVariantSelection,
+					possibleCopies,
+					refillableBulkMaxMode,
+					autoCraftRequested,
+					true,
+					state
+				);
+				return;
+			} else if (continuationPass) {
+				// Last step: this variant covers the rest.
+				OutputVariantContinuationController.end("satisfied", resolvedItemId);
+			}
+		}
+
 		// Chain already resolved local-only intermediate dependencies up front, so
 		// these replayed steps can use the faster direct placement path.
 		boolean directChainReplay = ChainCraftController.isActive()

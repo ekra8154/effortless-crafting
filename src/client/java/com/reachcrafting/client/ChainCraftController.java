@@ -386,6 +386,7 @@ public final class ChainCraftController {
 	private static void tick(Minecraft client) {
 		ChainCraftPopupController.tick(client);
 		RetrieveThenCraftController.tick(client);
+		OutputVariantContinuationController.tick(client);
 		tickPendingWarmupRetry(client);
 		if (activeRun == null) {
 			return;
