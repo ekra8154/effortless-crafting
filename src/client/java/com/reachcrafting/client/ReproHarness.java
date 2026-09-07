@@ -46,6 +46,7 @@ import java.nio.file.Path;
  *   set autoconfirm yes|no        - answer for auto-handled popups (default yes)
  *   set revolving <specific|prefer|always>
  *                                 - revolvingCraftHandling in memory only
+ *   set variantswitch on|off      - outputVariantSwitching in memory only
  *   set eject on|off              - flip ejectItemsWhenFull in memory only
  *   set budget <n>                - clickBudgetPerWindow in memory only
  *   warmcache                     - scan uncached containers (logs "warmup finish")
@@ -272,6 +273,10 @@ public final class ReproHarness {
 					};
 					ReachCraftingConfig.get().setRevolvingCraftHandling(handling);
 					ReachCraftingMod.diag("[repro_harness] set revolving_craft_handling={}", handling);
+				} else if (parts.length == 3 && parts[1].equals("variantswitch")) {
+					boolean on = parts[2].equals("on");
+					ReachCraftingConfig.get().setOutputVariantSwitching(on);
+					ReachCraftingMod.diag("[repro_harness] set output_variant_switching={}", on);
 				} else if (parts.length == 3 && parts[1].equals("autoconfirm")) {
 					autoConfirmYes = parts[2].equals("yes");
 					ReachCraftingMod.diag("[repro_harness] set autoconfirm_yes={}", autoConfirmYes);

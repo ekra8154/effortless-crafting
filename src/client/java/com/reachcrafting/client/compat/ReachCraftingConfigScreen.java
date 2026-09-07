@@ -260,12 +260,12 @@ public final class ReachCraftingConfigScreen {
 			.build());
 
 		autoGroup.add(entries.startBooleanToggle(
-				Component.translatable("option.reachcrafting.bulk_variant_switching"),
-				config.bulkVariantSwitching()
+				Component.translatable("option.reachcrafting.output_variant_switching"),
+				config.outputVariantSwitching()
 			)
 			.setDefaultValue(false)
-			.setTooltip(Component.translatable("tooltip.reachcrafting.bulk_variant_switching"))
-			.setSaveConsumer(config::setBulkVariantSwitching)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.output_variant_switching"))
+			.setSaveConsumer(config::setOutputVariantSwitching)
 			.build());
 
 		autoGroup.add(entries.startEnumSelector(

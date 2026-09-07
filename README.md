@@ -133,7 +133,7 @@ Bulk chain crafting combines bulk mode with chain crafting: request hundreds of 
 - **What bulk changes**: Bulk uncaps the normal queue limit, making it practical to craft large amounts of stackable and nonstackable items such as dispensers or cake if you wish. 
 - **Bulk max craft**: `Ctrl + Shift + click` while bulk is enabled repeatedly performs nearby max crafts until resources run out or the session is aborted.
 - **Dynamic staging and ejection**: Bulk craft brings in as many items as possible at a time and can eject outputs when needed to keep large sessions moving.
-- **Variant continuation**: Bulk can keep crafting the same variant or switch to another available variant in the same family depending on your settings.
+- **Output variant switching**: With the **Output Variant Switching** setting on, a bulk craft or a retrieval can move on to another variant in the same family once the current one runs out, following the revolving-variant setting for that click. Off keeps one variant per session.
 - **Safe shutdown**: Bulk sessions shut off automatically when finished, when manually aborted with `ESC`, or when the game window loses focus.
 
 ---

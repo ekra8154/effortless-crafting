@@ -52,8 +52,17 @@ final class ExistingOutputRetrievalSession extends BaseCraftSession {
 
 	private final ExistingOutputRetrievalRequest request;
 	private final ScreenContextSnapshot originalContext;
-	private final List<BlockPos> candidates;
+	private List<BlockPos> candidates;
 	private final java.util.Set<BlockPos> visited = new java.util.HashSet<>();
+	// The variant being pulled right now. Starts as the request's output and
+	// moves on to another family variant when this one runs out, if output
+	// variant switching and the revolving-variant setting allow it.
+	private String currentItemId;
+	private ItemStack currentDisplayStack;
+	private final Set<String> drainedItemIds = new java.util.HashSet<>();
+	private final Map<String, Integer> retrievedByItem = new LinkedHashMap<>();
+	private final Map<String, Integer> ejectedByItem = new LinkedHashMap<>();
+	private int variantSwitches;
 	private int nextCandidateIndex;
 	private int timeoutTicks;
 	private int reopenAttemptsRemaining;
@@ -94,6 +103,8 @@ final class ExistingOutputRetrievalSession extends BaseCraftSession {
 		);
 		this.reopenAttemptsRemaining = MAX_REOPEN_ATTEMPTS;
 		this.remainingCount = Math.max(request.requestedCount(), 1);
+		this.currentItemId = request.outputItemId();
+		this.currentDisplayStack = request.displayStack().copy();
 	}
 
 	boolean canStart() {
@@ -139,6 +150,9 @@ final class ExistingOutputRetrievalSession extends BaseCraftSession {
 				return;
 			}
 			if (!openNextContainer()) {
+				if (trySwitchVariant()) {
+					return;
+				}
 				beginResume();
 			}
 			return;
@@ -336,7 +350,7 @@ final class ExistingOutputRetrievalSession extends BaseCraftSession {
 		finished = true;
 		notifyFollowUp(false);
 		ReachCraftingMod.diag(
-			"[retrieve_existing] retrieve_complete outcome={} item={} requested={} retrieved={} ejected={} remaining={} visits={} budget_waits={} space_blocked={} ms={}",
+			"[retrieve_existing] retrieve_complete outcome={} item={} requested={} retrieved={} ejected={} remaining={} visits={} budget_waits={} space_blocked={} variants={} switches={} ms={}",
 			outcome,
 			request.outputItemId(),
 			request.requestedCount(),
@@ -346,6 +360,8 @@ final class ExistingOutputRetrievalSession extends BaseCraftSession {
 			containerVisits,
 			budgetWaits,
 			inventorySpaceBlocked,
+			describeCountsForLog(retrievedByItem),
+			variantSwitches,
 			System.currentTimeMillis() - startedAtMillis
 		);
 	}
@@ -359,23 +375,23 @@ final class ExistingOutputRetrievalSession extends BaseCraftSession {
 	}
 
 	private void finishAfterResume() {
-		String itemName = ContainerUtils.getItemName(request.outputItemId());
+		String retrievedText = describeCounts(retrievedByItem);
 		String outcome;
 		if (retrievedCount <= 0 && ejectedCount <= 0) {
 			sendMissingIngredientsChat("No matching existing items nearby.");
 			outcome = "none_found";
 		} else if (ejectedCount > 0) {
-			sendChat("Retrieved " + ContainerUtils.formatStackBreakdown(retrievedCount) + " " + itemName
-				+ ", " + ContainerUtils.formatStackBreakdown(ejectedCount) + " more ejected to the ground.");
+			sendChat("Retrieved " + (retrievedText.isEmpty() ? "nothing" : retrievedText)
+				+ ", " + describeCounts(ejectedByItem) + " more ejected to the ground.");
 			outcome = "ejected";
 		} else if (inventorySpaceBlocked) {
-			sendChat("Retrieved " + ContainerUtils.formatStackBreakdown(retrievedCount) + " " + itemName + ", then ran out of inventory space.");
+			sendChat("Retrieved " + retrievedText + ", then ran out of inventory space.");
 			outcome = "inventory_full";
 		} else if (remainingCount > 0) {
-			sendChat("Retrieved " + ContainerUtils.formatStackBreakdown(retrievedCount) + " " + itemName + ".");
+			sendChat("Retrieved " + retrievedText + ".");
 			outcome = "stock_exhausted";
 		} else {
-			sendChat("Retrieved " + ContainerUtils.formatStackBreakdown(retrievedCount) + " " + itemName + ".");
+			sendChat("Retrieved " + retrievedText + ".");
 			outcome = "satisfied";
 		}
 		if ((retrievedCount > 0 || ejectedCount > 0) && request.requestedRecipeId() != null) {
@@ -410,7 +426,7 @@ final class ExistingOutputRetrievalSession extends BaseCraftSession {
 		Vec3 eyePos = cameraEntity.getEyePosition(0);
 		// Re-read per open: every withdrawal bumps the cache revision.
 		NearbyContainerCache.ReachableView reachableView = NearbyContainerCache.getReachableView(level, cameraEntity, player.blockInteractionRange());
-		Set<String> wanted = Set.of(request.outputItemId());
+		Set<String> wanted = Set.of(currentItemId);
 		while (nextCandidateIndex < candidates.size()) {
 			BlockPos pos = candidates.get(nextCandidateIndex++);
 			if (visited.contains(pos)) {
@@ -476,7 +492,110 @@ final class ExistingOutputRetrievalSession extends BaseCraftSession {
 
 	private boolean isRequestedItem(ItemStack stack) {
 		return !stack.isEmpty()
-			&& request.outputItemId().equals(net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).toString());
+			&& currentItemId.equals(net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).toString());
+	}
+
+	/** Same rules bulk crafting uses to decide whether it may continue on another family variant. */
+	private boolean variantSwitchingAllowed() {
+		if (!ReachCraftingConfig.get().outputVariantSwitching()) {
+			return false;
+		}
+		if (request.recipeCollection() == null
+			|| request.recipeCollection().getRecipes().size() <= 1
+			|| VirtualRetrievalRecipeBookEntries.isSyntheticRecipeId(request.requestedRecipeId())) {
+			return false;
+		}
+		return BulkAutoCraftController.determineVariantContinuationMode(
+			request.requestedRecipeId(),
+			request.resolvedRecipeId(),
+			request.explicitVariantSelection()
+		) == BulkAutoCraftController.VariantContinuationMode.FAMILY_FALLBACK;
+	}
+
+	/**
+	 * Every reachable container has been tried (or skipped as known-empty)
+	 * for the current variant and the request is still open: ask the
+	 * retrieval variant chooser for another family variant that IS nearby,
+	 * excluding the ones already drained, and start over on it.
+	 */
+	private boolean trySwitchVariant() {
+		if (remainingCount <= 0 || (inventorySpaceBlocked && !ejectAllowed()) || !variantSwitchingAllowed()) {
+			return false;
+		}
+		drainedItemIds.add(currentItemId);
+		NearbyContainerCache.ReachableView view = NearbyContainerCache.getReachableView(level, cameraEntity, player.blockInteractionRange());
+		Map<String, Integer> totals = new HashMap<>(view.aggregateCounts());
+		for (String drained : drainedItemIds) {
+			totals.remove(drained);
+		}
+		// An EMPTY clicked stack: the request's display stack is the variant
+		// already resolved (oak), and handing it to the clicked (jungle) entry
+		// would label that entry as oak and leave nothing to switch to.
+		RecipeVariantResolver.Selection selection = RecipeVariantResolver.resolveRetrievalVariant(
+			client,
+			player,
+			request.requestedRecipeId(),
+			request.recipeCollection(),
+			ItemStack.EMPTY,
+			false,
+			true,
+			AvailableItemSnapshot.empty(),
+			totals,
+			totals,
+			false,
+			false,
+			Math.max(remainingCount, 1)
+		);
+		if (selection == null || selection.displayStack().isEmpty()) {
+			return false;
+		}
+		String nextItemId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(selection.displayStack().getItem()).toString();
+		if (drainedItemIds.contains(nextItemId) || totals.getOrDefault(nextItemId, 0) <= 0) {
+			return false;
+		}
+		variantSwitches++;
+		ReachCraftingMod.diag(
+			"[retrieve_existing] variant_switch from={} to={} nearby={} remaining={}",
+			currentItemId,
+			nextItemId,
+			totals.get(nextItemId),
+			remainingCount
+		);
+		currentItemId = nextItemId;
+		currentDisplayStack = selection.displayStack().copy();
+		candidates = NearbyContainerCache.prioritizeCandidates(
+			NearbyDiscoveryPlanner.findCandidates(level, cameraEntity, player.blockInteractionRange()),
+			view,
+			Set.of(nextItemId)
+		);
+		visited.clear();
+		nextCandidateIndex = 0;
+		return true;
+	}
+
+	private String describeCounts(Map<String, Integer> byItem) {
+		StringBuilder text = new StringBuilder();
+		for (Map.Entry<String, Integer> entry : byItem.entrySet()) {
+			if (entry.getValue() <= 0) {
+				continue;
+			}
+			if (!text.isEmpty()) {
+				text.append(", ");
+			}
+			text.append(ContainerUtils.formatStackBreakdown(entry.getValue())).append(' ').append(ContainerUtils.getItemName(entry.getKey()));
+		}
+		return text.toString();
+	}
+
+	private static String describeCountsForLog(Map<String, Integer> byItem) {
+		StringBuilder text = new StringBuilder();
+		for (Map.Entry<String, Integer> entry : byItem.entrySet()) {
+			if (!text.isEmpty()) {
+				text.append(',');
+			}
+			text.append(entry.getKey().replace("minecraft:", "")).append(':').append(entry.getValue());
+		}
+		return text.isEmpty() ? "none" : text.toString();
 	}
 
 	/**
@@ -499,7 +618,7 @@ final class ExistingOutputRetrievalSession extends BaseCraftSession {
 		int ejectClicks = 0;
 		int splitMoves = 0;
 
-		List<Slot> sources = sortedMatchingContainerSources(menu, request.outputItemId());
+		List<Slot> sources = sortedMatchingContainerSources(menu, currentItemId);
 		for (Slot sourceSlot : sources) {
 			if (stillNeeded <= 0 || blockedByInventory) {
 				break;
@@ -524,7 +643,7 @@ final class ExistingOutputRetrievalSession extends BaseCraftSession {
 					break;
 				}
 
-				fills.add(new WithdrawalPlan.PlannedMove(sourceSlot, targetSlot, request.outputItemId(), moveCount));
+				fills.add(new WithdrawalPlan.PlannedMove(sourceSlot, targetSlot, currentItemId, moveCount));
 				virtualPlayerStacks.put(targetSlot.index, sourceStack.copyWithCount(currentTargetCount + moveCount));
 				plannedFromSource.merge(sourceSlot.index, moveCount, Integer::sum);
 				if (moveCount != sourceStack.getCount()) {
@@ -633,8 +752,14 @@ final class ExistingOutputRetrievalSession extends BaseCraftSession {
 		}
 		retrievedCount += moved;
 		ejectedCount += ejected;
+		if (moved > 0) {
+			retrievedByItem.merge(currentItemId, moved, Integer::sum);
+		}
+		if (ejected > 0) {
+			ejectedByItem.merge(currentItemId, ejected, Integer::sum);
+		}
 		remainingCount = Math.max(remainingCount - total, 0);
-		NearbyContainerCache.applyWithdrawals(level, pendingContainerPos, Map.of(request.outputItemId(), total));
+		NearbyContainerCache.applyWithdrawals(level, pendingContainerPos, Map.of(currentItemId, total));
 		if (remainingCount > 0) {
 			inventorySpaceBlocked = !inventoryHasRoom(player.containerMenu);
 		}
@@ -642,9 +767,9 @@ final class ExistingOutputRetrievalSession extends BaseCraftSession {
 
 	/** True if any player slot could take at least one more of the requested item. */
 	private boolean inventoryHasRoom(AbstractContainerMenu menu) {
-		ItemStack sample = request.displayStack().isEmpty()
+		ItemStack sample = currentDisplayStack.isEmpty()
 			? ItemStack.EMPTY
-			: request.displayStack().copyWithCount(1);
+			: currentDisplayStack.copyWithCount(1);
 		for (Slot slot : menu.slots) {
 			if (!(slot.container instanceof Inventory)) {
 				continue;

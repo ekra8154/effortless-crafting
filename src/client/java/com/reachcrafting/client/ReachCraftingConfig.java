@@ -56,7 +56,7 @@ public final class ReachCraftingConfig {
 	private static final boolean DEFAULT_EJECT_ITEMS_WHEN_FULL = true;
 	private static final AutoCraftCapability DEFAULT_AUTO_CRAFT_CAPABILITY = AutoCraftCapability.BULK;
 	private static final boolean DEFAULT_AUTO_CRAFT_OFF_AFTER_BULK = false;
-	private static final boolean DEFAULT_BULK_VARIANT_SWITCHING = false;
+	private static final boolean DEFAULT_OUTPUT_VARIANT_SWITCHING = false;
 	private static final AutoCraftHandling DEFAULT_AUTO_CRAFT_HANDLING = AutoCraftHandling.HOLD;
 	private static final ChainCraftingMode DEFAULT_CHAIN_CRAFTING_MODE = ChainCraftingMode.CONFIRM;
 	private static final boolean DEFAULT_ENABLE_BULK_CHAIN_CRAFTING = true;
@@ -130,7 +130,7 @@ public final class ReachCraftingConfig {
 	private boolean ejectItemsWhenFull;
 	private AutoCraftCapability autoCraftCapability;
 	private boolean autoCraftOffAfterBulk;
-	private boolean bulkVariantSwitching;
+	private boolean outputVariantSwitching;
 	private AutoCraftHandling autoCraftHandling;
 	private ChainCraftingMode chainCraftingMode;
 	private boolean enableBulkChainCrafting;
@@ -217,7 +217,9 @@ public final class ReachCraftingConfig {
 			instance.autoCraftEnabledMode = stored.autoCraftEnabledMode != null ? stored.autoCraftEnabledMode : DEFAULT_AUTO_CRAFT_ENABLED_MODE;
 			instance.autoCraftCapability = stored.autoCraftCapability != null ? stored.autoCraftCapability : (stored.enableEnablingBulkMode != null ? (stored.enableEnablingBulkMode ? AutoCraftCapability.BULK : AutoCraftCapability.NORMAL) : DEFAULT_AUTO_CRAFT_CAPABILITY);
 			instance.autoCraftOffAfterBulk = stored.autoCraftOffAfterBulk != null ? stored.autoCraftOffAfterBulk : DEFAULT_AUTO_CRAFT_OFF_AFTER_BULK;
-			instance.bulkVariantSwitching = stored.bulkVariantSwitching != null ? stored.bulkVariantSwitching : DEFAULT_BULK_VARIANT_SWITCHING;
+			// Renamed from bulkVariantSwitching (it now governs retrieval too); read the old key once.
+			instance.outputVariantSwitching = stored.outputVariantSwitching != null ? stored.outputVariantSwitching
+				: stored.bulkVariantSwitching != null ? stored.bulkVariantSwitching : DEFAULT_OUTPUT_VARIANT_SWITCHING;
 			instance.autoCraftHandling = stored.autoCraftHandling != null ? stored.autoCraftHandling : DEFAULT_AUTO_CRAFT_HANDLING;
 			instance.chainCraftingMode = stored.chainCraftingMode != null ? stored.chainCraftingMode : DEFAULT_CHAIN_CRAFTING_MODE;
 			instance.enableBulkChainCrafting = stored.enableBulkChainCrafting != null ? stored.enableBulkChainCrafting : DEFAULT_ENABLE_BULK_CHAIN_CRAFTING;
@@ -598,12 +600,12 @@ public final class ReachCraftingConfig {
 		this.autoCraftOffAfterBulk = autoCraftOffAfterBulk;
 	}
 
-	public boolean bulkVariantSwitching() {
-		return bulkVariantSwitching;
+	public boolean outputVariantSwitching() {
+		return outputVariantSwitching;
 	}
 
-	public void setBulkVariantSwitching(boolean bulkVariantSwitching) {
-		this.bulkVariantSwitching = bulkVariantSwitching;
+	public void setOutputVariantSwitching(boolean outputVariantSwitching) {
+		this.outputVariantSwitching = outputVariantSwitching;
 	}
 
 	public AutoCraftHandling autoCraftHandling() {
@@ -937,7 +939,7 @@ public final class ReachCraftingConfig {
 		defaults.ejectItemsWhenFull = DEFAULT_EJECT_ITEMS_WHEN_FULL;
 		defaults.autoCraftCapability = DEFAULT_AUTO_CRAFT_CAPABILITY;
 		defaults.autoCraftOffAfterBulk = DEFAULT_AUTO_CRAFT_OFF_AFTER_BULK;
-		defaults.bulkVariantSwitching = DEFAULT_BULK_VARIANT_SWITCHING;
+		defaults.outputVariantSwitching = DEFAULT_OUTPUT_VARIANT_SWITCHING;
 		defaults.autoCraftHandling = DEFAULT_AUTO_CRAFT_HANDLING;
 		defaults.chainCraftingMode = DEFAULT_CHAIN_CRAFTING_MODE;
 		defaults.enableBulkChainCrafting = DEFAULT_ENABLE_BULK_CHAIN_CRAFTING;
@@ -1200,6 +1202,8 @@ public final class ReachCraftingConfig {
 		private AutoCraftMode autoCraftEnabledMode;
 		private AutoCraftCapability autoCraftCapability;
 		private Boolean autoCraftOffAfterBulk;
+		private Boolean outputVariantSwitching;
+		/** Legacy key, read only; never written back. */
 		private Boolean bulkVariantSwitching;
 		private AutoCraftHandling autoCraftHandling;
 		private ChainCraftingMode chainCraftingMode;
@@ -1260,7 +1264,7 @@ public final class ReachCraftingConfig {
 			this.autoCraftEnabledMode = config.autoCraftEnabledMode;
 			this.autoCraftCapability = config.autoCraftCapability;
 			this.autoCraftOffAfterBulk = config.autoCraftOffAfterBulk;
-			this.bulkVariantSwitching = config.bulkVariantSwitching;
+			this.outputVariantSwitching = config.outputVariantSwitching;
 			this.autoCraftHandling = config.autoCraftHandling;
 			this.chainCraftingMode = config.chainCraftingMode;
 			this.enableBulkChainCrafting = config.enableBulkChainCrafting;

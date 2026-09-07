@@ -948,7 +948,7 @@ final class RecipeClickExecutor {
 			return;
 		}
 
-		boolean keepFamilyContinuation = ReachCraftingConfig.get().bulkVariantSwitching();
+		boolean keepFamilyContinuation = ReachCraftingConfig.get().outputVariantSwitching();
 		RecipeDisplayId continuationRecipeId = keepFamilyContinuation ? clickedRecipeId : recipeId;
 		BulkAutoCraftController.VariantContinuationMode continuationMode;
 		if (!keepFamilyContinuation) {
