@@ -1,5 +1,7 @@
 package com.reachcrafting.client;
 
+import com.reachcrafting.ReachCraftingMod;
+
 import java.util.Map;
 import java.util.WeakHashMap;
 import com.reachcrafting.client.mixin.PopupScreenAccessor;
@@ -171,6 +173,7 @@ public final class ChainCraftPopupController {
 			return;
 		}
 
+		ReachCraftingMod.diag("[chain_popup] title={} message={}", title.getString(), message.getString());
 		PopupScreen popup = new PopupScreen.Builder(
 			background,
 			title

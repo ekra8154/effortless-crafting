@@ -553,12 +553,16 @@ final class RecipeClickExecutor {
 					}
 					int variantTotalCopies = planCopies;
 					if (moreWanted) {
+						// chainAvailableCounts, not availableCounts: the latter only
+						// holds the CLICKED recipe's ingredients (crimson planks),
+						// so every other variant planned against it came up empty
+						// and the prompt fell back to the single-variant wording.
 						variantTotalCopies += otherVariantChainCopies(
 							minecraft,
 							player,
 							chainVariantCandidates,
 							chainSelection,
-							availableCounts,
+							chainAvailableCounts,
 							allowNearbyChests,
 							chainMaxRequest ? bulkRecipeQueueLimit() : remainingAfterPlan
 						);
