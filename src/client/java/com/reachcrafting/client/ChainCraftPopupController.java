@@ -123,12 +123,40 @@ public final class ChainCraftPopupController {
 		boolean maxRequest,
 		String deferredMissingMessage
 	) {
+		handleBulkChainPlan(plan, selection, allowNearby, requestedRecipeCopies, maxRequest, deferredMissingMessage, null, plan != null ? plan.finalRecipeCopies() : 0);
+	}
+
+	/**
+	 * {@code family} non-null means Output Variant Switching may carry the
+	 * session onto other variants; {@code variantTotalCopies} is what the
+	 * whole family can reach (each variant planned on its own, an upper
+	 * bound), used for the prompt and to size a count request's target.
+	 */
+	static void handleBulkChainPlan(
+		ChainCraftPlan plan,
+		RecipeVariantResolver.Selection selection,
+		boolean allowNearby,
+		int requestedRecipeCopies,
+		boolean maxRequest,
+		String deferredMissingMessage,
+		BulkChainCraftController.VariantFamily family,
+		int variantTotalCopies
+	) {
 		ReachCraftingConfig.ChainCraftingMode mode = ReachCraftingConfig.get().chainCraftingMode();
 		if (mode == ReachCraftingConfig.ChainCraftingMode.DISABLED || plan == null || selection == null) {
 			return;
 		}
-		boolean downgraded = !maxRequest && requestedRecipeCopies > plan.finalRecipeCopies();
-		// A single-step plan is pure direct crafting — the case the yellow
+		boolean switching = family != null && variantTotalCopies > plan.finalRecipeCopies();
+		// With switching, a max request keeps going until no variant is
+		// left (uncapped target); a count request aims for the count, capped
+		// at what the family can reach.
+		int targetCopies = !switching
+			? plan.finalRecipeCopies()
+			: maxRequest
+				? RecipeClickExecutor.bulkRecipeQueueLimit()
+				: Math.min(requestedRecipeCopies, variantTotalCopies);
+		boolean downgraded = !maxRequest && requestedRecipeCopies > (switching ? variantTotalCopies : plan.finalRecipeCopies());
+		// A single-step plan is pure direct crafting, the case the yellow
 		// craftable indicator promises needs no chaining. Flat bulk max never
 		// prompts for that, so neither does bulk chain; the per-iteration
 		// replans still add conversion steps later if directs run dry.
@@ -136,13 +164,31 @@ public final class ChainCraftPopupController {
 			if (downgraded) {
 				ReachCraftingModClient.sendChainCraftChat(bulkAlwaysPartialMessage(plan, requestedRecipeCopies).getString());
 			}
-			BulkChainCraftController.start(selection, allowNearby, plan.finalRecipeCopies());
+			BulkChainCraftController.start(selection, allowNearby, targetCopies, family);
 			return;
 		}
 
+		Component message = switching
+			? bulkVariantMessageFor(plan, requestedRecipeCopies, maxRequest, variantTotalCopies)
+			: bulkMessageFor(plan, requestedRecipeCopies, maxRequest);
 		showConfirmPopup(
-			bulkMessageFor(plan, requestedRecipeCopies, maxRequest),
-			new PendingPopup(null, deferredMissingMessage, new BulkChainRequest(selection, allowNearby, plan.finalRecipeCopies()), null, null)
+			message,
+			new PendingPopup(null, deferredMissingMessage, new BulkChainRequest(selection, allowNearby, targetCopies, family), null, null)
+		);
+	}
+
+	private static Component bulkVariantMessageFor(ChainCraftPlan plan, int requestedRecipeCopies, boolean maxRequest, int variantTotalCopies) {
+		int outputPerCraft = Math.max(plan.finalOutput().getCount(), 1);
+		if (maxRequest) {
+			return Component.translatable(
+				"popup.reachcrafting.chain_crafting.bulk_variant_max_message",
+				variantTotalCopies * outputPerCraft
+			);
+		}
+		return Component.translatable(
+			"popup.reachcrafting.chain_crafting.bulk_variant_message",
+			variantTotalCopies * outputPerCraft,
+			requestedRecipeCopies * outputPerCraft
 		);
 	}
 
@@ -337,7 +383,7 @@ public final class ChainCraftPopupController {
 		if (pendingBulkChainStart != null) {
 			BulkChainRequest request = pendingBulkChainStart;
 			pendingBulkChainStart = null;
-			BulkChainCraftController.start(request.selection(), request.allowNearby(), request.targetCopies());
+			BulkChainCraftController.start(request.selection(), request.allowNearby(), request.targetCopies(), request.family());
 			return;
 		}
 		ChainCraftPlan plan = pendingStartPlan;
@@ -357,6 +403,6 @@ public final class ChainCraftPopupController {
 	private record PendingPopup(ChainCraftPlan plan, String deferredMissingMessage, BulkChainRequest bulkChain, Runnable onConfirm, Runnable onCancel) {
 	}
 
-	private record BulkChainRequest(RecipeVariantResolver.Selection selection, boolean allowNearby, int targetCopies) {
+	private record BulkChainRequest(RecipeVariantResolver.Selection selection, boolean allowNearby, int targetCopies, BulkChainCraftController.VariantFamily family) {
 	}
 }

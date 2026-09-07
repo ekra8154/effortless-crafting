@@ -497,24 +497,6 @@ final class RecipeClickExecutor {
 					allowNearbyChests,
 					AutoCraftController.isBulkModeEnabled()
 				);
-				if (AutoCraftController.isBulkModeEnabled()) {
-					if (!ReachCraftingConfig.get().enableBulkChainCrafting()) {
-						ReachCraftingModClient.sendChat(net.minecraft.network.chat.Component.translatable("message.reachcrafting.chain_crafting.bulk_unsupported").getString());
-						return;
-					}
-					ChainCraftPopupController.handleBulkChainPlan(
-						chainPlan,
-						chainSelection,
-						allowNearbyChests,
-						chainOffer.get().requestedRecipeCopies(),
-						chainOffer.get().maxRequest(),
-						chainMissingMessage
-					);
-					return;
-				}
-				int popupRequestedCopies = chainOffer.get().maxRequest()
-					? chainPlan.finalRecipeCopies()
-					: chainOffer.get().requestedRecipeCopies();
 				// Output variant switching across chain crafts: the gate is
 				// bulk's rule applied to the variant the CHAIN chose (the
 				// direct resolver kept the clicked one because nothing was
@@ -528,6 +510,50 @@ final class RecipeClickExecutor {
 					&& collection.getRecipes().size() > 1
 					&& BulkAutoCraftController.determineVariantContinuationMode(recipeId, chainSelection.recipeId(), explicitVariantSelection)
 						== BulkAutoCraftController.VariantContinuationMode.FAMILY_FALLBACK;
+				if (AutoCraftController.isBulkModeEnabled()) {
+					if (!ReachCraftingConfig.get().enableBulkChainCrafting()) {
+						ReachCraftingModClient.sendChat(net.minecraft.network.chat.Component.translatable("message.reachcrafting.chain_crafting.bulk_unsupported").getString());
+						return;
+					}
+					BulkChainCraftController.VariantFamily bulkFamily = null;
+					int bulkVariantTotal = chainPlan.finalRecipeCopies();
+					if (chainVariantSwitching) {
+						boolean bulkMax = chainOffer.get().maxRequest();
+						int wanted = bulkMax
+							? bulkRecipeQueueLimit()
+							: chainOffer.get().requestedRecipeCopies() - chainPlan.finalRecipeCopies();
+						if (wanted > 0) {
+							bulkVariantTotal += otherVariantChainCopies(
+								minecraft,
+								player,
+								chainVariantCandidates,
+								chainSelection,
+								chainAvailableCounts,
+								allowNearbyChests,
+								wanted
+							);
+						}
+						bulkFamily = new BulkChainCraftController.VariantFamily(
+							recipeId,
+							collection,
+							displayStack != null ? displayStack.copy() : ItemStack.EMPTY
+						);
+					}
+					ChainCraftPopupController.handleBulkChainPlan(
+						chainPlan,
+						chainSelection,
+						allowNearbyChests,
+						chainOffer.get().requestedRecipeCopies(),
+						chainOffer.get().maxRequest(),
+						chainMissingMessage,
+						bulkFamily,
+						bulkVariantTotal
+					);
+					return;
+				}
+				int popupRequestedCopies = chainOffer.get().maxRequest()
+					? chainPlan.finalRecipeCopies()
+					: chainOffer.get().requestedRecipeCopies();
 				if (chainVariantSwitching) {
 					boolean chainMaxRequest = chainOffer.get().maxRequest();
 					int planCopies = chainPlan.finalRecipeCopies();
