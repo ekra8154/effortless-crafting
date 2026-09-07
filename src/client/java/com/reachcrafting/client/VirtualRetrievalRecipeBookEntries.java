@@ -185,8 +185,15 @@ public final class VirtualRetrievalRecipeBookEntries {
 		return syntheticCollectionFor(itemId, item, displayCount, hasLiveNearbyBacking, categoryFor(item, itemId));
 	}
 
+	/**
+	 * Membership, not a range: real recipe display ids are not guaranteed
+	 * small (a singleplayer world handed out 1326191332 for a stained glass
+	 * pane), and a range test made that click read as a synthetic entry, so
+	 * it retrieved the collection's first colour instead of the clicked one.
+	 */
 	static boolean isSyntheticRecipeId(RecipeDisplayId recipeId) {
-		return recipeId != null && recipeId.index() >= SYNTHETIC_RECIPE_ID_BASE;
+		return recipeId != null
+			&& (LIVE_SYNTHETIC_RECIPE_IDS.contains(recipeId.index()) || PERSISTENT_SYNTHETIC_RECIPE_IDS.contains(recipeId.index()));
 	}
 
 	static boolean hasLiveNearbyBacking(RecipeDisplayId recipeId) {
