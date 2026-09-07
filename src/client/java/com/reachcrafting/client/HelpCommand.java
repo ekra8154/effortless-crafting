@@ -164,7 +164,7 @@ public final class HelpCommand {
 				"§bNearby crafting (Ctrl):",
 				"§7Ctrl§r lets a request use the chests, barrels and shulker boxes within reach as well as your inventory. §7Ctrl + click§r adds one; §7Ctrl + scroll§r queues an amount and sends it when Ctrl is released; §7Ctrl + Shift + click§r is a max craft from nearby storage.",
 				"§7What happens:§r materials are pulled from chests into the grid, the craft is staged, and anything left over goes back where it came from when you close the grid.",
-				"§7The dots§r on a recipe say what a Ctrl click would do: a filled dot crafts from your inventory alone, a plus shape will open chests. Yellow is a direct craft, orange a chain craft.",
+				"§7The dots§r on a recipe say what a Ctrl click would do: a filled dot crafts from your inventory alone, a plus shape means nearby chests are needed. Yellow is a direct craft, orange a chain craft.",
 				"§7First look is slow, later ones fast:§r container contents are remembered, so the first request walks each chest once and later requests know where things are.",
 				"§7Keep a chest out of it:§r hold Ctrl inside any container and click the dot near the top to blacklist (or whitelist) it. Whole container types can be excluded in settings.",
 				"§8Settings: Nearby Container Usage (While Ctrl Held / Always On), Nearby Container Caching, Container Drain Order, In-World Black/Whitelist, Blacklisted Container Types.",
