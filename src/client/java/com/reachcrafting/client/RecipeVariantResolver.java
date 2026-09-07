@@ -590,25 +590,28 @@ public final class RecipeVariantResolver {
 		return List.copyOf(grouped.values());
 	}
 
+	/**
+	 * What a retrieval can actually pull: nearby container stock ONLY. The
+	 * player's own inventory used to be merged in, so after one max pull of
+	 * jungle stairs the next click still "preferred" jungle (it was in the
+	 * inventory), searched the chests for it, and reported nothing nearby
+	 * while oak stairs sat there untouched.
+	 */
 	private static Map<String, Integer> retrievalOutputTotals(
 		Minecraft minecraft,
 		LocalPlayer player,
 		AvailableItemSnapshot availableItems
 	) {
-		Map<String, Integer> totals = availableItems.totalCounts();
 		if (!ReachCraftingConfig.get().enableNearbyContainerUsage()
 			|| minecraft.level == null
 			|| minecraft.getCameraEntity() == null) {
-			return totals;
+			return Map.of();
 		}
-		return AvailableItemSnapshot.mergeCounts(
-			totals,
-			NearbyContainerCache.getReachableView(
-				minecraft.level,
-				minecraft.getCameraEntity(),
-				player.blockInteractionRange()
-			).aggregateCounts()
-		);
+		return NearbyContainerCache.getReachableView(
+			minecraft.level,
+			minecraft.getCameraEntity(),
+			player.blockInteractionRange()
+		).aggregateCounts();
 	}
 
 	private static RecipeDisplayEntry findEntry(
