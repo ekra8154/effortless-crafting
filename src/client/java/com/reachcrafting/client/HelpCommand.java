@@ -156,7 +156,7 @@ public final class HelpCommand {
 				"§7Hover a recipe, hold Shift, scroll§r to set how many, then release Shift to send it. The counter on the recipe shows the queued amount.",
 				"§7Space§r while scrolling counts by 16. §7Right click or Esc§r before releasing cancels the queue.",
 				"§7Shift + click§r is still vanilla's max craft: as much as fits in the grid at once.",
-				"§7Inventory only.§r A plain Shift request uses what you carry. Add §fCtrl§r to let it pull from nearby chests, or §fAlt§r to have the result crafted for you.",
+				"§7Inventory only.§r A Shift request uses what you carry. Hold §fCtrl§r instead (or as well) to let it pull from nearby chests, or §fAlt§r to have the result crafted for you.",
 				"§7Revolving recipes§r (oak fence / spruce fence on one button) craft the variant shown, under §fRevolving Craft Handling§r. Right click the recipe for vanilla's variant menu when you want one exact variant.",
 				"§8Settings: Input Counter Visibility, Revolving Craft Handling, Count Preference.",
 			});
