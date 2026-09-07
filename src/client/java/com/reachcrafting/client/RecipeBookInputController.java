@@ -164,6 +164,14 @@ final class RecipeBookInputController {
 				? displayStack.copy()
 				: syntheticDisplayStack(minecraft, collection, recipeId);
 			int requestedCount = VirtualRetrievalRecipeBookEntries.requestCountForSynthetic(syntheticStack, shiftModifierDown);
+			com.reachcrafting.ReachCraftingMod.diag(
+				"[recipe_input] synthetic_click recipe={} button_stack={} resolved_stack={} shift={} collection_ids={}",
+				recipeId,
+				ContainerUtils.formatStack(displayStack != null ? displayStack : ItemStack.EMPTY),
+				ContainerUtils.formatStack(syntheticStack),
+				shiftModifierDown,
+				collection == null ? "null" : collection.getRecipes().stream().map(entry -> String.valueOf(entry.id().index())).toList()
+			);
 			VirtualRetrievalRecipeBookEntries.startRetrievalForSynthetic(recipeId, syntheticStack, requestedCount);
 			return;
 		}
