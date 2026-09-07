@@ -213,6 +213,7 @@ Retrieval Mode is the explicit form of the above: every recipe click retrieves i
 ### Extra Controls
 
 - **Quick Craft hotkey**: `B` by default opens a nearby 3x3 crafting table when possible, otherwise falls back to the 2x2 inventory grid and focuses search.
+- **In-game help**: `/effortlesscrafting help` lists short pages for queuing, nearby crafting, autocrafting, chain, bulk, bulk chain, Retrieval Mode, and retrieve-then-craft (`/effortlesscrafting help bulk`); `/effortlesscrafting tips` collects the easy-to-miss shortcuts; `/effortlesscrafting settings` opens the settings screen without Mod Menu or a keybind. Pages replace each other in chat, so clicking through them navigates instead of piling up.
 
 ---
 

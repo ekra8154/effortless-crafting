@@ -245,6 +245,15 @@ public final class ReproHarness {
 				}
 				openNearestCraftingTable(client);
 			}
+			case "cmd" -> {
+				// The /effortlesscrafting help pages, driven the way the command
+				// handlers are: "cmd help bulk", "cmd tips", "cmd settings".
+				String rest = parts.length > 1 ? String.join(" ", java.util.Arrays.copyOfRange(parts, 1, parts.length)) : "";
+				HelpCommand.harnessRun(rest);
+				ReachCraftingMod.diag("[repro_harness] cmd executed args='{}'", rest);
+			}
+			case "screen" -> ReachCraftingMod.diag("[repro_harness] screen={}",
+				client.gui.screen() == null ? "null" : client.gui.screen().getClass().getName());
 			case "warmcache" -> {
 				// Scan every uncached container in reach so a following
 				// retrieve runs against a warm cache. Logs "warmup finish"
