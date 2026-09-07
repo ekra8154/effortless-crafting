@@ -36,7 +36,9 @@ final class RetrieveThenCraftController {
 		String outputItemId,
 		ItemStack displayStack,
 		ReachCraftingConfig.ExistingOutputHandling handling,
-		RecipeDisplayId resolvedRecipeId
+		RecipeDisplayId resolvedRecipeId,
+		boolean fillOnly,
+		boolean variantRetried
 	) {
 	}
 
@@ -69,18 +71,20 @@ final class RetrieveThenCraftController {
 		);
 	}
 
-	static void start(FollowUp followUp, boolean fillOnly) {
+	static void start(FollowUp followUp) {
+		boolean fillOnly = followUp.fillOnly();
 		active = followUp;
 		pendingResult = null;
 		pendingReplay = null;
 		ReachCraftingMod.diag(
-			"[retrieve_then_craft] start item={} target={} clicks={} craft_all={} fill_only={} handling={}",
+			"[retrieve_then_craft] start item={} target={} clicks={} craft_all={} fill_only={} handling={} variant_retry={}",
 			followUp.outputItemId(),
 			followUp.targetItems(),
 			followUp.requestedClicks(),
 			followUp.craftAll(),
 			fillOnly,
-			followUp.handling()
+			followUp.handling(),
+			followUp.variantRetried()
 		);
 		NearbyContainerDryRun.startExistingOutputRetrieval(new ExistingOutputRetrievalRequest(
 			followUp.action().recipeId(),
@@ -148,8 +152,23 @@ final class RetrieveThenCraftController {
 			return;
 		}
 		if (retrieved <= 0) {
-			// Nothing nearby after all (cold cache discovered empty chests):
-			// same as the cache shortcut, an ordinary craft of the request.
+			// Nothing of THIS variant nearby. The discovery just warmed the
+			// cache, so the revolving-variant fallback that had nothing to go
+			// on at click time can be asked once more: dark oak stairs
+			// requested, oak stairs found in a chest -> retrieve those.
+			FollowUp alternate = followUp.variantRetried() ? null : resolveAlternateVariant(followUp);
+			if (alternate != null) {
+				ReachCraftingMod.diag(
+					"[retrieve_then_craft] variant_retry from={} to={} target={}",
+					followUp.outputItemId(),
+					alternate.outputItemId(),
+					alternate.targetItems()
+				);
+				start(alternate);
+				return;
+			}
+			// Nothing nearby after all: same as the cache shortcut, an
+			// ordinary craft of the request.
 			scheduleRemainder(followUp, followUp.requestedClicks(), "none_nearby", 0);
 			return;
 		}
@@ -196,6 +215,57 @@ final class RetrieveThenCraftController {
 			}
 			case CRAFT_ONLY -> logComplete(followUp, "craft_only", retrieved, 0);
 		}
+	}
+
+	/** The variant the retrieval resolver picks now that the cache is warm, or null if it is the same one (or none). */
+	private static FollowUp resolveAlternateVariant(FollowUp followUp) {
+		Minecraft client = Minecraft.getInstance();
+		if (client.player == null || client.level == null || client.getCameraEntity() == null) {
+			return null;
+		}
+		java.util.Map<String, Integer> nearbyTotals = NearbyContainerCache.getReachableView(
+			client.level, client.getCameraEntity(), client.player.blockInteractionRange()).aggregateCounts();
+		RecipeVariantResolver.Selection selection = RecipeVariantResolver.resolveRetrievalVariant(
+			client,
+			client.player,
+			followUp.action().recipeId(),
+			followUp.action().collection(),
+			followUp.action().displayStack().copy(),
+			followUp.action().explicitVariantSelection(),
+			true,
+			AvailableItemSnapshot.empty(),
+			nearbyTotals,
+			nearbyTotals,
+			followUp.craftAll(),
+			false,
+			Math.max(followUp.requestedClicks(), 1)
+		);
+		if (selection == null || selection.displayStack().isEmpty()) {
+			return null;
+		}
+		ItemStack stack = selection.displayStack().copy();
+		String itemId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+		if (itemId.equals(followUp.outputItemId()) || nearbyTotals.getOrDefault(itemId, 0) <= 0) {
+			return null;
+		}
+		int outputPerCraft = Math.max(stack.getCount(), 1);
+		int targetItems = followUp.craftAll() ? RecipeClickExecutor.bulkRecipeQueueLimit() : Math.max(followUp.requestedClicks(), 1) * outputPerCraft;
+		return new FollowUp(
+			followUp.action(),
+			followUp.requestedClicks(),
+			followUp.allowNearby(),
+			followUp.craftAll(),
+			followUp.refillableBulkMaxMode(),
+			followUp.autoCraftRequested(),
+			outputPerCraft,
+			targetItems,
+			itemId,
+			stack,
+			followUp.handling(),
+			selection.recipeId(),
+			followUp.fillOnly(),
+			true
+		);
 	}
 
 	private static void scheduleRemainder(FollowUp followUp, int clicks, String outcome, int retrieved) {

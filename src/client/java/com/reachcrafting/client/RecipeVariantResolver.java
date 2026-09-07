@@ -70,6 +70,52 @@ public final class RecipeVariantResolver {
 		boolean allowReservedGridVariantSwitch,
 		int desiredCopiesPerSlot
 	) {
+		return resolve(minecraft, player, clickedRecipeId, collection, clickedDisplayStack, explicitVariantSelection, allowVariantSwitching,
+			availableItems, usableCounts, preferenceTotals, craftAll, allowReservedGridVariantSwitch, desiredCopiesPerSlot, false);
+	}
+
+	/**
+	 * Variant choice for a RETRIEVAL of the output, whatever mode the book is
+	 * in: among the collection's variants, prefer the one whose output is
+	 * actually nearby (per the revolving-variant setting), not the one whose
+	 * ingredients are. Retrieval mode takes this path on its own; the
+	 * retrieve-first step of a craft click and the green dot must ask for it.
+	 */
+	public static Selection resolveRetrievalVariant(
+		Minecraft minecraft,
+		LocalPlayer player,
+		RecipeDisplayId clickedRecipeId,
+		RecipeCollection collection,
+		ItemStack clickedDisplayStack,
+		boolean explicitVariantSelection,
+		boolean allowVariantSwitching,
+		AvailableItemSnapshot availableItems,
+		Map<String, Integer> usableCounts,
+		Map<String, Integer> preferenceTotals,
+		boolean craftAll,
+		boolean allowReservedGridVariantSwitch,
+		int desiredCopiesPerSlot
+	) {
+		return resolve(minecraft, player, clickedRecipeId, collection, clickedDisplayStack, explicitVariantSelection, allowVariantSwitching,
+			availableItems, usableCounts, preferenceTotals, craftAll, allowReservedGridVariantSwitch, desiredCopiesPerSlot, true);
+	}
+
+	private static Selection resolve(
+		Minecraft minecraft,
+		LocalPlayer player,
+		RecipeDisplayId clickedRecipeId,
+		RecipeCollection collection,
+		ItemStack clickedDisplayStack,
+		boolean explicitVariantSelection,
+		boolean allowVariantSwitching,
+		AvailableItemSnapshot availableItems,
+		Map<String, Integer> usableCounts,
+		Map<String, Integer> preferenceTotals,
+		boolean craftAll,
+		boolean allowReservedGridVariantSwitch,
+		int desiredCopiesPerSlot,
+		boolean forceRetrievalSelection
+	) {
 		if (minecraft.level == null) {
 			return null;
 		}
@@ -140,7 +186,7 @@ public final class RecipeVariantResolver {
 			return exactSelection;
 		}
 
-		if (ExistingOutputRetrievalController.isEnabled()) {
+		if (forceRetrievalSelection || ExistingOutputRetrievalController.isEnabled()) {
 			return resolveRetrievalSelection(
 				minecraft,
 				player,

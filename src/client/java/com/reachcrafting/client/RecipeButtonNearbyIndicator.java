@@ -78,10 +78,24 @@ public final class RecipeButtonNearbyIndicator {
 
 	/** Dev harness: the state and retrievable flag for one recipe, as the book would show it. */
 	static String describe(RecipeDisplayId recipe, RecipeCollection collection) {
-		boolean explicit = collection != null && collection.getRecipes().size() > 1;
-		IndicatorState state = indicatorStateForRecipe(recipe, collection, ItemStack.EMPTY, explicit);
-		boolean retrievable = hasRetrievableOutput(recipe, collection, ItemStack.EMPTY, explicit);
-		return "state=" + state + " retrievable=" + retrievable;
+		// Same rules as the page button: a rotating (multi-variant) button
+		// reports the best member's state and "any member retrievable".
+		boolean multi = collection != null && collection.getRecipes().size() > 1;
+		IndicatorState state = multi
+			? resolveCollectionIndicatorState(collection)
+			: indicatorStateForRecipe(recipe, collection, ItemStack.EMPTY, false);
+		boolean retrievable = false;
+		if (multi) {
+			for (RecipeDisplayEntry entry : collection.getRecipes()) {
+				if (hasRetrievableOutput(entry.id(), collection, ItemStack.EMPTY, true)) {
+					retrievable = true;
+					break;
+				}
+			}
+		} else {
+			retrievable = hasRetrievableOutput(recipe, collection, ItemStack.EMPTY, false);
+		}
+		return "state=" + state + " retrievable=" + retrievable + " collection_size=" + (collection != null ? collection.getRecipes().size() : 0);
 	}
 
 	public static void renderButton(net.minecraft.client.gui.GuiGraphicsExtractor guiGraphics, RecipeButton button) {
@@ -330,7 +344,7 @@ public final class RecipeButtonNearbyIndicator {
 			minecraft.getCameraEntity(),
 			player.blockInteractionRange()
 		).aggregateCounts();
-		RecipeVariantResolver.Selection selection = RecipeVariantResolver.resolve(
+		RecipeVariantResolver.Selection selection = RecipeVariantResolver.resolveRetrievalVariant(
 			minecraft,
 			player,
 			recipe,

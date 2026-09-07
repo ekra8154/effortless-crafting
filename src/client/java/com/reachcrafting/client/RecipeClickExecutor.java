@@ -181,13 +181,38 @@ final class RecipeClickExecutor {
 			&& !BulkAutoCraftController.isActive()
 			&& !BulkChainCraftController.isActive()
 			&& !RetrieveThenCraftController.isActive()) {
-			int outputPerCraft = Math.max(resolvedDisplayStack.getCount(), 1);
-			int targetItems = craftAll ? bulkRecipeQueueLimit() : Math.max(requestedClicks, 1) * outputPerCraft;
 			NearbyContainerCache.ReachableView outputView = NearbyContainerCache.getReachableView(minecraft.level, minecraft.getCameraEntity(), player.blockInteractionRange());
-			int nearbyOutput = outputView.aggregateCounts().getOrDefault(resolvedItemId, 0);
+			Map<String, Integer> nearbyTotals = outputView.aggregateCounts();
+			// The variant to RETRIEVE is chosen by which output is nearby (per
+			// the revolving-variant setting), not by which ingredients the
+			// craft resolver found: dark oak stairs requested with oak stairs
+			// in the chest retrieves oak stairs when fallback is allowed.
+			RecipeVariantResolver.Selection retrievalSelection = RecipeVariantResolver.resolveRetrievalVariant(
+				minecraft,
+				player,
+				recipeId,
+				collection,
+				displayStack != null ? displayStack.copy() : ItemStack.EMPTY,
+				explicitVariantSelection,
+				true,
+				AvailableItemSnapshot.empty(),
+				nearbyTotals,
+				nearbyTotals,
+				craftAll,
+				false,
+				desiredVariantCopies
+			);
+			if (retrievalSelection == null || retrievalSelection.displayStack().isEmpty()) {
+				retrievalSelection = selectedRecipe;
+			}
+			ItemStack retrieveStack = retrievalSelection.displayStack().copy();
+			String retrieveItemId = BuiltInRegistries.ITEM.getKey(retrieveStack.getItem()).toString();
+			int outputPerCraft = Math.max(retrieveStack.getCount(), 1);
+			int targetItems = craftAll ? bulkRecipeQueueLimit() : Math.max(requestedClicks, 1) * outputPerCraft;
+			int nearbyOutput = nearbyTotals.getOrDefault(retrieveItemId, 0);
 			boolean cacheComplete = outputView.snapshotsByKey().size() >= outputView.nearestAccessByKey().size();
 			if (nearbyOutput <= 0 && cacheComplete) {
-				RetrieveThenCraftController.logNoneNearby(resolvedItemId, targetItems, outputHandling);
+				RetrieveThenCraftController.logNoneNearby(retrieveItemId, targetItems, outputHandling);
 			} else {
 				RetrieveThenCraftController.start(
 					new RetrieveThenCraftController.FollowUp(
@@ -205,12 +230,13 @@ final class RecipeClickExecutor {
 						autoCraftRequested,
 						outputPerCraft,
 						targetItems,
-						resolvedItemId,
-						resolvedDisplayStack.copy(),
+						retrieveItemId,
+						retrieveStack,
 						outputHandling,
-						selectedRecipe.recipeId()
-					),
-					!AutoCraftController.isBulkModeEnabled()
+						retrievalSelection.recipeId(),
+						!AutoCraftController.isBulkModeEnabled(),
+						false
+					)
 				);
 				if (explicitVariantSelection) {
 					tryCloseOverlayAfterRelease();
