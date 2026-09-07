@@ -80,6 +80,42 @@ public final class ChainCraftPopupController {
 		showConfirmPopup(messageFor(plan, requestedRecipeCopies), new PendingPopup(plan, deferredMissingMessage, null, null, null));
 	}
 
+	/**
+	 * Chain offer for a click that output variant switching may continue on
+	 * other family variants. {@code onConfirm} arms that continuation and
+	 * runs on Yes (or immediately in ALWAYS mode); a decline arms nothing.
+	 */
+	static void handlePlanWithVariantSwitching(ChainCraftPlan plan, int requestedRecipeCopies, String deferredMissingMessage, int variantTotalCopies, Runnable onConfirm) {
+		ReachCraftingConfig.ChainCraftingMode mode = ReachCraftingConfig.get().chainCraftingMode();
+		if (mode == ReachCraftingConfig.ChainCraftingMode.DISABLED || plan == null) {
+			return;
+		}
+		if (mode == ReachCraftingConfig.ChainCraftingMode.ALWAYS) {
+			if (requestedRecipeCopies > plan.finalRecipeCopies()) {
+				ReachCraftingModClient.sendChainCraftChat(alwaysPartialMessage(plan, requestedRecipeCopies).getString());
+			}
+			onConfirm.run();
+			ChainCraftController.start(plan);
+			return;
+		}
+		Component message = variantTotalCopies > plan.finalRecipeCopies()
+			? variantMessageFor(plan, requestedRecipeCopies, variantTotalCopies)
+			: messageFor(plan, requestedRecipeCopies);
+		showConfirmPopup(message, new PendingPopup(plan, deferredMissingMessage, null, onConfirm, null));
+	}
+
+	private static Component variantMessageFor(ChainCraftPlan plan, int requestedRecipeCopies, int variantTotalCopies) {
+		int outputPerCraft = Math.max(plan.finalOutput().getCount(), 1);
+		String itemName = plan.finalOutput().getHoverName().getString();
+		return Component.translatable(
+			"popup.reachcrafting.chain_crafting.variant_message",
+			plan.finalRecipeCopies() * outputPerCraft,
+			itemName,
+			variantTotalCopies * outputPerCraft,
+			requestedRecipeCopies * outputPerCraft
+		);
+	}
+
 	static void handleBulkChainPlan(
 		ChainCraftPlan plan,
 		RecipeVariantResolver.Selection selection,
@@ -257,9 +293,10 @@ public final class ChainCraftPopupController {
 		}
 		if (pending.onConfirm() != null) {
 			pending.onConfirm().run();
-		} else if (pending.bulkChain() != null) {
+		}
+		if (pending.bulkChain() != null) {
 			pendingBulkChainStart = pending.bulkChain();
-		} else {
+		} else if (pending.plan() != null) {
 			pendingStartPlan = pending.plan();
 		}
 		popup.onClose();

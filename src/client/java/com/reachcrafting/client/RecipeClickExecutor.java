@@ -302,21 +302,21 @@ final class RecipeClickExecutor {
 			&& collection.getRecipes().size() > 1
 			&& BulkAutoCraftController.determineVariantContinuationMode(recipeId, selectedRecipe.recipeId(), explicitVariantSelection)
 				== BulkAutoCraftController.VariantContinuationMode.FAMILY_FALLBACK;
+		RecipeBookClickCapture.HeldRecipeAction continuationAction = new RecipeBookClickCapture.HeldRecipeAction(
+			recipeId,
+			collection,
+			displayStack != null ? displayStack.copy() : ItemStack.EMPTY,
+			mouseButton,
+			explicitVariantSelection
+		);
+		// A continuation pass with nothing directly craftable may still chain
+		// craft the next variant (logs -> planks -> stairs); the run only ends
+		// once the chain offer below comes up empty too.
+		boolean continuationExhausted = false;
 		if (variantContinuationEligible) {
 			int possibleCopies = deficitReport.possibleCopies();
-			RecipeBookClickCapture.HeldRecipeAction continuationAction = new RecipeBookClickCapture.HeldRecipeAction(
-				recipeId,
-				collection,
-				displayStack != null ? displayStack.copy() : ItemStack.EMPTY,
-				mouseButton,
-				explicitVariantSelection
-			);
 			if (possibleCopies <= 0) {
-				if (continuationPass) {
-					OutputVariantContinuationController.end("no_viable_variant", resolvedItemId);
-					ReachCraftingModClient.sendDebugChat("Output variant switching: no craftable variant left.");
-					return;
-				}
+				continuationExhausted = continuationPass;
 			} else if (effectiveCraftAll) {
 				OutputVariantContinuationController.arm(continuationAction, -1, true, allowNearbyChests, autoCraftRequested, continuationPass, resolvedItemId, possibleCopies);
 			} else if (possibleCopies < effectiveRequestedClicks) {
@@ -515,7 +515,66 @@ final class RecipeClickExecutor {
 				int popupRequestedCopies = chainOffer.get().maxRequest()
 					? chainPlan.finalRecipeCopies()
 					: chainOffer.get().requestedRecipeCopies();
+				// Output variant switching across chain crafts: the gate is
+				// bulk's rule applied to the variant the CHAIN chose (the
+				// direct resolver kept the clicked one because nothing was
+				// directly craftable). The prompt reports what every family
+				// variant can cover together; after this variant's chain
+				// finishes, the continuation replays the click and the next
+				// variant chains without asking again.
+				boolean chainVariantSwitching = ReachCraftingConfig.get().outputVariantSwitching()
+					&& !explicitVariantSelection
+					&& collection != null
+					&& collection.getRecipes().size() > 1
+					&& BulkAutoCraftController.determineVariantContinuationMode(recipeId, chainSelection.recipeId(), explicitVariantSelection)
+						== BulkAutoCraftController.VariantContinuationMode.FAMILY_FALLBACK;
+				if (chainVariantSwitching) {
+					boolean chainMaxRequest = chainOffer.get().maxRequest();
+					int planCopies = chainPlan.finalRecipeCopies();
+					int requestedCopies = chainOffer.get().requestedRecipeCopies();
+					int remainingAfterPlan = chainMaxRequest ? -1 : requestedCopies - planCopies;
+					boolean moreWanted = chainMaxRequest || remainingAfterPlan > 0;
+					String chainItemId = BuiltInRegistries.ITEM.getKey(chainPlan.finalOutput().getItem()).toString();
+					boolean thisPassIsContinuation = continuationPass;
+					Runnable armContinuation = () -> {
+						if (moreWanted) {
+							OutputVariantContinuationController.arm(continuationAction, remainingAfterPlan, chainMaxRequest, allowNearbyChests, autoCraftRequested, thisPassIsContinuation, chainItemId, planCopies);
+						} else if (thisPassIsContinuation) {
+							OutputVariantContinuationController.end("satisfied", chainItemId);
+						}
+					};
+					if (continuationPass) {
+						armContinuation.run();
+						ReachCraftingModClient.sendChat("Output variant switching: chain crafting "
+							+ (planCopies * Math.max(chainPlan.finalOutput().getCount(), 1)) + " "
+							+ chainPlan.finalOutput().getHoverName().getString() + ".");
+						ChainCraftController.start(chainPlan);
+						return;
+					}
+					int variantTotalCopies = planCopies;
+					if (moreWanted) {
+						variantTotalCopies += otherVariantChainCopies(
+							minecraft,
+							player,
+							chainVariantCandidates,
+							chainSelection,
+							availableCounts,
+							allowNearbyChests,
+							chainMaxRequest ? bulkRecipeQueueLimit() : remainingAfterPlan
+						);
+						if (!chainMaxRequest) {
+							variantTotalCopies = Math.min(variantTotalCopies, requestedCopies);
+						}
+					}
+					ChainCraftPopupController.handlePlanWithVariantSwitching(chainPlan, popupRequestedCopies, chainMissingMessage, variantTotalCopies, armContinuation);
+					return;
+				}
 				ChainCraftPopupController.handlePlan(chainPlan, popupRequestedCopies, false, chainMissingMessage);
+				return;
+			}
+			if (continuationExhausted) {
+				OutputVariantContinuationController.end("no_viable_variant", resolvedItemId);
+				ReachCraftingModClient.sendDebugChat("Output variant switching: no craftable variant left.");
 				return;
 			}
 			ReachCraftingMod.diag(
@@ -1089,6 +1148,43 @@ final class RecipeClickExecutor {
 	 * the planner can actually build. The clicked variant always leads, so a
 	 * collection that chains on its own recipe never gets swapped away from.
 	 */
+	/**
+	 * How many more copies the OTHER family variants could chain craft, each
+	 * planned on its own against the same materials (an upper bound when
+	 * variants share inputs; the prompt says "up to"). Capped at the copies
+	 * still wanted so a huge family does not plan more than it needs.
+	 */
+	private static int otherVariantChainCopies(
+		Minecraft minecraft,
+		LocalPlayer player,
+		List<RecipeVariantResolver.Selection> candidates,
+		RecipeVariantResolver.Selection chosen,
+		Map<String, Integer> availableCounts,
+		boolean allowNearbyChests,
+		int copiesWanted
+	) {
+		int total = 0;
+		for (RecipeVariantResolver.Selection candidate : candidates) {
+			if (candidate == null || candidate.recipeId().equals(chosen.recipeId()) || total >= copiesWanted) {
+				continue;
+			}
+			Optional<ChainCraftOffer> offer = planChainCraftOfferFor(
+				minecraft,
+				player,
+				candidate,
+				availableCounts,
+				allowNearbyChests,
+				true,
+				Math.max(copiesWanted - total, 1),
+				Math.max(copiesWanted - total, 1)
+			);
+			if (offer.isPresent()) {
+				total += offer.get().plan().finalRecipeCopies();
+			}
+		}
+		return Math.min(total, copiesWanted);
+	}
+
 	private static Optional<ChainCraftOffer> planChainCraftOffer(
 		Minecraft minecraft,
 		LocalPlayer player,

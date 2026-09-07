@@ -111,6 +111,7 @@ Chain crafting extends autocraft by working backward through craftable dependenc
 - **Partial fallback**: If the full requested amount cannot be crafted but at least one final output can, the mod can offer to craft the possible amount instead.
 - **Conservative execution**: Intermediate results go into your inventory, and each step still uses the normal autocraft placement and validation path.
 - **Bulk chain crafting**: Bulk requests that need intermediates start a bulk chain session (see below) instead of being rejected.
+- **Across variants**: With **Output Variant Switching** on, a chain offer reports what every family variant can reach together (pale oak stairs requested with five kinds of logs on hand), and after the first variant's chain finishes the next variant chains without asking again.
 
 ---
 
