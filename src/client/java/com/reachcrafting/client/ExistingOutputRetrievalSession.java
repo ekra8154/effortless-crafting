@@ -67,6 +67,8 @@ final class ExistingOutputRetrievalSession extends BaseCraftSession {
 	// cold-cache discovery that finds nothing is not a surprise and gets no
 	// "nothing nearby" chat; a cache that said otherwise does.
 	private final boolean expectedNearby;
+	/** The one cold-cache re-resolution per session has been spent. */
+	private boolean variantRetried;
 	private int nextCandidateIndex;
 	private int timeoutTicks;
 	private int reopenAttemptsRemaining;
@@ -155,7 +157,7 @@ final class ExistingOutputRetrievalSession extends BaseCraftSession {
 				return;
 			}
 			if (!openNextContainer()) {
-				if (trySwitchVariant()) {
+				if (tryColdCacheVariantRetry() || trySwitchVariant()) {
 					return;
 				}
 				beginResume();
@@ -522,6 +524,107 @@ final class ExistingOutputRetrievalSession extends BaseCraftSession {
 	}
 
 	/**
+	 * The click was resolved against whatever the container cache knew at
+	 * the time. On a cold cache that is nothing, so the revolving-variant
+	 * rule (prefer clicked, count fallback; always by count) had no counts
+	 * to fall back on and kept the clicked variant. The pass just walked
+	 * every container and found none of it, but it also warmed the cache:
+	 * ask the same resolver once more with real counts, and if it now names
+	 * a different family variant that IS nearby, retrieve that instead. This
+	 * is the revolving setting doing its job late, not Output Variant
+	 * Switching, so it runs regardless of that toggle; Current Variant Only
+	 * and explicit picks stay strict inside the resolver.
+	 */
+	private boolean tryColdCacheVariantRetry() {
+		if (variantRetried || retrievedCount > 0 || ejectedCount > 0 || variantSwitches > 0 || remainingCount <= 0) {
+			return false;
+		}
+		variantRetried = true;
+		if (request.explicitVariantSelection()
+			|| request.recipeCollection() == null
+			|| request.recipeCollection().getRecipes().size() <= 1
+			|| VirtualRetrievalRecipeBookEntries.isSyntheticRecipeId(request.requestedRecipeId())) {
+			return false;
+		}
+		NearbyContainerCache.ReachableView view = NearbyContainerCache.getReachableView(level, cameraEntity, player.blockInteractionRange());
+		Map<String, Integer> totals = view.aggregateCounts();
+		RecipeVariantResolver.Selection selection = RecipeVariantResolver.resolveRetrievalVariant(
+			client,
+			player,
+			request.requestedRecipeId(),
+			request.recipeCollection(),
+			ItemStack.EMPTY,
+			false,
+			true,
+			AvailableItemSnapshot.empty(),
+			totals,
+			totals,
+			false,
+			false,
+			Math.max(remainingCount, 1)
+		);
+		String nextItemId = selection == null || selection.displayStack().isEmpty()
+			? null
+			: net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(selection.displayStack().getItem()).toString();
+		if (nextItemId == null || nextItemId.equals(currentItemId) || totals.getOrDefault(nextItemId, 0) <= 0) {
+			ReachCraftingMod.diag(
+				"[retrieve_existing] variant_retry none from={} resolved={} family_nearby={}",
+				currentItemId,
+				nextItemId,
+				describeFamilyNearby(totals)
+			);
+			return false;
+		}
+		ReachCraftingMod.diag(
+			"[retrieve_existing] variant_retry from={} to={} nearby={} remaining={} family_nearby={}",
+			currentItemId,
+			nextItemId,
+			totals.get(nextItemId),
+			remainingCount,
+			describeFamilyNearby(totals)
+		);
+		moveToVariant(nextItemId, selection.displayStack(), view);
+		return true;
+	}
+
+	/** Nearby counts of every output of the request's family, for the log. */
+	private String describeFamilyNearby(Map<String, Integer> totals) {
+		if (request.recipeCollection() == null || client.level == null) {
+			return "";
+		}
+		net.minecraft.util.context.ContextMap context = net.minecraft.world.item.crafting.display.SlotDisplayContext.fromLevel(client.level);
+		StringBuilder text = new StringBuilder();
+		for (net.minecraft.world.item.crafting.display.RecipeDisplayEntry entry : request.recipeCollection().getRecipes()) {
+			ItemStack stack = RecipeVariantResolver.resolveDisplayStack(entry.display(), context);
+			if (stack.isEmpty()) {
+				continue;
+			}
+			String itemId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+			int count = totals.getOrDefault(itemId, 0);
+			if (count <= 0) {
+				continue;
+			}
+			if (!text.isEmpty()) {
+				text.append(',');
+			}
+			text.append(itemId.replace("minecraft:", "")).append(':').append(count);
+		}
+		return text.isEmpty() ? "none" : text.toString();
+	}
+
+	private void moveToVariant(String nextItemId, ItemStack displayStack, NearbyContainerCache.ReachableView view) {
+		currentItemId = nextItemId;
+		currentDisplayStack = displayStack.copy();
+		candidates = NearbyContainerCache.prioritizeCandidates(
+			NearbyDiscoveryPlanner.findCandidates(level, cameraEntity, player.blockInteractionRange()),
+			view,
+			Set.of(nextItemId)
+		);
+		visited.clear();
+		nextCandidateIndex = 0;
+	}
+
+	/**
 	 * Every reachable container has been tried (or skipped as known-empty)
 	 * for the current variant and the request is still open: ask the
 	 * retrieval variant chooser for another family variant that IS nearby,
@@ -570,15 +673,7 @@ final class ExistingOutputRetrievalSession extends BaseCraftSession {
 			totals.get(nextItemId),
 			remainingCount
 		);
-		currentItemId = nextItemId;
-		currentDisplayStack = selection.displayStack().copy();
-		candidates = NearbyContainerCache.prioritizeCandidates(
-			NearbyDiscoveryPlanner.findCandidates(level, cameraEntity, player.blockInteractionRange()),
-			view,
-			Set.of(nextItemId)
-		);
-		visited.clear();
-		nextCandidateIndex = 0;
+		moveToVariant(nextItemId, selection.displayStack(), view);
 		return true;
 	}
 
