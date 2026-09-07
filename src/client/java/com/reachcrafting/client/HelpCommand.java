@@ -116,6 +116,7 @@ public final class HelpCommand {
 		}
 		line("§bEffortless Crafting help — pick a topic:");
 		line(row("general", "the basics: the three modifiers, click vs scroll, stacking them", "general"));
+		line(row("tips", "the easy-to-miss shortcuts", "tips"));
 		line(row("queuing", "Shift requests: hover, scroll an amount, release", "queuing"));
 		line(row("nearby", "Ctrl: craft from chests and barrels around you", "nearby"));
 		line(row("autocrafting", "Alt: craft the request and pocket the result", "autocrafting"));
@@ -124,7 +125,6 @@ public final class HelpCommand {
 		line(row("bulkchain", "hundreds of something from base materials", "bulkchain"));
 		line(row("retrieval", "Retrieval Mode: clicks pull items out of chests", "retrieval"));
 		line(row("retrievethencraft", "a Ctrl click grabs copies you already own first", "retrievethencraft"));
-		line(row("tips", "the easy-to-miss shortcuts", "tips"));
 		line(row(CMD + " settings", "open the settings screen from chat", "settings"));
 		line("§8Also: " + CMD + " help <topic>");
 		end();
