@@ -119,7 +119,7 @@
   "option.reachcrafting.auto_craft_off_after_bulk": "Toggle Auto Craft Off After Bulk",
   "tooltip.reachcrafting.auto_craft_off_after_bulk": "Toggle-mode only. If enabled, Auto Crafting is completely disabled once a bulk session finishes. If disabled, only bulk mode resets while standard Auto Crafting stays on.",
   "option.reachcrafting.output_variant_switching": "Output Variant Switching",
-  "tooltip.reachcrafting.output_variant_switching": "Applies to autocraft (plain, bulk, chain) and retrieval. When disabled, a request stays on the first resolved output variant. When enabled, it continues onto other variants of the family once the current one runs out. Requires Revolving Craft Handling to allow a fallback: it does nothing under Current Variant Only, and under Current Variant with Availability Fallback it only continues when the clicked variant was not the one resolved. An exact pick from the right-click variant menu never switches.",
+  "tooltip.reachcrafting.output_variant_switching": "Let autocraft and retrieval move on to other variants of a family when the chosen one runs out. Follows Revolving Craft Handling: off under Current Variant Only, and never for an exact pick from the variant menu.",
   "option.reachcrafting.auto_craft_handling": "Auto Craft Handling",
   "tooltip.reachcrafting.auto_craft_handling": "Choose how the Auto Crafting mode is toggled. Toggle keeps the current behavior (Alt key toggles the state on/off). Hold makes Auto Crafting active ONLY while the Alt key is held down.",
   "enum.reachcrafting.auto_craft_handling.toggle": "Toggle",
