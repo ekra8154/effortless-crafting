@@ -63,6 +63,10 @@ final class ExistingOutputRetrievalSession extends BaseCraftSession {
 	private final Map<String, Integer> retrievedByItem = new LinkedHashMap<>();
 	private final Map<String, Integer> ejectedByItem = new LinkedHashMap<>();
 	private int variantSwitches;
+	// Whether the cache promised this item nearby when the session began. A
+	// cold-cache discovery that finds nothing is not a surprise and gets no
+	// "nothing nearby" chat; a cache that said otherwise does.
+	private final boolean expectedNearby;
 	private int nextCandidateIndex;
 	private int timeoutTicks;
 	private int reopenAttemptsRemaining;
@@ -105,6 +109,7 @@ final class ExistingOutputRetrievalSession extends BaseCraftSession {
 		this.remainingCount = Math.max(request.requestedCount(), 1);
 		this.currentItemId = request.outputItemId();
 		this.currentDisplayStack = request.displayStack().copy();
+		this.expectedNearby = reachableView.aggregateCounts().getOrDefault(request.outputItemId(), 0) > 0;
 	}
 
 	boolean canStart() {
@@ -378,7 +383,11 @@ final class ExistingOutputRetrievalSession extends BaseCraftSession {
 		String retrievedText = describeCounts(retrievedByItem);
 		String outcome;
 		if (retrievedCount <= 0 && ejectedCount <= 0) {
-			sendMissingIngredientsChat("No matching existing items nearby.");
+			if (expectedNearby) {
+				sendMissingIngredientsChat("No matching existing items nearby (the container cache was out of date).");
+			} else {
+				sendDebugChat("No matching existing items nearby.");
+			}
 			outcome = "none_found";
 		} else if (ejectedCount > 0) {
 			sendChat("Retrieved " + (retrievedText.isEmpty() ? "nothing" : retrievedText)
