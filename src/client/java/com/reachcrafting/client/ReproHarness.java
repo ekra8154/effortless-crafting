@@ -57,6 +57,8 @@ import java.nio.file.Path;
 public final class ReproHarness {
 	private enum PendingKind { CRAFT, RETRIEVE, CRAFT_PLAIN, INDICATOR }
 	private static boolean pendingShift;
+	/** retrieve only: click the item's entry on the retrieval-mode variant menu (overlay) instead of the page button. */
+	private static boolean pendingOverlay;
 	private static boolean autoConfirmYes = true;
 
 	private static Path cmdFile;
@@ -219,6 +221,7 @@ public final class ReproHarness {
 				pendingRetrieveCount = -1;
 				pendingCtrl = false;
 				pendingShift = false;
+				pendingOverlay = false;
 				for (int i = 2; i < parts.length; i++) {
 					if (parts[i].startsWith("count=")) {
 						pendingRetrieveCount = Integer.parseInt(parts[i].substring("count=".length()));
@@ -226,6 +229,8 @@ public final class ReproHarness {
 						pendingCtrl = true;
 					} else if (parts[i].equals("shift")) {
 						pendingShift = true;
+					} else if (parts[i].equals("overlay")) {
+						pendingOverlay = true;
 					}
 				}
 				pendingBulkLatch = false;
@@ -335,7 +340,11 @@ public final class ReproHarness {
 		boolean bulkLatch = pendingBulkLatch;
 		pendingBulkItem = null;
 		if (pendingKind == PendingKind.RETRIEVE) {
-			retrieveRecipeByItemId(client, itemId, pendingRetrieveCount);
+			if (pendingOverlay) {
+				retrieveFromVariantOverlay(client, itemId, pendingRetrieveCount);
+			} else {
+				retrieveRecipeByItemId(client, itemId, pendingRetrieveCount);
+			}
 			return;
 		}
 		if (pendingKind == PendingKind.CRAFT_PLAIN) {
@@ -392,6 +401,37 @@ public final class ReproHarness {
 			}
 		}
 		ReachCraftingMod.LOGGER.warn("[repro_harness] no recipe collection found for {}", itemId);
+	}
+
+	/**
+	 * The retrieval-mode variant menu: one synthetic entry per colour. A
+	 * click there arrives with NO display stack (the overlay button hover
+	 * lookup only knows the entry id), so the drive passes EMPTY exactly as
+	 * the real path does and the input controller must resolve the clicked
+	 * entry's own output from the collection.
+	 */
+	private static void retrieveFromVariantOverlay(Minecraft client, String itemId, int count) {
+		RecipeCollection grouped = RetrievalOutputVariantOverlay.harnessGroupedCollection(itemId);
+		if (grouped == null || grouped.getRecipes().size() <= 1) {
+			ReachCraftingMod.LOGGER.warn("[repro_harness] no retrieval variant menu for {} (entries={})",
+				itemId, grouped == null ? "none" : grouped.getRecipes().size());
+			return;
+		}
+		ContextMap context = SlotDisplayContext.fromLevel(client.level);
+		for (RecipeDisplayEntry entry : grouped.getRecipes()) {
+			ItemStack stack = RecipeVariantResolver.resolveDisplayStack(entry.display(), context);
+			if (stack.isEmpty() || !itemId.equals(stack.getItem().builtInRegistryHolder().key().identifier().toString())) {
+				continue;
+			}
+			ExistingOutputRetrievalController.setEnabled(true);
+			ReachCraftingMod.diag(
+				"[repro_harness] retrieve armed OVERLAY id={} item={} count={} menu_entries={} synthetic={}",
+				entry.id(), itemId, count < 0 ? "all" : String.valueOf(count), grouped.getRecipes().size(),
+				VirtualRetrievalRecipeBookEntries.isSyntheticRecipeId(entry.id()));
+			driveRetrieveClick(entry.id(), grouped, ItemStack.EMPTY, count);
+			return;
+		}
+		ReachCraftingMod.LOGGER.warn("[repro_harness] variant menu for {} has no entry for it", itemId);
 	}
 
 	private static void retrieveRecipeByItemId(Minecraft client, String itemId, int count) {

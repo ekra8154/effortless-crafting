@@ -753,9 +753,23 @@ final class RecipeBookInputController {
 		// same way a plain click on that entry does.
 		if (VirtualRetrievalRecipeBookEntries.isSyntheticRecipeId(replayBatch.action().recipeId())) {
 			state.setReplayBatch(null);
+			// Actions captured over the variant overlay carry no display
+			// stack (the hover lookup only knows the entry id), so resolve the
+			// clicked entry's own output here, exactly as a direct click does.
+			ItemStack actionStack = replayBatch.action().displayStack();
+			ItemStack syntheticStack = actionStack != null && !actionStack.isEmpty()
+				? actionStack.copy()
+				: syntheticDisplayStack(minecraft, replayBatch.action().collection(), replayBatch.action().recipeId());
+			com.reachcrafting.ReachCraftingMod.diag(
+				"[recipe_replay] synthetic recipe={} action_stack={} resolved_stack={} clicks={}",
+				replayBatch.action().recipeId(),
+				ContainerUtils.formatStack(actionStack != null ? actionStack : ItemStack.EMPTY),
+				ContainerUtils.formatStack(syntheticStack),
+				replayBatch.remainingClicks()
+			);
 			VirtualRetrievalRecipeBookEntries.startRetrievalForSynthetic(
 				replayBatch.action().recipeId(),
-				replayBatch.action().displayStack(),
+				syntheticStack,
 				Math.max(replayBatch.remainingClicks(), 1)
 			);
 			return;
