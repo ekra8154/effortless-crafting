@@ -166,7 +166,7 @@ public final class HelpCommand {
 				"§7What happens:§r materials are pulled from chests into the grid, the craft is staged, and anything left over goes back where it came from when you close the grid.",
 				"§7The dots§r on a recipe say what a Ctrl click would do: a filled dot crafts from your inventory alone, a plus shape means nearby chests are needed. Yellow is a direct craft, orange a chain craft.",
 				"§7First look is slow, later ones fast:§r container contents are remembered, so the first request walks each chest once and later requests know where things are.",
-				"§7Keep a chest out of it:§r hold Ctrl inside any container and click the dot near the top to blacklist (or whitelist) it. Whole container types can be excluded in settings.",
+				"§7Keep a chest out of it:§r set §fIn-World Black/Whitelist§r to Blacklist (off by default), then hold Ctrl inside any container and click the dot near the top to blacklist (or whitelist) it. Quicker: with the filter outlines showing (the Toggle Filtered Container Outlines key), sneak + right-click a container with an empty hand to cycle it. Whole container types can be excluded with §fBlacklisted Container Types§r.",
 				"§8Settings: Nearby Container Usage (While Ctrl Held / Always On), Nearby Container Caching, Container Drain Order, In-World Black/Whitelist, Blacklisted Container Types.",
 			});
 			case "autocrafting" -> page(new String[]{
@@ -243,7 +243,7 @@ public final class HelpCommand {
 			"§7Tap Alt§r with a recipe already in the grid to craft it - no need to rebuild the request.",
 			"§7Right click or Esc§r cancels a queue you are still scrolling; §7Esc§r aborts any running session.",
 			"§7Hover a variant§r in the expanded recipe menu for its tooltip; the menu closes itself after a request.",
-			"§7Hold Ctrl inside a chest§r to see and set its blacklist / whitelist dot; with outlines shown, sneak + right-click a container to cycle it.",
+			"§7Hold Ctrl inside a chest§r to see and set its blacklist / whitelist dot (needs In-World Black/Whitelist on); with the filter outlines showing, sneak + right-click a container with an empty hand to cycle it.",
 			"§7Green under yellow:§r the green dot below the craftable dot means copies of the output are already in a nearby chest.",
 		});
 	}
