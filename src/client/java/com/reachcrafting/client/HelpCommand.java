@@ -41,7 +41,7 @@ public final class HelpCommand {
 
 	/** Canonical topic names, in index order; these are what tab completion offers. */
 	private static final List<String> TOPICS = List.of(
-		"queuing", "nearby", "autocrafting", "chain", "bulk", "bulkchain", "retrieval", "retrievethencraft"
+		"general", "queuing", "nearby", "autocrafting", "chain", "bulk", "bulkchain", "retrieval", "retrievethencraft"
 	);
 	/** Spellings a player might reasonably type, folded to the canonical name. */
 	private static final Map<String, String> ALIASES = Map.ofEntries(
@@ -57,6 +57,8 @@ public final class HelpCommand {
 		Map.entry("retrievethenask", "retrievethencraft"), Map.entry("existingoutput", "retrievethencraft"),
 		Map.entry("existingoutputhandling", "retrievethencraft"), Map.entry("retrieval-then-craft", "retrievethencraft"),
 		Map.entry("outputvariantswitching", "autocrafting"), Map.entry("variants", "queuing"),
+		Map.entry("basics", "general"), Map.entry("start", "general"), Map.entry("quickstart", "general"),
+		Map.entry("modifiers", "general"), Map.entry("overview", "general"), Map.entry("controls", "general"),
 		Map.entry("tips", "tips"), Map.entry("index", "index"), Map.entry("topics", "index")
 	);
 
@@ -113,6 +115,7 @@ public final class HelpCommand {
 			line(notice);
 		}
 		line("§bEffortless Crafting help — pick a topic:");
+		line(row("general", "the basics: the three modifiers, click vs scroll, stacking them", "general"));
 		line(row("queuing", "Shift requests: hover, scroll an amount, release", "queuing"));
 		line(row("nearby", "Ctrl: craft from chests and barrels around you", "nearby"));
 		line(row("autocrafting", "Alt: craft the request and pocket the result", "autocrafting"));
@@ -134,6 +137,19 @@ public final class HelpCommand {
 		return switch (topic) {
 			case "index" -> runIndex();
 			case "tips" -> runTips();
+			case "general" -> page(new String[]{
+				"§bEffortless Crafting — the basics:",
+				"§7A request:§r hover a recipe, hold a modifier, scroll to pick the amount, release to send it. Or just click with the modifier held.",
+				"§7Shift§r - inventory only. Click: vanilla's max craft, as much as fits in the grid. Scroll: queue an amount.",
+				"§7Ctrl§r - nearby chests allowed. Click: adds one, drawing on nearby storage. Scroll: queue an amount, sent when Ctrl is released.",
+				"§7Alt§r - autocraft it for you. Click: crafts one instantly. Scroll: queue an amount, crafted when Alt is released.",
+				"§7Stack them:§r Ctrl + Alt + scroll is a nearby autocraft. Ctrl + Shift + click is a nearby max craft. Ctrl + Alt + Shift + click is a nearby max craft, autocrafted.",
+				"§7While scrolling:§r hold Space to count by 16; right click or Esc cancels. §7Esc§r aborts any session the mod is running.",
+				"§7Bigger:§r Alt + click the result arrow latches bulk (no cap, repeated max crafts). Double-tap Ctrl for Retrieval Mode (clicks pull items out of chests).",
+				"§7The dots§r on a recipe: a filled dot crafts from your inventory, a plus shape will open nearby chests. Yellow is a direct craft, orange a chain craft, and green underneath means copies already sit in a chest.",
+				"§7Vanilla stays:§r plain clicks, Shift + click, Space to re-place the last recipe, and right click for the variant menu all work as before.",
+				"§8" + CMD + " settings opens the settings; the other topics go deeper.",
+			});
 			case "queuing" -> page(new String[]{
 				"§bQueuing a request (Shift):",
 				"§7Hover a recipe, hold Shift, scroll§r to set how many, then release Shift to send it. The counter on the recipe shows the queued amount.",
