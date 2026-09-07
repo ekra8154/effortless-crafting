@@ -156,8 +156,15 @@ final class RecipeBookInputController {
 			return;
 		}
 		if (VirtualRetrievalRecipeBookEntries.isSyntheticRecipeId(recipeId)) {
-			int requestedCount = VirtualRetrievalRecipeBookEntries.requestCountForSynthetic(displayStack, shiftModifierDown);
-			VirtualRetrievalRecipeBookEntries.startRetrievalForSynthetic(recipeId, displayStack != null ? displayStack.copy() : ItemStack.EMPTY, requestedCount);
+			// The button's display stack can be empty right after a book
+			// refresh (a finished session forces one); the entry itself still
+			// knows its item, so resolve from the collection instead of
+			// refusing the click.
+			ItemStack syntheticStack = displayStack != null && !displayStack.isEmpty()
+				? displayStack.copy()
+				: syntheticDisplayStack(minecraft, collection);
+			int requestedCount = VirtualRetrievalRecipeBookEntries.requestCountForSynthetic(syntheticStack, shiftModifierDown);
+			VirtualRetrievalRecipeBookEntries.startRetrievalForSynthetic(recipeId, syntheticStack, requestedCount);
 			return;
 		}
 		LocalPlayer player = minecraft.player;
@@ -252,6 +259,16 @@ final class RecipeBookInputController {
 			autoCraftRequested,
 			false,
 			state
+		);
+	}
+
+	private static ItemStack syntheticDisplayStack(Minecraft minecraft, net.minecraft.client.gui.screens.recipebook.RecipeCollection collection) {
+		if (minecraft.level == null || collection == null || collection.getRecipes().isEmpty()) {
+			return ItemStack.EMPTY;
+		}
+		return RecipeVariantResolver.resolveDisplayStack(
+			collection.getRecipes().getFirst().display(),
+			SlotDisplayContext.fromLevel(minecraft.level)
 		);
 	}
 

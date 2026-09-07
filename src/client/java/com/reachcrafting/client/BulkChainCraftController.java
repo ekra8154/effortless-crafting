@@ -310,8 +310,20 @@ public final class BulkChainCraftController {
 			true,
 			1
 		);
+		// Same rule as the chain offer: a variant whose only material is
+		// last-resort (stripped logs) is never switched to automatically.
+		java.util.Set<String> lastResort = LastResortIngredients.activeCategories(ReachCraftingConfig.get());
+		Map<net.minecraft.world.item.crafting.display.RecipeDisplayId, Integer> totalScores = ChainVariantRanking.scoreVariants(candidates, availableCounts);
+		Map<net.minecraft.world.item.crafting.display.RecipeDisplayId, Integer> ordinaryScores = lastResort.isEmpty()
+			? totalScores
+			: ChainVariantRanking.scoreVariants(candidates, RecipeClickExecutor.withoutLastResort(availableCounts, lastResort));
 		for (RecipeVariantResolver.Selection candidate : candidates) {
 			if (candidate == null || drained.contains(candidate.recipeId())) {
+				continue;
+			}
+			if (RecipeClickExecutor.onlyLastResortMaterial(candidate.recipeId(), totalScores, ordinaryScores, lastResort)) {
+				ReachCraftingMod.diag("[bulk_chain] variant_switch skip_last_resort_only variant={}", ContainerUtils.formatStack(candidate.displayStack()));
+				drained.add(candidate.recipeId());
 				continue;
 			}
 			Optional<ChainCraftPlan> plan = ChainCraftPlanner.planMax(client, client.player, candidate, availableCounts, session.allowNearby(), batchTarget, true);

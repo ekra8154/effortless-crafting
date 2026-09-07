@@ -1427,10 +1427,15 @@ final class RecipeClickExecutor {
 			.thenComparing(lowestFirst ? byScore : byScore.reversed())
 			.thenComparing(RecipeVariantResolver.preferenceOrder());
 
+		// A sibling whose only material is last-resort (stripped logs) is not
+		// an automatic fallback at all: those get spent only when the player
+		// asked for that variant and it has nothing else. The clicked/selected
+		// variant is kept regardless, since that IS the explicit request.
 		List<RecipeVariantResolver.Selection> siblings = variants.stream()
 			.filter(candidate -> !candidate.recipeId().equals(selectedRecipe.recipeId()))
 			.filter(candidate -> chainTiers.getOrDefault(candidate.recipeId(), CHAIN_TIER_UNREACHABLE)
 				!= CHAIN_TIER_UNREACHABLE)
+			.filter(candidate -> !onlyLastResortMaterial(candidate.recipeId(), variantScores, ordinaryScores, lastResort))
 			.sorted(chainOrder)
 			.toList();
 		if (siblings.isEmpty()) {
@@ -1476,7 +1481,19 @@ final class RecipeClickExecutor {
 		return List.copyOf(candidates);
 	}
 
-	private static Map<String, Integer> withoutLastResort(Map<String, Integer> counts, java.util.Set<String> lastResort) {
+	/** Scored on material, but none of it ordinary: every input it could use is one the player wants spent last. */
+	static boolean onlyLastResortMaterial(
+		RecipeDisplayId recipeId,
+		Map<RecipeDisplayId, Integer> totalScores,
+		Map<RecipeDisplayId, Integer> ordinaryScores,
+		java.util.Set<String> lastResort
+	) {
+		return !lastResort.isEmpty()
+			&& totalScores.getOrDefault(recipeId, 0) > 0
+			&& ordinaryScores.getOrDefault(recipeId, 0) <= 0;
+	}
+
+	static Map<String, Integer> withoutLastResort(Map<String, Integer> counts, java.util.Set<String> lastResort) {
 		Map<String, Integer> filtered = new HashMap<>();
 		for (Map.Entry<String, Integer> entry : counts.entrySet()) {
 			if (!LastResortIngredients.isLastResort(entry.getKey(), lastResort)) {
