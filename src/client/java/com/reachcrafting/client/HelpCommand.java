@@ -137,7 +137,7 @@ public final class HelpCommand {
 		return switch (topic) {
 			case "index" -> runIndex();
 			case "tips" -> runTips();
-			case "general" -> page(new String[]{
+			case "general" -> page(new Object[]{
 				"§bEffortless Crafting — the basics:",
 				"§7A request:§r hover a recipe, hold a modifier, scroll to pick the amount, release to send it. Or just click with the modifier held.",
 				"§7Shift§r - inventory only. Click: vanilla's max craft, as much as fits in the grid. Scroll: queue an amount.",
@@ -146,9 +146,10 @@ public final class HelpCommand {
 				"§7Stack them:§r Ctrl + Alt + scroll is a nearby autocraft. Ctrl + Shift + click is a nearby max craft. Ctrl + Alt + Shift + click is a nearby max craft, autocrafted.",
 				"§7While scrolling:§r hold Space to count by 16; right click or Esc cancels. §7Esc§r aborts any session the mod is running.",
 				"§7Bigger:§r Alt + click the result arrow latches bulk (no cap, repeated max crafts). Double-tap Ctrl for Retrieval Mode (clicks pull items out of chests).",
-				"§7The dots§r on a recipe: a filled dot crafts from your inventory, a plus shape will open nearby chests. Yellow is a direct craft, orange a chain craft, and green underneath means copies already sit in a chest.",
+				"§7The dots§r on a recipe: a filled dot crafts from your inventory, a plus shape means nearby chests are needed. Yellow is a direct craft, orange a chain craft, and green underneath means copies already sit in a chest.",
 				"§7Vanilla stays:§r plain clicks, Shift + click, Space to re-place the last recipe, and right click for the variant menu all work as before.",
-				"§8" + CMD + " settings opens the settings; the other topics go deeper.",
+				link(CMD + " settings", ChatFormatting.WHITE, CMD + " settings")
+					.append(Component.literal(" opens the settings; the other topics go deeper.").withStyle(ChatFormatting.GRAY)),
 			});
 			case "queuing" -> page(new String[]{
 				"§bQueuing a request (Shift):",
@@ -347,11 +348,15 @@ public final class HelpCommand {
 		return false;
 	}
 
-	/** A whole page of plain section-styled lines, replacing the previous page, with a back link to the index. */
-	private static int page(String[] lines) {
+	/** A whole page of section-styled strings (or styled components), replacing the previous page, with a back link to the index. */
+	private static int page(Object[] lines) {
 		begin();
-		for (String text : lines) {
-			line(text);
+		for (Object entry : lines) {
+			if (entry instanceof Component component) {
+				line(component);
+			} else {
+				line((String) entry);
+			}
 		}
 		line(link("« help topics", ChatFormatting.DARK_GRAY, CMD + " help"));
 		end();
@@ -359,7 +364,7 @@ public final class HelpCommand {
 	}
 
 	/** Clickable line that runs a navigation-only command; hover shows the command. */
-	private static Component link(String label, ChatFormatting color, String command) {
+	private static net.minecraft.network.chat.MutableComponent link(String label, ChatFormatting color, String command) {
 		return Component.literal(label).withStyle(style -> style
 			.withColor(color)
 			.withClickEvent(new ClickEvent.RunCommand(command))
