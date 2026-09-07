@@ -1399,15 +1399,31 @@ final class RecipeClickExecutor {
 		// unscored variant would otherwise win on a zero it never earned.
 		Map<RecipeDisplayId, Integer> variantScores =
 			ChainVariantRanking.scoreVariants(variants, chainAvailableCounts);
+		// "Prefer Non-Stripped Logs" spends stripped logs last within a recipe;
+		// the variant ranking must agree, or a family tie (576 stripped spruce
+		// vs 576 oak logs) breaks toward whichever variant sorted first and
+		// the stripped logs get burned while ordinary ones sit there. Score
+		// each variant on ordinary material too, and rank on that first; a
+		// variant whose only material is last-resort sorts behind the rest.
+		java.util.Set<String> lastResort = LastResortIngredients.activeCategories(ReachCraftingConfig.get());
+		Map<RecipeDisplayId, Integer> ordinaryScores = lastResort.isEmpty()
+			? variantScores
+			: ChainVariantRanking.scoreVariants(variants, withoutLastResort(chainAvailableCounts, lastResort));
 		boolean lowestFirst = ReachCraftingConfig.get().countPreference()
 			== IngredientPlanning.CountPreference.LOWEST_TOTAL;
 		Comparator<RecipeVariantResolver.Selection> byScore =
 			Comparator.comparingInt((RecipeVariantResolver.Selection candidate) ->
 				variantScores.getOrDefault(candidate.recipeId(), 0));
+		Comparator<RecipeVariantResolver.Selection> byOrdinaryScore =
+			Comparator.comparingInt((RecipeVariantResolver.Selection candidate) ->
+				ordinaryScores.getOrDefault(candidate.recipeId(), 0));
 		Comparator<RecipeVariantResolver.Selection> chainOrder = Comparator
 			.comparingInt((RecipeVariantResolver.Selection candidate) ->
 				chainTiers.getOrDefault(candidate.recipeId(), CHAIN_TIER_UNREACHABLE))
 			.thenComparingInt(candidate -> variantScores.containsKey(candidate.recipeId()) ? 0 : 1)
+			.thenComparingInt(candidate -> ordinaryScores.getOrDefault(candidate.recipeId(), 0) > 0
+				|| variantScores.getOrDefault(candidate.recipeId(), 0) <= 0 ? 0 : 1)
+			.thenComparing(lowestFirst ? byOrdinaryScore : byOrdinaryScore.reversed())
 			.thenComparing(lowestFirst ? byScore : byScore.reversed())
 			.thenComparing(RecipeVariantResolver.preferenceOrder());
 
@@ -1453,10 +1469,21 @@ final class RecipeClickExecutor {
 					+ " score=" + (variantScores.containsKey(candidate.recipeId())
 						? String.valueOf(variantScores.get(candidate.recipeId()))
 						: "none")
+					+ (lastResort.isEmpty() ? "" : " ordinary=" + ordinaryScores.getOrDefault(candidate.recipeId(), 0))
 					+ ")")
 				.toList()
 		);
 		return List.copyOf(candidates);
+	}
+
+	private static Map<String, Integer> withoutLastResort(Map<String, Integer> counts, java.util.Set<String> lastResort) {
+		Map<String, Integer> filtered = new HashMap<>();
+		for (Map.Entry<String, Integer> entry : counts.entrySet()) {
+			if (!LastResortIngredients.isLastResort(entry.getKey(), lastResort)) {
+				filtered.put(entry.getKey(), entry.getValue());
+			}
+		}
+		return filtered;
 	}
 
 	private static String missingMessageFor(

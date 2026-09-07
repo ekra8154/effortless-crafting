@@ -277,6 +277,10 @@ public final class ReproHarness {
 					boolean on = parts[2].equals("on");
 					ReachCraftingConfig.get().setOutputVariantSwitching(on);
 					ReachCraftingMod.diag("[repro_harness] set output_variant_switching={}", on);
+				} else if (parts.length == 3 && parts[1].equals("striplogs")) {
+					boolean on = parts[2].equals("on");
+					ReachCraftingConfig.get().setPreferNonStrippedLogs(on);
+					ReachCraftingMod.diag("[repro_harness] set prefer_non_stripped_logs={}", on);
 				} else if (parts.length == 3 && parts[1].equals("autoconfirm")) {
 					autoConfirmYes = parts[2].equals("yes");
 					ReachCraftingMod.diag("[repro_harness] set autoconfirm_yes={}", autoConfirmYes);
