@@ -153,7 +153,7 @@
   "popup.reachcrafting.chain_crafting.title": "Chain Crafting",
   "popup.reachcrafting.chain_crafting.message": "Base materials required for craft are available. Complete with chain crafting?",
   "popup.reachcrafting.chain_crafting.partial_message": "Not enough resources for %s %s. Craft %s instead?",
-  "popup.reachcrafting.chain_crafting.variant_message": "One variant covers %s %s. Output variant switching can reach up to %s of the %s requested. Complete with chain crafting?",
+  "popup.reachcrafting.chain_crafting.variant_message": "Output variant switching can reach up to %s of the %s requested. Complete with chain crafting?",
   "popup.reachcrafting.chain_crafting.yes": "Yes (Enter / Space)",
   "popup.reachcrafting.chain_crafting.no": "No (Esc)",
   "message.reachcrafting.chain_crafting.partial_always": "Not enough resources for %s %s. Proceeding with %s instead.",

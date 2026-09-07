@@ -108,11 +108,8 @@ public final class ChainCraftPopupController {
 
 	private static Component variantMessageFor(ChainCraftPlan plan, int requestedRecipeCopies, int variantTotalCopies) {
 		int outputPerCraft = Math.max(plan.finalOutput().getCount(), 1);
-		String itemName = plan.finalOutput().getHoverName().getString();
 		return Component.translatable(
 			"popup.reachcrafting.chain_crafting.variant_message",
-			plan.finalRecipeCopies() * outputPerCraft,
-			itemName,
 			variantTotalCopies * outputPerCraft,
 			requestedRecipeCopies * outputPerCraft
 		);
