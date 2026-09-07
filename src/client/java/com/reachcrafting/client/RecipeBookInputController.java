@@ -162,7 +162,7 @@ final class RecipeBookInputController {
 			// refusing the click.
 			ItemStack syntheticStack = displayStack != null && !displayStack.isEmpty()
 				? displayStack.copy()
-				: syntheticDisplayStack(minecraft, collection);
+				: syntheticDisplayStack(minecraft, collection, recipeId);
 			int requestedCount = VirtualRetrievalRecipeBookEntries.requestCountForSynthetic(syntheticStack, shiftModifierDown);
 			VirtualRetrievalRecipeBookEntries.startRetrievalForSynthetic(recipeId, syntheticStack, requestedCount);
 			return;
@@ -262,14 +262,22 @@ final class RecipeBookInputController {
 		);
 	}
 
-	private static ItemStack syntheticDisplayStack(Minecraft minecraft, net.minecraft.client.gui.screens.recipebook.RecipeCollection collection) {
+	/**
+	 * The clicked entry's own output. Retrieval mode's variant overlay is a
+	 * collection of one synthetic entry per colour and passes no display
+	 * stack, so this must be the entry whose id was clicked, never the first.
+	 */
+	private static ItemStack syntheticDisplayStack(Minecraft minecraft, net.minecraft.client.gui.screens.recipebook.RecipeCollection collection, RecipeDisplayId recipeId) {
 		if (minecraft.level == null || collection == null || collection.getRecipes().isEmpty()) {
 			return ItemStack.EMPTY;
 		}
-		return RecipeVariantResolver.resolveDisplayStack(
-			collection.getRecipes().getFirst().display(),
-			SlotDisplayContext.fromLevel(minecraft.level)
-		);
+		ContextMap context = SlotDisplayContext.fromLevel(minecraft.level);
+		for (RecipeDisplayEntry entry : collection.getRecipes()) {
+			if (entry.id().equals(recipeId)) {
+				return RecipeVariantResolver.resolveDisplayStack(entry.display(), context);
+			}
+		}
+		return ItemStack.EMPTY;
 	}
 
 	void onVanillaRecipeButtonClicked(
