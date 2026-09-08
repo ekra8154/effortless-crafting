@@ -26,7 +26,8 @@
 		"RecipeBookComponentMixin",
 		"RecipeBookPageAccessor",
 		"RecipeBookPageMixin",
-		"RecipeButtonMixin"
+		"RecipeButtonMixin",
+		"ChatComponentAccessor"
 	],
 	"injectors": {
 		"defaultRequire": 1
