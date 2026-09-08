@@ -55,6 +55,8 @@ public final class ChainCraftabilityCache {
 	 * taken on a click can never be overwritten by a slower, staler one.
 	 */
 	private static int generation = 0;
+	/** Generation of the async recompute whose publish has not landed yet (0 = none). */
+	private static int pendingAsyncGeneration = 0;
 
 	private ChainCraftabilityCache() {
 	}
@@ -73,6 +75,7 @@ public final class ChainCraftabilityCache {
 		recipeIndex = List.of();
 		recipesByOutput = Map.of();
 		backgroundTask = null;
+		pendingAsyncGeneration = 0;
 	}
 
 	public static void init() {
@@ -183,7 +186,12 @@ public final class ChainCraftabilityCache {
 			return;
 		}
 
-		boolean inFlight = backgroundTask != null && !backgroundTask.isDone();
+		// "In flight" runs from the async start until its publish lands on
+		// the render thread, not until the worker returns: the future is
+		// done a moment before client.execute runs the publish, and a
+		// synchronous refresh in that gap must still recompute.
+		boolean inFlight = pendingAsyncGeneration != 0
+			|| (backgroundTask != null && !backgroundTask.isDone());
 		if (inFlight && !synchronous) {
 			return; // Don't start a new recompute if one is currently in progress
 		}
@@ -258,9 +266,13 @@ public final class ChainCraftabilityCache {
 			return;
 		}
 
+		pendingAsyncGeneration = thisGeneration;
 		backgroundTask = java.util.concurrent.CompletableFuture.runAsync(() -> {
 			Computed computed = compute(allRecipes, gridSlotCount, context, indexStale, baseIndex, baseByOutput, counts);
 			client.execute(() -> {
+				if (pendingAsyncGeneration == thisGeneration) {
+					pendingAsyncGeneration = 0;
+				}
 				if (thisGeneration != generation) {
 					return; // a newer recompute (a synchronous one on a click) already applied
 				}
