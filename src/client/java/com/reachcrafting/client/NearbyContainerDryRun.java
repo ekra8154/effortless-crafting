@@ -86,6 +86,10 @@ public final class NearbyContainerDryRun {
 		COORDINATOR.startCacheWarmup(new CacheWarmupRequest(reason));
 	}
 
+	static void startExistingOutputRetrieval(ExistingOutputRetrievalRequest request) {
+		COORDINATOR.startExistingOutputRetrieval(request);
+	}
+
 	public static void cancelCurrent() {
 		COORDINATOR.cancelCurrent();
 	}
@@ -96,6 +100,10 @@ public final class NearbyContainerDryRun {
 
 	public static boolean isActiveSessionRunning() {
 		return COORDINATOR.isActiveSessionRunning();
+	}
+
+	public static boolean isRetrievalSessionRunning() {
+		return COORDINATOR.isRetrievalSessionRunning();
 	}
 
 	public static boolean shouldBlockWorldInteraction() {

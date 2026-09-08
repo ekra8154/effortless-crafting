@@ -104,7 +104,11 @@ public final class RecipeBookClickCapture {
 	}
 
 	public static void scheduleReplay(HeldRecipeAction action, int remainingClicks, boolean allowNearby, boolean craftAll, boolean refillableBulkMaxMode, boolean autoCraftRequested) {
-		CONTROLLER.scheduleReplay(action, remainingClicks, allowNearby, craftAll, refillableBulkMaxMode, autoCraftRequested);
+		CONTROLLER.scheduleReplay(action, remainingClicks, allowNearby, craftAll, refillableBulkMaxMode, autoCraftRequested, false);
+	}
+
+	public static void scheduleReplay(HeldRecipeAction action, int remainingClicks, boolean allowNearby, boolean craftAll, boolean refillableBulkMaxMode, boolean autoCraftRequested, boolean retrievalDone) {
+		CONTROLLER.scheduleReplay(action, remainingClicks, allowNearby, craftAll, refillableBulkMaxMode, autoCraftRequested, retrievalDone);
 	}
 
 	public static ReplayBatch getReplayBatch() {
@@ -173,6 +177,10 @@ public final class RecipeBookClickCapture {
 	public record PendingHeldRecipe(HeldRecipeAction action, int clickCount, boolean locked) {
 	}
 
-	public record ReplayBatch(HeldRecipeAction action, int remainingClicks, boolean allowNearby, boolean craftAll, boolean refillableBulkMaxMode, boolean autoCraftRequested) {
+	/** {@code retrievalDone}: this batch is the craft remainder after a retrieve-first step; the executor must not retrieve again. */
+	public record ReplayBatch(HeldRecipeAction action, int remainingClicks, boolean allowNearby, boolean craftAll, boolean refillableBulkMaxMode, boolean autoCraftRequested, boolean retrievalDone) {
+		public ReplayBatch(HeldRecipeAction action, int remainingClicks, boolean allowNearby, boolean craftAll, boolean refillableBulkMaxMode, boolean autoCraftRequested) {
+			this(action, remainingClicks, allowNearby, craftAll, refillableBulkMaxMode, autoCraftRequested, false);
+		}
 	}
 }

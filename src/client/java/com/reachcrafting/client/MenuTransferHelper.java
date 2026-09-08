@@ -25,10 +25,20 @@ final class MenuTransferHelper {
 		}
 	}
 
+	private static long clicksIssued;
+
 	private MenuTransferHelper() {
 	}
 
+	/** Running count of container clicks sent through this helper, so a
+	 * caller can charge a whole transfer to the click budget after the fact
+	 * without every move variant reporting its own cost. */
+	static long clicksIssued() {
+		return clicksIssued;
+	}
+
 	static void pickup(MultiPlayerGameMode gameMode, LocalPlayer player, AbstractContainerMenu menu, Slot slot, int mouseButton) {
+		clicksIssued++;
 		gameMode.handleInventoryMouseClick(menu.containerId, slot.index, mouseButton, ClickType.PICKUP, player);
 	}
 

@@ -91,6 +91,7 @@ Chain crafting extends autocraft by working backward through craftable dependenc
 - **Partial fallback**: If the full requested amount cannot be crafted but at least one final output can, the mod can offer to craft the possible amount instead.
 - **Conservative execution**: Intermediate results go into your inventory, and each step still uses the normal autocraft placement and validation path.
 - **Bulk chain crafting**: Bulk requests that need intermediates start a bulk chain session (see below) instead of being rejected.
+- **Across variants**: With **Output Variant Switching** on, a chain offer reports what every family variant can reach together (pale oak stairs requested with five kinds of logs on hand), and after the first variant's chain finishes the next variant chains without asking again.
 
 ---
 
@@ -113,7 +114,7 @@ Bulk chain crafting combines bulk mode with chain crafting: request hundreds of 
 - **What bulk changes**: Bulk uncaps the normal queue limit, making it practical to craft large amounts of stackable and nonstackable items such as dispensers or cake if you wish. 
 - **Bulk max craft**: `Ctrl + Shift + click` while bulk is enabled repeatedly performs nearby max crafts until resources run out or the session is aborted.
 - **Dynamic staging and ejection**: Bulk craft brings in as many items as possible at a time and can eject outputs when needed to keep large sessions moving.
-- **Variant continuation**: Bulk can keep crafting the same variant or switch to another available variant in the same family depending on your settings.
+- **Output variant switching**: With the **Output Variant Switching** setting on, a bulk craft, a plain auto craft, or a retrieval can move on to another variant in the same family once the current one runs out, following the revolving-variant setting for that click. Ask for 32 stairs with planks for 20 oak and 12 birch and you get both. Off keeps one variant per request.
 - **Safe shutdown**: Bulk sessions shut off automatically when finished, when manually aborted with `ESC`, or when the game window loses focus.
 
 ---
@@ -125,6 +126,21 @@ Scroll to pull is a specialized fast-output workflow that pairs well with the `S
 - `Shift + scroll down` while hovering the result slot pulls the crafted result into your inventory, or ejects it if inventory space is unavailable.
 - `Shift + scroll down` while hovering an inventory slot tries to pull the crafted result directly into that slot.
 - `Shift + scroll up` appends the crafted result to your cursor stack.
+
+---
+
+## Retrieving Existing Items
+
+If copies of what you are about to craft already sit in a nearby chest, a `Ctrl`-assisted recipe click can pull them out instead of crafting duplicates. Plain clicks are never affected. (This version has no separate Retrieval Mode: the book cannot show entries for items without a recipe, so retrieval always rides on a real recipe's click.)
+
+- **Existing Output Handling** (mod settings) decides what a `Ctrl` click does when the green dot shows:
+  - **Retrieve, Then Ask** (default): pull up to the requested amount, then ask whether to craft the rest. Requesting 32 stairs with 25 in a chest pulls the 25 and offers to craft the remaining 7.
+  - **Retrieve, Then Craft**: same, but the rest is crafted without asking.
+  - **Retrieve Only**: pull up to the requested amount and stop, so you decide separately how many more to craft. Once nothing is nearby the click is an ordinary craft.
+  - **Craft Only**: never look in chests for the output (the previous behavior).
+- **Count-bound**: the pull never exceeds what you asked for. `Ctrl + Shift + click` pulls everything nearby before the max craft. A craft click's pull never throws items on the ground; it fills your inventory and stops.
+- **Green dot**: drawn just below and right of the craftable dot on any recipe whose output is in a nearby chest, so both facts show at once. Turn it off with **Retrievable Indicator**.
+- **Output variant switching**: with the setting on, a pull or an autocraft can move on to another variant of the same family once the chosen one runs out, following the revolving-variant setting for that click.
 
 ---
 
@@ -157,6 +173,7 @@ Scroll to pull is a specialized fast-output workflow that pairs well with the `S
 - **Type to search**: Typing can jump directly into the recipe book search bar while ignoring keys that should not become text input.
 - **Search history**: Use the up and down arrows to cycle through previous recipe book searches.
 - **3x3 auto-focus**: The search bar is automatically focused when opening a crafting table.
+- **Craftable indicator**: A dot in the corner of a recipe says how a `Ctrl` click would craft it. A filled dot means it crafts from your inventory alone; a plus shape means nearby containers are needed. Yellow is a direct craft, orange a chain craft. A green dot underneath means copies of the output are already in a nearby chest.
 - **Yield and queue indicators**: The UI can show output totals and queued counts directly on recipes.
 - **Chat feedback**: Missing ingredient reports and bulk craft summaries are surfaced in chat.
 - **Recipe filter toggle**: `Spacebar` still supports the craftable/uncraftable recipe filter toggle when not being used for request scaling.
@@ -164,6 +181,8 @@ Scroll to pull is a specialized fast-output workflow that pairs well with the `S
 ### Extra Controls
 
 - **Quick Craft hotkey**: `B` by default opens a nearby 3x3 crafting table when possible, otherwise falls back to the 2x2 inventory grid and focuses search.
+- **In-game help**: `/effortlesscrafting help` lists short pages for queuing, nearby crafting, autocrafting, chain, bulk, bulk chain, and retrieve-then-craft; `/effortlesscrafting tips` collects the easy-to-miss shortcuts; `/effortlesscrafting settings` opens the settings screen without Mod Menu or a keybind.
+- **In-game help**: `/effortlesscrafting help` lists short pages for queuing, nearby crafting, autocrafting, chain, bulk, bulk chain, Retrieval Mode, and retrieve-then-craft (`/effortlesscrafting help bulk`); `/effortlesscrafting tips` collects the easy-to-miss shortcuts; `/effortlesscrafting settings` opens the settings screen without Mod Menu or a keybind. Pages replace each other in chat, so clicking through them navigates instead of piling up.
 
 ---
 

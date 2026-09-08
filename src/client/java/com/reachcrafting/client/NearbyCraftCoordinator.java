@@ -19,6 +19,8 @@ final class NearbyCraftCoordinator {
 	private static final NearbyCraftCoordinator INSTANCE = new NearbyCraftCoordinator();
 
 	private int interactionBlockTicks;
+
+	private boolean pauseScreenOpenLastTick;
 	private boolean suppressSecondaryUse;
 	private Set<String> pendingPostReturnCompactionItemIds = Set.of();
 	private CraftSession activeSession;
@@ -36,14 +38,17 @@ final class NearbyCraftCoordinator {
 				if (activeSession != null) {
 					abortActiveSession();
 				}
+				pauseScreenOpenLastTick = false;
 				return;
 			}
 			if (interactionBlockTicks > 0) {
 				interactionBlockTicks--;
 			}
-			if (client.screen instanceof net.minecraft.client.gui.screens.PauseScreen) {
+			boolean pauseScreenOpen = client.screen instanceof net.minecraft.client.gui.screens.PauseScreen;
+			if (pauseScreenOpen && !pauseScreenOpenLastTick) {
 				ContainerUtils.abortAllSessions();
 			}
+			pauseScreenOpenLastTick = pauseScreenOpen;
 			if (activeSession != null) {
 				activeSession.tick();
 			}
@@ -120,6 +125,26 @@ final class NearbyCraftCoordinator {
 		session.start();
 	}
 
+	void startExistingOutputRetrieval(ExistingOutputRetrievalRequest request) {
+		Minecraft client = Minecraft.getInstance();
+		LocalPlayer player = client.player;
+		Level level = client.level;
+		MultiPlayerGameMode gameMode = client.gameMode;
+		Entity cameraEntity = client.getCameraEntity();
+		if (player == null || level == null || gameMode == null || cameraEntity == null) {
+			return;
+		}
+
+		cancelCurrent();
+		ExistingOutputRetrievalSession session = new ExistingOutputRetrievalSession(this, client, player, level, gameMode, cameraEntity, request);
+		if (!session.canStart()) {
+			return;
+		}
+
+		activeSession = session;
+		session.start();
+	}
+
 	boolean tryExpandReservedGrid(SearchRequest request) {
 		Minecraft client = Minecraft.getInstance();
 		LocalPlayer player = client.player;
@@ -175,6 +200,11 @@ final class NearbyCraftCoordinator {
 
 	boolean isActiveSessionRunning() {
 		return activeSession != null;
+	}
+
+	/** True while a retrieval session owns the inventory and the screen. */
+	boolean isRetrievalSessionRunning() {
+		return activeSession instanceof ExistingOutputRetrievalSession;
 	}
 
 	boolean shouldBlockWorldInteraction() {

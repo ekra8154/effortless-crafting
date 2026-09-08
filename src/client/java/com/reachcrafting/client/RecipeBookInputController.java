@@ -230,6 +230,7 @@ final class RecipeBookInputController {
 			requestedClicks,
 			refillableBulkMaxMode,
 			autoCraftRequested,
+			false,
 			state
 		);
 	}
@@ -404,6 +405,10 @@ final class RecipeBookInputController {
 	}
 
 	void scheduleReplay(RecipeBookClickCapture.HeldRecipeAction action, int remainingClicks, boolean allowNearby, boolean craftAll, boolean refillableBulkMaxMode, boolean autoCraftRequested) {
+		scheduleReplay(action, remainingClicks, allowNearby, craftAll, refillableBulkMaxMode, autoCraftRequested, false);
+	}
+
+	void scheduleReplay(RecipeBookClickCapture.HeldRecipeAction action, int remainingClicks, boolean allowNearby, boolean craftAll, boolean refillableBulkMaxMode, boolean autoCraftRequested, boolean retrievalDone) {
 		if (!ReachCraftingConfig.get().enabled() || action == null || remainingClicks <= 0) {
 			return;
 		}
@@ -443,7 +448,7 @@ final class RecipeBookInputController {
 			refillableBulkMaxMode,
 			action.recipeId()
 		);
-		state.setReplayBatch(new RecipeBookClickCapture.ReplayBatch(action, remainingClicks, allowNearby, craftAll, refillableBulkMaxMode, autoCraftRequested));
+		state.setReplayBatch(new RecipeBookClickCapture.ReplayBatch(action, remainingClicks, allowNearby, craftAll, refillableBulkMaxMode, autoCraftRequested, retrievalDone));
 	}
 
 	boolean hasPendingHeldRecipe(
@@ -554,6 +559,50 @@ final class RecipeBookInputController {
 		}
 	}
 
+	/**
+	 * Dev harness only: queue {@code count} of a recipe and release it as one
+	 * request, the way a Ctrl+scroll accumulation followed by the key release
+	 * does. Goes through the same clamp and replay so the queue limit is
+	 * exercised, not bypassed.
+	 */
+	void harnessQueueAndRelease(
+		Recipe<?> recipe,
+		net.minecraft.client.gui.screens.recipebook.RecipeCollection collection,
+		ItemStack displayStack,
+		int count
+	) {
+		harnessQueueAndRelease(recipe, collection, displayStack, count, false, false);
+	}
+
+	void harnessQueueAndRelease(
+		Recipe<?> recipe,
+		net.minecraft.client.gui.screens.recipebook.RecipeCollection collection,
+		ItemStack displayStack,
+		int count,
+		boolean ctrl,
+		boolean alt
+	) {
+		Minecraft minecraft = Minecraft.getInstance();
+		RecipeBookClickCapture.HeldRecipeAction action = new RecipeBookClickCapture.HeldRecipeAction(
+			recipe,
+			recipe.getId(),
+			collection,
+			displayStack != null ? displayStack.copy() : ItemStack.EMPTY,
+			GLFW.GLFW_MOUSE_BUTTON_LEFT,
+			false
+		);
+		int queueLimit = resolveQueueLimit(minecraft, action);
+		int queued = clampQueuedCount(0, count, queueLimit);
+		com.reachcrafting.ReachCraftingMod.diag(
+			"[recipe_input] harness_queue recipe={} requested={} queue_limit={} queued={}",
+			recipe.getId(), count, queueLimit, queued);
+		state.setPendingHeldRecipe(new RecipeBookClickCapture.PendingHeldRecipe(action, queued, queued >= 2));
+		if (alt) {
+			AutoCraftController.consumeQuickCraft();
+		}
+		releasePendingHeldRecipe(currentModifierState(ctrl, false, alt));
+	}
+
 	private void releasePendingHeldRecipe(ModifierState modifierState) {
 		if (!ReachCraftingConfig.get().enabled() || state.pendingHeldRecipe() == null) {
 			return;
@@ -655,7 +704,8 @@ final class RecipeBookInputController {
 					replayBatch.allowNearby(),
 					replayBatch.craftAll(),
 					replayBatch.refillableBulkMaxMode(),
-					replayBatch.autoCraftRequested()
+					replayBatch.autoCraftRequested(),
+					replayBatch.retrievalDone()
 				);
 				state.setReplayBatch(replayBatch);
 			}
@@ -684,6 +734,7 @@ final class RecipeBookInputController {
 			replayBatch.remainingClicks(),
 			replayBatch.refillableBulkMaxMode(),
 			replayBatch.autoCraftRequested(),
+			replayBatch.retrievalDone(),
 			state
 		);
 		if (state.replayBatch() == replayBatch) {
@@ -729,7 +780,11 @@ final class RecipeBookInputController {
 	private boolean isCraftingSessionControllerActive() {
 		return BulkAutoCraftController.isActive()
 			|| ChainCraftController.isActive()
-			|| BulkChainCraftController.isActive();
+			|| BulkChainCraftController.isActive()
+			// A retrieval walks chests for as long as a bulk craft does; a
+			// queue release landing mid-walk must not flush the grid or
+			// start a competing request underneath it.
+			|| NearbyContainerDryRun.isRetrievalSessionRunning();
 	}
 
 	private boolean adjustHeldRecipeCount(Minecraft minecraft, RecipeBookClickCapture.HeldRecipeAction action, int delta) {
