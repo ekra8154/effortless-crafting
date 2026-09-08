@@ -48,6 +48,9 @@ import java.nio.file.Path;
  *                                 - revolvingCraftHandling in memory only
  *   set variantswitch on|off      - outputVariantSwitching in memory only
  *   set nearby always|ctrl|off    - nearby container usage mode in memory only
+ *   waitidle                      - log "[repro_harness] idle" once nothing is running
+ * Every consumed command is echoed to repro-cmd.ack, so the driver can
+ * wait for consumption instead of sleeping.
  *   set eject on|off              - flip ejectItemsWhenFull in memory only
  *   set budget <n>                - clickBudgetPerWindow in memory only
  *   warmcache                     - scan uncached containers (logs "warmup finish")
@@ -63,6 +66,15 @@ public final class ReproHarness {
 	private static boolean autoConfirmYes = true;
 
 	private static Path cmdFile;
+	/**
+	 * Written with the command text the moment a command is consumed, so the
+	 * driver can wait for that instead of sleeping a fixed 1.5 s per command.
+	 */
+	private static Path ackFile;
+	/** `waitidle`: log "[repro_harness] idle" once the mod has been quiet for IDLE_QUIET_TICKS. */
+	private static boolean idleWatch;
+	private static int idleQuietTicks;
+	private static final int IDLE_QUIET_TICKS = 10;
 	private static int pollCounter;
 	private static String pendingBulkItem;
 	private static PendingKind pendingKind = PendingKind.CRAFT;
@@ -112,6 +124,7 @@ public final class ReproHarness {
 		// making all ten version worktrees carry a config override.
 		ReachCraftingMod.setDiagnosticLoggingGate(() -> true);
 		cmdFile = FabricLoader.getInstance().getGameDir().resolve("repro-cmd.txt");
+		ackFile = FabricLoader.getInstance().getGameDir().resolve("repro-cmd.ack");
 		ReachCraftingMod.diag("[repro_harness] armed cmd_file={} quiet_launch={} free_mouse={} (F6 toggles)", cmdFile, QUIET_LAUNCH, freeMouse);
 		ClientTickEvents.END_CLIENT_TICK.register(ReproHarness::tick);
 	}
@@ -140,7 +153,8 @@ public final class ReproHarness {
 			focusBypassTicks--;
 		}
 		drivePending(client);
-		if (++pollCounter < 10) {
+		pollIdle(client);
+		if (++pollCounter < 2) {
 			return;
 		}
 		pollCounter = 0;
@@ -149,8 +163,13 @@ public final class ReproHarness {
 			return;
 		}
 		ReachCraftingMod.diag("[repro_harness] command={}", command);
+		writeAck(command);
 		String[] parts = command.trim().split("\\s+");
 		switch (parts[0]) {
+			case "waitidle" -> {
+				idleWatch = true;
+				idleQuietTicks = 0;
+			}
 			case "open" -> openNearestCraftingTable(client);
 			case "close" -> {
 				// Close the crafting screen so grid contents return to the
@@ -535,6 +554,52 @@ public final class ReproHarness {
 		Vec3 hitPos = ContainerUtils.closestPointOnUnitBlock(eyePos, tablePos);
 		Direction face = Direction.getApproximateNearest(hitPos.subtract(eyePos)).getOpposite();
 		client.gameMode.useItemOn(client.player, InteractionHand.MAIN_HAND, new BlockHitResult(hitPos, face, tablePos, false));
+	}
+
+	private static void writeAck(String command) {
+		try {
+			if (ackFile != null) {
+				Files.writeString(ackFile, command);
+			}
+		} catch (IOException e) {
+			ReachCraftingMod.LOGGER.warn("[repro_harness] ack file error", e);
+		}
+	}
+
+	/**
+	 * Everything the mod can still be doing after a scenario's "done" line:
+	 * container sessions (withdrawal, retrieval, return), the click queue,
+	 * a pending auto-move, the extractor, every controller that schedules
+	 * further work, a prompt waiting for an answer, and the harness's own
+	 * pending trigger.
+	 */
+	private static boolean modBusy(Minecraft client) {
+		return pendingBulkItem != null
+			|| NearbyContainerDryRun.isActiveSessionRunning()
+			|| ContainerUtils.isInputQueueActive()
+			|| ContainerUtils.isAutoMovePending()
+			|| ChainCraftController.isActive()
+			|| BulkAutoCraftController.isActive()
+			|| BulkChainCraftController.isActive()
+			|| GridExtractor.isActive()
+			|| OutputVariantContinuationController.isActive()
+			|| RetrieveThenCraftController.isActive()
+			|| (client.screen instanceof net.minecraft.client.gui.components.PopupScreen popup
+				&& ChainCraftPopupController.isChainCraftPopup(popup));
+	}
+
+	private static void pollIdle(Minecraft client) {
+		if (!idleWatch) {
+			return;
+		}
+		if (modBusy(client)) {
+			idleQuietTicks = 0;
+			return;
+		}
+		if (++idleQuietTicks >= IDLE_QUIET_TICKS) {
+			idleWatch = false;
+			ReachCraftingMod.diag("[repro_harness] idle");
+		}
 	}
 
 	private static String readAndClearCommand() {
