@@ -260,12 +260,12 @@ public final class ReachCraftingConfigScreen {
 			.build());
 
 		autoGroup.add(entries.startBooleanToggle(
-				Component.translatable("option.reachcrafting.bulk_variant_switching"),
-				config.bulkVariantSwitching()
+				Component.translatable("option.reachcrafting.output_variant_switching"),
+				config.outputVariantSwitching()
 			)
 			.setDefaultValue(false)
-			.setTooltip(Component.translatable("tooltip.reachcrafting.bulk_variant_switching"))
-			.setSaveConsumer(config::setBulkVariantSwitching)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.output_variant_switching"))
+			.setSaveConsumer(config::setOutputVariantSwitching)
 			.build());
 
 		autoGroup.add(entries.startEnumSelector(
@@ -352,6 +352,26 @@ public final class ReachCraftingConfigScreen {
 			.setDefaultValue(true)
 			.setTooltip(Component.translatable("tooltip.reachcrafting.enable_existing_output_retrieval"))
 			.setSaveConsumer(config::setEnableExistingOutputRetrieval)
+			.build());
+
+		nearbyGroup.add(entries.startEnumSelector(
+				Component.translatable("option.reachcrafting.existing_output_handling"),
+				ReachCraftingConfig.ExistingOutputHandling.class,
+				config.existingOutputHandling()
+			)
+			.setDefaultValue(ReachCraftingConfig.ExistingOutputHandling.RETRIEVE_THEN_ASK)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.existing_output_handling"))
+			.setSaveConsumer(config::setExistingOutputHandling)
+			.setEnumNameProvider(value -> Component.translatable("enum.reachcrafting.existing_output_handling." + value.name().toLowerCase()))
+			.build());
+
+		nearbyGroup.add(entries.startBooleanToggle(
+				Component.translatable("option.reachcrafting.show_retrievable_indicator"),
+				config.showRetrievableIndicator()
+			)
+			.setDefaultValue(true)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.show_retrievable_indicator"))
+			.setSaveConsumer(config::setShowRetrievableIndicator)
 			.build());
 
 		nearbyGroup.add(entries.startBooleanToggle(

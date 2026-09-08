@@ -40,11 +40,27 @@ public final class BulkChainCraftController {
 		ClientTickEvents.END_CLIENT_TICK.register(BulkChainCraftController::tick);
 	}
 
+	/**
+	 * The click a bulk chain session came from, kept so the session can move
+	 * on to another variant of the same family when the current one runs out
+	 * (Output Variant Switching). Null when switching is not allowed for it.
+	 */
+	public record VariantFamily(
+		net.minecraft.world.item.crafting.display.RecipeDisplayId clickedRecipeId,
+		net.minecraft.client.gui.screens.recipebook.RecipeCollection collection,
+		ItemStack clickedDisplayStack
+	) {
+	}
+
 	static void start(RecipeVariantResolver.Selection selection, boolean allowNearby, int requestedTotalCopies) {
+		start(selection, allowNearby, requestedTotalCopies, null);
+	}
+
+	static void start(RecipeVariantResolver.Selection selection, boolean allowNearby, int requestedTotalCopies, VariantFamily family) {
 		if (selection == null || selection.displayStack().isEmpty() || requestedTotalCopies <= 0) {
 			return;
 		}
-		activeSession = BulkChainSession.start(selection, allowNearby, requestedTotalCopies);
+		activeSession = BulkChainSession.start(selection, allowNearby, requestedTotalCopies, family);
 		settleDelayTicks = 0;
 		BulkDespawnWarning.noteSessionStart();
 		// The user just confirmed a bulk session; if a stray hold-state wipe
@@ -130,8 +146,11 @@ public final class BulkChainCraftController {
 			String itemName = activeSession.selection().displayStack().getHoverName().getString();
 			int outputPerCraft = Math.max(activeSession.selection().displayStack().getCount(), 1);
 			int craftedItems = activeSession.completedCopies() * outputPerCraft;
+			String crafted = activeSession.completedByItem().size() > 1
+				? describeCompletedByItem(activeSession.completedByItem())
+				: ContainerUtils.formatStackBreakdown(craftedItems) + " " + itemName;
 			ReachCraftingModClient.sendBulkSummaryChat(
-				"Bulk chain craft " + status + ": Crafted " + ContainerUtils.formatStackBreakdown(craftedItems) + " " + itemName
+				"Bulk chain craft " + status + ": Crafted " + crafted
 					+ BulkDespawnWarning.elapsedSummarySuffix()
 			);
 		}
@@ -242,12 +261,92 @@ public final class BulkChainCraftController {
 		// every iteration — on a cramped inventory that ladder alone cost
 		// six planner passes per batch.
 		int nextCap = Math.min(MAX_BATCH_FINAL_COPIES, Math.max(4, session.plannedIterationCopies() * 2));
+		session.completedByItem().merge(
+			net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(session.selection().displayStack().getItem()).toString(),
+			craftedCopies * outputPerCraft,
+			Integer::sum
+		);
 		activeSession = session.withIterationAccounted(craftedCopies, 0, nextCap);
 		if (activeSession.completedCopies() >= activeSession.requestedTotalCopies()) {
 			stop(false, "requested_copies_completed");
 			return;
 		}
 		settleDelayTicks = 1;
+	}
+
+	private static String describeCompletedByItem(Map<String, Integer> byItem) {
+		StringBuilder text = new StringBuilder();
+		for (Map.Entry<String, Integer> entry : byItem.entrySet()) {
+			if (!text.isEmpty()) {
+				text.append(", ");
+			}
+			text.append(ContainerUtils.formatStackBreakdown(entry.getValue())).append(' ').append(ContainerUtils.getItemName(entry.getKey()));
+		}
+		return text.toString();
+	}
+
+	/**
+	 * The current variant cannot be planned any more. With a family on the
+	 * session, find another variant that still has a chain plan against the
+	 * same live counts, make it the session's selection, and go again.
+	 */
+	private static boolean trySwitchVariant(Minecraft client, Map<String, Integer> availableCounts, int batchTarget) {
+		BulkChainSession session = activeSession;
+		if (session == null || session.family() == null || client.player == null) {
+			return false;
+		}
+		VariantFamily family = session.family();
+		java.util.Set<net.minecraft.world.item.crafting.display.RecipeDisplayId> drained = new java.util.HashSet<>(session.drainedRecipeIds());
+		drained.add(session.selection().recipeId());
+		java.util.List<RecipeVariantResolver.Selection> candidates = RecipeVariantResolver.collectionCandidates(
+			client,
+			client.player,
+			family.clickedRecipeId(),
+			family.collection(),
+			family.clickedDisplayStack().copy(),
+			AvailableItemSnapshot.capture(client.player, client.screen),
+			availableCounts,
+			availableCounts,
+			true,
+			1
+		);
+		// Same rule as the chain offer: a variant whose only material is
+		// last-resort (stripped logs) is never switched to automatically.
+		java.util.Set<String> lastResort = LastResortIngredients.activeCategories(ReachCraftingConfig.get());
+		Map<net.minecraft.world.item.crafting.display.RecipeDisplayId, Integer> totalScores = ChainVariantRanking.scoreVariants(candidates, availableCounts);
+		Map<net.minecraft.world.item.crafting.display.RecipeDisplayId, Integer> ordinaryScores = lastResort.isEmpty()
+			? totalScores
+			: ChainVariantRanking.scoreVariants(candidates, RecipeClickExecutor.withoutLastResort(availableCounts, lastResort));
+		for (RecipeVariantResolver.Selection candidate : candidates) {
+			if (candidate == null || drained.contains(candidate.recipeId())) {
+				continue;
+			}
+			if (RecipeClickExecutor.onlyLastResortMaterial(candidate.recipeId(), totalScores, ordinaryScores, lastResort)) {
+				ReachCraftingMod.diag("[bulk_chain] variant_switch skip_last_resort_only variant={}", ContainerUtils.formatStack(candidate.displayStack()));
+				drained.add(candidate.recipeId());
+				continue;
+			}
+			Optional<ChainCraftPlan> plan = ChainCraftPlanner.planMax(client, client.player, candidate, availableCounts, session.allowNearby(), batchTarget, true);
+			if (plan.isEmpty() || plan.get().finalRecipeCopies() <= 0) {
+				drained.add(candidate.recipeId());
+				continue;
+			}
+			ReachCraftingMod.diag(
+				"[bulk_chain] variant_switch from={} to={} plannable={} completed={}/{}",
+				ContainerUtils.formatStack(session.selection().displayStack()),
+				ContainerUtils.formatStack(candidate.displayStack()),
+				plan.get().finalRecipeCopies(),
+				session.completedCopies(),
+				session.requestedTotalCopies()
+			);
+			ReachCraftingModClient.sendChat("Output variant switching: bulk chain crafting "
+				+ candidate.displayStack().getHoverName().getString() + ".");
+			activeSession = session.withSelection(candidate, drained);
+			startNextIteration(client);
+			return true;
+		}
+		ReachCraftingMod.diag("[bulk_chain] variant_switch none_left drained={}", drained.size());
+		return false;
 	}
 
 	private static void startNextIteration(Minecraft client) {
@@ -265,6 +364,9 @@ public final class BulkChainCraftController {
 			true
 		);
 		if (plan.isEmpty()) {
+			if (trySwitchVariant(client, availableCounts, batchTarget)) {
+				return;
+			}
 			stop(false, "materials_exhausted");
 			return;
 		}
@@ -295,6 +397,9 @@ public final class BulkChainCraftController {
 					true
 				);
 				if (plan.isEmpty()) {
+					if (trySwitchVariant(client, availableCounts, batchTarget)) {
+						return;
+					}
 					stop(false, "materials_exhausted");
 					return;
 				}
@@ -411,18 +516,25 @@ public final class BulkChainCraftController {
 		boolean chainRunning,
 		int stalledIterations,
 		int batchCap,
-		int plannedIterationCopies
+		int plannedIterationCopies,
+		VariantFamily family,
+		java.util.Set<net.minecraft.world.item.crafting.display.RecipeDisplayId> drainedRecipeIds,
+		Map<String, Integer> completedByItem
 	) {
-		private static BulkChainSession start(RecipeVariantResolver.Selection selection, boolean allowNearby, int requestedTotalCopies) {
-			return new BulkChainSession(selection, allowNearby, requestedTotalCopies, 0, 0, 0, false, 0, MAX_BATCH_FINAL_COPIES, 0);
+		private static BulkChainSession start(RecipeVariantResolver.Selection selection, boolean allowNearby, int requestedTotalCopies, VariantFamily family) {
+			return new BulkChainSession(selection, allowNearby, requestedTotalCopies, 0, 0, 0, false, 0, MAX_BATCH_FINAL_COPIES, 0, family, java.util.Set.of(), new java.util.LinkedHashMap<>());
 		}
 
 		BulkChainSession withChainStarted(int baselineOutputCount, int iterationCopies) {
-			return new BulkChainSession(selection, allowNearby, requestedTotalCopies, completedCopies, baselineOutputCount, 0, true, stalledIterations, batchCap, iterationCopies);
+			return new BulkChainSession(selection, allowNearby, requestedTotalCopies, completedCopies, baselineOutputCount, 0, true, stalledIterations, batchCap, iterationCopies, family, drainedRecipeIds, completedByItem);
 		}
 
 		BulkChainSession withEjected(int ejectedCount) {
-			return new BulkChainSession(selection, allowNearby, requestedTotalCopies, completedCopies, iterationBaselineOutputCount, ejectedCount, chainRunning, stalledIterations, batchCap, plannedIterationCopies);
+			return new BulkChainSession(selection, allowNearby, requestedTotalCopies, completedCopies, iterationBaselineOutputCount, ejectedCount, chainRunning, stalledIterations, batchCap, plannedIterationCopies, family, drainedRecipeIds, completedByItem);
+		}
+
+		BulkChainSession withSelection(RecipeVariantResolver.Selection nextSelection, java.util.Set<net.minecraft.world.item.crafting.display.RecipeDisplayId> drained) {
+			return new BulkChainSession(nextSelection, allowNearby, requestedTotalCopies, completedCopies, 0, 0, false, 0, batchCap, 0, family, java.util.Set.copyOf(drained), completedByItem);
 		}
 
 		BulkChainSession withIterationAccounted(int craftedCopies, int updatedStalledIterations, int updatedBatchCap) {
@@ -438,7 +550,10 @@ public final class BulkChainCraftController {
 				false,
 				updatedStalledIterations,
 				updatedBatchCap,
-				0
+				0,
+				family,
+				drainedRecipeIds,
+				completedByItem
 			);
 		}
 	}
