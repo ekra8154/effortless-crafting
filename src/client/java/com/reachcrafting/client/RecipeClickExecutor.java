@@ -381,7 +381,12 @@ final class RecipeClickExecutor {
 		// cache on a cold nearby scan -- the first click after opening a table
 		// then wrongly concluded "direct unsatisfiable -> chain", launching an
 		// expensive cyclic planner search AND dropping into tiny eject batches.
-		// Trust the same signal the indicator shows.
+		// Trust the same signal the indicator shows -- brought up to date
+		// first: the cache refreshes asynchronously off the tick, and the
+		// first click after opening the table (or after a chest scan moved
+		// the nearby counts) otherwise reads the previous state's sets, which
+		// hid every chain sibling from the variant fallback below.
+		ChainCraftabilityCache.refreshNow(minecraft);
 		boolean directlyCraftableNow = !immediateCraftDeficit.hasMissingIngredients()
 			|| ChainCraftabilityCache.isReachable(selectedRecipe.recipeId());
 		boolean directBulkTakesPriority = (refillableBulkMaxMode

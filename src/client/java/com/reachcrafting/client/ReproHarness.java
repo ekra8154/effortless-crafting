@@ -416,6 +416,9 @@ public final class ReproHarness {
 				}
 				ExistingOutputRetrievalController.setEnabled(false);
 				RecipeButtonNearbyIndicator.clearCaches();
+				// The probe reads the cache the way a click does: settled, not
+				// whatever an in-flight tick recompute last published.
+				ChainCraftabilityCache.refreshNow(client);
 				ReachCraftingMod.diag("[repro_harness] indicator_state item={} recipe={} {}",
 					itemId, entry.id(), RecipeButtonNearbyIndicator.describe(entry.id(), collection));
 				return;

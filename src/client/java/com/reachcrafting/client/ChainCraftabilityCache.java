@@ -49,6 +49,12 @@ public final class ChainCraftabilityCache {
 	private static List<LightRecipe> recipeIndex = List.of();
 	private static Map<String, List<LightRecipe>> recipesByOutput = Map.of();
 	private static java.util.concurrent.CompletableFuture<Void> backgroundTask = null;
+	/**
+	 * Bumped by every recompute that starts. An async recompute applies its
+	 * result only if nothing newer started meanwhile, so a synchronous refresh
+	 * taken on a click can never be overwritten by a slower, staler one.
+	 */
+	private static int generation = 0;
 
 	private ChainCraftabilityCache() {
 	}
@@ -132,7 +138,26 @@ public final class ChainCraftabilityCache {
 		refreshIfNeeded(client, true);
 	}
 
+	/**
+	 * Bring the sets up to date NOW, on the calling thread. The tick refresh
+	 * is asynchronous, which is right for painting indicators but wrong for
+	 * a decision: the first click after opening a crafting table (or after a
+	 * chest scan changed the nearby counts) read the previous state's sets
+	 * while the recompute for the new one was still in flight, so a variant
+	 * fallback saw every sibling as chain-unreachable and the harness probe
+	 * reported the stale answer. Cheap enough for a click: the recipe index
+	 * is rebuilt only when the recipe count changed, and the classification
+	 * is one flood-fill over the light index.
+	 */
+	public static void refreshNow(Minecraft client) {
+		refresh(client, false, true);
+	}
+
 	private static void refreshIfNeeded(Minecraft client, boolean fromTick) {
+		refresh(client, fromTick, false);
+	}
+
+	private static void refresh(Minecraft client, boolean fromTick, boolean synchronous) {
 		if (!ReachCraftingConfig.get().enabled()
 			|| client.player == null
 			|| client.level == null) {
@@ -158,7 +183,8 @@ public final class ChainCraftabilityCache {
 			return;
 		}
 
-		if (backgroundTask != null && !backgroundTask.isDone()) {
+		boolean inFlight = backgroundTask != null && !backgroundTask.isDone();
+		if (inFlight && !synchronous) {
 			return; // Don't start a new recompute if one is currently in progress
 		}
 
@@ -193,7 +219,10 @@ public final class ChainCraftabilityCache {
 			|| nearbyRevision != lastNearbyRevision
 			|| reachableSignature != lastReachableSignature;
 
-		if (!indexStale && !countsStale) {
+		// An in-flight async recompute still leaves the sets stale until it
+		// lands; a synchronous caller needs the answer now, so it recomputes
+		// even when nothing changed since that task started.
+		if (!indexStale && !countsStale && !(synchronous && inFlight)) {
 			return;
 		}
 
@@ -209,44 +238,115 @@ public final class ChainCraftabilityCache {
 		ContextMap context = SlotDisplayContext.fromLevel(client.level);
 
 		long recomputeStartNanos = PerformanceProfiler.start();
-		
+
 		CountsCapture counts = captureCounts(player, client);
+		final int thisGeneration = ++generation;
+		final List<LightRecipe> baseIndex = recipeIndex;
+		final Map<String, List<LightRecipe>> baseByOutput = recipesByOutput;
+
+		if (synchronous) {
+			Computed computed = compute(allRecipes, gridSlotCount, context, indexStale, baseIndex, baseByOutput, counts);
+			apply(thisGeneration, computed, knownCount, gridSlotCount, inventoryHash, nearbyRevision, reachableSignature);
+			PerformanceProfiler.record(
+				"chain.cache_sync_recompute",
+				recomputeStartNanos,
+				"recipes=" + computed.index().size() + " screen_slots=" + gridSlotCount + " index_stale=" + indexStale + " async=false"
+			);
+			return;
+		}
 
 		backgroundTask = java.util.concurrent.CompletableFuture.runAsync(() -> {
-			List<LightRecipe> localRecipeIndex = indexStale ? buildRecipeIndex(allRecipes, gridSlotCount, context) : recipeIndex;
-			Map<String, List<LightRecipe>> localRecipesByOutput;
-			if (indexStale) {
-				Map<String, List<LightRecipe>> byOutput = new java.util.HashMap<>();
-				for (LightRecipe recipe : localRecipeIndex) {
-					byOutput.computeIfAbsent(recipe.outputItemId, k -> new ArrayList<>()).add(recipe);
+			Computed computed = compute(allRecipes, gridSlotCount, context, indexStale, baseIndex, baseByOutput, counts);
+			client.execute(() -> {
+				if (thisGeneration != generation) {
+					return; // a newer recompute (a synchronous one on a click) already applied
 				}
-				localRecipesByOutput = Map.copyOf(byOutput);
-				ReachCraftingMod.LOGGER.debug(
-					"[chain_cache] rebuilt recipe index recipes={} grid_slots={}",
-					localRecipeIndex.size(),
-					gridSlotCount
+				apply(thisGeneration, computed, knownCount, gridSlotCount, inventoryHash, finalNearbyRevision, finalReachableSignature);
+				PerformanceProfiler.record(
+					"chain.cache_tick_recompute",
+					recomputeStartNanos,
+					"recipes=" + computed.index().size() + " screen_slots=" + gridSlotCount + " index_stale=" + indexStale + " async=true"
 				);
-			} else {
-				localRecipesByOutput = recipesByOutput;
-			}
-
-			recompute(localRecipeIndex, localRecipesByOutput, counts, () -> {
-				client.execute(() -> {
-					recipeIndex = localRecipeIndex;
-					recipesByOutput = localRecipesByOutput;
-					lastKnownRecipeCount = knownCount;
-					lastGridSlotCount = gridSlotCount;
-					lastInventoryHash = inventoryHash;
-					lastNearbyRevision = finalNearbyRevision;
-					lastReachableSignature = finalReachableSignature;
-					PerformanceProfiler.record(
-						"chain.cache_tick_recompute",
-						recomputeStartNanos,
-						"recipes=" + localRecipeIndex.size() + " screen_slots=" + gridSlotCount + " index_stale=" + indexStale + " async=true"
-					);
-				});
 			});
 		});
+	}
+
+	private record Computed(
+		List<LightRecipe> index,
+		Map<String, List<LightRecipe>> byOutput,
+		Classification local,
+		Classification merged,
+		int directlyAvailable
+	) {
+	}
+
+	/** The whole recompute, thread-agnostic: index (if stale) plus the two classification passes. */
+	private static Computed compute(
+		List<RecipeDisplayEntry> allRecipes,
+		int gridSlotCount,
+		ContextMap context,
+		boolean indexStale,
+		List<LightRecipe> baseIndex,
+		Map<String, List<LightRecipe>> baseByOutput,
+		CountsCapture counts
+	) {
+		List<LightRecipe> localRecipeIndex = indexStale ? buildRecipeIndex(allRecipes, gridSlotCount, context) : baseIndex;
+		Map<String, List<LightRecipe>> localRecipesByOutput;
+		if (indexStale) {
+			Map<String, List<LightRecipe>> byOutput = new java.util.HashMap<>();
+			for (LightRecipe recipe : localRecipeIndex) {
+				byOutput.computeIfAbsent(recipe.outputItemId, k -> new ArrayList<>()).add(recipe);
+			}
+			localRecipesByOutput = Map.copyOf(byOutput);
+			ReachCraftingMod.LOGGER.debug(
+				"[chain_cache] rebuilt recipe index recipes={} grid_slots={}",
+				localRecipeIndex.size(),
+				gridSlotCount
+			);
+		} else {
+			localRecipesByOutput = baseByOutput;
+		}
+		// Two classification passes: inventory-only, then inventory + nearby
+		// containers. The smart sort ranks in-inventory results above ones
+		// that would need chest withdrawals. When nearby adds nothing the
+		// merged map is the SAME instance and the second pass is skipped.
+		Classification local = classify(localRecipeIndex, localRecipesByOutput, counts.local());
+		Classification merged = counts.merged() == counts.local()
+			? local
+			: classify(localRecipeIndex, localRecipesByOutput, counts.merged());
+		return new Computed(localRecipeIndex, localRecipesByOutput, local, merged, counts.merged().size());
+	}
+
+	/** Publish a recompute's result; render thread only. */
+	private static void apply(
+		int thisGeneration,
+		Computed computed,
+		int knownCount,
+		int gridSlotCount,
+		long inventoryHash,
+		long nearbyRevision,
+		int reachableSignature
+	) {
+		recipeIndex = computed.index();
+		recipesByOutput = computed.byOutput();
+		chainCraftableRecipeIds = computed.merged().chain();
+		reachableRecipeIds = computed.merged().direct();
+		locallyChainCraftableRecipeIds = computed.local().chain();
+		locallyReachableRecipeIds = computed.local().direct();
+		lastKnownRecipeCount = knownCount;
+		lastGridSlotCount = gridSlotCount;
+		lastInventoryHash = inventoryHash;
+		lastNearbyRevision = nearbyRevision;
+		lastReachableSignature = reachableSignature;
+		ReachCraftingMod.LOGGER.debug(
+			"[chain_cache] recomputed generation={} chain_craftable={} reachable={} local_chain={} local_reachable={} directly_available={}",
+			thisGeneration,
+			computed.merged().chain().size(),
+			computed.merged().direct().size(),
+			computed.local().chain().size(),
+			computed.local().direct().size(),
+			computed.directlyAvailable()
+		);
 	}
 
 	record CountsCapture(Map<String, Integer> local, Map<String, Integer> merged) {
@@ -280,46 +380,6 @@ public final class ChainCraftabilityCache {
 	}
 
 	private record Classification(Set<RecipeDisplayId> chain, Set<RecipeDisplayId> direct) {
-	}
-
-	private static void recompute(
-		List<LightRecipe> localRecipeIndex,
-		Map<String, List<LightRecipe>> localRecipesByOutput,
-		CountsCapture counts,
-		Runnable onComplete
-	) {
-		long startNanos = PerformanceProfiler.start();
-		// Two classification passes: inventory-only, then inventory + nearby
-		// containers. The smart sort ranks in-inventory results above ones
-		// that would need chest withdrawals. When nearby adds nothing the
-		// merged map is the SAME instance and the second pass is skipped.
-		Classification local = classify(localRecipeIndex, localRecipesByOutput, counts.local());
-		Classification merged = counts.merged() == counts.local()
-			? local
-			: classify(localRecipeIndex, localRecipesByOutput, counts.merged());
-
-		Minecraft.getInstance().execute(() -> {
-			chainCraftableRecipeIds = merged.chain();
-			reachableRecipeIds = merged.direct();
-			locallyChainCraftableRecipeIds = local.chain();
-			locallyReachableRecipeIds = local.direct();
-			ReachCraftingMod.LOGGER.debug(
-				"[chain_cache] recomputed chain_craftable={} reachable={} local_chain={} local_reachable={} directly_available={}",
-				merged.chain().size(),
-				merged.direct().size(),
-				local.chain().size(),
-				local.direct().size(),
-				counts.merged().size()
-			);
-			PerformanceProfiler.record(
-				"chain.cache_recompute_body",
-				startNanos,
-				"chain=" + merged.chain().size() + " reachable=" + merged.direct().size()
-					+ " local_chain=" + local.chain().size() + " local_reachable=" + local.direct().size()
-					+ " direct=" + counts.merged().size()
-			);
-			onComplete.run();
-		});
 	}
 
 	private static Classification classify(
