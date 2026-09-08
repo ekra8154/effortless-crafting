@@ -31,6 +31,8 @@ public final class ReachCraftingConfig {
 	private static final boolean DEFAULT_DIAGNOSTIC_LOGGING_ENABLED = false;
 	private static final boolean DEFAULT_SHOW_NEARBY_CRAFTABLE_INDICATOR = true;
 	private static final boolean DEFAULT_ENABLE_EXISTING_OUTPUT_RETRIEVAL = true;
+	private static final boolean DEFAULT_SHOW_RETRIEVABLE_INDICATOR = true;
+	private static final ExistingOutputHandling DEFAULT_EXISTING_OUTPUT_HANDLING = ExistingOutputHandling.RETRIEVE_THEN_ASK;
 	private static final boolean DEFAULT_CACHE_CONTAINERS_FOR_FASTER_SEARCH = true;
 	private static final ContainerDrainOrder DEFAULT_CONTAINER_DRAIN_ORDER = ContainerDrainOrder.SMALLEST_FIRST;
 	private static final boolean DEFAULT_REACH_CRAFT_HOLD_AND_RELEASE = true;
@@ -54,7 +56,7 @@ public final class ReachCraftingConfig {
 	private static final boolean DEFAULT_EJECT_ITEMS_WHEN_FULL = true;
 	private static final AutoCraftCapability DEFAULT_AUTO_CRAFT_CAPABILITY = AutoCraftCapability.BULK;
 	private static final boolean DEFAULT_AUTO_CRAFT_OFF_AFTER_BULK = false;
-	private static final boolean DEFAULT_BULK_VARIANT_SWITCHING = false;
+	private static final boolean DEFAULT_OUTPUT_VARIANT_SWITCHING = false;
 	private static final AutoCraftHandling DEFAULT_AUTO_CRAFT_HANDLING = AutoCraftHandling.HOLD;
 	private static final ChainCraftingMode DEFAULT_CHAIN_CRAFTING_MODE = ChainCraftingMode.CONFIRM;
 	private static final boolean DEFAULT_ENABLE_BULK_CHAIN_CRAFTING = true;
@@ -102,6 +104,8 @@ public final class ReachCraftingConfig {
 	private IngredientPlanning.CountPreference countPreference;
 	private boolean showNearbyCraftableIndicator;
 	private boolean enableExistingOutputRetrieval;
+	private boolean showRetrievableIndicator;
+	private ExistingOutputHandling existingOutputHandling;
 	private boolean cacheContainersForFasterSearch;
 	private ContainerDrainOrder containerDrainOrder;
 	private boolean reachCraftHoldAndRelease;
@@ -126,7 +130,7 @@ public final class ReachCraftingConfig {
 	private boolean ejectItemsWhenFull;
 	private AutoCraftCapability autoCraftCapability;
 	private boolean autoCraftOffAfterBulk;
-	private boolean bulkVariantSwitching;
+	private boolean outputVariantSwitching;
 	private AutoCraftHandling autoCraftHandling;
 	private ChainCraftingMode chainCraftingMode;
 	private boolean enableBulkChainCrafting;
@@ -181,6 +185,8 @@ public final class ReachCraftingConfig {
 				: DEFAULT_COUNT_PREFERENCE;
 			instance.showNearbyCraftableIndicator = stored.showNearbyCraftableIndicator != null ? stored.showNearbyCraftableIndicator : DEFAULT_SHOW_NEARBY_CRAFTABLE_INDICATOR;
 			instance.enableExistingOutputRetrieval = stored.enableExistingOutputRetrieval != null ? stored.enableExistingOutputRetrieval : DEFAULT_ENABLE_EXISTING_OUTPUT_RETRIEVAL;
+			instance.showRetrievableIndicator = stored.showRetrievableIndicator != null ? stored.showRetrievableIndicator : DEFAULT_SHOW_RETRIEVABLE_INDICATOR;
+			instance.existingOutputHandling = stored.existingOutputHandling != null ? stored.existingOutputHandling : DEFAULT_EXISTING_OUTPUT_HANDLING;
 			instance.cacheContainersForFasterSearch = stored.cacheContainersForFasterSearch != null
 				? stored.cacheContainersForFasterSearch
 				: DEFAULT_CACHE_CONTAINERS_FOR_FASTER_SEARCH;
@@ -211,7 +217,9 @@ public final class ReachCraftingConfig {
 			instance.autoCraftEnabledMode = stored.autoCraftEnabledMode != null ? stored.autoCraftEnabledMode : DEFAULT_AUTO_CRAFT_ENABLED_MODE;
 			instance.autoCraftCapability = stored.autoCraftCapability != null ? stored.autoCraftCapability : (stored.enableEnablingBulkMode != null ? (stored.enableEnablingBulkMode ? AutoCraftCapability.BULK : AutoCraftCapability.NORMAL) : DEFAULT_AUTO_CRAFT_CAPABILITY);
 			instance.autoCraftOffAfterBulk = stored.autoCraftOffAfterBulk != null ? stored.autoCraftOffAfterBulk : DEFAULT_AUTO_CRAFT_OFF_AFTER_BULK;
-			instance.bulkVariantSwitching = stored.bulkVariantSwitching != null ? stored.bulkVariantSwitching : DEFAULT_BULK_VARIANT_SWITCHING;
+			// Renamed from bulkVariantSwitching (it now governs retrieval too); read the old key once.
+			instance.outputVariantSwitching = stored.outputVariantSwitching != null ? stored.outputVariantSwitching
+				: stored.bulkVariantSwitching != null ? stored.bulkVariantSwitching : DEFAULT_OUTPUT_VARIANT_SWITCHING;
 			instance.autoCraftHandling = stored.autoCraftHandling != null ? stored.autoCraftHandling : DEFAULT_AUTO_CRAFT_HANDLING;
 			instance.chainCraftingMode = stored.chainCraftingMode != null ? stored.chainCraftingMode : DEFAULT_CHAIN_CRAFTING_MODE;
 			instance.enableBulkChainCrafting = stored.enableBulkChainCrafting != null ? stored.enableBulkChainCrafting : DEFAULT_ENABLE_BULK_CHAIN_CRAFTING;
@@ -352,6 +360,23 @@ public final class ReachCraftingConfig {
 	public void setShowNearbyCraftableIndicator(boolean showNearbyCraftableIndicator) {
 		this.showNearbyCraftableIndicator = showNearbyCraftableIndicator;
 		RecipeButtonNearbyIndicator.clearCaches();
+	}
+
+	public boolean showRetrievableIndicator() {
+		return showRetrievableIndicator;
+	}
+
+	public void setShowRetrievableIndicator(boolean showRetrievableIndicator) {
+		this.showRetrievableIndicator = showRetrievableIndicator;
+		RecipeButtonNearbyIndicator.clearCaches();
+	}
+
+	public ExistingOutputHandling existingOutputHandling() {
+		return existingOutputHandling != null ? existingOutputHandling : DEFAULT_EXISTING_OUTPUT_HANDLING;
+	}
+
+	public void setExistingOutputHandling(ExistingOutputHandling existingOutputHandling) {
+		this.existingOutputHandling = existingOutputHandling != null ? existingOutputHandling : DEFAULT_EXISTING_OUTPUT_HANDLING;
 	}
 
 	public boolean enableExistingOutputRetrieval() {
@@ -575,12 +600,12 @@ public final class ReachCraftingConfig {
 		this.autoCraftOffAfterBulk = autoCraftOffAfterBulk;
 	}
 
-	public boolean bulkVariantSwitching() {
-		return bulkVariantSwitching;
+	public boolean outputVariantSwitching() {
+		return outputVariantSwitching;
 	}
 
-	public void setBulkVariantSwitching(boolean bulkVariantSwitching) {
-		this.bulkVariantSwitching = bulkVariantSwitching;
+	public void setOutputVariantSwitching(boolean outputVariantSwitching) {
+		this.outputVariantSwitching = outputVariantSwitching;
 	}
 
 	public AutoCraftHandling autoCraftHandling() {
@@ -888,6 +913,8 @@ public final class ReachCraftingConfig {
 		defaults.countPreference = DEFAULT_COUNT_PREFERENCE;
 		defaults.showNearbyCraftableIndicator = DEFAULT_SHOW_NEARBY_CRAFTABLE_INDICATOR;
 		defaults.enableExistingOutputRetrieval = DEFAULT_ENABLE_EXISTING_OUTPUT_RETRIEVAL;
+		defaults.showRetrievableIndicator = DEFAULT_SHOW_RETRIEVABLE_INDICATOR;
+		defaults.existingOutputHandling = DEFAULT_EXISTING_OUTPUT_HANDLING;
 		defaults.cacheContainersForFasterSearch = DEFAULT_CACHE_CONTAINERS_FOR_FASTER_SEARCH;
 		defaults.containerDrainOrder = DEFAULT_CONTAINER_DRAIN_ORDER;
 		defaults.reachCraftHoldAndRelease = DEFAULT_REACH_CRAFT_HOLD_AND_RELEASE;
@@ -912,7 +939,7 @@ public final class ReachCraftingConfig {
 		defaults.ejectItemsWhenFull = DEFAULT_EJECT_ITEMS_WHEN_FULL;
 		defaults.autoCraftCapability = DEFAULT_AUTO_CRAFT_CAPABILITY;
 		defaults.autoCraftOffAfterBulk = DEFAULT_AUTO_CRAFT_OFF_AFTER_BULK;
-		defaults.bulkVariantSwitching = DEFAULT_BULK_VARIANT_SWITCHING;
+		defaults.outputVariantSwitching = DEFAULT_OUTPUT_VARIANT_SWITCHING;
 		defaults.autoCraftHandling = DEFAULT_AUTO_CRAFT_HANDLING;
 		defaults.chainCraftingMode = DEFAULT_CHAIN_CRAFTING_MODE;
 		defaults.enableBulkChainCrafting = DEFAULT_ENABLE_BULK_CHAIN_CRAFTING;
@@ -1119,6 +1146,14 @@ public final class ReachCraftingConfig {
 		ALWAYS
 	}
 
+	/** What a Ctrl-assisted recipe click does about copies of the output that already sit in nearby containers. */
+	public enum ExistingOutputHandling {
+		CRAFT_ONLY,
+		RETRIEVE_THEN_ASK,
+		RETRIEVE_THEN_CRAFT,
+		RETRIEVE_ONLY
+	}
+
 	public enum AutoCraftMode {
 		NORMAL,
 		BULK
@@ -1139,6 +1174,8 @@ public final class ReachCraftingConfig {
 		private IngredientPlanning.CountPreference countPreference;
 		private Boolean showNearbyCraftableIndicator;
 		private Boolean enableExistingOutputRetrieval;
+		private Boolean showRetrievableIndicator;
+		private ExistingOutputHandling existingOutputHandling;
 		private Boolean cacheContainersForFasterSearch;
 		private ContainerDrainOrder containerDrainOrder;
 		private Boolean reachCraftHoldAndRelease;
@@ -1165,6 +1202,8 @@ public final class ReachCraftingConfig {
 		private AutoCraftMode autoCraftEnabledMode;
 		private AutoCraftCapability autoCraftCapability;
 		private Boolean autoCraftOffAfterBulk;
+		private Boolean outputVariantSwitching;
+		/** Legacy key, read only; never written back. */
 		private Boolean bulkVariantSwitching;
 		private AutoCraftHandling autoCraftHandling;
 		private ChainCraftingMode chainCraftingMode;
@@ -1199,6 +1238,8 @@ public final class ReachCraftingConfig {
 			this.countPreference = config.countPreference;
 			this.showNearbyCraftableIndicator = config.showNearbyCraftableIndicator;
 			this.enableExistingOutputRetrieval = config.enableExistingOutputRetrieval;
+			this.showRetrievableIndicator = config.showRetrievableIndicator;
+			this.existingOutputHandling = config.existingOutputHandling;
 			this.cacheContainersForFasterSearch = config.cacheContainersForFasterSearch;
 			this.containerDrainOrder = config.containerDrainOrder;
 			this.reachCraftHoldAndRelease = config.reachCraftHoldAndRelease;
@@ -1223,7 +1264,7 @@ public final class ReachCraftingConfig {
 			this.autoCraftEnabledMode = config.autoCraftEnabledMode;
 			this.autoCraftCapability = config.autoCraftCapability;
 			this.autoCraftOffAfterBulk = config.autoCraftOffAfterBulk;
-			this.bulkVariantSwitching = config.bulkVariantSwitching;
+			this.outputVariantSwitching = config.outputVariantSwitching;
 			this.autoCraftHandling = config.autoCraftHandling;
 			this.chainCraftingMode = config.chainCraftingMode;
 			this.enableBulkChainCrafting = config.enableBulkChainCrafting;

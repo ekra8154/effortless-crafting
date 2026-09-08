@@ -22,6 +22,7 @@ import net.minecraft.world.item.crafting.display.SlotDisplayContext;
 public final class ChainCraftController {
 	private static final int STEP_TIMEOUT_TICKS = 200;
 	private static final int BATCH_SETTLE_QUIET_TICKS = 8;
+	private static final int BATCH_SETTLE_QUIET_TICKS_GRID_LOADED = 100;
 	private static ChainCraftRun activeRun;
 	private static PendingWarmupRetry pendingWarmupRetry;
 	private static RecipeDisplayId activeFinalStepRecipeId;
@@ -385,6 +386,8 @@ public final class ChainCraftController {
 
 	private static void tick(Minecraft client) {
 		ChainCraftPopupController.tick(client);
+		RetrieveThenCraftController.tick(client);
+		OutputVariantContinuationController.tick(client);
 		tickPendingWarmupRetry(client);
 		if (activeRun == null) {
 			return;
@@ -502,7 +505,15 @@ public final class ChainCraftController {
 			? 0
 			: activeRun.settleQuietTicks() + 1;
 		activeRun = activeRun.withSettlingBatchProgress(observedCopies, quietTicks);
-		if (quietTicks >= BATCH_SETTLE_QUIET_TICKS) {
+		// A grid that still holds the step's staged ingredients means the
+		// server has crafts left to deliver; on a laggy server the result
+		// arrives later than the short quiet window and the batch used to
+		// settle at one observed copy, then fail its second half as
+		// "missing". Wait much longer while the grid is loaded; the short
+		// window still applies once it is empty.
+		boolean gridStillLoaded = !ContainerUtils.isGridEmpty(client.player.containerMenu);
+		int quietLimit = gridStillLoaded ? BATCH_SETTLE_QUIET_TICKS_GRID_LOADED : BATCH_SETTLE_QUIET_TICKS;
+		if (quietTicks >= quietLimit) {
 			ReachCraftingMod.diag(
 				"[chain_execute] batch_settled reason=quiet index={} observed_copies={} scheduled_copies={} quiet_ticks={}",
 				activeRun.currentStepIndex(),
