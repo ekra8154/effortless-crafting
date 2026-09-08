@@ -78,6 +78,30 @@ public final class RetrievalOutputVariantOverlay {
 		return true;
 	}
 
+	/**
+	 * Dev harness only: the retrieval-mode variant menu the book would open
+	 * for this item's family (one synthetic entry per output), built by the
+	 * same code the real overlay uses. Null when no recipe makes the item.
+	 */
+	static RecipeCollection harnessGroupedCollection(String itemId) {
+		Minecraft minecraft = Minecraft.getInstance();
+		LocalPlayer player = minecraft.player;
+		if (player == null || minecraft.level == null) {
+			return null;
+		}
+		ContextMap context = SlotDisplayContext.fromLevel(minecraft.level);
+		for (RecipeCollection collection : player.getRecipeBook().getCollections()) {
+			for (RecipeDisplayEntry entry : collection.getRecipes()) {
+				ItemStack stack = RecipeVariantResolver.resolveDisplayStack(entry.display(), context);
+				if (stack.isEmpty() || !itemId.equals(BuiltInRegistries.ITEM.getKey(stack.getItem()).toString())) {
+					continue;
+				}
+				return buildGroupedCollection(player, collection, entry.id(), stack);
+			}
+		}
+		return null;
+	}
+
 	private static RecipeCollection buildGroupedCollection(
 		LocalPlayer player,
 		RecipeCollection collection,

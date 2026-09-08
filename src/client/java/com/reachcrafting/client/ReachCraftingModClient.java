@@ -73,6 +73,7 @@ public class ReachCraftingModClient implements ClientModInitializer {
 		PlaceRecipeBudget.init();
 		ClickStageUpgrade.init();
 		ReproHarness.init();
+		HelpCommand.init();
 		
 
 
@@ -105,6 +106,9 @@ public class ReachCraftingModClient implements ClientModInitializer {
 
 		int[] tickCounter = {0};
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
+			// /effortlesscrafting settings opens on the tick after the command,
+			// and must work even while the mod is switched off.
+			HelpCommand.tickPendingSettings(client);
 			tickCounter[0]++;
 			if (tickCounter[0] >= 200) {
 				tickCounter[0] = 0;

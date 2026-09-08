@@ -47,6 +47,7 @@ final class RecipeClickExecutor {
 		int requestedClicks,
 		boolean refillableBulkMaxMode,
 		boolean autoCraftRequested,
+		boolean retrievalDone,
 		HeldRecipeQueueState state
 	) {
 		AvailableItemSnapshot availableItems = AvailableItemSnapshot.capture(player, screen);
@@ -167,6 +168,93 @@ final class RecipeClickExecutor {
 			return;
 		}
 
+		// Retrieve-first step (existingOutputHandling). Only on a click that
+		// already allows nearby containers, never on the replay it schedules
+		// for the remainder, and never underneath a running session.
+		ReachCraftingConfig.ExistingOutputHandling outputHandling = ReachCraftingConfig.get().existingOutputHandling();
+		if (outputHandling != ReachCraftingConfig.ExistingOutputHandling.CRAFT_ONLY
+			&& !retrievalDone
+			&& allowNearbyChests
+			&& ReachCraftingConfig.get().enableNearbyContainerUsage()
+			&& ReachCraftingConfig.get().cacheContainersForFasterSearch()
+			&& !ChainCraftController.isActive()
+			&& !BulkAutoCraftController.isActive()
+			&& !BulkChainCraftController.isActive()
+			&& !RetrieveThenCraftController.isActive()) {
+			NearbyContainerCache.ReachableView outputView = NearbyContainerCache.getReachableView(minecraft.level, minecraft.getCameraEntity(), player.blockInteractionRange());
+			Map<String, Integer> nearbyTotals = outputView.aggregateCounts();
+			// The variant to RETRIEVE is chosen by which output is nearby (per
+			// the revolving-variant setting), not by which ingredients the
+			// craft resolver found: dark oak stairs requested with oak stairs
+			// in the chest retrieves oak stairs when fallback is allowed.
+			RecipeVariantResolver.Selection retrievalSelection = RecipeVariantResolver.resolveRetrievalVariant(
+				minecraft,
+				player,
+				recipeId,
+				collection,
+				displayStack != null ? displayStack.copy() : ItemStack.EMPTY,
+				explicitVariantSelection,
+				true,
+				AvailableItemSnapshot.empty(),
+				nearbyTotals,
+				nearbyTotals,
+				craftAll,
+				false,
+				desiredVariantCopies
+			);
+			if (retrievalSelection == null || retrievalSelection.displayStack().isEmpty()) {
+				retrievalSelection = selectedRecipe;
+			}
+			ItemStack retrieveStack = retrievalSelection.displayStack().copy();
+			String retrieveItemId = BuiltInRegistries.ITEM.getKey(retrieveStack.getItem()).toString();
+			int outputPerCraft = Math.max(retrieveStack.getCount(), 1);
+			int targetItems = craftAll ? bulkRecipeQueueLimit() : Math.max(requestedClicks, 1) * outputPerCraft;
+			int nearbyOutput = nearbyTotals.getOrDefault(retrieveItemId, 0);
+			boolean cacheComplete = outputView.snapshotsByKey().size() >= outputView.nearestAccessByKey().size();
+			if (nearbyOutput <= 0 && cacheComplete) {
+				RetrieveThenCraftController.logNoneNearby(retrieveItemId, targetItems, outputHandling);
+			} else {
+				RetrieveThenCraftController.start(
+					new RetrieveThenCraftController.FollowUp(
+						new RecipeBookClickCapture.HeldRecipeAction(
+							recipeId,
+							collection,
+							displayStack != null ? displayStack.copy() : ItemStack.EMPTY,
+							mouseButton,
+							explicitVariantSelection
+						),
+						requestedClicks,
+						allowNearbyChests,
+						craftAll,
+						refillableBulkMaxMode,
+						autoCraftRequested,
+						outputPerCraft,
+						targetItems,
+						retrieveItemId,
+						retrieveStack,
+						outputHandling,
+						retrievalSelection.recipeId(),
+						!AutoCraftController.isBulkModeEnabled(),
+						false
+					)
+				);
+				if (explicitVariantSelection) {
+					tryCloseOverlayAfterRelease();
+				}
+				return;
+			}
+		} else {
+			ReachCraftingMod.diag(
+				"[retrieve_then_craft] rtc_skipped reason={} item={} clicks={}",
+				outputHandling == ReachCraftingConfig.ExistingOutputHandling.CRAFT_ONLY ? "craft_only"
+					: retrievalDone ? "remainder_replay"
+					: !allowNearbyChests ? "no_ctrl"
+					: "session_active",
+				resolvedItemId,
+				requestedClicks
+			);
+		}
+
 		ReachCraftingMod.LOGGER.debug(
 			"[recipe_click] screen={} button={} idx={} craftable={} shift={} ctrl={} output={}",
 			screenKind,
@@ -196,6 +284,69 @@ final class RecipeClickExecutor {
 			: effectiveCraftAll
 				? deficitReport.possibleCopies()
 				: requestedClicks;
+
+		// Output variant switching for a plain (non-bulk) auto craft. When the
+		// resolved variant cannot cover the request, craft what it can and let
+		// OutputVariantContinuationController replay the remainder; that pass
+		// resolves the next variant. A continuation pass that finds no
+		// craftable variant ends the run quietly (the player got the max).
+		boolean continuationPass = OutputVariantContinuationController.consumeFiring();
+		boolean variantContinuationEligible = !AutoCraftController.isBulkModeEnabled()
+			&& !ChainCraftController.isActive()
+			&& !BulkChainCraftController.isActive()
+			&& !BulkAutoCraftController.isActive()
+			&& (autoCraftRequested || AutoCraftController.isEnabled())
+			&& ReachCraftingConfig.get().outputVariantSwitching()
+			&& !explicitVariantSelection
+			&& collection != null
+			&& collection.getRecipes().size() > 1
+			&& BulkAutoCraftController.determineVariantContinuationMode(recipeId, selectedRecipe.recipeId(), explicitVariantSelection)
+				== BulkAutoCraftController.VariantContinuationMode.FAMILY_FALLBACK;
+		RecipeBookClickCapture.HeldRecipeAction continuationAction = new RecipeBookClickCapture.HeldRecipeAction(
+			recipeId,
+			collection,
+			displayStack != null ? displayStack.copy() : ItemStack.EMPTY,
+			mouseButton,
+			explicitVariantSelection
+		);
+		// A continuation pass with nothing directly craftable may still chain
+		// craft the next variant (logs -> planks -> stairs); the run only ends
+		// once the chain offer below comes up empty too.
+		boolean continuationExhausted = false;
+		if (variantContinuationEligible) {
+			int possibleCopies = deficitReport.possibleCopies();
+			if (possibleCopies <= 0) {
+				continuationExhausted = continuationPass;
+			} else if (effectiveCraftAll) {
+				OutputVariantContinuationController.arm(continuationAction, -1, true, allowNearbyChests, autoCraftRequested, continuationPass, resolvedItemId, possibleCopies);
+			} else if (possibleCopies < effectiveRequestedClicks) {
+				OutputVariantContinuationController.arm(continuationAction, effectiveRequestedClicks - possibleCopies, false, allowNearbyChests, autoCraftRequested, continuationPass, resolvedItemId, possibleCopies);
+				// Re-enter with the count this variant can actually make, so
+				// the craft completes cleanly instead of reporting a shortfall.
+				executeRecipeButtonClick(
+					minecraft,
+					player,
+					screen,
+					recipeId,
+					collection,
+					displayStack,
+					mouseButton,
+					craftAll,
+					allowNearbyChests,
+					forceDryRun,
+					explicitVariantSelection,
+					possibleCopies,
+					refillableBulkMaxMode,
+					autoCraftRequested,
+					true,
+					state
+				);
+				return;
+			} else if (continuationPass) {
+				// Last step: this variant covers the rest.
+				OutputVariantContinuationController.end("satisfied", resolvedItemId);
+			}
+		}
 
 		// Chain already resolved local-only intermediate dependencies up front, so
 		// these replayed steps can use the faster direct placement path.
@@ -346,10 +497,47 @@ final class RecipeClickExecutor {
 					allowNearbyChests,
 					AutoCraftController.isBulkModeEnabled()
 				);
+				// Output variant switching across chain crafts: the gate is
+				// bulk's rule applied to the variant the CHAIN chose (the
+				// direct resolver kept the clicked one because nothing was
+				// directly craftable). The prompt reports what every family
+				// variant can cover together; after this variant's chain
+				// finishes, the continuation replays the click and the next
+				// variant chains without asking again.
+				boolean chainVariantSwitching = ReachCraftingConfig.get().outputVariantSwitching()
+					&& !explicitVariantSelection
+					&& collection != null
+					&& collection.getRecipes().size() > 1
+					&& BulkAutoCraftController.determineVariantContinuationMode(recipeId, chainSelection.recipeId(), explicitVariantSelection)
+						== BulkAutoCraftController.VariantContinuationMode.FAMILY_FALLBACK;
 				if (AutoCraftController.isBulkModeEnabled()) {
 					if (!ReachCraftingConfig.get().enableBulkChainCrafting()) {
 						ReachCraftingModClient.sendChat(net.minecraft.network.chat.Component.translatable("message.reachcrafting.chain_crafting.bulk_unsupported").getString());
 						return;
+					}
+					BulkChainCraftController.VariantFamily bulkFamily = null;
+					int bulkVariantTotal = chainPlan.finalRecipeCopies();
+					if (chainVariantSwitching) {
+						boolean bulkMax = chainOffer.get().maxRequest();
+						int wanted = bulkMax
+							? bulkRecipeQueueLimit()
+							: chainOffer.get().requestedRecipeCopies() - chainPlan.finalRecipeCopies();
+						if (wanted > 0) {
+							bulkVariantTotal += otherVariantChainCopies(
+								minecraft,
+								player,
+								chainVariantCandidates,
+								chainSelection,
+								chainAvailableCounts,
+								allowNearbyChests,
+								wanted
+							);
+						}
+						bulkFamily = new BulkChainCraftController.VariantFamily(
+							recipeId,
+							collection,
+							displayStack != null ? displayStack.copy() : ItemStack.EMPTY
+						);
 					}
 					ChainCraftPopupController.handleBulkChainPlan(
 						chainPlan,
@@ -357,14 +545,66 @@ final class RecipeClickExecutor {
 						allowNearbyChests,
 						chainOffer.get().requestedRecipeCopies(),
 						chainOffer.get().maxRequest(),
-						chainMissingMessage
+						chainMissingMessage,
+						bulkFamily,
+						bulkVariantTotal
 					);
 					return;
 				}
 				int popupRequestedCopies = chainOffer.get().maxRequest()
 					? chainPlan.finalRecipeCopies()
 					: chainOffer.get().requestedRecipeCopies();
+				if (chainVariantSwitching) {
+					boolean chainMaxRequest = chainOffer.get().maxRequest();
+					int planCopies = chainPlan.finalRecipeCopies();
+					int requestedCopies = chainOffer.get().requestedRecipeCopies();
+					int remainingAfterPlan = chainMaxRequest ? -1 : requestedCopies - planCopies;
+					boolean moreWanted = chainMaxRequest || remainingAfterPlan > 0;
+					String chainItemId = BuiltInRegistries.ITEM.getKey(chainPlan.finalOutput().getItem()).toString();
+					boolean thisPassIsContinuation = continuationPass;
+					Runnable armContinuation = () -> {
+						if (moreWanted) {
+							OutputVariantContinuationController.arm(continuationAction, remainingAfterPlan, chainMaxRequest, allowNearbyChests, autoCraftRequested, thisPassIsContinuation, chainItemId, planCopies);
+						} else if (thisPassIsContinuation) {
+							OutputVariantContinuationController.end("satisfied", chainItemId);
+						}
+					};
+					if (continuationPass) {
+						armContinuation.run();
+						ReachCraftingModClient.sendChat("Output variant switching: chain crafting "
+							+ (planCopies * Math.max(chainPlan.finalOutput().getCount(), 1)) + " "
+							+ chainPlan.finalOutput().getHoverName().getString() + ".");
+						ChainCraftController.start(chainPlan);
+						return;
+					}
+					int variantTotalCopies = planCopies;
+					if (moreWanted) {
+						// chainAvailableCounts, not availableCounts: the latter only
+						// holds the CLICKED recipe's ingredients (crimson planks),
+						// so every other variant planned against it came up empty
+						// and the prompt fell back to the single-variant wording.
+						variantTotalCopies += otherVariantChainCopies(
+							minecraft,
+							player,
+							chainVariantCandidates,
+							chainSelection,
+							chainAvailableCounts,
+							allowNearbyChests,
+							chainMaxRequest ? bulkRecipeQueueLimit() : remainingAfterPlan
+						);
+						if (!chainMaxRequest) {
+							variantTotalCopies = Math.min(variantTotalCopies, requestedCopies);
+						}
+					}
+					ChainCraftPopupController.handlePlanWithVariantSwitching(chainPlan, popupRequestedCopies, chainMissingMessage, variantTotalCopies, armContinuation);
+					return;
+				}
 				ChainCraftPopupController.handlePlan(chainPlan, popupRequestedCopies, false, chainMissingMessage);
+				return;
+			}
+			if (continuationExhausted) {
+				OutputVariantContinuationController.end("no_viable_variant", resolvedItemId);
+				ReachCraftingModClient.sendDebugChat("Output variant switching: no craftable variant left.");
 				return;
 			}
 			ReachCraftingMod.diag(
@@ -860,7 +1100,7 @@ final class RecipeClickExecutor {
 			return;
 		}
 
-		boolean keepFamilyContinuation = ReachCraftingConfig.get().bulkVariantSwitching();
+		boolean keepFamilyContinuation = ReachCraftingConfig.get().outputVariantSwitching();
 		RecipeDisplayId continuationRecipeId = keepFamilyContinuation ? clickedRecipeId : recipeId;
 		BulkAutoCraftController.VariantContinuationMode continuationMode;
 		if (!keepFamilyContinuation) {
@@ -938,6 +1178,43 @@ final class RecipeClickExecutor {
 	 * the planner can actually build. The clicked variant always leads, so a
 	 * collection that chains on its own recipe never gets swapped away from.
 	 */
+	/**
+	 * How many more copies the OTHER family variants could chain craft, each
+	 * planned on its own against the same materials (an upper bound when
+	 * variants share inputs; the prompt says "up to"). Capped at the copies
+	 * still wanted so a huge family does not plan more than it needs.
+	 */
+	private static int otherVariantChainCopies(
+		Minecraft minecraft,
+		LocalPlayer player,
+		List<RecipeVariantResolver.Selection> candidates,
+		RecipeVariantResolver.Selection chosen,
+		Map<String, Integer> availableCounts,
+		boolean allowNearbyChests,
+		int copiesWanted
+	) {
+		int total = 0;
+		for (RecipeVariantResolver.Selection candidate : candidates) {
+			if (candidate == null || candidate.recipeId().equals(chosen.recipeId()) || total >= copiesWanted) {
+				continue;
+			}
+			Optional<ChainCraftOffer> offer = planChainCraftOfferFor(
+				minecraft,
+				player,
+				candidate,
+				availableCounts,
+				allowNearbyChests,
+				true,
+				Math.max(copiesWanted - total, 1),
+				Math.max(copiesWanted - total, 1)
+			);
+			if (offer.isPresent()) {
+				total += offer.get().plan().finalRecipeCopies();
+			}
+		}
+		return Math.min(total, copiesWanted);
+	}
+
 	private static Optional<ChainCraftOffer> planChainCraftOffer(
 		Minecraft minecraft,
 		LocalPlayer player,
@@ -1122,22 +1399,43 @@ final class RecipeClickExecutor {
 		// unscored variant would otherwise win on a zero it never earned.
 		Map<RecipeDisplayId, Integer> variantScores =
 			ChainVariantRanking.scoreVariants(variants, chainAvailableCounts);
+		// "Prefer Non-Stripped Logs" spends stripped logs last within a recipe;
+		// the variant ranking must agree, or a family tie (576 stripped spruce
+		// vs 576 oak logs) breaks toward whichever variant sorted first and
+		// the stripped logs get burned while ordinary ones sit there. Score
+		// each variant on ordinary material too, and rank on that first; a
+		// variant whose only material is last-resort sorts behind the rest.
+		java.util.Set<String> lastResort = LastResortIngredients.activeCategories(ReachCraftingConfig.get());
+		Map<RecipeDisplayId, Integer> ordinaryScores = lastResort.isEmpty()
+			? variantScores
+			: ChainVariantRanking.scoreVariants(variants, withoutLastResort(chainAvailableCounts, lastResort));
 		boolean lowestFirst = ReachCraftingConfig.get().countPreference()
 			== IngredientPlanning.CountPreference.LOWEST_TOTAL;
 		Comparator<RecipeVariantResolver.Selection> byScore =
 			Comparator.comparingInt((RecipeVariantResolver.Selection candidate) ->
 				variantScores.getOrDefault(candidate.recipeId(), 0));
+		Comparator<RecipeVariantResolver.Selection> byOrdinaryScore =
+			Comparator.comparingInt((RecipeVariantResolver.Selection candidate) ->
+				ordinaryScores.getOrDefault(candidate.recipeId(), 0));
 		Comparator<RecipeVariantResolver.Selection> chainOrder = Comparator
 			.comparingInt((RecipeVariantResolver.Selection candidate) ->
 				chainTiers.getOrDefault(candidate.recipeId(), CHAIN_TIER_UNREACHABLE))
 			.thenComparingInt(candidate -> variantScores.containsKey(candidate.recipeId()) ? 0 : 1)
+			.thenComparingInt(candidate -> ordinaryScores.getOrDefault(candidate.recipeId(), 0) > 0
+				|| variantScores.getOrDefault(candidate.recipeId(), 0) <= 0 ? 0 : 1)
+			.thenComparing(lowestFirst ? byOrdinaryScore : byOrdinaryScore.reversed())
 			.thenComparing(lowestFirst ? byScore : byScore.reversed())
 			.thenComparing(RecipeVariantResolver.preferenceOrder());
 
+		// A sibling whose only material is last-resort (stripped logs) is not
+		// an automatic fallback at all: those get spent only when the player
+		// asked for that variant and it has nothing else. The clicked/selected
+		// variant is kept regardless, since that IS the explicit request.
 		List<RecipeVariantResolver.Selection> siblings = variants.stream()
 			.filter(candidate -> !candidate.recipeId().equals(selectedRecipe.recipeId()))
 			.filter(candidate -> chainTiers.getOrDefault(candidate.recipeId(), CHAIN_TIER_UNREACHABLE)
 				!= CHAIN_TIER_UNREACHABLE)
+			.filter(candidate -> !onlyLastResortMaterial(candidate.recipeId(), variantScores, ordinaryScores, lastResort))
 			.sorted(chainOrder)
 			.toList();
 		if (siblings.isEmpty()) {
@@ -1176,10 +1474,33 @@ final class RecipeClickExecutor {
 					+ " score=" + (variantScores.containsKey(candidate.recipeId())
 						? String.valueOf(variantScores.get(candidate.recipeId()))
 						: "none")
+					+ (lastResort.isEmpty() ? "" : " ordinary=" + ordinaryScores.getOrDefault(candidate.recipeId(), 0))
 					+ ")")
 				.toList()
 		);
 		return List.copyOf(candidates);
+	}
+
+	/** Scored on material, but none of it ordinary: every input it could use is one the player wants spent last. */
+	static boolean onlyLastResortMaterial(
+		RecipeDisplayId recipeId,
+		Map<RecipeDisplayId, Integer> totalScores,
+		Map<RecipeDisplayId, Integer> ordinaryScores,
+		java.util.Set<String> lastResort
+	) {
+		return !lastResort.isEmpty()
+			&& totalScores.getOrDefault(recipeId, 0) > 0
+			&& ordinaryScores.getOrDefault(recipeId, 0) <= 0;
+	}
+
+	static Map<String, Integer> withoutLastResort(Map<String, Integer> counts, java.util.Set<String> lastResort) {
+		Map<String, Integer> filtered = new HashMap<>();
+		for (Map.Entry<String, Integer> entry : counts.entrySet()) {
+			if (!LastResortIngredients.isLastResort(entry.getKey(), lastResort)) {
+				filtered.put(entry.getKey(), entry.getValue());
+			}
+		}
+		return filtered;
 	}
 
 	private static String missingMessageFor(

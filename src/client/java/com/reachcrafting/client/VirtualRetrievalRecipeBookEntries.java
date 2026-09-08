@@ -126,26 +126,7 @@ public final class VirtualRetrievalRecipeBookEntries {
 			boolean hasLiveNearbyBacking = nearbyCounts.containsKey(itemId);
 			int liveCount = nearbyCounts.getOrDefault(itemId, 1);
 			int displayCount = hasLiveNearbyBacking ? Math.min(Math.max(liveCount, 1), stack.getMaxStackSize()) : 1;
-			String cacheKey = itemId + ":" + displayCount + ":" + hasLiveNearbyBacking;
-			RecipeCollection syntheticCollection = SYNTHETIC_CACHE.computeIfAbsent(cacheKey, k -> {
-				RecipeDisplayId id = syntheticIdFor(itemId, hasLiveNearbyBacking);
-				RecipeDisplay display = new ShapelessCraftingRecipeDisplay(
-					List.of(),
-					new SlotDisplay.ItemStackSlotDisplay(new ItemStackTemplate(item, displayCount)),
-					new SlotDisplay.ItemSlotDisplay(net.minecraft.world.level.block.Blocks.CRAFTING_TABLE.asItem())
-				);
-				RecipeDisplayEntry syntheticEntry = new RecipeDisplayEntry(
-					id,
-					display,
-					java.util.OptionalInt.empty(),
-					category,
-					java.util.Optional.empty()
-				);
-				RecipeCollection col = new RecipeCollection(List.of(syntheticEntry));
-				col.selectRecipes(new StackedItemContents(), ignored -> true);
-				return col;
-			});
-			synthetic.add(syntheticCollection);
+			synthetic.add(syntheticCollectionFor(itemId, item, displayCount, hasLiveNearbyBacking, category));
 		}
 
 		if (synthetic.isEmpty()) {
@@ -161,8 +142,58 @@ public final class VirtualRetrievalRecipeBookEntries {
 		return combined;
 	}
 
+	private static RecipeCollection syntheticCollectionFor(String itemId, Item item, int displayCount, boolean hasLiveNearbyBacking, RecipeBookCategory category) {
+		String cacheKey = itemId + ":" + displayCount + ":" + hasLiveNearbyBacking;
+		return SYNTHETIC_CACHE.computeIfAbsent(cacheKey, k -> {
+			RecipeDisplayId id = syntheticIdFor(itemId, hasLiveNearbyBacking);
+			RecipeDisplay display = new ShapelessCraftingRecipeDisplay(
+				List.of(),
+				new SlotDisplay.ItemStackSlotDisplay(new ItemStackTemplate(item, displayCount)),
+				new SlotDisplay.ItemSlotDisplay(net.minecraft.world.level.block.Blocks.CRAFTING_TABLE.asItem())
+			);
+			RecipeDisplayEntry syntheticEntry = new RecipeDisplayEntry(
+				id,
+				display,
+				java.util.OptionalInt.empty(),
+				category,
+				java.util.Optional.empty()
+			);
+			RecipeCollection col = new RecipeCollection(List.of(syntheticEntry));
+			col.selectRecipes(new StackedItemContents(), ignored -> true);
+			return col;
+		});
+	}
+
+	/**
+	 * Dev harness only: the synthetic (no-recipe) entry the retrieval-mode
+	 * book would show for this item, built the same way {@link #injectCollections}
+	 * builds it, so scripted clicks on it exercise the real synthetic paths.
+	 * Null when the item id is unknown.
+	 */
+	static RecipeCollection harnessSyntheticCollection(String itemId) {
+		Item item = BuiltInRegistries.ITEM.getOptional(net.minecraft.resources.Identifier.parse(itemId)).orElse(null);
+		if (item == null) {
+			return null;
+		}
+		Minecraft minecraft = Minecraft.getInstance();
+		Map<String, Integer> nearbyCounts = minecraft.level != null && minecraft.getCameraEntity() != null && minecraft.player != null
+			? NearbyContainerCache.getReachableView(minecraft.level, minecraft.getCameraEntity(), minecraft.player.blockInteractionRange()).aggregateCounts()
+			: Map.of();
+		boolean hasLiveNearbyBacking = nearbyCounts.containsKey(itemId);
+		ItemStack stack = new ItemStack(item);
+		int displayCount = hasLiveNearbyBacking ? Math.min(Math.max(nearbyCounts.get(itemId), 1), stack.getMaxStackSize()) : 1;
+		return syntheticCollectionFor(itemId, item, displayCount, hasLiveNearbyBacking, categoryFor(item, itemId));
+	}
+
+	/**
+	 * Membership, not a range: real recipe display ids are not guaranteed
+	 * small (a singleplayer world handed out 1326191332 for a stained glass
+	 * pane), and a range test made that click read as a synthetic entry, so
+	 * it retrieved the collection's first colour instead of the clicked one.
+	 */
 	static boolean isSyntheticRecipeId(RecipeDisplayId recipeId) {
-		return recipeId != null && recipeId.index() >= SYNTHETIC_RECIPE_ID_BASE;
+		return recipeId != null
+			&& (LIVE_SYNTHETIC_RECIPE_IDS.contains(recipeId.index()) || PERSISTENT_SYNTHETIC_RECIPE_IDS.contains(recipeId.index()));
 	}
 
 	static boolean hasLiveNearbyBacking(RecipeDisplayId recipeId) {
@@ -173,7 +204,8 @@ public final class VirtualRetrievalRecipeBookEntries {
 		if (stack == null || stack.isEmpty()) {
 			return 1;
 		}
-		return shiftRequested ? Math.max(stack.getMaxStackSize(), 1) : 1;
+		// Shift = all of it; the session stops when nearby stock runs out.
+		return shiftRequested ? RecipeClickExecutor.bulkRecipeQueueLimit() : 1;
 	}
 
 	static void startRetrievalForSynthetic(RecipeDisplayId recipeId, ItemStack displayStack, int requestedCount) {
@@ -275,8 +307,16 @@ public final class VirtualRetrievalRecipeBookEntries {
 		return lowerName.contains(search) || itemId.toLowerCase(Locale.ROOT).contains(search);
 	}
 
+	// Room for each id family above its base without crossing Integer.MAX_VALUE:
+	// live ids sit in [1.0e9, 1.4e9), persistent-only in [1.5e9, 1.9e9).
+	private static final int SYNTHETIC_HASH_SPAN = 400_000_000;
+
 	static RecipeDisplayId syntheticIdFor(String itemId, boolean hasLiveNearbyBacking) {
-		int hash = Math.abs(itemId.hashCode());
+		// floorMod, not abs: base + abs(hash) overflowed to a NEGATIVE index
+		// for any item whose hash exceeded ~1.1e9 ("minecraft:egg" did), and a
+		// negative index fails isSyntheticRecipeId, so clicks on that entry
+		// silently took the real-recipe path instead of the synthetic one.
+		int hash = Math.floorMod(itemId.hashCode(), SYNTHETIC_HASH_SPAN);
 		int base = hasLiveNearbyBacking ? SYNTHETIC_RECIPE_ID_BASE : PERSISTENT_ONLY_SYNTHETIC_RECIPE_ID_BASE;
 		int index = base + hash;
 		if (hasLiveNearbyBacking) {
