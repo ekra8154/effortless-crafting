@@ -47,6 +47,7 @@ import java.nio.file.Path;
  *   set revolving <specific|prefer|always>
  *                                 - revolvingCraftHandling in memory only
  *   set variantswitch on|off      - outputVariantSwitching in memory only
+ *   set nearby always|ctrl|off    - nearby container usage mode in memory only
  *   set eject on|off              - flip ejectItemsWhenFull in memory only
  *   set budget <n>                - clickBudgetPerWindow in memory only
  *   warmcache                     - scan uncached containers (logs "warmup finish")
@@ -295,6 +296,17 @@ public final class ReproHarness {
 					boolean on = parts[2].equals("on");
 					ReachCraftingConfig.get().setPreferNonStrippedLogs(on);
 					ReachCraftingMod.diag("[repro_harness] set prefer_non_stripped_logs={}", on);
+				} else if (parts.length == 3 && parts[1].equals("nearby")) {
+					// Revolving-variant resolution on a plain craft only runs when
+					// nearby chests are allowed, so scenarios that assert on it pin
+					// the mode instead of inheriting a worktree's run config.
+					ReachCraftingConfig.NearbyContainerUsageMode mode = switch (parts[2]) {
+						case "always" -> ReachCraftingConfig.NearbyContainerUsageMode.ALWAYS;
+						case "off", "disabled" -> ReachCraftingConfig.NearbyContainerUsageMode.DISABLED;
+						default -> ReachCraftingConfig.NearbyContainerUsageMode.CTRL_HELD;
+					};
+					ReachCraftingConfig.get().setNearbyContainerUsageMode(mode);
+					ReachCraftingMod.diag("[repro_harness] set nearby_container_usage={}", mode);
 				} else if (parts.length == 3 && parts[1].equals("autoconfirm")) {
 					autoConfirmYes = parts[2].equals("yes");
 					ReachCraftingMod.diag("[repro_harness] set autoconfirm_yes={}", autoConfirmYes);
