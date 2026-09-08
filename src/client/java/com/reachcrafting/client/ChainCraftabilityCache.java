@@ -226,8 +226,11 @@ public final class ChainCraftabilityCache {
 			return;
 		}
 
-		lastKnownRecipeCount = knownCount;
-		lastGridSlotCount = gridSlotCount;
+		// Only the COUNT markers are stamped up front (so ticks do not restart
+		// an in-flight recompute). The index markers are stamped by apply():
+		// a synchronous refresh arriving while an async index build is still
+		// in flight must build the index itself, not classify over the old
+		// (possibly empty) one and then out-generation the real result.
 		lastInventoryHash = inventoryHash;
 		lastNearbyRevision = nearbyRevision;
 		lastReachableSignature = reachableSignature;
