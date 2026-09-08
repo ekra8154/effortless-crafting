@@ -103,6 +103,10 @@ public final class NearbyContainerDryRun {
 		));
 	}
 
+	static void startExistingOutputRetrieval(ExistingOutputRetrievalRequest request) {
+		COORDINATOR.startExistingOutputRetrieval(request);
+	}
+
 	public static void cancelCurrent() {
 		COORDINATOR.cancelCurrent();
 	}
@@ -113,6 +117,10 @@ public final class NearbyContainerDryRun {
 
 	public static boolean isActiveSessionRunning() {
 		return COORDINATOR.isActiveSessionRunning();
+	}
+
+	public static boolean isRetrievalSessionRunning() {
+		return COORDINATOR.isRetrievalSessionRunning();
 	}
 
 	public static boolean shouldBlockWorldInteraction() {

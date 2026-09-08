@@ -70,6 +70,52 @@ public final class RecipeVariantResolver {
 		boolean allowReservedGridVariantSwitch,
 		int desiredCopiesPerSlot
 	) {
+		return resolve(minecraft, player, clickedRecipeId, collection, clickedDisplayStack, explicitVariantSelection, allowVariantSwitching,
+			availableItems, usableCounts, preferenceTotals, craftAll, allowReservedGridVariantSwitch, desiredCopiesPerSlot, false);
+	}
+
+	/**
+	 * Variant choice for a RETRIEVAL of the output, whatever mode the book is
+	 * in: among the collection's variants, prefer the one whose output is
+	 * actually nearby (per the revolving-variant setting), not the one whose
+	 * ingredients are. Retrieval mode takes this path on its own; the
+	 * retrieve-first step of a craft click and the green dot must ask for it.
+	 */
+	public static Selection resolveRetrievalVariant(
+		Minecraft minecraft,
+		LocalPlayer player,
+		RecipeDisplayId clickedRecipeId,
+		RecipeCollection collection,
+		ItemStack clickedDisplayStack,
+		boolean explicitVariantSelection,
+		boolean allowVariantSwitching,
+		AvailableItemSnapshot availableItems,
+		Map<String, Integer> usableCounts,
+		Map<String, Integer> preferenceTotals,
+		boolean craftAll,
+		boolean allowReservedGridVariantSwitch,
+		int desiredCopiesPerSlot
+	) {
+		return resolve(minecraft, player, clickedRecipeId, collection, clickedDisplayStack, explicitVariantSelection, allowVariantSwitching,
+			availableItems, usableCounts, preferenceTotals, craftAll, allowReservedGridVariantSwitch, desiredCopiesPerSlot, true);
+	}
+
+	private static Selection resolve(
+		Minecraft minecraft,
+		LocalPlayer player,
+		RecipeDisplayId clickedRecipeId,
+		RecipeCollection collection,
+		ItemStack clickedDisplayStack,
+		boolean explicitVariantSelection,
+		boolean allowVariantSwitching,
+		AvailableItemSnapshot availableItems,
+		Map<String, Integer> usableCounts,
+		Map<String, Integer> preferenceTotals,
+		boolean craftAll,
+		boolean allowReservedGridVariantSwitch,
+		int desiredCopiesPerSlot,
+		boolean forceRetrievalSelection
+	) {
 		if (minecraft.level == null) {
 			return null;
 		}
@@ -140,7 +186,7 @@ public final class RecipeVariantResolver {
 			return exactSelection;
 		}
 
-		if (ExistingOutputRetrievalController.isEnabled()) {
+		if (forceRetrievalSelection || ExistingOutputRetrievalController.isEnabled()) {
 			return resolveRetrievalSelection(
 				minecraft,
 				player,
@@ -544,25 +590,28 @@ public final class RecipeVariantResolver {
 		return List.copyOf(grouped.values());
 	}
 
+	/**
+	 * What a retrieval can actually pull: nearby container stock ONLY. The
+	 * player's own inventory used to be merged in, so after one max pull of
+	 * jungle stairs the next click still "preferred" jungle (it was in the
+	 * inventory), searched the chests for it, and reported nothing nearby
+	 * while oak stairs sat there untouched.
+	 */
 	private static Map<String, Integer> retrievalOutputTotals(
 		Minecraft minecraft,
 		LocalPlayer player,
 		AvailableItemSnapshot availableItems
 	) {
-		Map<String, Integer> totals = availableItems.totalCounts();
 		if (!ReachCraftingConfig.get().enableNearbyContainerUsage()
 			|| minecraft.level == null
 			|| minecraft.getCameraEntity() == null) {
-			return totals;
+			return Map.of();
 		}
-		return AvailableItemSnapshot.mergeCounts(
-			totals,
-			NearbyContainerCache.getReachableView(
-				minecraft.level,
-				minecraft.getCameraEntity(),
-				player.blockInteractionRange()
-			).aggregateCounts()
-		);
+		return NearbyContainerCache.getReachableView(
+			minecraft.level,
+			minecraft.getCameraEntity(),
+			player.blockInteractionRange()
+		).aggregateCounts();
 	}
 
 	private static RecipeDisplayEntry findEntry(
