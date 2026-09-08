@@ -156,8 +156,23 @@ final class RecipeBookInputController {
 			return;
 		}
 		if (VirtualRetrievalRecipeBookEntries.isSyntheticRecipeId(recipeId)) {
-			int requestedCount = VirtualRetrievalRecipeBookEntries.requestCountForSynthetic(displayStack, shiftModifierDown);
-			VirtualRetrievalRecipeBookEntries.startRetrievalForSynthetic(recipeId, displayStack != null ? displayStack.copy() : ItemStack.EMPTY, requestedCount);
+			// The button's display stack can be empty right after a book
+			// refresh (a finished session forces one); the entry itself still
+			// knows its item, so resolve from the collection instead of
+			// refusing the click.
+			ItemStack syntheticStack = displayStack != null && !displayStack.isEmpty()
+				? displayStack.copy()
+				: syntheticDisplayStack(minecraft, collection, recipeId);
+			int requestedCount = VirtualRetrievalRecipeBookEntries.requestCountForSynthetic(syntheticStack, shiftModifierDown);
+			com.reachcrafting.ReachCraftingMod.diag(
+				"[recipe_input] synthetic_click recipe={} button_stack={} resolved_stack={} shift={} collection_ids={}",
+				recipeId,
+				ContainerUtils.formatStack(displayStack != null ? displayStack : ItemStack.EMPTY),
+				ContainerUtils.formatStack(syntheticStack),
+				shiftModifierDown,
+				collection == null ? "null" : collection.getRecipes().stream().map(entry -> String.valueOf(entry.id().index())).toList()
+			);
+			VirtualRetrievalRecipeBookEntries.startRetrievalForSynthetic(recipeId, syntheticStack, requestedCount);
 			return;
 		}
 		LocalPlayer player = minecraft.player;
@@ -250,8 +265,27 @@ final class RecipeBookInputController {
 			requestedClicks,
 			refillableBulkMaxMode,
 			autoCraftRequested,
+			false,
 			state
 		);
+	}
+
+	/**
+	 * The clicked entry's own output. Retrieval mode's variant overlay is a
+	 * collection of one synthetic entry per colour and passes no display
+	 * stack, so this must be the entry whose id was clicked, never the first.
+	 */
+	private static ItemStack syntheticDisplayStack(Minecraft minecraft, net.minecraft.client.gui.screens.recipebook.RecipeCollection collection, RecipeDisplayId recipeId) {
+		if (minecraft.level == null || collection == null || collection.getRecipes().isEmpty()) {
+			return ItemStack.EMPTY;
+		}
+		ContextMap context = SlotDisplayContext.fromLevel(minecraft.level);
+		for (RecipeDisplayEntry entry : collection.getRecipes()) {
+			if (entry.id().equals(recipeId)) {
+				return RecipeVariantResolver.resolveDisplayStack(entry.display(), context);
+			}
+		}
+		return ItemStack.EMPTY;
 	}
 
 	void onVanillaRecipeButtonClicked(
@@ -429,6 +463,10 @@ final class RecipeBookInputController {
 	}
 
 	void scheduleReplay(RecipeBookClickCapture.HeldRecipeAction action, int remainingClicks, boolean allowNearby, boolean craftAll, boolean refillableBulkMaxMode, boolean autoCraftRequested) {
+		scheduleReplay(action, remainingClicks, allowNearby, craftAll, refillableBulkMaxMode, autoCraftRequested, false);
+	}
+
+	void scheduleReplay(RecipeBookClickCapture.HeldRecipeAction action, int remainingClicks, boolean allowNearby, boolean craftAll, boolean refillableBulkMaxMode, boolean autoCraftRequested, boolean retrievalDone) {
 		if (!ReachCraftingConfig.get().enabled() || action == null || remainingClicks <= 0) {
 			return;
 		}
@@ -468,7 +506,7 @@ final class RecipeBookInputController {
 			refillableBulkMaxMode,
 			action.recipeId()
 		);
-		state.setReplayBatch(new RecipeBookClickCapture.ReplayBatch(action, remainingClicks, allowNearby, craftAll, refillableBulkMaxMode, autoCraftRequested));
+		state.setReplayBatch(new RecipeBookClickCapture.ReplayBatch(action, remainingClicks, allowNearby, craftAll, refillableBulkMaxMode, autoCraftRequested, retrievalDone));
 	}
 
 	boolean hasPendingHeldRecipe(
@@ -535,6 +573,11 @@ final class RecipeBookInputController {
 		if (AutoCraftController.isBulkModeEnabled()) {
 			return RecipeClickExecutor.bulkRecipeQueueLimit();
 		}
+		// Retrieval is never capped: Shift means "all of it", and the session
+		// stops on its own when nearby stock runs out (or ejects when full).
+		if (ExistingOutputRetrievalController.isEnabled()) {
+			return RecipeClickExecutor.bulkRecipeQueueLimit();
+		}
 
 		ItemStack expectedOutput = RecipeClickExecutor.resolveExpectedOutputStack(
 			minecraft,
@@ -591,6 +634,49 @@ final class RecipeBookInputController {
 			}
 			state.setPendingHeldRecipe(new RecipeBookClickCapture.PendingHeldRecipe(action, newInitialCount, newInitialCount >= 2));
 		}
+	}
+
+	/**
+	 * Dev harness only: queue {@code count} of a recipe and release it as one
+	 * request, the way a Ctrl+scroll accumulation followed by the key release
+	 * does. Goes through the same clamp and replay so the queue limit is
+	 * exercised, not bypassed.
+	 */
+	void harnessQueueAndRelease(
+		RecipeDisplayId recipeId,
+		net.minecraft.client.gui.screens.recipebook.RecipeCollection collection,
+		ItemStack displayStack,
+		int count
+	) {
+		harnessQueueAndRelease(recipeId, collection, displayStack, count, false, false);
+	}
+
+	void harnessQueueAndRelease(
+		RecipeDisplayId recipeId,
+		net.minecraft.client.gui.screens.recipebook.RecipeCollection collection,
+		ItemStack displayStack,
+		int count,
+		boolean ctrl,
+		boolean alt
+	) {
+		Minecraft minecraft = Minecraft.getInstance();
+		RecipeBookClickCapture.HeldRecipeAction action = new RecipeBookClickCapture.HeldRecipeAction(
+			recipeId,
+			collection,
+			displayStack != null ? displayStack.copy() : ItemStack.EMPTY,
+			GLFW.GLFW_MOUSE_BUTTON_LEFT,
+			false
+		);
+		int queueLimit = resolveQueueLimit(minecraft, action);
+		int queued = clampQueuedCount(0, count, queueLimit);
+		com.reachcrafting.ReachCraftingMod.diag(
+			"[recipe_input] harness_queue recipe={} requested={} queue_limit={} queued={}",
+			recipeId, count, queueLimit, queued);
+		state.setPendingHeldRecipe(new RecipeBookClickCapture.PendingHeldRecipe(action, queued, queued >= 2));
+		if (alt) {
+			AutoCraftController.consumeQuickCraft();
+		}
+		releasePendingHeldRecipe(currentModifierState(ctrl, false, alt));
 	}
 
 	private void releasePendingHeldRecipe(ModifierState modifierState) {
@@ -662,6 +748,32 @@ final class RecipeBookInputController {
 		NearbyContainerDryRun.runPendingPostReturnCompaction(minecraft);
 
 		RecipeBookClickCapture.ReplayBatch replayBatch = state.replayBatch();
+		// A queued count on a synthetic (no-recipe) retrieval entry: there is
+		// nothing to resolve or place, so start the retrieval directly, the
+		// same way a plain click on that entry does.
+		if (VirtualRetrievalRecipeBookEntries.isSyntheticRecipeId(replayBatch.action().recipeId())) {
+			state.setReplayBatch(null);
+			// Actions captured over the variant overlay carry no display
+			// stack (the hover lookup only knows the entry id), so resolve the
+			// clicked entry's own output here, exactly as a direct click does.
+			ItemStack actionStack = replayBatch.action().displayStack();
+			ItemStack syntheticStack = actionStack != null && !actionStack.isEmpty()
+				? actionStack.copy()
+				: syntheticDisplayStack(minecraft, replayBatch.action().collection(), replayBatch.action().recipeId());
+			com.reachcrafting.ReachCraftingMod.diag(
+				"[recipe_replay] synthetic recipe={} action_stack={} resolved_stack={} clicks={}",
+				replayBatch.action().recipeId(),
+				ContainerUtils.formatStack(actionStack != null ? actionStack : ItemStack.EMPTY),
+				ContainerUtils.formatStack(syntheticStack),
+				replayBatch.remainingClicks()
+			);
+			VirtualRetrievalRecipeBookEntries.startRetrievalForSynthetic(
+				replayBatch.action().recipeId(),
+				syntheticStack,
+				Math.max(replayBatch.remainingClicks(), 1)
+			);
+			return;
+		}
 		// Batches capture mode-dependent state at request time but can sit
 		// through a grid-flush delay or dry-run stall, during which the bulk
 		// latch may drop (Alt tap, gesture kill orphaning a session's batch).
@@ -694,7 +806,8 @@ final class RecipeBookInputController {
 					replayBatch.allowNearby(),
 					replayBatch.craftAll(),
 					replayBatch.refillableBulkMaxMode(),
-					replayBatch.autoCraftRequested()
+					replayBatch.autoCraftRequested(),
+					replayBatch.retrievalDone()
 				);
 				state.setReplayBatch(replayBatch);
 			}
@@ -723,6 +836,7 @@ final class RecipeBookInputController {
 			replayBatch.remainingClicks(),
 			replayBatch.refillableBulkMaxMode(),
 			replayBatch.autoCraftRequested(),
+			replayBatch.retrievalDone(),
 			state
 		);
 		if (state.replayBatch() == replayBatch) {
@@ -768,7 +882,11 @@ final class RecipeBookInputController {
 	private boolean isCraftingSessionControllerActive() {
 		return BulkAutoCraftController.isActive()
 			|| ChainCraftController.isActive()
-			|| BulkChainCraftController.isActive();
+			|| BulkChainCraftController.isActive()
+			// A retrieval walks chests for as long as a bulk craft does; a
+			// queue release landing mid-walk must not flush the grid or
+			// start a competing request underneath it.
+			|| NearbyContainerDryRun.isRetrievalSessionRunning();
 	}
 
 	private boolean adjustHeldRecipeCount(Minecraft minecraft, RecipeBookClickCapture.HeldRecipeAction action, int delta) {
@@ -871,26 +989,12 @@ final class RecipeBookInputController {
 	}
 
 	private int resolveQueueLimit(Minecraft minecraft, RecipeBookClickCapture.HeldRecipeAction action) {
-		if (VirtualRetrievalRecipeBookEntries.isSyntheticRecipeId(action.recipeId())) {
-			ItemStack displayStack = action.displayStack();
-			if (!displayStack.isEmpty()) {
-				return Math.max(displayStack.getMaxStackSize(), 1);
-			}
-		}
-		if (ExistingOutputRetrievalController.isEnabled()) {
-			ItemStack expectedOutput = action.displayStack().isEmpty()
-				? RecipeClickExecutor.resolveExpectedOutputStack(
-					minecraft,
-					minecraft.player,
-					action.recipeId(),
-					action.collection(),
-					ItemStack.EMPTY,
-					action.explicitVariantSelection()
-				)
-				: action.displayStack().copy();
-			if (!expectedOutput.isEmpty()) {
-				return Math.max(expectedOutput.getMaxStackSize(), 1);
-			}
+		// Retrieval requests (real recipes and the synthetic no-recipe
+		// entries alike) are never capped by a stack size: the queue counts
+		// up to the same ceiling bulk crafting uses.
+		if (VirtualRetrievalRecipeBookEntries.isSyntheticRecipeId(action.recipeId())
+			|| ExistingOutputRetrievalController.isEnabled()) {
+			return RecipeClickExecutor.bulkRecipeQueueLimit();
 		}
 		int queueLimit = Math.max(RecipeClickExecutor.resolveRecipeQueueLimit(minecraft, action.recipeId(), action.collection()), 1);
 		if (AutoCraftController.isBulkModeEnabled()) {

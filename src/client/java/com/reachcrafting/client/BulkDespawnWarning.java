@@ -48,7 +48,7 @@ final class BulkDespawnWarning {
 		}
 		warned = true;
 		ReachCraftingModClient.sendChat(
-			"Bulk session has been running for over " + formatDuration(thresholdSeconds)
+			"This session has been running for over " + formatDuration(thresholdSeconds)
 				+ ": items ejected on the ground despawn 5 minutes after being dropped."
 		);
 	}

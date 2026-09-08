@@ -356,6 +356,7 @@ public final class ContainerUtils {
 
 	public static void abortAllSessions() {
 		AutoMoveController.settleCompletedWork(net.minecraft.client.Minecraft.getInstance());
+		OutputVariantContinuationController.clear();
 		// Placements still queued on the packet budget are live work too: the
 		// craft they belong to has not happened yet. Counting them here means
 		// Esc during a budget-throttled placement reports as an abort instead
