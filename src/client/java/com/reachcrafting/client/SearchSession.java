@@ -1738,9 +1738,9 @@ final class SearchSession extends BaseCraftSession {
 
 	private BulkAutoCraftController.VariantContinuationMode resolveBulkVariantContinuationMode(RecipeVariantResolver.Selection resolvedSelection) {
 		BulkAutoCraftController.VariantContinuationMode currentMode = BulkAutoCraftController.currentVariantContinuationMode();
-		if (!ReachCraftingConfig.get().bulkVariantSwitching()) {
+		if (!ReachCraftingConfig.get().outputVariantSwitching()) {
 			com.reachcrafting.ReachCraftingMod.diag(
-				"[bulk_variant_mode] force_strict requested_recipe={} current_recipe={} resolved_recipe={} current_mode={} reason=bulk_variant_switching_disabled",
+				"[bulk_variant_mode] force_strict requested_recipe={} current_recipe={} resolved_recipe={} current_mode={} reason=output_variant_switching_disabled",
 				initialRequestedRecipeId,
 				recipeId,
 				resolvedSelection == null ? "<null>" : resolvedSelection.recipeId(),
@@ -1760,7 +1760,7 @@ final class SearchSession extends BaseCraftSession {
 		}
 		
 		if (resolvedSelection != null && !resolvedSelection.recipeId().equals(initialRequestedRecipeId)) {
-			return !ReachCraftingConfig.get().bulkVariantSwitching()
+			return !ReachCraftingConfig.get().outputVariantSwitching()
 				? BulkAutoCraftController.VariantContinuationMode.STRICT_CURRENT_VARIANT
 				: BulkAutoCraftController.VariantContinuationMode.FAMILY_FALLBACK;
 		}
@@ -1769,7 +1769,7 @@ final class SearchSession extends BaseCraftSession {
 	}
 
 	private ResourceLocation bulkContinuationRecipeId() {
-		return ReachCraftingConfig.get().bulkVariantSwitching() ? initialRequestedRecipeId : recipeId;
+		return ReachCraftingConfig.get().outputVariantSwitching() ? initialRequestedRecipeId : recipeId;
 	}
 
 	private RecipeHolder<?> resolveRecipeById(ResourceLocation targetRecipeId) {

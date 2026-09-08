@@ -22,7 +22,8 @@
 		"RecipeBookPageMixin",
 		"RecipeBookComponentMixin",
 		"AbstractContainerScreenAccessor",
-		"InventoryScreenMixin"
+		"InventoryScreenMixin",
+		"ChatComponentAccessor"
 	],
 	"injectors": {
 		"defaultRequire": 1

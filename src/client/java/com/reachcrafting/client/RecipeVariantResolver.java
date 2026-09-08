@@ -66,6 +66,51 @@ public final class RecipeVariantResolver {
 		boolean allowReservedGridVariantSwitch,
 		int desiredCopiesPerSlot
 	) {
+		return resolve(minecraft, player, clickedRecipe, collection, clickedDisplayStack, explicitVariantSelection, allowVariantSwitching,
+			availableItems, usableCounts, preferenceTotals, craftAll, allowReservedGridVariantSwitch, desiredCopiesPerSlot, false);
+	}
+
+	/**
+	 * Variant choice for a RETRIEVAL of the output: among the collection's
+	 * variants, prefer the one whose output is actually nearby (per the
+	 * revolving-variant setting), not the one whose ingredients are. The
+	 * retrieve-first step of a craft click and the green dot ask for it.
+	 */
+	public static Selection resolveRetrievalVariant(
+		Minecraft minecraft,
+		LocalPlayer player,
+		RecipeHolder<?> clickedRecipe,
+		RecipeCollection collection,
+		ItemStack clickedDisplayStack,
+		boolean explicitVariantSelection,
+		boolean allowVariantSwitching,
+		AvailableItemSnapshot availableItems,
+		Map<String, Integer> usableCounts,
+		Map<String, Integer> preferenceTotals,
+		boolean craftAll,
+		boolean allowReservedGridVariantSwitch,
+		int desiredCopiesPerSlot
+	) {
+		return resolve(minecraft, player, clickedRecipe, collection, clickedDisplayStack, explicitVariantSelection, allowVariantSwitching,
+			availableItems, usableCounts, preferenceTotals, craftAll, allowReservedGridVariantSwitch, desiredCopiesPerSlot, true);
+	}
+
+	private static Selection resolve(
+		Minecraft minecraft,
+		LocalPlayer player,
+		RecipeHolder<?> clickedRecipe,
+		RecipeCollection collection,
+		ItemStack clickedDisplayStack,
+		boolean explicitVariantSelection,
+		boolean allowVariantSwitching,
+		AvailableItemSnapshot availableItems,
+		Map<String, Integer> usableCounts,
+		Map<String, Integer> preferenceTotals,
+		boolean craftAll,
+		boolean allowReservedGridVariantSwitch,
+		int desiredCopiesPerSlot,
+		boolean forceRetrievalSelection
+	) {
 		if (minecraft.level == null || clickedRecipe == null) {
 			return null;
 		}
@@ -115,6 +160,19 @@ public final class RecipeVariantResolver {
 				}
 			}
 			return exactSelection;
+		}
+
+		if (forceRetrievalSelection) {
+			return resolveRetrievalSelection(
+				minecraft,
+				player,
+				availableItems,
+				exactSelection,
+				candidates,
+				handling,
+				requestedCopies,
+				craftAll
+			);
 		}
 
 		boolean bulkStrictOrUndecided = !craftAll
@@ -464,6 +522,98 @@ public final class RecipeVariantResolver {
 			.mapToInt(itemId -> preferenceTotals.getOrDefault(itemId, 0))
 			.sum();
 		return new Selection(recipe, recipe.id(), ingredientSummary, displayStack, outputItemId, outputLabel, copiesAvailable, preferredTotalCount);
+	}
+
+	private static Selection resolveRetrievalSelection(
+		Minecraft minecraft,
+		LocalPlayer player,
+		AvailableItemSnapshot availableItems,
+		Selection exactSelection,
+		List<Selection> candidates,
+		ReachCraftingConfig.RevolvingCraftHandling handling,
+		int requestedCopies,
+		boolean craftAll
+	) {
+		if (handling == ReachCraftingConfig.RevolvingCraftHandling.SPECIFIC_VARIANT_ONLY) {
+			return exactSelection;
+		}
+
+		Map<String, Integer> outputTotals = retrievalOutputTotals(minecraft, player, availableItems);
+		List<Selection> outputCandidates = uniqueOutputSelections(candidates, exactSelection);
+		if (outputCandidates.isEmpty()) {
+			return exactSelection;
+		}
+
+		int exactOutputCount = outputTotals.getOrDefault(exactSelection.outputItemId(), 0);
+		if (handling == ReachCraftingConfig.RevolvingCraftHandling.PREFER_CLICKED_TYPE_WITH_COUNT_FALLBACK
+			&& exactOutputCount > 0
+			&& (craftAll || exactOutputCount >= requestedCopies)) {
+			return exactSelection;
+		}
+
+		List<Selection> availableOutputCandidates = outputCandidates.stream()
+			.filter(candidate -> outputTotals.getOrDefault(candidate.outputItemId(), 0) > 0)
+			.toList();
+		if (availableOutputCandidates.isEmpty()) {
+			return exactSelection;
+		}
+
+		Comparator<Selection> byOutputCount = Comparator
+			.comparingInt((Selection selection) -> outputTotals.getOrDefault(selection.outputItemId(), 0))
+			.thenComparing(Selection::outputItemId);
+
+		if (!craftAll) {
+			List<Selection> fullRequestCandidates = availableOutputCandidates.stream()
+				.filter(candidate -> outputTotals.getOrDefault(candidate.outputItemId(), 0) >= requestedCopies)
+				.toList();
+			if (!fullRequestCandidates.isEmpty()) {
+				return fullRequestCandidates.stream()
+					.max(byOutputCount)
+					.orElse(exactSelection);
+			}
+		}
+
+		return availableOutputCandidates.stream()
+			.max(byOutputCount)
+			.orElse(exactSelection);
+	}
+
+	private static List<Selection> uniqueOutputSelections(List<Selection> candidates, Selection exactSelection) {
+		Map<String, Selection> grouped = new java.util.LinkedHashMap<>();
+		for (Selection candidate : candidates) {
+			if (candidate == null || candidate.displayStack().isEmpty()) {
+				continue;
+			}
+			Selection existing = grouped.get(candidate.outputItemId());
+			if (existing == null || candidate.recipeId().equals(exactSelection.recipeId())) {
+				grouped.put(candidate.outputItemId(), candidate);
+			}
+		}
+		return List.copyOf(grouped.values());
+	}
+
+	/**
+	 * What a retrieval can actually pull: nearby container stock ONLY. The
+	 * player's own inventory must not count, or after one max pull the next
+	 * click still "prefers" the variant now in the inventory, searches the
+	 * chests for it, and reports nothing nearby while another variant sits
+	 * there untouched.
+	 */
+	private static Map<String, Integer> retrievalOutputTotals(
+		Minecraft minecraft,
+		LocalPlayer player,
+		AvailableItemSnapshot availableItems
+	) {
+		if (!ReachCraftingConfig.get().enableNearbyContainerUsage()
+			|| minecraft.level == null
+			|| minecraft.getCameraEntity() == null) {
+			return Map.of();
+		}
+		return NearbyContainerCache.getReachableView(
+			minecraft.level,
+			minecraft.getCameraEntity(),
+			player.blockInteractionRange()
+		).aggregateCounts();
 	}
 
 	private static Comparator<Selection> compareSelections(IngredientPlanning.CountPreference countPreference, boolean craftAll) {

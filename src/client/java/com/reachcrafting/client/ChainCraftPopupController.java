@@ -1,5 +1,6 @@
 package com.reachcrafting.client;
 
+import com.reachcrafting.ReachCraftingMod;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.ConfirmScreen;
 import net.minecraft.client.gui.screens.Screen;
@@ -64,7 +65,40 @@ public final class ChainCraftPopupController {
 			return;
 		}
 
-		showConfirmPopup(messageFor(plan, requestedRecipeCopies), new PendingPopup(plan, deferredMissingMessage, null));
+		showConfirmPopup(messageFor(plan, requestedRecipeCopies), new PendingPopup(plan, deferredMissingMessage, null, null, null));
+	}
+
+	/**
+	 * Chain offer for a click that output variant switching may continue on
+	 * other family variants. {@code onConfirm} arms that continuation and
+	 * runs on Yes (or immediately in ALWAYS mode); a decline arms nothing.
+	 */
+	static void handlePlanWithVariantSwitching(ChainCraftPlan plan, int requestedRecipeCopies, String deferredMissingMessage, int variantTotalCopies, Runnable onConfirm) {
+		ReachCraftingConfig.ChainCraftingMode mode = ReachCraftingConfig.get().chainCraftingMode();
+		if (mode == ReachCraftingConfig.ChainCraftingMode.DISABLED || plan == null) {
+			return;
+		}
+		if (mode == ReachCraftingConfig.ChainCraftingMode.ALWAYS) {
+			if (requestedRecipeCopies > plan.finalRecipeCopies()) {
+				ReachCraftingModClient.sendChainCraftChat(alwaysPartialMessage(plan, requestedRecipeCopies).getString());
+			}
+			onConfirm.run();
+			ChainCraftController.start(plan);
+			return;
+		}
+		Component message = variantTotalCopies > plan.finalRecipeCopies()
+			? variantMessageFor(plan, requestedRecipeCopies, variantTotalCopies)
+			: messageFor(plan, requestedRecipeCopies);
+		showConfirmPopup(message, new PendingPopup(plan, deferredMissingMessage, null, onConfirm, null));
+	}
+
+	private static Component variantMessageFor(ChainCraftPlan plan, int requestedRecipeCopies, int variantTotalCopies) {
+		int outputPerCraft = Math.max(plan.finalOutput().getCount(), 1);
+		return Component.translatable(
+			"popup.reachcrafting.chain_crafting.variant_message",
+			variantTotalCopies * outputPerCraft,
+			requestedRecipeCopies * outputPerCraft
+		);
 	}
 
 	static void handleBulkChainPlan(
@@ -75,12 +109,40 @@ public final class ChainCraftPopupController {
 		boolean maxRequest,
 		String deferredMissingMessage
 	) {
+		handleBulkChainPlan(plan, selection, allowNearby, requestedRecipeCopies, maxRequest, deferredMissingMessage, null, plan != null ? plan.finalRecipeCopies() : 0);
+	}
+
+	/**
+	 * {@code family} non-null means Output Variant Switching may carry the
+	 * session onto other variants; {@code variantTotalCopies} is what the
+	 * whole family can reach (each variant planned on its own, an upper
+	 * bound), used for the prompt and to size a count request's target.
+	 */
+	static void handleBulkChainPlan(
+		ChainCraftPlan plan,
+		RecipeVariantResolver.Selection selection,
+		boolean allowNearby,
+		int requestedRecipeCopies,
+		boolean maxRequest,
+		String deferredMissingMessage,
+		BulkChainCraftController.VariantFamily family,
+		int variantTotalCopies
+	) {
 		ReachCraftingConfig.ChainCraftingMode mode = ReachCraftingConfig.get().chainCraftingMode();
 		if (mode == ReachCraftingConfig.ChainCraftingMode.DISABLED || plan == null || selection == null) {
 			return;
 		}
-		boolean downgraded = !maxRequest && requestedRecipeCopies > plan.finalRecipeCopies();
-		// A single-step plan is pure direct crafting — the case the yellow
+		boolean switching = family != null && variantTotalCopies > plan.finalRecipeCopies();
+		// With switching, a max request keeps going until no variant is
+		// left (uncapped target); a count request aims for the count, capped
+		// at what the family can reach.
+		int targetCopies = !switching
+			? plan.finalRecipeCopies()
+			: maxRequest
+				? RecipeClickExecutor.bulkRecipeQueueLimit()
+				: Math.min(requestedRecipeCopies, variantTotalCopies);
+		boolean downgraded = !maxRequest && requestedRecipeCopies > (switching ? variantTotalCopies : plan.finalRecipeCopies());
+		// A single-step plan is pure direct crafting, the case the yellow
 		// craftable indicator promises needs no chaining. Flat bulk max never
 		// prompts for that, so neither does bulk chain; the per-iteration
 		// replans still add conversion steps later if directs run dry.
@@ -88,22 +150,57 @@ public final class ChainCraftPopupController {
 			if (downgraded) {
 				ReachCraftingModClient.sendChainCraftChat(bulkAlwaysPartialMessage(plan, requestedRecipeCopies).getString());
 			}
-			BulkChainCraftController.start(selection, allowNearby, plan.finalRecipeCopies());
+			BulkChainCraftController.start(selection, allowNearby, targetCopies, family);
 			return;
 		}
 
+		Component message = switching
+			? bulkVariantMessageFor(plan, requestedRecipeCopies, maxRequest, variantTotalCopies)
+			: bulkMessageFor(plan, requestedRecipeCopies, maxRequest);
 		showConfirmPopup(
-			bulkMessageFor(plan, requestedRecipeCopies, maxRequest),
-			new PendingPopup(null, deferredMissingMessage, new BulkChainRequest(selection, allowNearby, plan.finalRecipeCopies()))
+			message,
+			new PendingPopup(null, deferredMissingMessage, new BulkChainRequest(selection, allowNearby, targetCopies, family), null, null)
 		);
 	}
 
+	private static Component bulkVariantMessageFor(ChainCraftPlan plan, int requestedRecipeCopies, boolean maxRequest, int variantTotalCopies) {
+		int outputPerCraft = Math.max(plan.finalOutput().getCount(), 1);
+		if (maxRequest) {
+			return Component.translatable(
+				"popup.reachcrafting.chain_crafting.bulk_variant_max_message",
+				variantTotalCopies * outputPerCraft
+			);
+		}
+		return Component.translatable(
+			"popup.reachcrafting.chain_crafting.bulk_variant_message",
+			variantTotalCopies * outputPerCraft,
+			requestedRecipeCopies * outputPerCraft
+		);
+	}
+
+	/**
+	 * A Yes/No prompt for another feature (retrieve-then-craft) that wants the
+	 * same keyboard and harness handling as the chain prompt. Exactly one of
+	 * the two callbacks runs: confirm on Yes/Enter/Space, cancel on No/Esc.
+	 */
+	static void showConfirm(Component title, Component message, Runnable onConfirm, Runnable onCancel) {
+		showConfirmPopup(title, message, new PendingPopup(null, null, null, onConfirm, onCancel));
+	}
+
 	private static void showConfirmPopup(Component message, PendingPopup pending) {
+		showConfirmPopup(Component.translatable("popup.reachcrafting.chain_crafting.title"), message, pending);
+	}
+
+	private static void showConfirmPopup(Component title, Component message, PendingPopup pending) {
 		Minecraft client = Minecraft.getInstance();
 		Screen background = client.screen;
 		if (!(background instanceof CraftingScreen) && !(background instanceof InventoryScreen)) {
+			if (pending.onCancel() != null) {
+				pending.onCancel().run();
+			}
 			return;
 		}
+		ReachCraftingMod.diag("[chain_popup] title={} message={}", title.getString(), message.getString());
 
 		java.util.concurrent.atomic.AtomicBoolean resolved = new java.util.concurrent.atomic.AtomicBoolean(false);
 		it.unimi.dsi.fastutil.booleans.BooleanConsumer callback = accepted -> {
@@ -111,9 +208,12 @@ public final class ChainCraftPopupController {
 				return;
 			}
 			if (accepted) {
+				if (pending.onConfirm() != null) {
+					pending.onConfirm().run();
+				}
 				if (pending.bulkChain() != null) {
 					pendingBulkChainStart = pending.bulkChain();
-				} else {
+				} else if (pending.plan() != null) {
 					pendingStartPlan = pending.plan();
 				}
 			} else {
@@ -128,7 +228,7 @@ public final class ChainCraftPopupController {
 		};
 		ConfirmScreen popup = new ConfirmScreen(
 			callback,
-			Component.translatable("popup.reachcrafting.chain_crafting.title"),
+			title,
 			message,
 			Component.translatable("popup.reachcrafting.chain_crafting.yes"),
 			Component.translatable("popup.reachcrafting.chain_crafting.no")
@@ -279,7 +379,7 @@ public final class ChainCraftPopupController {
 		if (pendingBulkChainStart != null) {
 			BulkChainRequest request = pendingBulkChainStart;
 			pendingBulkChainStart = null;
-			BulkChainCraftController.start(request.selection(), request.allowNearby(), request.targetCopies());
+			BulkChainCraftController.start(request.selection(), request.allowNearby(), request.targetCopies(), request.family());
 			return;
 		}
 		ChainCraftPlan plan = pendingStartPlan;
@@ -288,14 +388,17 @@ public final class ChainCraftPopupController {
 	}
 
 	private static void sendDeferredMissing(PendingPopup pending) {
+		if (pending.onCancel() != null) {
+			pending.onCancel().run();
+		}
 		if (pending.deferredMissingMessage() != null && !pending.deferredMissingMessage().isBlank()) {
 			ReachCraftingModClient.sendMissingIngredientsChat(pending.deferredMissingMessage());
 		}
 	}
 
-	private record PendingPopup(ChainCraftPlan plan, String deferredMissingMessage, BulkChainRequest bulkChain) {
+	private record PendingPopup(ChainCraftPlan plan, String deferredMissingMessage, BulkChainRequest bulkChain, Runnable onConfirm, Runnable onCancel) {
 	}
 
-	private record BulkChainRequest(RecipeVariantResolver.Selection selection, boolean allowNearby, int targetCopies) {
+	private record BulkChainRequest(RecipeVariantResolver.Selection selection, boolean allowNearby, int targetCopies, BulkChainCraftController.VariantFamily family) {
 	}
 }

@@ -759,6 +759,15 @@ final class AutoMoveController {
 					return;
 				}
 
+				if (PlaceRecipeBudget.hasPendingFor(menu.containerId)) {
+					// The result slot is live, but this container still has
+					// placements queued on the packet budget. An exact-count
+					// craft stages one copy per placement; harvesting now would
+					// craft only the copies that have landed and strand the
+					// rest in the queue, so wait for our own sends to drain.
+					return;
+				}
+
 				int slotsNeeded = 0;
 				if (AutoCraftController.isBulkModeEnabled()) {
 					slotsNeeded = BulkAutoCraftController.estimatedRequiredSlotsForNextBatch();
