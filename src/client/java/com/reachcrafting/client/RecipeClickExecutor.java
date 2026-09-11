@@ -214,27 +214,13 @@ final class RecipeClickExecutor {
 			if (nearbyOutput <= 0 && cacheComplete) {
 				RetrieveThenCraftController.logNoneNearby(retrieveItemId, targetItems, outputHandling);
 			} else {
-				// How many copies the materials can actually produce. The chain
-				// offer already quotes its planner instead of a subtraction, and
-				// the retrieve prompt now does the same, so it cannot offer a
-				// remainder it will not deliver. Direct copies first; a chain
-				// plan can raise that when chain crafting is allowed to run.
+				// What the materials can DIRECTLY make, so the prompt never
+				// offers a remainder it will not deliver. Deliberately not a
+				// chain estimate: chain crafting asks its own question with its
+				// own number afterwards, and it is not even eligible without an
+				// auto craft request, so counting it here would promise crafts
+				// this click can never perform.
 				int craftableCopies = deficitReport.possibleCopies();
-				if (craftableCopies < desiredVariantCopies
-					&& ReachCraftingConfig.get().chainCraftingMode() != ReachCraftingConfig.ChainCraftingMode.DISABLED) {
-					Optional<ChainCraftPlan> prospect = ChainCraftPlanner.planMax(
-						minecraft,
-						player,
-						selectedRecipe,
-						chainAvailableCounts,
-						allowNearbyChests,
-						desiredVariantCopies,
-						AutoCraftController.isBulkModeEnabled()
-					);
-					if (prospect.isPresent()) {
-						craftableCopies = Math.max(craftableCopies, prospect.get().finalRecipeCopies());
-					}
-				}
 				RetrieveThenCraftController.start(
 					new RetrieveThenCraftController.FollowUp(
 						new RecipeBookClickCapture.HeldRecipeAction(
