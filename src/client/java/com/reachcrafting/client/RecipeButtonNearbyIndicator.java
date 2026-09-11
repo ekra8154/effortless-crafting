@@ -57,6 +57,16 @@ public final class RecipeButtonNearbyIndicator {
 		} else {
 			retrievable = hasRetrievableOutput(recipe, collection, ItemStack.EMPTY, false);
 		}
+		// Report what the button actually draws. Both dots are gated by their
+		// display settings, and the green one also follows Existing Output
+		// Handling, so a probe that skipped those gates would measure a state
+		// the player never sees.
+		if (!ReachCraftingConfig.get().showNearbyCraftableIndicator()) {
+			state = IndicatorState.NONE;
+		}
+		if (!retrievableIndicatorEnabled()) {
+			retrievable = false;
+		}
 		return "state=" + state + " retrievable=" + retrievable + " collection_size=" + (collection != null ? collection.getRecipes().size() : 0);
 	}
 
@@ -95,6 +105,12 @@ public final class RecipeButtonNearbyIndicator {
 	}
 
 	private static boolean retrievableIndicatorEnabled() {
+		// The green dot promises that a Ctrl-assisted click pulls the copies
+		// already in storage. Under Craft only nothing would pull, so showing
+		// it would advertise a gesture the mod refuses to perform.
+		if (ReachCraftingConfig.get().existingOutputHandling() == ReachCraftingConfig.ExistingOutputHandling.CRAFT_ONLY) {
+			return false;
+		}
 		return ReachCraftingConfig.get().showRetrievableIndicator();
 	}
 
