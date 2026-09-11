@@ -400,6 +400,10 @@ public final class ContainerUtils {
 		}
 		ChainCraftController.abort(false);
 		NearbyContainerDryRun.abortActiveSession();
+		// Retrieval Mode is cleared here, which is what makes it end when the
+		// crafting screen closes: the close hook runs abortAllSessions. Without
+		// this the mode would still be latched on the next open.
+		ExistingOutputRetrievalController.setEnabled(false);
 		InventoryGridRestoreTracker.clear();
 		OffhandConsolidationController.swapBack(net.minecraft.client.Minecraft.getInstance());
 
