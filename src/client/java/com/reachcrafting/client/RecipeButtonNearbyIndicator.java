@@ -120,7 +120,16 @@ public final class RecipeButtonNearbyIndicator {
 		}
 
 		AbstractWidget widget = (AbstractWidget) (Object) button;
+		// The recipe button has already drawn its item 150 deep by the time
+		// this runs, and a flat fill lands at the widget's own depth, so any
+		// indicator overlapping the item would be hidden behind it (the green
+		// dot sits far enough in to overlap, the craft dot barely does). Lift
+		// the whole group above the item; within it, draw order still decides,
+		// so green stays under the craft dot.
+		guiGraphics.pose().pushPose();
+		guiGraphics.pose().translate(0.0F, 0.0F, 200.0F);
 		renderIndicators(guiGraphics, widget.getX() + 3, widget.getY() + 3, indicatorState, retrievable);
+		guiGraphics.pose().popPose();
 	}
 
 	/**
