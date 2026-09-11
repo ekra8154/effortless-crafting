@@ -162,7 +162,7 @@ public final class RecipeVariantResolver {
 			return exactSelection;
 		}
 
-		if (forceRetrievalSelection) {
+		if (forceRetrievalSelection || ExistingOutputRetrievalController.isEnabled()) {
 			return resolveRetrievalSelection(
 				minecraft,
 				player,

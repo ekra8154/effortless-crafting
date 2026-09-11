@@ -136,6 +136,38 @@ public final class RecipeBookSmartSorter {
 		List<Recipe<?>> recipes = selectedRecipes(collection);
 		int recentRank = recentRank(recipes, context.recentRanks);
 
+		if (context.retrievalModeEnabled) {
+			boolean explicitVariantSelection = recipes.size() > 1;
+			boolean retrievable = false;
+			for (Recipe<?> entry : recipes) {
+				NearbyMemoKey nearbyMemoKey = new NearbyMemoKey(entry.getId(), explicitVariantSelection);
+				retrievable |= context.retrievabilityByRecipe.computeIfAbsent(
+					nearbyMemoKey,
+					ignored -> RecipeButtonNearbyIndicator.hasRetrievableOutput(
+						entry,
+						collection,
+						ItemStack.EMPTY,
+						explicitVariantSelection
+					)
+				);
+				if (retrievable) {
+					break;
+				}
+			}
+
+			if (retrievable && recentRank != Integer.MAX_VALUE) {
+				return new SortScore(0, recentRank, originalIndex);
+			}
+			if (retrievable) {
+				return new SortScore(1, 0, originalIndex);
+			}
+			if (recentRank != Integer.MAX_VALUE) {
+				return new SortScore(2, recentRank, originalIndex);
+			}
+			return new SortScore(3, 0, originalIndex);
+		}
+
+
 		// Craftability decides the tier; recency only ranks WITHIN a tier, so
 		// a recently-used recipe never outranks something craftable right now.
 		if (collection.hasCraftable()) {
@@ -176,6 +208,38 @@ public final class RecipeBookSmartSorter {
 	static SortScore fullScore(RecipeCollection collection, SortPassContext context, int originalIndex) {
 		List<Recipe<?>> recipes = selectedRecipes(collection);
 		int recentRank = recentRank(recipes, context.recentRanks);
+
+		if (context.retrievalModeEnabled) {
+			boolean explicitVariantSelection = recipes.size() > 1;
+			boolean retrievable = false;
+			for (Recipe<?> entry : recipes) {
+				NearbyMemoKey nearbyMemoKey = new NearbyMemoKey(entry.getId(), explicitVariantSelection);
+				retrievable |= context.retrievabilityByRecipe.computeIfAbsent(
+					nearbyMemoKey,
+					ignored -> RecipeButtonNearbyIndicator.hasRetrievableOutput(
+						entry,
+						collection,
+						ItemStack.EMPTY,
+						explicitVariantSelection
+					)
+				);
+				if (retrievable) {
+					break;
+				}
+			}
+
+			if (retrievable && recentRank != Integer.MAX_VALUE) {
+				return new SortScore(0, recentRank, originalIndex);
+			}
+			if (retrievable) {
+				return new SortScore(1, 0, originalIndex);
+			}
+			if (recentRank != Integer.MAX_VALUE) {
+				return new SortScore(2, recentRank, originalIndex);
+			}
+			return new SortScore(3, 0, originalIndex);
+		}
+
 
 		// Tier order (user-facing contract): in-inventory direct, in-inventory
 		// chain, needs-nearby direct, needs-nearby chain, everything else.
@@ -263,8 +327,13 @@ public final class RecipeBookSmartSorter {
 	}
 
 
+	static record NearbyMemoKey(ResourceLocation recipeId, boolean explicitVariantSelection) {
+	}
+
 	static final class SortPassContext {
 		final Map<String, Integer> recentRanks;
+		final boolean retrievalModeEnabled = ExistingOutputRetrievalController.isEnabled();
+		final Map<NearbyMemoKey, Boolean> retrievabilityByRecipe = new HashMap<>();
 		final Map<ResourceLocation, Boolean> chainCraftableByRecipe = new HashMap<>();
 		final Map<RecipeCollection, RecipeButtonNearbyIndicator.Craftability> collectionCraftability = new IdentityHashMap<>();
 

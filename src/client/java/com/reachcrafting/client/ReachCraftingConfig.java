@@ -30,6 +30,8 @@ public final class ReachCraftingConfig {
 	private static final boolean DEFAULT_PREFER_NON_STRIPPED_LOGS = true;
 	private static final boolean DEFAULT_DIAGNOSTIC_LOGGING_ENABLED = false;
 	private static final boolean DEFAULT_SHOW_CRAFTABILITY_INDICATORS = true;
+	private static final boolean DEFAULT_ENABLE_EXISTING_OUTPUT_RETRIEVAL = true;
+	private static final boolean DEFAULT_EXPANDED_VARIANT_MENU_TOOLTIPS = true;
 	private static final ExistingOutputHandling DEFAULT_EXISTING_OUTPUT_HANDLING = ExistingOutputHandling.RETRIEVE_THEN_ASK;
 	private static final boolean DEFAULT_CACHE_CONTAINERS_FOR_FASTER_SEARCH = true;
 	private static final ContainerDrainOrder DEFAULT_CONTAINER_DRAIN_ORDER = ContainerDrainOrder.SMALLEST_FIRST;
@@ -100,6 +102,8 @@ public final class ReachCraftingConfig {
 	private RevolvingCraftHandling revolvingCraftHandling;
 	private IngredientPlanning.CountPreference countPreference;
 	private boolean showCraftabilityIndicators;
+	private boolean enableExistingOutputRetrieval;
+	private boolean expandedVariantMenuTooltips;
 	private ExistingOutputHandling existingOutputHandling;
 	private boolean cacheContainersForFasterSearch;
 	private ContainerDrainOrder containerDrainOrder;
@@ -178,6 +182,8 @@ public final class ReachCraftingConfig {
 				? stored.countPreference
 				: DEFAULT_COUNT_PREFERENCE;
 			instance.showCraftabilityIndicators = stored.showCraftabilityIndicators != null ? stored.showCraftabilityIndicators : DEFAULT_SHOW_CRAFTABILITY_INDICATORS;
+			instance.enableExistingOutputRetrieval = stored.enableExistingOutputRetrieval != null ? stored.enableExistingOutputRetrieval : DEFAULT_ENABLE_EXISTING_OUTPUT_RETRIEVAL;
+			instance.expandedVariantMenuTooltips = stored.expandedVariantMenuTooltips != null ? stored.expandedVariantMenuTooltips : DEFAULT_EXPANDED_VARIANT_MENU_TOOLTIPS;
 			instance.existingOutputHandling = stored.existingOutputHandling != null ? stored.existingOutputHandling : DEFAULT_EXISTING_OUTPUT_HANDLING;
 			instance.cacheContainersForFasterSearch = stored.cacheContainersForFasterSearch != null
 				? stored.cacheContainersForFasterSearch
@@ -346,6 +352,26 @@ public final class ReachCraftingConfig {
 
 	public boolean showCraftabilityIndicators() {
 		return showCraftabilityIndicators;
+	}
+
+	public boolean enableExistingOutputRetrieval() {
+		return enableExistingOutputRetrieval;
+	}
+
+	public void setEnableExistingOutputRetrieval(boolean enableExistingOutputRetrieval) {
+		this.enableExistingOutputRetrieval = enableExistingOutputRetrieval;
+		if (!enableExistingOutputRetrieval) {
+			ExistingOutputRetrievalController.setEnabled(false);
+		}
+		RecipeButtonNearbyIndicator.clearCaches();
+	}
+
+	public boolean expandedVariantMenuTooltips() {
+		return expandedVariantMenuTooltips;
+	}
+
+	public void setExpandedVariantMenuTooltips(boolean expandedVariantMenuTooltips) {
+		this.expandedVariantMenuTooltips = expandedVariantMenuTooltips;
 	}
 
 	public void setShowCraftabilityIndicators(boolean showCraftabilityIndicators) {
@@ -784,6 +810,7 @@ public final class ReachCraftingConfig {
 				this.recentRecipeDisplayIdsByContext.clear();
 			}
 			RecipeBookChunkedScheduler.clear();
+			ExistingOutputRetrievalController.setEnabled(false);
 			ChainCraftabilityCache.clearCache();
 			NearbyContainerCache.clear();
 			RecipeButtonNearbyIndicator.clearCaches();
@@ -874,6 +901,8 @@ public final class ReachCraftingConfig {
 		defaults.revolvingCraftHandling = DEFAULT_REVOLVING_CRAFT_HANDLING;
 		defaults.countPreference = DEFAULT_COUNT_PREFERENCE;
 		defaults.showCraftabilityIndicators = DEFAULT_SHOW_CRAFTABILITY_INDICATORS;
+		defaults.enableExistingOutputRetrieval = DEFAULT_ENABLE_EXISTING_OUTPUT_RETRIEVAL;
+		defaults.expandedVariantMenuTooltips = DEFAULT_EXPANDED_VARIANT_MENU_TOOLTIPS;
 		defaults.existingOutputHandling = DEFAULT_EXISTING_OUTPUT_HANDLING;
 		defaults.cacheContainersForFasterSearch = DEFAULT_CACHE_CONTAINERS_FOR_FASTER_SEARCH;
 		defaults.containerDrainOrder = DEFAULT_CONTAINER_DRAIN_ORDER;
@@ -976,7 +1005,10 @@ public final class ReachCraftingConfig {
 		if (contextId == null) {
 			return null;
 		}
-		return contextId;
+		// Retrieval Mode has its own recent-recipe history: the clicks made
+		// while pulling from chests are a different intent from crafting ones.
+		String prefix = ContainerUtils.isExistingOutputRetrievalEnabled() ? "retrieval_" : "";
+		return prefix + contextId;
 	}
 
 	private static String storageContextId() {
@@ -1135,6 +1167,8 @@ public final class ReachCraftingConfig {
 		// anyone who turned the dots off in 1.3.0 keeps that.
 		@com.google.gson.annotations.SerializedName(value = "showCraftabilityIndicators", alternate = {"showNearbyCraftableIndicator"})
 		private Boolean showCraftabilityIndicators;
+		private Boolean enableExistingOutputRetrieval;
+		private Boolean expandedVariantMenuTooltips;
 		private ExistingOutputHandling existingOutputHandling;
 		private Boolean cacheContainersForFasterSearch;
 		private ContainerDrainOrder containerDrainOrder;
@@ -1196,6 +1230,8 @@ public final class ReachCraftingConfig {
 			this.revolvingCraftHandling = config.revolvingCraftHandling;
 			this.countPreference = config.countPreference;
 			this.showCraftabilityIndicators = config.showCraftabilityIndicators;
+			this.enableExistingOutputRetrieval = config.enableExistingOutputRetrieval;
+			this.expandedVariantMenuTooltips = config.expandedVariantMenuTooltips;
 			this.existingOutputHandling = config.existingOutputHandling;
 			this.cacheContainersForFasterSearch = config.cacheContainersForFasterSearch;
 			this.containerDrainOrder = config.containerDrainOrder;

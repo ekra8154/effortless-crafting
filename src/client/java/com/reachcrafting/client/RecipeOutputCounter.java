@@ -47,6 +47,7 @@ public final class RecipeOutputCounter {
 		int queuedOutputCount = 0;
 		String queuedItemId = null;
 		boolean hasQueuedState = countState.queuedState();
+		boolean retrievalQueuedDisplay = hasQueuedState && ContainerUtils.isExistingOutputRetrievalEnabled();
 		if (hasQueuedState && !countState.queuedOutputStack().isEmpty()) {
 			queuedItemId = BuiltInRegistries.ITEM.getKey(countState.queuedOutputStack().getItem()).toString();
 			queuedOutputCount = countState.displayedCount() * countState.queuedOutputStack().getCount();

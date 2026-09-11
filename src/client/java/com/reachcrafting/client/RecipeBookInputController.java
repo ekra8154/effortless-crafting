@@ -162,11 +162,12 @@ final class RecipeBookInputController {
 			RecipeBookFocusManager.defocusRecipeBookSearch(minecraft);
 		}
 
-		boolean autoCraftRequested = altModifierDown && ReachCraftingConfig.get().altAsRequestKey();
+		boolean retrievalRequested = ExistingOutputRetrievalController.isEnabled();
+		boolean autoCraftRequested = !retrievalRequested && altModifierDown && ReachCraftingConfig.get().altAsRequestKey();
 		boolean maxCraftRequested = shiftModifierDown;
 		boolean craftAll = maxCraftRequested;
 		boolean allowNearbyChests = ReachCraftingConfig.get().enableNearbyContainerUsage()
-			&& (ctrlModifierDown || ReachCraftingConfig.get().nearbyAlwaysAllowed());
+			&& (ctrlModifierDown || retrievalRequested || ReachCraftingConfig.get().nearbyAlwaysAllowed());
 		boolean refillableBulkMaxMode = maxCraftRequested && AutoCraftController.isBulkModeEnabled();
 		int requestedClicks = maxCraftRequested
 			? resolveMaxCraftRequestCount(minecraft, player, recipe, collection, displayStack, explicitVariantSelection, allowNearbyChests)
@@ -498,6 +499,11 @@ final class RecipeBookInputController {
 		boolean allowNearbyChests
 	) {
 		if (AutoCraftController.isBulkModeEnabled()) {
+			return RecipeClickExecutor.bulkRecipeQueueLimit();
+		}
+		// Retrieval is never capped: Shift means "all of it", and the session
+		// stops on its own when nearby stock runs out (or ejects when full).
+		if (ExistingOutputRetrievalController.isEnabled()) {
 			return RecipeClickExecutor.bulkRecipeQueueLimit();
 		}
 
@@ -887,6 +893,11 @@ final class RecipeBookInputController {
 	}
 
 	private int resolveQueueLimit(Minecraft minecraft, RecipeBookClickCapture.HeldRecipeAction action) {
+		// Retrieval requests are never capped by a stack size: the queue counts
+		// up to the same ceiling bulk crafting uses.
+		if (ExistingOutputRetrievalController.isEnabled()) {
+			return RecipeClickExecutor.bulkRecipeQueueLimit();
+		}
 		int queueLimit = Math.max(RecipeClickExecutor.resolveRecipeQueueLimit(minecraft, action.recipe(), action.collection()), 1);
 		if (AutoCraftController.isBulkModeEnabled()) {
 			return Math.max(queueLimit, RecipeClickExecutor.bulkRecipeQueueLimit());

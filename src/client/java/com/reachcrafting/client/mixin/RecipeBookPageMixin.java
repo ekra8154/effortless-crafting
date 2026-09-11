@@ -51,6 +51,11 @@ public abstract class RecipeBookPageMixin {
 
 				ItemStack displayStack = RecipeVariantResolver.resolveDisplayStack(recipeButton.getRecipe(), Minecraft.getInstance());
 				if (recipeButton.getCollection() != null && recipeButton.getCollection().getRecipes().size() > 1) {
+					if (com.reachcrafting.client.ContainerUtils.isExistingOutputRetrievalEnabled()
+						&& com.reachcrafting.client.RetrievalOutputVariantOverlay.openForButton(recipeButton)) {
+						cir.setReturnValue(true);
+						return;
+					}
 					if (RecipeBookClickCapture.onRecipeButtonRightClicked(
 						recipeButton.getRecipe(),
 						recipeButton.getCollection(),
@@ -90,7 +95,9 @@ public abstract class RecipeBookPageMixin {
 			return;
 		}
 
-		boolean interceptWithMod = ctrlDown || (altDown && !shiftDown && ReachCraftingConfig.get().altAsRequestKey());
+		boolean interceptWithMod = ctrlDown
+			|| com.reachcrafting.client.ContainerUtils.isExistingOutputRetrievalEnabled()
+			|| (altDown && !shiftDown && ReachCraftingConfig.get().altAsRequestKey());
 		if (!interceptWithMod) {
 			return;
 		}
