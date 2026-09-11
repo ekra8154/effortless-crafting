@@ -34,6 +34,10 @@ import java.nio.file.Path;
 public final class ReproHarness {
 	private enum PendingKind { CRAFT, RETRIEVE, CRAFT_PLAIN, INDICATOR }
 	private static boolean pendingShift;
+	// A scripted craft has always behaved as though Alt were held, so the
+	// remainder of a retrieve-then-craft was collected rather than left staged
+	// in the grid. "noalt" drives the plain path a player gets without auto craft.
+	private static boolean pendingNoAlt;
 	private static boolean autoConfirmYes = true;
 
 	private static Path cmdFile;
@@ -199,6 +203,7 @@ public final class ReproHarness {
 				pendingRetrieveCount = -1;
 				pendingCtrl = false;
 				pendingShift = false;
+				pendingNoAlt = false;
 				for (int i = 2; i < parts.length; i++) {
 					if (parts[i].startsWith("count=")) {
 						pendingRetrieveCount = Integer.parseInt(parts[i].substring("count=".length()));
@@ -206,6 +211,8 @@ public final class ReproHarness {
 						pendingCtrl = true;
 					} else if (parts[i].equals("shift")) {
 						pendingShift = true;
+					} else if (parts[i].equals("noalt")) {
+						pendingNoAlt = true;
 					}
 				}
 				pendingBulkLatch = false;
@@ -322,13 +329,14 @@ public final class ReproHarness {
 		String itemId = pendingBulkItem;
 		boolean ctrl = pendingCtrl;
 		boolean bulkLatch = pendingBulkLatch;
+		boolean noAlt = pendingNoAlt;
 		pendingBulkItem = null;
 		if (pendingKind == PendingKind.RETRIEVE) {
 			retrieveRecipeByItemId(client, itemId, pendingRetrieveCount);
 			return;
 		}
 		if (pendingKind == PendingKind.CRAFT_PLAIN) {
-			craftRecipeByItemId(client, itemId, ctrl, pendingShift, pendingRetrieveCount);
+			craftRecipeByItemId(client, itemId, ctrl, pendingShift, pendingRetrieveCount, noAlt);
 			return;
 		}
 		if (pendingKind == PendingKind.INDICATOR) {
@@ -353,7 +361,7 @@ public final class ReproHarness {
 	}
 
 	/** A plain Alt-style auto-craft click, no bulk latch, honoring existingOutputHandling. */
-	private static void craftRecipeByItemId(Minecraft client, String itemId, boolean ctrl, boolean shift, int count) {
+	private static void craftRecipeByItemId(Minecraft client, String itemId, boolean ctrl, boolean shift, int count, boolean noAlt) {
 		RecipeCollection[] collectionOut = new RecipeCollection[1];
 		Recipe<?> recipe = findRecipeFor(client, itemId, collectionOut);
 		if (recipe == null) {
@@ -365,13 +373,13 @@ public final class ReproHarness {
 		AutoCraftController.setEnabledMode(ReachCraftingConfig.AutoCraftMode.NORMAL);
 		autoConfirmTicks = 400;
 		ReachCraftingMod.diag(
-			"[repro_harness] craft armed recipe id={} item={} ctrl={} shift={} count={} handling={}",
-			recipe.getId(), itemId, ctrl, shift, count < 0 ? "1" : String.valueOf(count),
+			"[repro_harness] craft armed recipe id={} item={} ctrl={} shift={} alt={} count={} handling={}",
+			recipe.getId(), itemId, ctrl, shift, !noAlt, count < 0 ? "1" : String.valueOf(count),
 			ReachCraftingConfig.get().existingOutputHandling());
 		if (count < 0) {
 			RecipeBookClickCapture.onRecipeButtonClicked(recipe, collection, stack, 0, shift, ctrl, true, false);
 		} else {
-			RecipeBookInputController.getInstance().harnessQueueAndRelease(recipe, collection, stack, count, ctrl, true);
+			RecipeBookInputController.getInstance().harnessQueueAndRelease(recipe, collection, stack, count, ctrl, !noAlt);
 		}
 	}
 
