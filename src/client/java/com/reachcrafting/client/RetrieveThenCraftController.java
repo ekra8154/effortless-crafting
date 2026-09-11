@@ -189,6 +189,13 @@ final class RetrieveThenCraftController {
 			? remainderClicks
 			: Math.min(remainderClicks, Math.max(followUp.craftableCopies(), 0));
 		int achievableItems = achievableClicks * Math.max(followUp.outputPerCraft(), 1);
+		// Chain crafting asks its own question with its own number and can reach
+		// past what is directly craftable, so the direct figure is only the
+		// whole story when chaining cannot step in. When it can, keep the plain
+		// wording and let the chain offer speak for itself.
+		boolean chainMayExtend = ReachCraftingConfig.get().chainCraftingMode() != ReachCraftingConfig.ChainCraftingMode.DISABLED
+			&& (followUp.autoCraftRequested() || AutoCraftController.isBulkModeEnabled());
+		boolean quoteDirect = !uncapped && !chainMayExtend && achievableClicks < remainderClicks;
 		// The remainder is replayed as an ordinary recipe request, so it only
 		// reaches the inventory when auto craft will run for it. Without that
 		// the ingredients are staged in the grid and the player takes the
@@ -198,7 +205,7 @@ final class RetrieveThenCraftController {
 			case RETRIEVE_ONLY -> logComplete(followUp, "retrieve_only", retrieved, 0);
 			case RETRIEVE_THEN_CRAFT -> {
 				String craftItemName = ContainerUtils.getItemName(followUp.outputItemId());
-				if (!uncapped && achievableClicks <= 0) {
+				if (quoteDirect && achievableClicks <= 0) {
 					ReachCraftingModClient.sendChat(Component.translatable(
 						"message.reachcrafting.retrieve_then_craft.none_craftable",
 						retrieved, craftItemName, shortfall
@@ -206,7 +213,7 @@ final class RetrieveThenCraftController {
 					logComplete(followUp, "no_materials", retrieved, 0);
 					return;
 				}
-				if (!uncapped && achievableClicks < remainderClicks) {
+				if (quoteDirect) {
 					ReachCraftingModClient.sendChat(Component.translatable(
 						willCraft
 							? "message.reachcrafting.retrieve_then_craft.crafting_partial"
@@ -222,11 +229,13 @@ final class RetrieveThenCraftController {
 						craftItemName
 					).getString());
 				}
-				scheduleRemainder(followUp, achievableClicks, "crafted_remainder", retrieved);
+				// Always replay the whole remainder: the replay caps itself to what
+				// it can do, and anything less would deny the chain path its turn.
+				scheduleRemainder(followUp, remainderClicks, "crafted_remainder", retrieved);
 			}
 			case RETRIEVE_THEN_ASK -> {
 				String itemName = ContainerUtils.getItemName(followUp.outputItemId());
-				if (!uncapped && achievableClicks <= 0) {
+				if (quoteDirect && achievableClicks <= 0) {
 					// Nothing to offer: asking "stage 0 more?" wastes a prompt.
 					ReachCraftingModClient.sendChat(Component.translatable(
 						"message.reachcrafting.retrieve_then_craft.none_craftable",
@@ -240,7 +249,7 @@ final class RetrieveThenCraftController {
 					message = Component.translatable(willCraft
 						? "popup.reachcrafting.retrieve_then_craft.max_message"
 						: "popup.reachcrafting.retrieve_then_craft.max_message_stage", retrieved, itemName);
-				} else if (achievableClicks < remainderClicks) {
+				} else if (quoteDirect) {
 					message = Component.translatable(willCraft
 						? "popup.reachcrafting.retrieve_then_craft.partial_message"
 						: "popup.reachcrafting.retrieve_then_craft.partial_message_stage",
@@ -257,14 +266,14 @@ final class RetrieveThenCraftController {
 					retrieved,
 					followUp.targetItems(),
 					shortfall,
-					achievableClicks,
+					remainderClicks,
 					willCraft
 				);
 				ChainCraftPopupController.showConfirm(
 					Component.translatable("popup.reachcrafting.retrieve_then_craft.title"),
 					message,
-					() -> scheduleRemainder(followUp, achievableClicks, "crafted_remainder", retrieved),
-					() -> logComplete(followUp, "declined", retrieved, achievableClicks)
+					() -> scheduleRemainder(followUp, remainderClicks, "crafted_remainder", retrieved),
+					() -> logComplete(followUp, "declined", retrieved, remainderClicks)
 				);
 			}
 			case CRAFT_ONLY -> logComplete(followUp, "craft_only", retrieved, 0);
