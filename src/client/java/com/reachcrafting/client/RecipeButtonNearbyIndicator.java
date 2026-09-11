@@ -61,7 +61,7 @@ public final class RecipeButtonNearbyIndicator {
 		// display settings, and the green one also follows Existing Output
 		// Handling, so a probe that skipped those gates would measure a state
 		// the player never sees.
-		if (!ReachCraftingConfig.get().showNearbyCraftableIndicator()) {
+		if (!ReachCraftingConfig.get().showCraftabilityIndicators()) {
 			state = IndicatorState.NONE;
 		}
 		if (!retrievableIndicatorEnabled()) {
@@ -111,7 +111,7 @@ public final class RecipeButtonNearbyIndicator {
 		if (ReachCraftingConfig.get().existingOutputHandling() == ReachCraftingConfig.ExistingOutputHandling.CRAFT_ONLY) {
 			return false;
 		}
-		return ReachCraftingConfig.get().showRetrievableIndicator();
+		return ReachCraftingConfig.get().showCraftabilityIndicators();
 	}
 
 	/** True when the cached nearby containers hold copies of this recipe's output (the variant a retrieval would pick). */
@@ -253,7 +253,7 @@ public final class RecipeButtonNearbyIndicator {
 		RecipeCollection collection = button.getCollection();
 		if (recipe == null || collection == null) return;
 
-		IndicatorState indicatorState = ReachCraftingConfig.get().showNearbyCraftableIndicator()
+		IndicatorState indicatorState = ReachCraftingConfig.get().showCraftabilityIndicators()
 			? (collection.getRecipes().size() > 1
 				? resolveCollectionIndicatorState(collection)
 				: indicatorStateForRecipe(recipe, collection, ItemStack.EMPTY, false))
@@ -289,7 +289,7 @@ public final class RecipeButtonNearbyIndicator {
 		// The blue dot is what this predicate is for: it is drawn only for a
 		// craft the inventory alone cannot do. LOCALLY_CRAFTABLE deliberately
 		// does not light it.
-		return ReachCraftingConfig.get().showNearbyCraftableIndicator()
+		return ReachCraftingConfig.get().showCraftabilityIndicators()
 			&& computeCraftability(recipe, collection, displayStack, explicitVariantSelection)
 				== Craftability.NEARBY_CRAFTABLE;
 	}
@@ -298,7 +298,7 @@ public final class RecipeButtonNearbyIndicator {
 	 * Full craftability of one recipe: craftable from the inventory alone,
 	 * craftable only by pulling from nearby containers, or neither.
 	 *
-	 * <p>Note this does NOT check showNearbyCraftableIndicator - that setting
+	 * <p>Note this does NOT check showCraftabilityIndicators - that setting
 	 * governs whether the dot is DRAWN, not whether the recipe is craftable,
 	 * and the smart sort needs the answer either way.</p>
 	 */
@@ -405,7 +405,7 @@ public final class RecipeButtonNearbyIndicator {
 	}
 
 	public static void renderOverlayButton(GuiGraphics guiGraphics, int x, int y, int width, RecipeHolder<?> recipe, RecipeCollection collection) {
-		IndicatorState indicatorState = ReachCraftingConfig.get().showNearbyCraftableIndicator()
+		IndicatorState indicatorState = ReachCraftingConfig.get().showCraftabilityIndicators()
 			? indicatorStateForRecipe(recipe, collection, ItemStack.EMPTY, true)
 			: IndicatorState.NONE;
 		boolean retrievable = retrievableIndicatorEnabled() && hasRetrievableOutput(recipe, collection, ItemStack.EMPTY, true);
