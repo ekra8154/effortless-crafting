@@ -222,7 +222,18 @@ public final class RecipeButtonNearbyIndicator {
 		if (indicatorState == IndicatorState.NONE && !retrievable) {
 			return;
 		}
-		renderIndicators(guiGraphics, x, y, indicatorState, retrievable);
+		// Same depth problem as the page buttons, but deeper here. The overlay
+		// button translates its own content 150 before drawing, and the item
+		// renderer adds another 150 on top, so the ingredients sit around 300
+		// rather than the 150 a page button uses. Clear that, or the dots hide
+		// under the icon in the top-left grid cell.
+		guiGraphics.pose().pushPose();
+		guiGraphics.pose().translate(0.0F, 0.0F, 400.0F);
+		// Nudged up and left: an overlay button is a 3x3 recipe preview, so the
+		// dots would otherwise cover most of its first ingredient slot. The page
+		// buttons have room and keep their own placement.
+		renderIndicators(guiGraphics, x - 3, y - 3, indicatorState, retrievable);
+		guiGraphics.pose().popPose();
 	}
 
 	private static boolean retrievableIndicatorEnabled() {
