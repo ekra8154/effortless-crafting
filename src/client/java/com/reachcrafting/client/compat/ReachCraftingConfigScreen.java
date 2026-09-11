@@ -109,6 +109,15 @@ public final class ReachCraftingConfigScreen {
 			.build());
 
 		tweaksGroup.add(entries.startBooleanToggle(
+				Component.translatable("option.reachcrafting.show_craftability_indicators"),
+				config.showCraftabilityIndicators()
+			)
+			.setDefaultValue(true)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.show_craftability_indicators"))
+			.setSaveConsumer(config::setShowCraftabilityIndicators)
+			.build());
+
+		tweaksGroup.add(entries.startBooleanToggle(
 				Component.translatable("option.reachcrafting.recipe_book_page_navigation"),
 				config.recipeBookPageNavigation()
 			)
@@ -337,15 +346,6 @@ public final class ReachCraftingConfigScreen {
 			.build());
 
 		nearbyGroup.add(entries.startBooleanToggle(
-				Component.translatable("option.reachcrafting.show_nearby_craftable_indicator"),
-				config.showNearbyCraftableIndicator()
-			)
-			.setDefaultValue(true)
-			.setTooltip(Component.translatable("tooltip.reachcrafting.show_nearby_craftable_indicator"))
-			.setSaveConsumer(config::setShowNearbyCraftableIndicator)
-			.build());
-
-		nearbyGroup.add(entries.startBooleanToggle(
 				Component.translatable("option.reachcrafting.enable_existing_output_retrieval"),
 				config.enableExistingOutputRetrieval()
 			)
@@ -363,15 +363,6 @@ public final class ReachCraftingConfigScreen {
 			.setTooltip(Component.translatable("tooltip.reachcrafting.existing_output_handling"))
 			.setSaveConsumer(config::setExistingOutputHandling)
 			.setEnumNameProvider(value -> Component.translatable("enum.reachcrafting.existing_output_handling." + value.name().toLowerCase()))
-			.build());
-
-		nearbyGroup.add(entries.startBooleanToggle(
-				Component.translatable("option.reachcrafting.show_retrievable_indicator"),
-				config.showRetrievableIndicator()
-			)
-			.setDefaultValue(true)
-			.setTooltip(Component.translatable("tooltip.reachcrafting.show_retrievable_indicator"))
-			.setSaveConsumer(config::setShowRetrievableIndicator)
 			.build());
 
 		nearbyGroup.add(entries.startBooleanToggle(
