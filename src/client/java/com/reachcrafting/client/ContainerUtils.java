@@ -265,6 +265,22 @@ public final class ContainerUtils {
 		return RecipeBookInputController.getInstance().isInputQueueActive();
 	}
 
+	public static boolean isExistingOutputRetrievalEnabled() {
+		return ExistingOutputRetrievalController.isEnabled();
+	}
+
+	public static void toggleExistingOutputRetrievalViaResultSlot() {
+		ExistingOutputRetrievalController.toggleViaResultSlot();
+	}
+
+	public static void disableExistingOutputRetrieval() {
+		ExistingOutputRetrievalController.setEnabled(false);
+	}
+
+	public static void tickExistingOutputRetrievalController(net.minecraft.client.Minecraft client) {
+		ExistingOutputRetrievalController.tick(client);
+	}
+
 	public static void clearInputQueue() {
 		RecipeBookInputController.getInstance().clearInputQueue();
 	}
@@ -427,6 +443,7 @@ public final class ContainerUtils {
 		long window = Minecraft.getInstance().getWindow().getWindow();
 		boolean altDown = InputConstants.isKeyDown(window, GLFW.GLFW_KEY_LEFT_ALT)
 			|| InputConstants.isKeyDown(window, GLFW.GLFW_KEY_RIGHT_ALT);
+		ExistingOutputRetrievalController.tick(Minecraft.getInstance());
 		tickAutoCraftController();
 
 		if (!Minecraft.getInstance().isWindowActive() && !ReproHarness.suppressFocusGuard()) {

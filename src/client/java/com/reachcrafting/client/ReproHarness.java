@@ -38,6 +38,8 @@ public final class ReproHarness {
 	// remainder of a retrieve-then-craft was collected rather than left staged
 	// in the grid. "noalt" drives the plain path a player gets without auto craft.
 	private static boolean pendingNoAlt;
+	// "overlay" drives the click through the expanded variant menu.
+	private static boolean pendingOverlay;
 	private static boolean autoConfirmYes = true;
 
 	private static Path cmdFile;
@@ -169,6 +171,9 @@ public final class ReproHarness {
 				}
 				pendingBulkItem = parts[1];
 				pendingKind = PendingKind.CRAFT;
+				// A retrieve run leaves Retrieval Mode latched (it is a mode,
+				// not a session); a craft run after it must not be rerouted.
+				ExistingOutputRetrievalController.setEnabled(false);
 				// bulk/chain are pure craft primitives; the retrieve-first
 				// step is exercised through `craft` with `set retrieval`.
 				ReachCraftingConfig.get().setExistingOutputHandling(ReachCraftingConfig.ExistingOutputHandling.CRAFT_ONLY);
@@ -204,6 +209,7 @@ public final class ReproHarness {
 				pendingCtrl = false;
 				pendingShift = false;
 				pendingNoAlt = false;
+				pendingOverlay = false;
 				for (int i = 2; i < parts.length; i++) {
 					if (parts[i].startsWith("count=")) {
 						pendingRetrieveCount = Integer.parseInt(parts[i].substring("count=".length()));
@@ -213,6 +219,8 @@ public final class ReproHarness {
 						pendingShift = true;
 					} else if (parts[i].equals("noalt")) {
 						pendingNoAlt = true;
+					} else if (parts[i].equals("overlay")) {
+						pendingOverlay = true;
 					}
 				}
 				pendingBulkLatch = false;
@@ -332,7 +340,11 @@ public final class ReproHarness {
 		boolean noAlt = pendingNoAlt;
 		pendingBulkItem = null;
 		if (pendingKind == PendingKind.RETRIEVE) {
-			retrieveRecipeByItemId(client, itemId, pendingRetrieveCount);
+			if (pendingOverlay) {
+				retrieveFromVariantOverlay(client, itemId, pendingRetrieveCount);
+			} else {
+				retrieveRecipeByItemId(client, itemId, pendingRetrieveCount);
+			}
 			return;
 		}
 		if (pendingKind == PendingKind.CRAFT_PLAIN) {
@@ -370,6 +382,7 @@ public final class ReproHarness {
 		}
 		RecipeCollection collection = collectionOut[0];
 		ItemStack stack = RecipeVariantResolver.resolveDisplayStack(recipe, client);
+		ExistingOutputRetrievalController.setEnabled(false);
 		AutoCraftController.setEnabledMode(ReachCraftingConfig.AutoCraftMode.NORMAL);
 		autoConfirmTicks = 400;
 		ReachCraftingMod.diag(
@@ -390,6 +403,7 @@ public final class ReproHarness {
 			ReachCraftingMod.LOGGER.warn("[repro_harness] no recipe collection found for {}", itemId);
 			return;
 		}
+		ExistingOutputRetrievalController.setEnabled(false);
 		RecipeButtonNearbyIndicator.clearCaches();
 		// The probe reads the cache the way a click does: settled, not
 		// whatever an in-flight tick recompute last published.
@@ -399,10 +413,11 @@ public final class ReproHarness {
 	}
 
 	/**
-	 * This lineage has no Retrieval Mode (no synthetic book entries), so a
-	 * scripted retrieval starts the retrieval session directly for the real
-	 * recipe's output: the same session the retrieve-first step of a Ctrl
-	 * click runs, uncapped (count < 0 = everything nearby).
+	 * Retrieval is a mode the player toggles with a Ctrl double-tap, so arm it
+	 * directly and then drive the very click paths a user would. The click
+	 * resolves which variant to pull for itself, which is why nothing is
+	 * pre-resolved here. This version has no synthetic book entries, so an item
+	 * no recipe makes simply cannot be retrieved.
 	 */
 	private static void retrieveRecipeByItemId(Minecraft client, String itemId, int count) {
 		RecipeCollection[] collectionOut = new RecipeCollection[1];
@@ -412,44 +427,51 @@ public final class ReproHarness {
 			return;
 		}
 		ItemStack stack = RecipeVariantResolver.resolveDisplayStack(recipe, client);
-		int requested = count < 0 ? RecipeClickExecutor.bulkRecipeQueueLimit() : Math.max(count, 1);
-		// A Retrieval Mode click on a real entry resolves the variant to
-		// retrieve from what is nearby (per the revolving-variant setting)
-		// before the session starts; do the same here so the session gets
-		// the resolved recipe and output, not the clicked one.
-		java.util.Map<String, Integer> nearbyTotals = NearbyContainerCache.getReachableView(
-			client.level, client.getCameraEntity(), RecipeClickExecutor.reachDistance(client, client.player)).aggregateCounts();
-		RecipeVariantResolver.Selection selection = RecipeVariantResolver.resolveRetrievalVariant(
-			client,
-			client.player,
-			recipe,
-			collectionOut[0],
-			stack.copy(),
-			false,
-			true,
-			AvailableItemSnapshot.empty(),
-			nearbyTotals,
-			nearbyTotals,
-			count < 0,
-			false,
-			Math.max(count, 1)
-		);
-		RecipeHolder<?> resolvedRecipe = selection != null && selection.recipe() != null ? selection.recipe() : recipe;
-		ItemStack resolvedStack = selection != null && !selection.displayStack().isEmpty() ? selection.displayStack().copy() : stack.copy();
-		String resolvedItemId = BuiltInRegistries.ITEM.getKey(resolvedStack.getItem()).toString();
+		ExistingOutputRetrievalController.setEnabled(true);
 		ReachCraftingMod.diag(
-			"[repro_harness] retrieve armed recipe id={} resolved={} item={} count={} (direct session, no retrieval mode on this version)",
-			recipe.id(), resolvedRecipe.id(), resolvedItemId, count < 0 ? "all" : String.valueOf(count));
-		NearbyContainerDryRun.startExistingOutputRetrieval(new ExistingOutputRetrievalRequest(
-			recipe,
-			resolvedRecipe,
-			collectionOut[0],
-			false,
-			resolvedItemId,
-			resolvedItemId + " x" + resolvedStack.getCount(),
-			resolvedStack,
-			requested
-		));
+			"[repro_harness] retrieve armed recipe id={} item={} count={} retrieval_enabled={}",
+			recipe.id(), itemId, count < 0 ? "all" : String.valueOf(count),
+			ExistingOutputRetrievalController.isEnabled());
+		driveRetrieveClick(recipe, collectionOut[0], stack, count);
+	}
+
+	private static void driveRetrieveClick(
+		RecipeHolder<?> recipe,
+		RecipeCollection collection,
+		ItemStack stack,
+		int count
+	) {
+		if (count < 0) {
+			RecipeBookClickCapture.onRecipeButtonClicked(recipe, collection, stack, 0, true, false, false, false);
+		} else {
+			RecipeBookInputController.getInstance().harnessQueueAndRelease(recipe, collection, stack, count);
+		}
+	}
+
+	/**
+	 * Dev harness: the variant menu Retrieval Mode opens for this item, then a
+	 * click on the entry that makes it. On this version the menu lists the real
+	 * recipes, so this walks those rather than one entry per output item.
+	 */
+	private static void retrieveFromVariantOverlay(Minecraft client, String itemId, int count) {
+		RecipeCollection grouped = RetrievalOutputVariantOverlay.harnessGroupedCollection(itemId);
+		if (grouped == null || grouped.getRecipes().isEmpty()) {
+			ReachCraftingMod.LOGGER.warn("[repro_harness] no variant menu for {}", itemId);
+			return;
+		}
+		for (RecipeHolder<?> entry : grouped.getRecipes()) {
+			ItemStack stack = RecipeVariantResolver.resolveDisplayStack(entry, client);
+			if (stack.isEmpty() || !itemId.equals(BuiltInRegistries.ITEM.getKey(stack.getItem()).toString())) {
+				continue;
+			}
+			ExistingOutputRetrievalController.setEnabled(true);
+			ReachCraftingMod.diag(
+				"[repro_harness] retrieve armed OVERLAY id={} item={} count={} menu_entries={}",
+				entry.id(), itemId, count < 0 ? "all" : String.valueOf(count), grouped.getRecipes().size());
+			driveRetrieveClick(entry, grouped, ItemStack.EMPTY, count);
+			return;
+		}
+		ReachCraftingMod.LOGGER.warn("[repro_harness] variant menu for {} has no entry for it", itemId);
 	}
 
 	private static void clickRecipeByItemId(Minecraft client, String itemId, boolean ctrl, boolean bulkLatch) {

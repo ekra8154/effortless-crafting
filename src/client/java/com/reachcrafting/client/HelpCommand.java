@@ -41,7 +41,7 @@ public final class HelpCommand {
 
 	/** Canonical topic names, in index order; these are what tab completion offers. */
 	private static final List<String> TOPICS = List.of(
-		"general", "queuing", "nearby", "autocrafting", "chain", "bulk", "bulkchain", "retrievethencraft"
+		"general", "queuing", "nearby", "autocrafting", "chain", "bulk", "bulkchain", "retrieval", "retrievethencraft"
 	);
 	/** Spellings a player might reasonably type, folded to the canonical name. */
 	private static final Map<String, String> ALIASES = Map.ofEntries(
@@ -53,8 +53,7 @@ public final class HelpCommand {
 		Map.entry("chaincrafting", "chain"), Map.entry("chains", "chain"),
 		Map.entry("bulkcrafting", "bulk"),
 		Map.entry("bulkchaincrafting", "bulkchain"), Map.entry("bulkchains", "bulkchain"),
-		Map.entry("retrievalmode", "retrievethencraft"), Map.entry("retrieve", "retrievethencraft"), Map.entry("retrieving", "retrievethencraft"),
-		Map.entry("retrieval", "retrievethencraft"),
+		Map.entry("retrievalmode", "retrieval"), Map.entry("retrieve", "retrieval"), Map.entry("retrieving", "retrieval"),
 		Map.entry("retrievethenask", "retrievethencraft"), Map.entry("existingoutput", "retrievethencraft"),
 		Map.entry("existingoutputhandling", "retrievethencraft"), Map.entry("retrieval-then-craft", "retrievethencraft"),
 		Map.entry("outputvariantswitching", "autocrafting"), Map.entry("variants", "queuing"),
@@ -124,6 +123,7 @@ public final class HelpCommand {
 		line(row("chain", "missing intermediates get crafted first", "chain"));
 		line(row("bulk", "uncapped amounts and repeated max crafts", "bulk"));
 		line(row("bulkchain", "hundreds of something from base materials", "bulkchain"));
+		line(row("retrieval", "Retrieval Mode: clicks pull items out of chests", "retrieval"));
 		line(row("retrievethencraft", "a Ctrl click grabs copies you already own first", "retrievethencraft"));
 		line(row(CMD + " settings", "open the settings screen from chat", "settings"));
 		line("§8Also: " + CMD + " help <topic>");
@@ -206,6 +206,15 @@ public final class HelpCommand {
 				"§7Cleanup:§r pulled materials go back to their chests when the session ends. If the inventory gets too full to continue, it stops with a message rather than throwing things.",
 				"§7Stopping§r works like bulk: Esc, closing the screen, or losing focus.",
 				"§8Settings: Bulk Chain Crafting (on by default); Chain Crafting decides whether it asks first.",
+			});
+			case "retrieval" -> page(new String[]{
+				"§bRetrieval Mode:",
+				"§7Turn it on:§r double-tap Ctrl in a crafting screen, or Ctrl + click the result slot (with autocraft and bulk off). An X in the result slot means it is active; the same gesture turns it off.",
+				"§7What changes:§r recipe clicks pull the item out of nearby chests instead of crafting it. §7Click§r takes one, §7Shift + click§r takes everything nearby, §7Ctrl + scroll§r sets a count.",
+				"§7Needs a recipe:§r on this version only items some recipe can make will appear. Right click a revolving entry for its variant menu, which lists the recipes rather than the finished items.",
+				"§7Green dot§r on an entry means some are in a chest within reach.",
+				"§7Full inventory:§r with §fEject New Items When Inventory Full§r on, the rest is thrown on the ground straight from the chest; off, the pull stops when you are full.",
+				"§8Settings: Existing Output Retrieval (turns the mode off entirely), Craftability Indicators, Output Variant Switching.",
 			});
 			case "retrievethencraft" -> page(new String[]{
 				"§bRetrieve, then craft:",

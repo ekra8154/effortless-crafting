@@ -131,6 +131,30 @@ final class RecipeClickExecutor {
 		);
 		String resolvedItemId = BuiltInRegistries.ITEM.getKey(resolvedDisplayStack.getItem()).toString();
 		String outputLabel = resolvedItemId + " x" + resolvedDisplayStack.getCount();
+		if (ExistingOutputRetrievalController.isEnabled()) {
+			// Retrieval Mode: the click pulls the resolved output out of nearby
+			// storage instead of crafting it. This version has no synthetic
+			// recipe-book entries, so only outputs that some recipe makes can
+			// ever be clicked here.
+			if (!ReachCraftingConfig.get().enableNearbyContainerUsage()) {
+				ReachCraftingModClient.sendChat("Nearby container usage is disabled.");
+				return;
+			}
+			NearbyContainerDryRun.startExistingOutputRetrieval(new ExistingOutputRetrievalRequest(
+				recipe,
+				selectedRecipe.recipe(),
+				collection,
+				explicitVariantSelection,
+				resolvedItemId,
+				outputLabel,
+				resolvedDisplayStack,
+				craftAll ? Math.max(desiredVariantCopies, 1) : Math.max(requestedClicks, 1)
+			));
+			if (explicitVariantSelection) {
+				tryCloseOverlayAfterRelease();
+			}
+			return;
+		}
 
 		// Retrieve-first step (existingOutputHandling). Only on a click that
 		// already allows nearby containers, never on the replay it schedules

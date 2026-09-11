@@ -82,6 +82,15 @@ public final class ReachCraftingConfigScreen {
 			.build());
 
 		tweaksGroup.add(entries.startBooleanToggle(
+				Component.translatable("option.reachcrafting.expanded_variant_menu_tooltips"),
+				config.expandedVariantMenuTooltips()
+			)
+			.setDefaultValue(true)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.expanded_variant_menu_tooltips"))
+			.setSaveConsumer(config::setExpandedVariantMenuTooltips)
+			.build());
+
+		tweaksGroup.add(entries.startBooleanToggle(
 				Component.translatable("option.reachcrafting.show_craftability_indicators"),
 				config.showCraftabilityIndicators()
 			)
@@ -334,6 +343,15 @@ public final class ReachCraftingConfigScreen {
 			.setDefaultValue(true)
 			.setTooltip(Component.translatable("tooltip.reachcrafting.reach_craft_prefer_inventory"))
 			.setSaveConsumer(config::setReachCraftPreferInventory)
+			.build());
+
+		nearbyGroup.add(entries.startBooleanToggle(
+				Component.translatable("option.reachcrafting.enable_existing_output_retrieval"),
+				config.enableExistingOutputRetrieval()
+			)
+			.setDefaultValue(true)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.enable_existing_output_retrieval"))
+			.setSaveConsumer(config::setEnableExistingOutputRetrieval)
 			.build());
 
 		nearbyGroup.add(entries.startEnumSelector(

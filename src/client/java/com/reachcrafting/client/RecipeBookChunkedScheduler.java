@@ -271,7 +271,7 @@ public final class RecipeBookChunkedScheduler {
 		long inventoryHash = computeInventoryHash(player, screen);
 		long nearbyRevision = reachableView.revision();
 		int reachableSignature = reachableSignature(reachableView);
-		return new StateKey(screen.getClass(), inventoryHash, nearbyRevision, reachableSignature);
+		return new StateKey(screen.getClass(), inventoryHash, nearbyRevision, reachableSignature, ContainerUtils.isExistingOutputRetrievalEnabled());
 	}
 
 	private static long computeInventoryHash(LocalPlayer player, Screen screen) {
@@ -338,7 +338,7 @@ public final class RecipeBookChunkedScheduler {
 		}
 	}
 
-	private record StateKey(Class<?> screenClass, long inventoryHash, long nearbyRevision, int reachableSignature) {
+	private record StateKey(Class<?> screenClass, long inventoryHash, long nearbyRevision, int reachableSignature, boolean retrievalMode) {
 	}
 
 	private static final class Pass {

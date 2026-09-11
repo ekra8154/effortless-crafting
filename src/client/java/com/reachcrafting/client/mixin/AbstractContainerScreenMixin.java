@@ -132,8 +132,22 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 			&& ((Object) this instanceof CraftingScreen || (Object) this instanceof InventoryScreen)) {
 			Slot hoveredSlot = ((AbstractContainerScreenAccessor) this).getHoveredSlot();
 			if (hoveredSlot instanceof ResultSlot && reachcrafting$isArrowClickTarget(hoveredSlot, mouseX, mouseY)) {
+				if (com.reachcrafting.client.ContainerUtils.isExistingOutputRetrievalEnabled()) {
+					com.reachcrafting.client.ContainerUtils.disableExistingOutputRetrieval();
+				}
 				com.reachcrafting.client.ContainerUtils.consumeAutoCraftToggle();
 				com.reachcrafting.client.ContainerUtils.toggleAutoCraftEnabledModeViaArrow();
+				cir.setReturnValue(true);
+				return;
+			}
+		}
+		if (button == 0
+			&& ReachCraftingConfig.get().enableExistingOutputRetrieval()
+			&& Screen.hasControlDown()
+			&& ((Object) this instanceof CraftingScreen || (Object) this instanceof InventoryScreen)) {
+			Slot hoveredSlot = ((AbstractContainerScreenAccessor) this).getHoveredSlot();
+			if (hoveredSlot instanceof ResultSlot && reachcrafting$isArrowClickTarget(hoveredSlot, mouseX, mouseY)) {
+				com.reachcrafting.client.ContainerUtils.toggleExistingOutputRetrievalViaResultSlot();
 				cir.setReturnValue(true);
 				return;
 			}
@@ -168,6 +182,13 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 		if (!ReachCraftingConfig.get().enabled()) {
 			return;
 		}
+		if (slot instanceof ResultSlot
+			&& ((Object) this instanceof CraftingScreen || (Object) this instanceof InventoryScreen)
+			&& com.reachcrafting.client.ContainerUtils.isExistingOutputRetrievalEnabled()) {
+			// Retrieval Mode replaces the craft arrow: clicks pull, they do not craft.
+			RecipeButtonNearbyIndicator.renderRetrievalX(guiGraphics, slot.x + 8, slot.y + 8);
+			return;
+		}
 		if (com.reachcrafting.client.ContainerUtils.isAutoCraftEnabled() && slot instanceof ResultSlot) {
 			if ((Object) this instanceof CraftingScreen || (Object) this instanceof InventoryScreen) {
 				if (com.reachcrafting.client.ContainerUtils.isBulkAutoCraftModeEnabled()) {
@@ -184,6 +205,9 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 			return;
 		}
 		if (keyCode == GLFW.GLFW_KEY_LEFT_ALT || keyCode == GLFW.GLFW_KEY_RIGHT_ALT) {
+			if (com.reachcrafting.client.ContainerUtils.isExistingOutputRetrievalEnabled()) {
+				com.reachcrafting.client.ContainerUtils.disableExistingOutputRetrieval();
+			}
 			com.reachcrafting.client.ContainerUtils.handleAutoCraftKeyPress();
 			cir.setReturnValue(true);
 		} else if (keyCode == GLFW.GLFW_KEY_ESCAPE) {

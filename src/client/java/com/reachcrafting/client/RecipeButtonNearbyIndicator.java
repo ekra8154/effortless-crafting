@@ -15,6 +15,8 @@ import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.client.gui.screens.recipebook.RecipeCollection;
 
 public final class RecipeButtonNearbyIndicator {
+	private static final String RETRIEVAL_X_PATTERN = "#OOO#\nO#O#O\nOO#OO\nO#O#O\n#OOO#";
+	private static final float RETRIEVAL_X_SCALE = 1.2f;
 	private RecipeButtonNearbyIndicator() {
 	}
 
@@ -105,6 +107,11 @@ public final class RecipeButtonNearbyIndicator {
 	}
 
 	private static boolean retrievableIndicatorEnabled() {
+		// Retrieval Mode turns every click into a pull, so the dot is the whole
+		// signal there and the handling setting does not apply.
+		if (ExistingOutputRetrievalController.isEnabled()) {
+			return true;
+		}
 		// The green dot promises that a Ctrl-assisted click pulls the copies
 		// already in storage. Under Craft only nothing would pull, so showing
 		// it would advertise a gesture the mod refuses to perform.
@@ -283,6 +290,9 @@ public final class RecipeButtonNearbyIndicator {
 	private static void renderIndicators(GuiGraphics guiGraphics, int x, int y, IndicatorState state, boolean retrievable) {
 		if (retrievable) {
 			renderGreenDot(guiGraphics, x + 2, y + 2);
+		}
+		if (ExistingOutputRetrievalController.isEnabled()) {
+			return;
 		}
 		switch (state) {
 			case LOCAL -> renderDot(guiGraphics, x, y);
@@ -531,6 +541,44 @@ public final class RecipeButtonNearbyIndicator {
 		guiGraphics.fill(x - 1, y + 5, x + 4, y + 6, color); // Taper 1 (5x1)
 		guiGraphics.fill(x + 0, y + 6, x + 3, y + 7, color); // Taper 2 (3x1)
 	}
+
+	public static void renderRetrievalX(net.minecraft.client.gui.GuiGraphics guiGraphics, int x, int y) {
+		int color = 0x80000000;
+		renderPattern(guiGraphics, x, y, RETRIEVAL_X_PATTERN, color, RETRIEVAL_X_SCALE);
+	}
+
+	private static void renderPattern(net.minecraft.client.gui.GuiGraphics guiGraphics, int centerX, int centerY, String pattern, int color, float scale) {
+		if (pattern == null || pattern.isBlank()) {
+			return;
+		}
+
+		String[] rows = pattern.split("\\n");
+		int height = rows.length;
+		int width = 0;
+		for (String row : rows) {
+			width = Math.max(width, row.length());
+		}
+
+		float scaledWidth = width * scale;
+		float scaledHeight = height * scale;
+		float startX = centerX - (scaledWidth / 2.0f);
+		float startY = centerY - (scaledHeight / 2.0f);
+
+		guiGraphics.pose().pushPose();
+		guiGraphics.pose().translate(startX, startY, 0);
+		guiGraphics.pose().scale(scale, scale, 1.0f);
+		try {
+			for (int rowIndex = 0; rowIndex < rows.length; rowIndex++) {
+				String row = rows[rowIndex];
+				for (int columnIndex = 0; columnIndex < row.length(); columnIndex++) {
+					if (row.charAt(columnIndex) != '#') {
+						continue;
+					}
+					guiGraphics.fill(columnIndex, rowIndex, columnIndex + 1, rowIndex + 1, color);
+				}
+			}
+		} finally {
+			guiGraphics.pose().popPose();
+		}
+	}
 }
-
-
