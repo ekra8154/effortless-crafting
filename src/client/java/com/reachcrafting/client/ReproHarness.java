@@ -390,7 +390,7 @@ public final class ReproHarness {
 			recipe.id(), itemId, ctrl, shift, !noAlt, count < 0 ? "1" : String.valueOf(count),
 			ReachCraftingConfig.get().existingOutputHandling());
 		if (count < 0) {
-			RecipeBookClickCapture.onRecipeButtonClicked(recipe, collection, stack, 0, shift, ctrl, true, false);
+			RecipeBookClickCapture.onRecipeButtonClicked(recipe, collection, stack, 0, shift, ctrl, !noAlt, false);
 		} else {
 			RecipeBookInputController.getInstance().harnessQueueAndRelease(recipe, collection, stack, count, ctrl, !noAlt);
 		}
