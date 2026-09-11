@@ -213,7 +213,10 @@ public final class RecipeButtonNearbyIndicator {
 		if (indicatorState == IndicatorState.NONE && !retrievable) {
 			return;
 		}
-		renderIndicators(guiGraphics, x, y, indicatorState, retrievable);
+		// Nudged up and left: an overlay button is a 3x3 recipe preview, so the
+		// dots would otherwise cover most of its first ingredient slot. The page
+		// buttons have room and keep their own placement.
+		renderIndicators(guiGraphics, x - 3, y - 3, indicatorState, retrievable);
 	}
 
 	private static boolean retrievableIndicatorEnabled() {
