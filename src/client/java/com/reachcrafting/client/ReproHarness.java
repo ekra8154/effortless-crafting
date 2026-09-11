@@ -63,6 +63,11 @@ public final class ReproHarness {
 	private static boolean pendingShift;
 	/** retrieve only: click the item's entry on the retrieval-mode variant menu (overlay) instead of the page button. */
 	private static boolean pendingOverlay;
+	// A scripted craft has always behaved as though Alt were held, so the
+	// remainder of a retrieve-then-craft was collected rather than left
+	// staged in the grid. "noalt" drives the plain path a player gets
+	// without auto craft.
+	private static boolean pendingNoAlt;
 	private static boolean autoConfirmYes = true;
 
 	private static Path cmdFile;
@@ -242,6 +247,7 @@ public final class ReproHarness {
 				pendingCtrl = false;
 				pendingShift = false;
 				pendingOverlay = false;
+				pendingNoAlt = false;
 				for (int i = 2; i < parts.length; i++) {
 					if (parts[i].startsWith("count=")) {
 						pendingRetrieveCount = Integer.parseInt(parts[i].substring("count=".length()));
@@ -251,6 +257,8 @@ public final class ReproHarness {
 						pendingShift = true;
 					} else if (parts[i].equals("overlay")) {
 						pendingOverlay = true;
+					} else if (parts[i].equals("noalt")) {
+						pendingNoAlt = true;
 					}
 				}
 				pendingBulkLatch = false;
@@ -378,6 +386,7 @@ public final class ReproHarness {
 		String itemId = pendingBulkItem;
 		boolean ctrl = pendingCtrl;
 		boolean bulkLatch = pendingBulkLatch;
+		boolean noAlt = pendingNoAlt;
 		pendingBulkItem = null;
 		if (pendingKind == PendingKind.RETRIEVE) {
 			if (pendingOverlay) {
@@ -388,7 +397,7 @@ public final class ReproHarness {
 			return;
 		}
 		if (pendingKind == PendingKind.CRAFT_PLAIN) {
-			craftRecipeByItemId(client, itemId, ctrl, pendingShift, pendingRetrieveCount);
+			craftRecipeByItemId(client, itemId, ctrl, pendingShift, pendingRetrieveCount, noAlt);
 			return;
 		}
 		if (pendingKind == PendingKind.INDICATOR) {
@@ -399,7 +408,7 @@ public final class ReproHarness {
 	}
 
 	/** A plain Alt-style auto-craft click, no bulk latch, honoring existingOutputHandling. */
-	private static void craftRecipeByItemId(Minecraft client, String itemId, boolean ctrl, boolean shift, int count) {
+	private static void craftRecipeByItemId(Minecraft client, String itemId, boolean ctrl, boolean shift, int count, boolean noAlt) {
 		ContextMap context = SlotDisplayContext.fromLevel(client.level);
 		for (RecipeCollection collection : client.player.getRecipeBook().getCollections()) {
 			for (RecipeDisplayEntry entry : collection.getRecipes()) {
@@ -411,13 +420,13 @@ public final class ReproHarness {
 				AutoCraftController.setEnabledMode(ReachCraftingConfig.AutoCraftMode.NORMAL);
 				autoConfirmTicks = 400;
 				ReachCraftingMod.diag(
-					"[repro_harness] craft armed recipe id={} item={} ctrl={} shift={} count={} handling={}",
-					entry.id(), itemId, ctrl, shift, count < 0 ? "1" : String.valueOf(count),
+					"[repro_harness] craft armed recipe id={} item={} ctrl={} shift={} alt={} count={} handling={}",
+					entry.id(), itemId, ctrl, shift, !noAlt, count < 0 ? "1" : String.valueOf(count),
 					ReachCraftingConfig.get().existingOutputHandling());
 				if (count < 0) {
 					RecipeBookClickCapture.onRecipeButtonClicked(entry.id(), collection, stack, 0, shift, ctrl, true, false);
 				} else {
-					RecipeBookInputController.getInstance().harnessQueueAndRelease(entry.id(), collection, stack, count, ctrl, true);
+					RecipeBookInputController.getInstance().harnessQueueAndRelease(entry.id(), collection, stack, count, ctrl, !noAlt);
 				}
 				return;
 			}
