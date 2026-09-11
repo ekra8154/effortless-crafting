@@ -196,6 +196,10 @@ final class RetrieveThenCraftController {
 		boolean chainMayExtend = ReachCraftingConfig.get().chainCraftingMode() != ReachCraftingConfig.ChainCraftingMode.DISABLED
 			&& (followUp.autoCraftRequested() || AutoCraftController.isBulkModeEnabled());
 		boolean quoteDirect = !uncapped && !chainMayExtend && achievableClicks < remainderClicks;
+		// Nothing to offer at all. A max request asks "more?" without a count,
+		// so the count check above never caught it; it would still ask after a
+		// pull that exhausted both the chests and the materials.
+		boolean nothingCraftable = !chainMayExtend && Math.max(followUp.craftableCopies(), 0) <= 0;
 		// The remainder is replayed as an ordinary recipe request, so it only
 		// reaches the inventory when auto craft will run for it. Without that
 		// the ingredients are staged in the grid and the player takes the
@@ -205,10 +209,14 @@ final class RetrieveThenCraftController {
 			case RETRIEVE_ONLY -> logComplete(followUp, "retrieve_only", retrieved, 0);
 			case RETRIEVE_THEN_CRAFT -> {
 				String craftItemName = ContainerUtils.getItemName(followUp.outputItemId());
-				if (quoteDirect && achievableClicks <= 0) {
+				if (nothingCraftable) {
 					ReachCraftingModClient.sendChat(Component.translatable(
-						"message.reachcrafting.retrieve_then_craft.none_craftable",
-						retrieved, craftItemName, shortfall
+						uncapped
+							? "message.reachcrafting.retrieve_then_craft.none_craftable_max"
+							: "message.reachcrafting.retrieve_then_craft.none_craftable",
+						uncapped
+							? new Object[]{retrieved, craftItemName}
+							: new Object[]{retrieved, craftItemName, shortfall}
 					).getString());
 					logComplete(followUp, "no_materials", retrieved, 0);
 					return;
@@ -235,11 +243,15 @@ final class RetrieveThenCraftController {
 			}
 			case RETRIEVE_THEN_ASK -> {
 				String itemName = ContainerUtils.getItemName(followUp.outputItemId());
-				if (quoteDirect && achievableClicks <= 0) {
-					// Nothing to offer: asking "stage 0 more?" wastes a prompt.
+				if (nothingCraftable) {
+					// Nothing to offer, so the prompt would be a dead end.
 					ReachCraftingModClient.sendChat(Component.translatable(
-						"message.reachcrafting.retrieve_then_craft.none_craftable",
-						retrieved, itemName, shortfall
+						uncapped
+							? "message.reachcrafting.retrieve_then_craft.none_craftable_max"
+							: "message.reachcrafting.retrieve_then_craft.none_craftable",
+						uncapped
+							? new Object[]{retrieved, itemName}
+							: new Object[]{retrieved, itemName, shortfall}
 					).getString());
 					logComplete(followUp, "no_materials", retrieved, 0);
 					return;
