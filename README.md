@@ -159,7 +159,7 @@ If copies of what you are about to craft already sit in a nearby chest, a `Ctrl`
   - **Retrieve Only**: pull up to the requested amount and stop, so you decide separately how many more to craft. Once nothing is nearby the click is an ordinary craft.
   - **Craft Only**: never look in chests for the output (the previous behavior).
 - **Count-bound**: the pull never exceeds what you asked for. `Ctrl + Shift + click` pulls everything nearby before the max craft. A craft click's pull never throws items on the ground; it fills your inventory and stops.
-- **Green dot**: drawn just below and right of the craftable dot on any recipe whose output is in a nearby chest, so both facts show at once. Turn it off with **Retrievable Indicator**.
+- **Green dot**: drawn just below and right of the craftable dot on any recipe whose output is in a nearby chest, so both facts show at once. It is hidden under **Craft Only**, since nothing would be pulled. Turn all the dots off with **Craftability Indicators**.
 
 ## Retrieval Mode
 

@@ -29,9 +29,8 @@ public final class ReachCraftingConfig {
 	private static final IngredientPlanning.CountPreference DEFAULT_COUNT_PREFERENCE = IngredientPlanning.CountPreference.HIGHEST_TOTAL;
 	private static final boolean DEFAULT_PREFER_NON_STRIPPED_LOGS = true;
 	private static final boolean DEFAULT_DIAGNOSTIC_LOGGING_ENABLED = false;
-	private static final boolean DEFAULT_SHOW_NEARBY_CRAFTABLE_INDICATOR = true;
+	private static final boolean DEFAULT_SHOW_CRAFTABILITY_INDICATORS = true;
 	private static final boolean DEFAULT_ENABLE_EXISTING_OUTPUT_RETRIEVAL = true;
-	private static final boolean DEFAULT_SHOW_RETRIEVABLE_INDICATOR = true;
 	private static final ExistingOutputHandling DEFAULT_EXISTING_OUTPUT_HANDLING = ExistingOutputHandling.RETRIEVE_THEN_ASK;
 	private static final boolean DEFAULT_CACHE_CONTAINERS_FOR_FASTER_SEARCH = true;
 	private static final ContainerDrainOrder DEFAULT_CONTAINER_DRAIN_ORDER = ContainerDrainOrder.SMALLEST_FIRST;
@@ -102,9 +101,8 @@ public final class ReachCraftingConfig {
 	private InWorldFilterMode inWorldFilterMode;
 	private RevolvingCraftHandling revolvingCraftHandling;
 	private IngredientPlanning.CountPreference countPreference;
-	private boolean showNearbyCraftableIndicator;
+	private boolean showCraftabilityIndicators;
 	private boolean enableExistingOutputRetrieval;
-	private boolean showRetrievableIndicator;
 	private ExistingOutputHandling existingOutputHandling;
 	private boolean cacheContainersForFasterSearch;
 	private ContainerDrainOrder containerDrainOrder;
@@ -183,9 +181,8 @@ public final class ReachCraftingConfig {
 			instance.countPreference = stored.countPreference != null
 				? stored.countPreference
 				: DEFAULT_COUNT_PREFERENCE;
-			instance.showNearbyCraftableIndicator = stored.showNearbyCraftableIndicator != null ? stored.showNearbyCraftableIndicator : DEFAULT_SHOW_NEARBY_CRAFTABLE_INDICATOR;
+			instance.showCraftabilityIndicators = stored.showCraftabilityIndicators != null ? stored.showCraftabilityIndicators : DEFAULT_SHOW_CRAFTABILITY_INDICATORS;
 			instance.enableExistingOutputRetrieval = stored.enableExistingOutputRetrieval != null ? stored.enableExistingOutputRetrieval : DEFAULT_ENABLE_EXISTING_OUTPUT_RETRIEVAL;
-			instance.showRetrievableIndicator = stored.showRetrievableIndicator != null ? stored.showRetrievableIndicator : DEFAULT_SHOW_RETRIEVABLE_INDICATOR;
 			instance.existingOutputHandling = stored.existingOutputHandling != null ? stored.existingOutputHandling : DEFAULT_EXISTING_OUTPUT_HANDLING;
 			instance.cacheContainersForFasterSearch = stored.cacheContainersForFasterSearch != null
 				? stored.cacheContainersForFasterSearch
@@ -353,21 +350,12 @@ public final class ReachCraftingConfig {
 		this.countPreference = countPreference;
 	}
 
-	public boolean showNearbyCraftableIndicator() {
-		return showNearbyCraftableIndicator;
+	public boolean showCraftabilityIndicators() {
+		return showCraftabilityIndicators;
 	}
 
-	public void setShowNearbyCraftableIndicator(boolean showNearbyCraftableIndicator) {
-		this.showNearbyCraftableIndicator = showNearbyCraftableIndicator;
-		RecipeButtonNearbyIndicator.clearCaches();
-	}
-
-	public boolean showRetrievableIndicator() {
-		return showRetrievableIndicator;
-	}
-
-	public void setShowRetrievableIndicator(boolean showRetrievableIndicator) {
-		this.showRetrievableIndicator = showRetrievableIndicator;
+	public void setShowCraftabilityIndicators(boolean showCraftabilityIndicators) {
+		this.showCraftabilityIndicators = showCraftabilityIndicators;
 		RecipeButtonNearbyIndicator.clearCaches();
 	}
 
@@ -911,9 +899,8 @@ public final class ReachCraftingConfig {
 		defaults.inWorldFilterMode = DEFAULT_IN_WORLD_FILTER_MODE;
 		defaults.revolvingCraftHandling = DEFAULT_REVOLVING_CRAFT_HANDLING;
 		defaults.countPreference = DEFAULT_COUNT_PREFERENCE;
-		defaults.showNearbyCraftableIndicator = DEFAULT_SHOW_NEARBY_CRAFTABLE_INDICATOR;
+		defaults.showCraftabilityIndicators = DEFAULT_SHOW_CRAFTABILITY_INDICATORS;
 		defaults.enableExistingOutputRetrieval = DEFAULT_ENABLE_EXISTING_OUTPUT_RETRIEVAL;
-		defaults.showRetrievableIndicator = DEFAULT_SHOW_RETRIEVABLE_INDICATOR;
 		defaults.existingOutputHandling = DEFAULT_EXISTING_OUTPUT_HANDLING;
 		defaults.cacheContainersForFasterSearch = DEFAULT_CACHE_CONTAINERS_FOR_FASTER_SEARCH;
 		defaults.containerDrainOrder = DEFAULT_CONTAINER_DRAIN_ORDER;
@@ -1172,9 +1159,12 @@ public final class ReachCraftingConfig {
 		private InWorldFilterMode inWorldFilterMode;
 		private RevolvingCraftHandling revolvingCraftHandling;
 		private IngredientPlanning.CountPreference countPreference;
-		private Boolean showNearbyCraftableIndicator;
+		// This was two toggles, one of them named for nearby chests although it
+		// also governed the inventory-only dot. The old key is still read, so
+		// anyone who turned the dots off in 1.3.0 keeps that.
+		@com.google.gson.annotations.SerializedName(value = "showCraftabilityIndicators", alternate = {"showNearbyCraftableIndicator"})
+		private Boolean showCraftabilityIndicators;
 		private Boolean enableExistingOutputRetrieval;
-		private Boolean showRetrievableIndicator;
 		private ExistingOutputHandling existingOutputHandling;
 		private Boolean cacheContainersForFasterSearch;
 		private ContainerDrainOrder containerDrainOrder;
@@ -1236,9 +1226,8 @@ public final class ReachCraftingConfig {
 			this.inWorldFilterMode = config.inWorldFilterMode;
 			this.revolvingCraftHandling = config.revolvingCraftHandling;
 			this.countPreference = config.countPreference;
-			this.showNearbyCraftableIndicator = config.showNearbyCraftableIndicator;
+			this.showCraftabilityIndicators = config.showCraftabilityIndicators;
 			this.enableExistingOutputRetrieval = config.enableExistingOutputRetrieval;
-			this.showRetrievableIndicator = config.showRetrievableIndicator;
 			this.existingOutputHandling = config.existingOutputHandling;
 			this.cacheContainersForFasterSearch = config.cacheContainersForFasterSearch;
 			this.containerDrainOrder = config.containerDrainOrder;
