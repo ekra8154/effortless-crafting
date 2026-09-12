@@ -38,6 +38,12 @@ public final class ReproHarness {
 	// remainder of a retrieve-then-craft was collected rather than left staged
 	// in the grid. "noalt" drives the plain path a player gets without auto craft.
 	private static boolean pendingNoAlt;
+	// Existing Output Handling as it was before a bulk/chain run forced
+	// Craft Only, so the run can hand it back. The setter itself does not
+	// persist, but auto craft toggles during the run call save(), which
+	// writes the forced value to disk and leaves the worktree on Craft
+	// Only for whatever is launched next.
+	private static ReachCraftingConfig.ExistingOutputHandling handlingBeforeRun;
 	// "overlay" drives the click through the expanded variant menu.
 	private static boolean pendingOverlay;
 	private static boolean autoConfirmYes = true;
@@ -154,6 +160,15 @@ public final class ReproHarness {
 				if (client.screen != null) {
 					client.player.closeContainer();
 				}
+				// Hand back the handling a bulk/chain run borrowed, and rewrite the
+				// file so the worktree is not left on Craft Only. Every scenario
+				// ends with `close`, so this is the reliable place for it.
+				if (handlingBeforeRun != null) {
+					ReachCraftingConfig.get().setExistingOutputHandling(handlingBeforeRun);
+					ReachCraftingMod.diag("[repro_harness] restored existing_output_handling={}", handlingBeforeRun);
+					handlingBeforeRun = null;
+					ReachCraftingConfig.save();
+				}
 				ReachCraftingMod.diag("[repro_harness] closed container");
 			}
 			case "clearcache" -> {
@@ -176,6 +191,9 @@ public final class ReproHarness {
 				ExistingOutputRetrievalController.setEnabled(false);
 				// bulk/chain are pure craft primitives; the retrieve-first
 				// step is exercised through `craft` with `set retrieval`.
+				if (handlingBeforeRun == null) {
+					handlingBeforeRun = ReachCraftingConfig.get().existingOutputHandling();
+				}
 				ReachCraftingConfig.get().setExistingOutputHandling(ReachCraftingConfig.ExistingOutputHandling.CRAFT_ONLY);
 				// "chain" drives the NON-bulk request path: alt held for the
 				// craft, no sticky bulk latch. That combination is its own
