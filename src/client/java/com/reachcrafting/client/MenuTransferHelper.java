@@ -8,7 +8,6 @@ import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
-import org.lwjgl.glfw.GLFW;
 
 final class MenuTransferHelper {
 	enum WithdrawalExecutionMode {
@@ -24,6 +23,12 @@ final class MenuTransferHelper {
 			return new WithdrawalMoveResult(0, WithdrawalExecutionMode.FAILED);
 		}
 	}
+
+	/** Container-click button numbers as the server reads them. These are not
+	 * input codes: since 26.3 a left mouse press reports SDL button 1, and
+	 * vanilla translates it to 0 before the click goes out. */
+	static final int LEFT_CLICK = 0;
+	static final int RIGHT_CLICK = 1;
 
 	private static long clicksIssued;
 
@@ -87,15 +92,15 @@ final class MenuTransferHelper {
 		boolean canLeftClickMerge = targetStack.isEmpty() || (ItemStack.isSameItemSameComponents(sourceStack, targetStack) && targetStack.getCount() + moveCount <= targetStack.getMaxStackSize());
 
 		if (canLeftClickMerge && moveCount == sourceStack.getCount()) {
-			pickup(gameMode, player, menu, sourceSlot, GLFW.GLFW_MOUSE_BUTTON_LEFT);
-			pickup(gameMode, player, menu, targetSlot, GLFW.GLFW_MOUSE_BUTTON_LEFT);
+			pickup(gameMode, player, menu, sourceSlot, LEFT_CLICK);
+			pickup(gameMode, player, menu, targetSlot, LEFT_CLICK);
 			if (!player.containerMenu.getCarried().isEmpty()) {
-				pickup(gameMode, player, menu, sourceSlot, GLFW.GLFW_MOUSE_BUTTON_LEFT);
+				pickup(gameMode, player, menu, sourceSlot, LEFT_CLICK);
 			}
 			return moveCount;
 		}
 
-		pickup(gameMode, player, menu, sourceSlot, GLFW.GLFW_MOUSE_BUTTON_LEFT);
+		pickup(gameMode, player, menu, sourceSlot, LEFT_CLICK);
 		ItemStack carriedStack = player.containerMenu.getCarried();
 		if (carriedStack.isEmpty()) {
 			return 0;
@@ -103,11 +108,11 @@ final class MenuTransferHelper {
 
 		int placed = 0;
 		if (canLeftClickMerge && moveCount == carriedStack.getCount()) {
-			pickup(gameMode, player, menu, targetSlot, GLFW.GLFW_MOUSE_BUTTON_LEFT);
+			pickup(gameMode, player, menu, targetSlot, LEFT_CLICK);
 			placed = moveCount;
 		} else {
 			while (placed < moveCount && !player.containerMenu.getCarried().isEmpty()) {
-				pickup(gameMode, player, menu, targetSlot, GLFW.GLFW_MOUSE_BUTTON_RIGHT);
+				pickup(gameMode, player, menu, targetSlot, RIGHT_CLICK);
 				placed++;
 			}
 		}
@@ -115,11 +120,11 @@ final class MenuTransferHelper {
 		if (!player.containerMenu.getCarried().isEmpty()) {
 			Slot returnSlot = findMatchingInventorySourceSlot(menu, player.containerMenu.getCarried(), player);
 			if (returnSlot != null) {
-				pickup(gameMode, player, menu, returnSlot, GLFW.GLFW_MOUSE_BUTTON_LEFT);
+				pickup(gameMode, player, menu, returnSlot, LEFT_CLICK);
 			} else {
 				for (Slot slot : menu.slots) {
 					if (slot.container instanceof Inventory && !slot.hasItem() && slot.mayPlace(player.containerMenu.getCarried())) {
-						pickup(gameMode, player, menu, slot, GLFW.GLFW_MOUSE_BUTTON_LEFT);
+						pickup(gameMode, player, menu, slot, LEFT_CLICK);
 						break;
 					}
 				}
@@ -161,10 +166,10 @@ final class MenuTransferHelper {
 		int sourceRemainderAfterFullPickup = sourceCount - moveCount;
 
 		if (moveCount == sourceCount) {
-			pickup(gameMode, player, menu, sourceSlot, GLFW.GLFW_MOUSE_BUTTON_LEFT);
-			pickup(gameMode, player, menu, targetSlot, GLFW.GLFW_MOUSE_BUTTON_LEFT);
+			pickup(gameMode, player, menu, sourceSlot, LEFT_CLICK);
+			pickup(gameMode, player, menu, targetSlot, LEFT_CLICK);
 			if (!player.containerMenu.getCarried().isEmpty()) {
-				pickup(gameMode, player, menu, sourceSlot, GLFW.GLFW_MOUSE_BUTTON_LEFT);
+				pickup(gameMode, player, menu, sourceSlot, LEFT_CLICK);
 				return WithdrawalMoveResult.failed();
 			}
 			return new WithdrawalMoveResult(moveCount, WithdrawalExecutionMode.FULL_STACK);
@@ -204,17 +209,17 @@ final class MenuTransferHelper {
 		LocalPlayer player,
 		MultiPlayerGameMode gameMode
 	) {
-		pickup(gameMode, player, menu, sourceSlot, GLFW.GLFW_MOUSE_BUTTON_RIGHT);
+		pickup(gameMode, player, menu, sourceSlot, RIGHT_CLICK);
 		if (player.containerMenu.getCarried().isEmpty()) {
 			return WithdrawalMoveResult.failed();
 		}
 
 		for (int i = 0; i < splitCarryCount - moveCount; i++) {
-			pickup(gameMode, player, menu, sourceSlot, GLFW.GLFW_MOUSE_BUTTON_RIGHT);
+			pickup(gameMode, player, menu, sourceSlot, RIGHT_CLICK);
 		}
-		pickup(gameMode, player, menu, targetSlot, GLFW.GLFW_MOUSE_BUTTON_LEFT);
+		pickup(gameMode, player, menu, targetSlot, LEFT_CLICK);
 		if (!player.containerMenu.getCarried().isEmpty()) {
-			pickup(gameMode, player, menu, sourceSlot, GLFW.GLFW_MOUSE_BUTTON_LEFT);
+			pickup(gameMode, player, menu, sourceSlot, LEFT_CLICK);
 			return WithdrawalMoveResult.failed();
 		}
 		return new WithdrawalMoveResult(moveCount, WithdrawalExecutionMode.SPLIT_PICKUP);
@@ -229,18 +234,18 @@ final class MenuTransferHelper {
 		LocalPlayer player,
 		MultiPlayerGameMode gameMode
 	) {
-		pickup(gameMode, player, menu, sourceSlot, GLFW.GLFW_MOUSE_BUTTON_LEFT);
+		pickup(gameMode, player, menu, sourceSlot, LEFT_CLICK);
 		if (player.containerMenu.getCarried().isEmpty()) {
 			return WithdrawalMoveResult.failed();
 		}
 
 		for (int i = 0; i < sourceRemainderAfterFullPickup; i++) {
-			pickup(gameMode, player, menu, sourceSlot, GLFW.GLFW_MOUSE_BUTTON_RIGHT);
+			pickup(gameMode, player, menu, sourceSlot, RIGHT_CLICK);
 		}
-		pickup(gameMode, player, menu, targetSlot, GLFW.GLFW_MOUSE_BUTTON_LEFT);
+		pickup(gameMode, player, menu, targetSlot, LEFT_CLICK);
 
 		if (!player.containerMenu.getCarried().isEmpty()) {
-			pickup(gameMode, player, menu, sourceSlot, GLFW.GLFW_MOUSE_BUTTON_LEFT);
+			pickup(gameMode, player, menu, sourceSlot, LEFT_CLICK);
 			return WithdrawalMoveResult.failed();
 		}
 		return new WithdrawalMoveResult(moveCount, WithdrawalExecutionMode.REMAINDER_BACK_TO_SOURCE);
@@ -254,19 +259,19 @@ final class MenuTransferHelper {
 		LocalPlayer player,
 		MultiPlayerGameMode gameMode
 	) {
-		pickup(gameMode, player, menu, sourceSlot, GLFW.GLFW_MOUSE_BUTTON_LEFT);
+		pickup(gameMode, player, menu, sourceSlot, LEFT_CLICK);
 		if (player.containerMenu.getCarried().isEmpty()) {
 			return WithdrawalMoveResult.failed();
 		}
 
 		int placed = 0;
 		while (placed < moveCount && !player.containerMenu.getCarried().isEmpty()) {
-			pickup(gameMode, player, menu, targetSlot, GLFW.GLFW_MOUSE_BUTTON_RIGHT);
+			pickup(gameMode, player, menu, targetSlot, RIGHT_CLICK);
 			placed++;
 		}
 
 		if (!player.containerMenu.getCarried().isEmpty()) {
-			pickup(gameMode, player, menu, sourceSlot, GLFW.GLFW_MOUSE_BUTTON_LEFT);
+			pickup(gameMode, player, menu, sourceSlot, LEFT_CLICK);
 		}
 		if (!player.containerMenu.getCarried().isEmpty()) {
 			return WithdrawalMoveResult.failed();
@@ -280,7 +285,7 @@ final class MenuTransferHelper {
 		}
 
 		String itemId = BuiltInRegistries.ITEM.getKey(sourceGridSlot.getItem().getItem()).toString();
-		pickup(gameMode, player, menu, sourceGridSlot, GLFW.GLFW_MOUSE_BUTTON_LEFT);
+		pickup(gameMode, player, menu, sourceGridSlot, LEFT_CLICK);
 		if (player.containerMenu.getCarried().isEmpty()) {
 			return false;
 		}
@@ -292,10 +297,10 @@ final class MenuTransferHelper {
 				return true;
 			}
 			int carriedBefore = player.containerMenu.getCarried().getCount();
-			pickup(gameMode, player, menu, destinationSlot, GLFW.GLFW_MOUSE_BUTTON_LEFT);
+			pickup(gameMode, player, menu, destinationSlot, LEFT_CLICK);
 			int carriedAfter = player.containerMenu.getCarried().getCount();
 			if (carriedAfter >= carriedBefore) {
-				pickup(gameMode, player, menu, sourceGridSlot, GLFW.GLFW_MOUSE_BUTTON_LEFT);
+				pickup(gameMode, player, menu, sourceGridSlot, LEFT_CLICK);
 				return false;
 			}
 		}
@@ -332,27 +337,27 @@ final class MenuTransferHelper {
 		}
 
 		if (count == sourceCount) {
-			gameMode.handleContainerInput(menu.containerId, source.index, GLFW.GLFW_MOUSE_BUTTON_LEFT, ContainerInput.PICKUP, player);
-			gameMode.handleContainerInput(menu.containerId, target.index, GLFW.GLFW_MOUSE_BUTTON_LEFT, ContainerInput.PICKUP, player);
+			gameMode.handleContainerInput(menu.containerId, source.index, LEFT_CLICK, ContainerInput.PICKUP, player);
+			gameMode.handleContainerInput(menu.containerId, target.index, LEFT_CLICK, ContainerInput.PICKUP, player);
 		} else if (count == (sourceCount + 1) / 2 && roomInTarget >= count) {
-			gameMode.handleContainerInput(menu.containerId, source.index, GLFW.GLFW_MOUSE_BUTTON_RIGHT, ContainerInput.PICKUP, player);
-			gameMode.handleContainerInput(menu.containerId, target.index, GLFW.GLFW_MOUSE_BUTTON_LEFT, ContainerInput.PICKUP, player);
+			gameMode.handleContainerInput(menu.containerId, source.index, RIGHT_CLICK, ContainerInput.PICKUP, player);
+			gameMode.handleContainerInput(menu.containerId, target.index, LEFT_CLICK, ContainerInput.PICKUP, player);
 		} else if (roomInTarget >= count && (sourceCount - count) > 0 && (sourceCount - count) < count) {
-			gameMode.handleContainerInput(menu.containerId, source.index, GLFW.GLFW_MOUSE_BUTTON_LEFT, ContainerInput.PICKUP, player);
+			gameMode.handleContainerInput(menu.containerId, source.index, LEFT_CLICK, ContainerInput.PICKUP, player);
 			for (int i = 0; i < sourceCount - count; i++) {
-				gameMode.handleContainerInput(menu.containerId, source.index, GLFW.GLFW_MOUSE_BUTTON_RIGHT, ContainerInput.PICKUP, player);
+				gameMode.handleContainerInput(menu.containerId, source.index, RIGHT_CLICK, ContainerInput.PICKUP, player);
 			}
-			gameMode.handleContainerInput(menu.containerId, target.index, GLFW.GLFW_MOUSE_BUTTON_LEFT, ContainerInput.PICKUP, player);
+			gameMode.handleContainerInput(menu.containerId, target.index, LEFT_CLICK, ContainerInput.PICKUP, player);
 			if (!player.containerMenu.getCarried().isEmpty()) {
-				gameMode.handleContainerInput(menu.containerId, source.index, GLFW.GLFW_MOUSE_BUTTON_LEFT, ContainerInput.PICKUP, player);
+				gameMode.handleContainerInput(menu.containerId, source.index, LEFT_CLICK, ContainerInput.PICKUP, player);
 			}
 		} else {
-			gameMode.handleContainerInput(menu.containerId, source.index, GLFW.GLFW_MOUSE_BUTTON_LEFT, ContainerInput.PICKUP, player);
+			gameMode.handleContainerInput(menu.containerId, source.index, LEFT_CLICK, ContainerInput.PICKUP, player);
 			for (int i = 0; i < count; i++) {
-				gameMode.handleContainerInput(menu.containerId, target.index, GLFW.GLFW_MOUSE_BUTTON_RIGHT, ContainerInput.PICKUP, player);
+				gameMode.handleContainerInput(menu.containerId, target.index, RIGHT_CLICK, ContainerInput.PICKUP, player);
 			}
 			if (!player.containerMenu.getCarried().isEmpty()) {
-				gameMode.handleContainerInput(menu.containerId, source.index, GLFW.GLFW_MOUSE_BUTTON_LEFT, ContainerInput.PICKUP, player);
+				gameMode.handleContainerInput(menu.containerId, source.index, LEFT_CLICK, ContainerInput.PICKUP, player);
 			}
 		}
 	}

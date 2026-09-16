@@ -1,5 +1,6 @@
 package com.reachcrafting.client.mixin;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import com.reachcrafting.client.ReachCraftingConfig;
 import com.reachcrafting.client.RecipeBookClickCapture;
 import net.minecraft.client.gui.screens.recipebook.OverlayRecipeComponent;
@@ -7,7 +8,6 @@ import net.minecraft.client.gui.screens.recipebook.RecipeCollection;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.world.item.crafting.display.RecipeDisplayId;
-import org.lwjgl.glfw.GLFW;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -21,7 +21,7 @@ public abstract class OverlayRecipeComponentMixin {
 		cancellable = true
 	)
 	private void reachcrafting$interceptOverlayRecipeClicked(MouseButtonEvent click, boolean filtering, CallbackInfoReturnable<Boolean> cir) {
-		if (!ReachCraftingConfig.get().enabled() || click.button() != GLFW.GLFW_MOUSE_BUTTON_LEFT) {
+		if (!ReachCraftingConfig.get().enabled() || click.button() != InputConstants.MOUSE_BUTTON_LEFT) {
 			return;
 		}
 
@@ -32,9 +32,9 @@ public abstract class OverlayRecipeComponentMixin {
 			return;
 		}
 
-		boolean ctrlDown = (click.modifiers() & GLFW.GLFW_MOD_CONTROL) != 0;
-		boolean shiftDown = (click.modifiers() & GLFW.GLFW_MOD_SHIFT) != 0;
-		boolean altDown = (click.modifiers() & GLFW.GLFW_MOD_ALT) != 0;
+		boolean ctrlDown = (click.modifiers() & InputConstants.MOD_CONTROL) != 0;
+		boolean shiftDown = (click.modifiers() & InputConstants.MOD_SHIFT) != 0;
+		boolean altDown = (click.modifiers() & InputConstants.MOD_ALT) != 0;
 		boolean interceptWithMod = ctrlDown
 			|| com.reachcrafting.client.ContainerUtils.isExistingOutputRetrievalEnabled()
 			|| (shiftDown && RecipeBookClickCapture.isBulkModeEnabled())
@@ -81,7 +81,7 @@ public abstract class OverlayRecipeComponentMixin {
 			return;
 		}
 
-		if (click.button() == GLFW.GLFW_MOUSE_BUTTON_RIGHT) {
+		if (click.button() == InputConstants.MOUSE_BUTTON_RIGHT) {
 			if (cir.getReturnValueZ()) {
 				RecipeBookClickCapture.onRecipeButtonRightClicked(
 					recipeId,
@@ -93,13 +93,13 @@ public abstract class OverlayRecipeComponentMixin {
 			return;
 		}
 
-		if (!cir.getReturnValueZ() || click.button() != GLFW.GLFW_MOUSE_BUTTON_LEFT) {
+		if (!cir.getReturnValueZ() || click.button() != InputConstants.MOUSE_BUTTON_LEFT) {
 			return;
 		}
 
-		boolean ctrlDown = (click.modifiers() & GLFW.GLFW_MOD_CONTROL) != 0;
-		boolean shiftDown = (click.modifiers() & GLFW.GLFW_MOD_SHIFT) != 0;
-		boolean altDown = (click.modifiers() & GLFW.GLFW_MOD_ALT) != 0;
+		boolean ctrlDown = (click.modifiers() & InputConstants.MOD_CONTROL) != 0;
+		boolean shiftDown = (click.modifiers() & InputConstants.MOD_SHIFT) != 0;
+		boolean altDown = (click.modifiers() & InputConstants.MOD_ALT) != 0;
 		com.reachcrafting.ReachCraftingMod.diag(
 			"[overlay_click] return recipe={} ctrl={} shift={} alt={} vanillaAccepted={}",
 			recipeId,

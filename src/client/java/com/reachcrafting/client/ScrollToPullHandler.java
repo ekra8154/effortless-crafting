@@ -13,7 +13,6 @@ import net.minecraft.world.inventory.ResultSlot;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
-import org.lwjgl.glfw.GLFW;
 
 public final class ScrollToPullHandler {
     private ScrollToPullHandler() {
@@ -293,11 +292,11 @@ public final class ScrollToPullHandler {
     }
 
     private static boolean isShiftKeyDown(Minecraft minecraft) {
-        return InputConstants.isKeyDown(minecraft.getWindow(), GLFW.GLFW_KEY_LEFT_SHIFT)
-            || InputConstants.isKeyDown(minecraft.getWindow(), GLFW.GLFW_KEY_RIGHT_SHIFT);
+        return InputConstants.isKeyDown(InputConstants.KEY_LSHIFT)
+            || InputConstants.isKeyDown(InputConstants.KEY_RSHIFT);
     }
 
     private static boolean isSpaceKeyDown(Minecraft minecraft) {
-        return InputConstants.isKeyDown(minecraft.getWindow(), GLFW.GLFW_KEY_SPACE);
+        return InputConstants.isKeyDown(InputConstants.KEY_SPACE);
     }
 }

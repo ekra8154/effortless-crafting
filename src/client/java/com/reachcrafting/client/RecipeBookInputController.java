@@ -1,5 +1,6 @@
 package com.reachcrafting.client;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import com.reachcrafting.client.mixin.ClientRecipeBookAccessor;
 import java.util.Map;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -16,7 +17,6 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.display.RecipeDisplayEntry;
 import net.minecraft.world.item.crafting.display.RecipeDisplayId;
 import net.minecraft.world.item.crafting.display.SlotDisplayContext;
-import org.lwjgl.glfw.GLFW;
 
 final class RecipeBookInputController {
 	private static final RecipeBookInputController INSTANCE = new RecipeBookInputController();
@@ -116,7 +116,7 @@ final class RecipeBookInputController {
 				if (!ReachCraftingConfig.get().enabled()) {
 					return true;
 				}
-				if (event.button() != GLFW.GLFW_MOUSE_BUTTON_RIGHT) {
+				if (event.button() != InputConstants.MOUSE_BUTTON_RIGHT) {
 					return true;
 				}
 				RecipeBookClickCapture.HeldRecipeAction action = RecipeBookFocusManager.findHoveredHeldRecipeAction(currentScreen, event.x(), event.y());
@@ -360,7 +360,7 @@ final class RecipeBookInputController {
 			recipeId,
 			collection,
 			displayStack != null ? displayStack.copy() : ItemStack.EMPTY,
-			GLFW.GLFW_MOUSE_BUTTON_LEFT,
+			InputConstants.MOUSE_BUTTON_LEFT,
 			explicitVariantSelection
 		));
 	}
@@ -664,7 +664,7 @@ final class RecipeBookInputController {
 			recipeId,
 			collection,
 			displayStack != null ? displayStack.copy() : ItemStack.EMPTY,
-			GLFW.GLFW_MOUSE_BUTTON_LEFT,
+			InputConstants.MOUSE_BUTTON_LEFT,
 			false
 		);
 		int queueLimit = resolveQueueLimit(minecraft, action);
@@ -1024,7 +1024,7 @@ final class RecipeBookInputController {
 			recipeId,
 			collection,
 			ItemStack.EMPTY,
-			org.lwjgl.glfw.GLFW.GLFW_MOUSE_BUTTON_LEFT,
+			InputConstants.MOUSE_BUTTON_LEFT,
 			explicitVariantSelection
 		));
 	}

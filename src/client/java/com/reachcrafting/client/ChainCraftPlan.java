@@ -1,5 +1,6 @@
 package com.reachcrafting.client;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import java.util.List;
 import java.util.Map;
 import net.minecraft.client.gui.screens.recipebook.RecipeCollection;
@@ -51,7 +52,7 @@ record ChainCraftPlan(
 				recipeId,
 				collection,
 				displayStack.copy(),
-				org.lwjgl.glfw.GLFW.GLFW_MOUSE_BUTTON_LEFT,
+				InputConstants.MOUSE_BUTTON_LEFT,
 				true
 			);
 		}

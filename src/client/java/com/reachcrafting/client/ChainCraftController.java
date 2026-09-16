@@ -1,5 +1,6 @@
 package com.reachcrafting.client;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import com.reachcrafting.ReachCraftingMod;
 import com.reachcrafting.client.mixin.ClientRecipeBookAccessor;
 import java.util.Map;
@@ -696,7 +697,7 @@ public final class ChainCraftController {
 					step.recipeId(),
 					directCollection,
 					step.displayStack().copy(),
-					org.lwjgl.glfw.GLFW.GLFW_MOUSE_BUTTON_LEFT,
+					InputConstants.MOUSE_BUTTON_LEFT,
 					true
 				);
 			}
@@ -720,7 +721,7 @@ public final class ChainCraftController {
 				entry.getKey(),
 				collection,
 				step.displayStack().copy(),
-				org.lwjgl.glfw.GLFW.GLFW_MOUSE_BUTTON_LEFT,
+				InputConstants.MOUSE_BUTTON_LEFT,
 				true
 			);
 		}

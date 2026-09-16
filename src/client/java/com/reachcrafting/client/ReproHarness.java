@@ -1,5 +1,6 @@
 package com.reachcrafting.client;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import com.reachcrafting.ReachCraftingMod;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.loader.api.FabricLoader;
@@ -151,8 +152,7 @@ public final class ReproHarness {
 	/** F6 toggles free-mouse mode live (release the cursor for the desktop, or
 	 * grab it back to play as ReproBot) — no relaunch needed. Edge-triggered. */
 	private static void pollFreeMouseToggle(Minecraft client) {
-		boolean down = com.mojang.blaze3d.platform.InputConstants.isKeyDown(
-			client.getWindow(), org.lwjgl.glfw.GLFW.GLFW_KEY_F6);
+		boolean down = com.mojang.blaze3d.platform.InputConstants.isKeyDown(InputConstants.KEY_F6);
 		if (down && !freeMouseKeyWasDown) {
 			freeMouse = !freeMouse;
 			if (freeMouse) {
@@ -442,7 +442,7 @@ public final class ReproHarness {
 					entry.id(), itemId, ctrl, shift, !noAlt, count < 0 ? "1" : String.valueOf(count),
 					ReachCraftingConfig.get().existingOutputHandling());
 				if (count < 0) {
-					RecipeBookClickCapture.onRecipeButtonClicked(entry.id(), collection, stack, 0, shift, ctrl, !noAlt, false);
+					RecipeBookClickCapture.onRecipeButtonClicked(entry.id(), collection, stack, InputConstants.MOUSE_BUTTON_LEFT, shift, ctrl, !noAlt, false);
 				} else {
 					RecipeBookInputController.getInstance().harnessQueueAndRelease(entry.id(), collection, stack, count, ctrl, !noAlt);
 				}
@@ -547,7 +547,7 @@ public final class ReproHarness {
 		int count
 	) {
 		if (count < 0) {
-			RecipeBookClickCapture.onRecipeButtonClicked(recipeId, collection, stack, 0, true, false, false, false);
+			RecipeBookClickCapture.onRecipeButtonClicked(recipeId, collection, stack, InputConstants.MOUSE_BUTTON_LEFT, true, false, false, false);
 		} else {
 			RecipeBookInputController.getInstance().harnessQueueAndRelease(recipeId, collection, stack, count);
 		}
@@ -573,7 +573,7 @@ public final class ReproHarness {
 					: ReachCraftingConfig.AutoCraftMode.NORMAL);
 				autoConfirmTicks = 200;
 				RecipeBookClickCapture.onRecipeButtonClicked(
-					entry.id(), collection, stack, 0, true, ctrl, !bulkLatch, false);
+					entry.id(), collection, stack, InputConstants.MOUSE_BUTTON_LEFT, true, ctrl, !bulkLatch, false);
 				return;
 			}
 		}

@@ -1,10 +1,10 @@
 package com.reachcrafting.client.mixin;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import com.reachcrafting.client.ChainCraftPopupController;
 import net.minecraft.client.gui.components.PopupScreen;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
-import org.lwjgl.glfw.GLFW;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -18,7 +18,7 @@ public abstract class PopupScreenMixin {
 		if (!((Object) this instanceof PopupScreen popup) || !ChainCraftPopupController.isChainCraftPopup(popup)) {
 			return;
 		}
-		if (event.key() == GLFW.GLFW_KEY_ENTER || event.key() == GLFW.GLFW_KEY_KP_ENTER || event.key() == GLFW.GLFW_KEY_SPACE) {
+		if (event.key() == InputConstants.KEY_RETURN || event.key() == InputConstants.KEY_NUMPADENTER || event.key() == InputConstants.KEY_SPACE) {
 			if (ChainCraftPopupController.confirm(popup)) {
 				cir.setReturnValue(true);
 			}

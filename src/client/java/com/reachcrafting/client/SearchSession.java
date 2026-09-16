@@ -1,5 +1,6 @@
 package com.reachcrafting.client;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import com.reachcrafting.ReachCraftingMod;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -36,7 +37,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
-import org.lwjgl.glfw.GLFW;
+import org.lwjgl.sdl.SDLMouse;
 
 /**
  * SearchSession owns nearby-container craft discovery and withdrawal for one recipe action.
@@ -587,7 +588,7 @@ final class SearchSession extends BaseCraftSession {
 						bulkContinuationRecipeId(),
 						recipeCollection,
 						ItemStack.EMPTY,
-						org.lwjgl.glfw.GLFW.GLFW_MOUSE_BUTTON_LEFT,
+						InputConstants.MOUSE_BUTTON_LEFT,
 						explicitVariantSelection
 					),
 					requestedSingleClicks,
@@ -1834,7 +1835,7 @@ final class SearchSession extends BaseCraftSession {
 						bulkContinuationRecipeId(),
 						recipeCollection,
 						ItemStack.EMPTY,
-						org.lwjgl.glfw.GLFW.GLFW_MOUSE_BUTTON_LEFT,
+						InputConstants.MOUSE_BUTTON_LEFT,
 						explicitVariantSelection
 					),
 					requestedSingleClicks,
@@ -1888,7 +1889,7 @@ final class SearchSession extends BaseCraftSession {
 		double clampedX = Mth.clamp(originalContext.mouseX(), 0.0D, Math.max(0.0D, client.getWindow().getScreenWidth() - 1.0D));
 		double clampedY = Mth.clamp(originalContext.mouseY(), 0.0D, Math.max(0.0D, client.getWindow().getScreenHeight() - 1.0D));
 		client.mouseHandler.setIgnoreFirstMove();
-		GLFW.glfwSetCursorPos(client.getWindow().handle(), clampedX, clampedY);
+		SDLMouse.SDL_WarpMouseInWindow(client.getWindow().handle(), (float) clampedX, (float) clampedY);
 	}
 
 	private boolean restoreReservedGrid() {
@@ -2143,7 +2144,7 @@ final class SearchSession extends BaseCraftSession {
 			// Try to drop the item into the inventory
 			for (Slot slot : menu.slots) {
 				if (slot.container instanceof Inventory && !slot.hasItem()) {
-					pickup(menu, slot, GLFW.GLFW_MOUSE_BUTTON_LEFT);
+					pickup(menu, slot, MenuTransferHelper.LEFT_CLICK);
 					break;
 				}
 			}

@@ -17,7 +17,6 @@ import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.inventory.RecipeBookMenu;
-import org.lwjgl.glfw.GLFW;
 import com.reachcrafting.client.ContainerUtils;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -45,7 +44,7 @@ public abstract class RecipeBookComponentMixin {
 	private static final long TOGGLE_DOUBLE_TAP_WINDOW_MS = 400L;
 	private long reachcrafting$lastToggleTapMillis = 0L;
 	// Taps are counted on the press AFTER a release, never on held-key repeat:
-	// GLFW repeats deliver presses with no intervening release, and a naive
+	// Key repeats deliver presses with no intervening release, and a naive
 	// counter reads a held key as a double tap. (Holding the toggle key is a
 	// real gesture here - space held is the x16 multiplier.)
 	//
@@ -67,8 +66,8 @@ public abstract class RecipeBookComponentMixin {
 		// A non-keyboard binding cannot be polled this way; clear rather than
 		// latch, so an unpollable binding degrades to "every press is a tap"
 		// instead of never toggling again.
-		if (key.getType() != InputConstants.Type.KEYSYM
-			|| !InputConstants.isKeyDown(this.minecraft.getWindow(), key.getValue())) {
+		if (key.getType() != InputConstants.Type.KEYBOARD
+			|| !InputConstants.isKeyDown(key.getValue())) {
 			reachcrafting$toggleKeyDown = false;
 		}
 	}
@@ -167,7 +166,7 @@ public abstract class RecipeBookComponentMixin {
 	private void reachcrafting$onKeyPressedHead(KeyEvent event, CallbackInfoReturnable<Boolean> cir) {
 		if (!ReachCraftingConfig.get().enabled()) return;
 		reachcrafting$lastKeyPressedWasToggle = false;
-		if (event.key() == GLFW.GLFW_KEY_SPACE
+		if (event.key() == InputConstants.KEY_SPACE
 			&& reachcrafting$isToggleBoundToSpace()
 			&& reachcrafting$isSearchReadyToReplace()
 			&& reachcrafting$registerToggleTap()
@@ -177,35 +176,34 @@ public abstract class RecipeBookComponentMixin {
 			return;
 		}
 		if (ReachCraftingConfig.get().recipeBookPageNavigation()
-			&& (event.key() == GLFW.GLFW_KEY_LEFT || event.key() == GLFW.GLFW_KEY_RIGHT)
+			&& (event.key() == InputConstants.KEY_LEFT || event.key() == InputConstants.KEY_RIGHT)
 			&& reachcrafting$shouldPageWithArrowKey()) {
-			if (reachcrafting$turnRecipeBookPage(event.key() == GLFW.GLFW_KEY_RIGHT)) {
+			if (reachcrafting$turnRecipeBookPage(event.key() == InputConstants.KEY_RIGHT)) {
 				cir.setReturnValue(true);
 				return;
 			}
 		}
 		if (this.searchBox != null && this.searchBox.isFocused()) {
 			int key = event.key();
-			if (key == GLFW.GLFW_KEY_UP || key == GLFW.GLFW_KEY_DOWN) {
-				if (reachcrafting$navigateSearchHistory(key == GLFW.GLFW_KEY_UP)) {
+			if (key == InputConstants.KEY_UP || key == InputConstants.KEY_DOWN) {
+				if (reachcrafting$navigateSearchHistory(key == InputConstants.KEY_UP)) {
 					cir.setReturnValue(true);
 					return;
 				}
 			}
 
 			// If focused, let number keys through to the screen for hotbar switching
-			if ((key >= GLFW.GLFW_KEY_0 && key <= GLFW.GLFW_KEY_9) ||
-				(key >= GLFW.GLFW_KEY_KP_0 && key <= GLFW.GLFW_KEY_KP_9)) {
+			if (reachcrafting$isDigitKey(key)) {
 				cir.setReturnValue(false);
 				return;
 			}
 		}
 
-		if (event.key() == GLFW.GLFW_KEY_LEFT_ALT || event.key() == GLFW.GLFW_KEY_RIGHT_ALT) {
+		if (event.key() == InputConstants.KEY_LALT || event.key() == InputConstants.KEY_RALT) {
 			ContainerUtils.handleAutoCraftKeyPress();
 			cir.setReturnValue(true);
 		} else if (com.reachcrafting.client.ReachCraftingModClient.toggleCraftableFilterKey.matches(event)) {
-			boolean isSpace = event.key() == GLFW.GLFW_KEY_SPACE;
+			boolean isSpace = event.key() == InputConstants.KEY_SPACE;
 			boolean requestModifierHeld = com.reachcrafting.client.RecipeBookFocusManager.isControlKeyDown(this.minecraft)
 				|| com.reachcrafting.client.RecipeBookFocusManager.isShiftKeyDown(this.minecraft)
 				|| (ReachCraftingConfig.get().altAsRequestKey() && com.reachcrafting.client.RecipeBookFocusManager.isAltKeyDown(this.minecraft));
@@ -248,7 +246,7 @@ public abstract class RecipeBookComponentMixin {
 		if (com.reachcrafting.client.ReachCraftingModClient.toggleCraftableFilterKey.matches(event)) {
 			reachcrafting$toggleKeyDown = false;
 		}
-		if (event.key() == GLFW.GLFW_KEY_LEFT_ALT || event.key() == GLFW.GLFW_KEY_RIGHT_ALT) {
+		if (event.key() == InputConstants.KEY_LALT || event.key() == InputConstants.KEY_RALT) {
 			ContainerUtils.handleAutoCraftKeyReleased();
 			cir.setReturnValue(true);
 		}
@@ -260,7 +258,7 @@ public abstract class RecipeBookComponentMixin {
 		if (this.searchBox != null && this.isVisible() && reachcrafting$isSupportedScreen()) {
 			if (this.searchBox.isFocused()) {
 				int key = event.key();
-				if (key != GLFW.GLFW_KEY_UP && key != GLFW.GLFW_KEY_DOWN) {
+				if (key != InputConstants.KEY_UP && key != InputConstants.KEY_DOWN) {
 					reachcrafting$resetSearchHistoryNavigation();
 				}
 			}
@@ -471,18 +469,17 @@ public abstract class RecipeBookComponentMixin {
 		}
 
 		// Exclude modifiers and space
-		if (key == GLFW.GLFW_KEY_LEFT_SHIFT || key == GLFW.GLFW_KEY_RIGHT_SHIFT ||
-			key == GLFW.GLFW_KEY_LEFT_CONTROL || key == GLFW.GLFW_KEY_RIGHT_CONTROL ||
-			key == GLFW.GLFW_KEY_LEFT_ALT || key == GLFW.GLFW_KEY_RIGHT_ALT ||
-			key == GLFW.GLFW_KEY_LEFT_SUPER || key == GLFW.GLFW_KEY_RIGHT_SUPER ||
-			key == GLFW.GLFW_KEY_SPACE ||
+		if (key == InputConstants.KEY_LSHIFT || key == InputConstants.KEY_RSHIFT ||
+			key == InputConstants.KEY_LCONTROL || key == InputConstants.KEY_RCONTROL ||
+			key == InputConstants.KEY_LALT || key == InputConstants.KEY_RALT ||
+			key == InputConstants.KEY_LGUI || key == InputConstants.KEY_RGUI ||
+			key == InputConstants.KEY_SPACE ||
 			com.reachcrafting.client.ReachCraftingModClient.toggleCraftableFilterKey.matches(event)) {
 			return false;
 		}
 
 		// Exclude numbers
-		if ((key >= GLFW.GLFW_KEY_0 && key <= GLFW.GLFW_KEY_9) ||
-			(key >= GLFW.GLFW_KEY_KP_0 && key <= GLFW.GLFW_KEY_KP_9)) {
+		if (reachcrafting$isDigitKey(key)) {
 			return false;
 		}
 
@@ -507,16 +504,28 @@ public abstract class RecipeBookComponentMixin {
 		}
 
 		// Exclude system keys that don't produce characters
-		if (key == GLFW.GLFW_KEY_ESCAPE || key == GLFW.GLFW_KEY_TAB || 
-			key == GLFW.GLFW_KEY_ENTER || 
-			key == GLFW.GLFW_KEY_DELETE || key == GLFW.GLFW_KEY_INSERT ||
-			key == GLFW.GLFW_KEY_PAGE_UP || key == GLFW.GLFW_KEY_PAGE_DOWN ||
-			key == GLFW.GLFW_KEY_HOME || key == GLFW.GLFW_KEY_END ||
-			(key >= GLFW.GLFW_KEY_F1 && key <= GLFW.GLFW_KEY_F25)) {
+		if (key == InputConstants.KEY_ESCAPE || key == InputConstants.KEY_TAB || 
+			key == InputConstants.KEY_RETURN || 
+			key == InputConstants.KEY_DELETE || key == InputConstants.KEY_INSERT ||
+			key == InputConstants.KEY_PAGEUP || key == InputConstants.KEY_PAGEDOWN ||
+			key == InputConstants.KEY_HOME || key == InputConstants.KEY_END ||
+			reachcrafting$isFunctionKey(key)) {
 			return false;
 		}
 
 		return true;
+	}
+
+	// SDL scancodes are not laid out in keyboard order: digits run 1..9 then 0,
+	// and the function keys are split into F1-F12 and F13-F24.
+	private static boolean reachcrafting$isDigitKey(int key) {
+		return (key >= InputConstants.KEY_1 && key <= InputConstants.KEY_0)
+			|| (key >= InputConstants.KEY_NUMPAD1 && key <= InputConstants.KEY_NUMPAD0);
+	}
+
+	private static boolean reachcrafting$isFunctionKey(int key) {
+		return (key >= InputConstants.KEY_F1 && key <= InputConstants.KEY_F12)
+			|| (key >= InputConstants.KEY_F13 && key <= InputConstants.KEY_F24);
 	}
 
 	private boolean reachcrafting$navigateSearchHistory(boolean moveUp) {
@@ -645,7 +654,7 @@ public abstract class RecipeBookComponentMixin {
 
 	private boolean reachcrafting$isToggleBoundToSpace() {
 		InputConstants.Key key = ((KeyMappingAccessor) com.reachcrafting.client.ReachCraftingModClient.toggleCraftableFilterKey).getKey();
-		return key.getType() == InputConstants.Type.KEYSYM && key.getValue() == GLFW.GLFW_KEY_SPACE;
+		return key.getType() == InputConstants.Type.KEYBOARD && key.getValue() == InputConstants.KEY_SPACE;
 	}
 
 	private boolean reachcrafting$shouldPageWithArrowKey() {

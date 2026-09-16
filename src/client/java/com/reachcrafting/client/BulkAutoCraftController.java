@@ -1,5 +1,6 @@
 package com.reachcrafting.client;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.CraftingScreen;
@@ -346,7 +347,7 @@ public final class BulkAutoCraftController {
 				clickedRecipeId,
 				collection,
 				ItemStack.EMPTY,
-				org.lwjgl.glfw.GLFW.GLFW_MOUSE_BUTTON_LEFT,
+				InputConstants.MOUSE_BUTTON_LEFT,
 				explicitVariantSelection
 			));
 	}

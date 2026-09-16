@@ -15,29 +15,28 @@ import net.minecraft.client.gui.screens.recipebook.OverlayRecipeComponent;
 import net.minecraft.client.gui.screens.recipebook.RecipeButton;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.crafting.display.RecipeDisplayId;
-import org.lwjgl.glfw.GLFW;
 
 public final class RecipeBookFocusManager {
 	private RecipeBookFocusManager() {
 	}
 
 	public static boolean isShiftKeyDown(Minecraft minecraft) {
-		return InputConstants.isKeyDown(minecraft.getWindow(), GLFW.GLFW_KEY_LEFT_SHIFT)
-			|| InputConstants.isKeyDown(minecraft.getWindow(), GLFW.GLFW_KEY_RIGHT_SHIFT);
+		return InputConstants.isKeyDown(InputConstants.KEY_LSHIFT)
+			|| InputConstants.isKeyDown(InputConstants.KEY_RSHIFT);
 	}
 
 	public static boolean isControlKeyDown(Minecraft minecraft) {
-		return InputConstants.isKeyDown(minecraft.getWindow(), GLFW.GLFW_KEY_LEFT_CONTROL)
-			|| InputConstants.isKeyDown(minecraft.getWindow(), GLFW.GLFW_KEY_RIGHT_CONTROL);
+		return InputConstants.isKeyDown(InputConstants.KEY_LCONTROL)
+			|| InputConstants.isKeyDown(InputConstants.KEY_RCONTROL);
 	}
 
 	public static boolean isAltKeyDown(Minecraft minecraft) {
-		return InputConstants.isKeyDown(minecraft.getWindow(), GLFW.GLFW_KEY_LEFT_ALT)
-			|| InputConstants.isKeyDown(minecraft.getWindow(), GLFW.GLFW_KEY_RIGHT_ALT);
+		return InputConstants.isKeyDown(InputConstants.KEY_LALT)
+			|| InputConstants.isKeyDown(InputConstants.KEY_RALT);
 	}
 
 	public static boolean isSpaceKeyDown(Minecraft minecraft) {
-		return InputConstants.isKeyDown(minecraft.getWindow(), GLFW.GLFW_KEY_SPACE);
+		return InputConstants.isKeyDown(InputConstants.KEY_SPACE);
 	}
 
 	static void defocusRecipeBookSearch(Minecraft minecraft, HeldRecipeQueueState state) {
@@ -104,7 +103,7 @@ public final class RecipeBookFocusManager {
 					recipeId,
 					overlay.getRecipeCollection(),
 					ItemStack.EMPTY,
-					GLFW.GLFW_MOUSE_BUTTON_LEFT,
+					InputConstants.MOUSE_BUTTON_LEFT,
 					true
 				);
 			}
@@ -119,7 +118,7 @@ public final class RecipeBookFocusManager {
 				button.getCurrentRecipe(),
 				button.getCollection(),
 				button.getDisplayStack().copy(),
-				GLFW.GLFW_MOUSE_BUTTON_LEFT,
+				InputConstants.MOUSE_BUTTON_LEFT,
 				false
 			);
 		}

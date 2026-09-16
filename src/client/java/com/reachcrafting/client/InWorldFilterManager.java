@@ -214,7 +214,7 @@ public final class InWorldFilterManager {
 			sneakCycleConsumedPress = true;
 			BlockPos pos = ((net.minecraft.world.phys.BlockHitResult) client.hitResult).getBlockPos();
 			toggleInclusion(client.level, pos, client.level.getBlockState(pos));
-			client.player.swing(net.minecraft.world.InteractionHand.MAIN_HAND);
+			client.player.swing(net.minecraft.world.InteractionHand.MAIN_HAND, net.minecraft.world.item.component.SwingAnimation.DEFAULT, false);
 		}
 		return true;
 	}

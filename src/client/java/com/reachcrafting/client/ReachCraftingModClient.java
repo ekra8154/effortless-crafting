@@ -8,7 +8,6 @@ import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.resources.Identifier;
 // import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
-import org.lwjgl.glfw.GLFW;
 
 public class ReachCraftingModClient implements ClientModInitializer {
 	public static KeyMapping showFilterOutlinesKey;
@@ -83,22 +82,22 @@ public class ReachCraftingModClient implements ClientModInitializer {
 
 		showFilterOutlinesKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
 			"key.reachcrafting.show_filter_outlines",
-			InputConstants.Type.KEYSYM,
+			InputConstants.Type.KEYBOARD,
 			InputConstants.UNKNOWN.getValue(),
 			reachCraftingCategory
 		));
 
 		quickCraftKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
 			"key.reachcrafting.quick_craft",
-			InputConstants.Type.KEYSYM,
-			GLFW.GLFW_KEY_B,
+			InputConstants.Type.KEYBOARD,
+			InputConstants.KEY_B,
 			reachCraftingCategory
 		));
 
 		toggleCraftableFilterKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
 			"key.reachcrafting.toggle_craftable_filter",
-			InputConstants.Type.KEYSYM,
-			GLFW.GLFW_KEY_SPACE,
+			InputConstants.Type.KEYBOARD,
+			InputConstants.KEY_SPACE,
 			reachCraftingCategory
 		));
 

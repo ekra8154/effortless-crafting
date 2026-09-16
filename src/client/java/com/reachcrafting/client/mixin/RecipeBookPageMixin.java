@@ -1,5 +1,6 @@
 package com.reachcrafting.client.mixin;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import com.reachcrafting.client.ReachCraftingConfig;
 import com.reachcrafting.client.RecipeBookClickCapture;
 import java.util.List;
@@ -7,7 +8,6 @@ import net.minecraft.client.gui.screens.recipebook.OverlayRecipeComponent;
 import net.minecraft.client.gui.screens.recipebook.RecipeButton;
 import net.minecraft.client.gui.screens.recipebook.RecipeBookPage;
 import net.minecraft.client.input.MouseButtonEvent;
-import org.lwjgl.glfw.GLFW;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -38,7 +38,7 @@ public abstract class RecipeBookPageMixin {
 		if (!ReachCraftingConfig.get().enabled()) {
 			return;
 		}
-		if (click.button() == GLFW.GLFW_MOUSE_BUTTON_RIGHT) {
+		if (click.button() == InputConstants.MOUSE_BUTTON_RIGHT) {
 			OverlayRecipeComponent overlay = ((RecipeBookPageAccessor) (Object) this).getOverlay();
 			if (overlay != null && overlay.isVisible()) {
 				return;
@@ -83,13 +83,13 @@ public abstract class RecipeBookPageMixin {
 			}
 		}
 
-		if (click.button() != GLFW.GLFW_MOUSE_BUTTON_LEFT) {
+		if (click.button() != InputConstants.MOUSE_BUTTON_LEFT) {
 			return;
 		}
 
-		boolean ctrlDown = (click.modifiers() & GLFW.GLFW_MOD_CONTROL) != 0;
-		boolean shiftDown = (click.modifiers() & GLFW.GLFW_MOD_SHIFT) != 0;
-		boolean altDown = (click.modifiers() & GLFW.GLFW_MOD_ALT) != 0;
+		boolean ctrlDown = (click.modifiers() & InputConstants.MOD_CONTROL) != 0;
+		boolean shiftDown = (click.modifiers() & InputConstants.MOD_SHIFT) != 0;
+		boolean altDown = (click.modifiers() & InputConstants.MOD_ALT) != 0;
 		if (shiftDown) {
 			RecipeBookClickCapture.defocusRecipeBookSearch(net.minecraft.client.Minecraft.getInstance());
 		}
@@ -140,7 +140,7 @@ public abstract class RecipeBookPageMixin {
 		boolean filtering,
 		CallbackInfoReturnable<Boolean> cir
 	) {
-		if (!ReachCraftingConfig.get().enabled() || !cir.getReturnValueZ() || click.button() != GLFW.GLFW_MOUSE_BUTTON_LEFT) {
+		if (!ReachCraftingConfig.get().enabled() || !cir.getReturnValueZ() || click.button() != InputConstants.MOUSE_BUTTON_LEFT) {
 			return;
 		}
 
@@ -150,11 +150,11 @@ public abstract class RecipeBookPageMixin {
 			return;
 		}
 
-		boolean ctrlDown = (click.modifiers() & GLFW.GLFW_MOD_CONTROL) != 0;
+		boolean ctrlDown = (click.modifiers() & InputConstants.MOD_CONTROL) != 0;
 		if (ctrlDown || com.reachcrafting.client.ContainerUtils.isExistingOutputRetrievalEnabled()) {
 			return;
 		}
-		boolean altDown = (click.modifiers() & GLFW.GLFW_MOD_ALT) != 0;
+		boolean altDown = (click.modifiers() & InputConstants.MOD_ALT) != 0;
 
 		for (RecipeButton button : this.buttons) {
 			if (!button.isMouseOver(click.x(), click.y())) {

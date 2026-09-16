@@ -17,7 +17,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
-import org.lwjgl.glfw.GLFW;
+import org.lwjgl.sdl.SDLMouse;
 
 final class ScreenContextRestorer {
 	private ScreenContextRestorer() {
@@ -99,6 +99,6 @@ final class ScreenContextRestorer {
 		double clampedX = Mth.clamp(context.mouseX(), 0.0D, Math.max(0.0D, client.getWindow().getScreenWidth() - 1.0D));
 		double clampedY = Mth.clamp(context.mouseY(), 0.0D, Math.max(0.0D, client.getWindow().getScreenHeight() - 1.0D));
 		client.mouseHandler.setIgnoreFirstMove();
-		GLFW.glfwSetCursorPos(client.getWindow().handle(), clampedX, clampedY);
+		SDLMouse.SDL_WarpMouseInWindow(client.getWindow().handle(), (float) clampedX, (float) clampedY);
 	}
 }

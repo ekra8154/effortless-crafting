@@ -1,5 +1,6 @@
 package com.reachcrafting.client;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import com.reachcrafting.ReachCraftingMod;
 
 import java.util.Map;
@@ -19,7 +20,6 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import org.lwjgl.glfw.GLFW;
 
 public final class ChainCraftPopupController {
 	private static final Map<PopupScreen, PendingPopup> PENDING_POPUPS = new WeakHashMap<>();
@@ -36,7 +36,7 @@ public final class ChainCraftPopupController {
 				return;
 			}
 			ScreenMouseEvents.allowMouseClick(screen).register((currentScreen, click) -> {
-				if (click.button() != GLFW.GLFW_MOUSE_BUTTON_LEFT || !isChainCraftPopup(popup)) {
+				if (click.button() != InputConstants.MOUSE_BUTTON_LEFT || !isChainCraftPopup(popup)) {
 					return true;
 				}
 				LinearLayout layout = ((PopupScreenAccessor) popup).reachcrafting$getLayout();
