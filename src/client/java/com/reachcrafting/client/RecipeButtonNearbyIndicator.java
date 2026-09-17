@@ -8,6 +8,7 @@ import net.minecraft.client.gui.screens.inventory.CraftingScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.client.gui.screens.recipebook.RecipeButton;
 import net.minecraft.client.player.LocalPlayer;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import net.minecraft.world.item.ItemStack;
@@ -15,6 +16,16 @@ import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.client.gui.screens.recipebook.RecipeCollection;
 
 public final class RecipeButtonNearbyIndicator {
+
+	// This lineage evaluates every visible button live each frame, and an
+	// automation session changes the inventory every craft. Re-evaluating the
+	// whole page per craft cost the render thread ~200 ms each on the cached
+	// lineages (a key-cycle dispenser batch ran at 4 ticks a craft with
+	// indicators on, 1 tick with them off), so while an automated interaction
+	// is running, page buttons show the state they last computed live; the
+	// first frame after the session ends computes live again.
+	private static final Map<net.minecraft.resources.ResourceLocation, IndicatorState> lastKnownState = new HashMap<>();
+	private static final Map<net.minecraft.resources.ResourceLocation, Boolean> lastKnownRetrievable = new HashMap<>();
 	private static final String RETRIEVAL_X_PATTERN = "#OOO#\nO#O#O\nOO#OO\nO#O#O\n#OOO#";
 	private static final float RETRIEVAL_X_SCALE = 1.2f;
 	private RecipeButtonNearbyIndicator() {
@@ -245,8 +256,13 @@ public final class RecipeButtonNearbyIndicator {
 		return best;
 	}
 
-	/** Nearby-craftability is computed live; there is no persistent cache to clear. */
+	/**
+	 * Nearby-craftability is computed live; the only thing held is the
+	 * last-known state per page button that an automation session shows.
+	 */
 	public static void clearCaches() {
+		lastKnownState.clear();
+		lastKnownRetrievable.clear();
 	}
 
 	/**
@@ -260,12 +276,22 @@ public final class RecipeButtonNearbyIndicator {
 		RecipeCollection collection = button.getCollection();
 		if (recipe == null || collection == null) return;
 
-		IndicatorState indicatorState = ReachCraftingConfig.get().showCraftabilityIndicators()
-			? (collection.getRecipes().size() > 1
-				? resolveCollectionIndicatorState(collection)
-				: indicatorStateForRecipe(recipe, collection, ItemStack.EMPTY, false))
-			: IndicatorState.NONE;
-		boolean retrievable = resolveRetrievable(button);
+		net.minecraft.resources.ResourceLocation stateKey = recipe.id();
+		IndicatorState indicatorState;
+		boolean retrievable;
+		if (AutoMoveController.isAutomatedInteractionRunning() && lastKnownState.containsKey(stateKey)) {
+			indicatorState = lastKnownState.get(stateKey);
+			retrievable = lastKnownRetrievable.getOrDefault(stateKey, false);
+		} else {
+			indicatorState = ReachCraftingConfig.get().showCraftabilityIndicators()
+				? (collection.getRecipes().size() > 1
+					? resolveCollectionIndicatorState(collection)
+					: indicatorStateForRecipe(recipe, collection, ItemStack.EMPTY, false))
+				: IndicatorState.NONE;
+			retrievable = resolveRetrievable(button);
+			lastKnownState.put(stateKey, indicatorState);
+			lastKnownRetrievable.put(stateKey, retrievable);
+		}
 		if (indicatorState == IndicatorState.NONE && !retrievable) {
 			return;
 		}
