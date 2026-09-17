@@ -383,6 +383,9 @@ public final class ReproHarness {
 				if (stack.isEmpty() || !itemId.equals(stack.getItem().builtInRegistryHolder().key().location().toString())) {
 					continue;
 				}
+				if (!pristineDisplay(stack) && hasPristineEntryFor(client, itemId)) {
+					continue; // a renamed stand-in (ViaBackwards); the plain item's own recipe exists
+				}
 				collectionOut[0] = collection;
 				return recipe;
 			}
@@ -492,12 +495,37 @@ public final class ReproHarness {
 		ReachCraftingMod.LOGGER.warn("[repro_harness] variant menu for {} has no entry for it", itemId);
 	}
 
+	/**
+	 * Through ViaBackwards an item this client does not know arrives as a
+	 * stand-in item wearing the original's name (1.21.9's copper chest shows
+	 * a 1.21.8 client a renamed plain chest), so once that recipe unlocks a
+	 * by-item search can land on it first. Prefer the plain item's display.
+	 */
+	private static boolean pristineDisplay(ItemStack stack) {
+		return ItemStack.isSameItemSameTags(stack, stack.getItem().getDefaultInstance());
+	}
+
+	private static boolean hasPristineEntryFor(Minecraft client, String itemId) {
+		for (RecipeCollection collection : client.player.getRecipeBook().getCollections()) {
+			for (Recipe<?> recipe : collection.getRecipes()) {
+				ItemStack stack = RecipeVariantResolver.resolveDisplayStack(recipe, client);
+				if (!stack.isEmpty() && itemId.equals(stack.getItem().builtInRegistryHolder().key().location().toString()) && pristineDisplay(stack)) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
 	private static void clickRecipeByItemId(Minecraft client, String itemId, boolean ctrl, boolean bulkLatch) {
 		for (RecipeCollection collection : client.player.getRecipeBook().getCollections()) {
 			for (Recipe<?> recipe : collection.getRecipes()) {
 				ItemStack stack = RecipeVariantResolver.resolveDisplayStack(recipe, client);
 				if (stack.isEmpty() || !itemId.equals(stack.getItem().builtInRegistryHolder().key().location().toString())) {
 					continue;
+				}
+				if (!pristineDisplay(stack) && hasPristineEntryFor(client, itemId)) {
+					continue; // a renamed stand-in (ViaBackwards); the plain item's own recipe exists
 				}
 				ReachCraftingMod.diag(
 					"[repro_harness] clicking recipe id={} item={} shift=true ctrl={} bulk_latch={}",
