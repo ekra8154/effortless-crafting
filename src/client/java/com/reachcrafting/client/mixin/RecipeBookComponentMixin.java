@@ -15,9 +15,12 @@ import net.minecraft.client.gui.screens.recipebook.RecipeCollection;
 import net.minecraft.client.input.CharacterEvent;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.util.StringUtil;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.inventory.RecipeBookMenu;
 import com.reachcrafting.client.ContainerUtils;
+import org.lwjgl.sdl.SDLKeyboard;
+import org.lwjgl.sdl.SDLKeycode;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
@@ -67,6 +70,7 @@ public abstract class RecipeBookComponentMixin {
 		// latch, so an unpollable binding degrades to "every press is a tap"
 		// instead of never toggling again.
 		if (key.getType() != InputConstants.Type.KEYBOARD
+			|| key.getValue() < 0
 			|| !InputConstants.isKeyDown(key.getValue())) {
 			reachcrafting$toggleKeyDown = false;
 		}
@@ -225,11 +229,32 @@ public abstract class RecipeBookComponentMixin {
 
 		if (ReachCraftingConfig.get().typeToFocusSearch() && this.searchBox != null && this.isVisible() && !this.searchBox.isFocused()) {
 			if (reachcrafting$isEligibleKey(event)) {
+				boolean textInputWasActive = SDLKeyboard.SDL_TextInputActive(this.minecraft.getWindow().handle());
 				this.searchBox.setFocused(true);
 				this.searchBox.setCursorPosition(this.searchBox.getValue().length());
 				this.searchBox.setHighlightPos(0);
+				if (!textInputWasActive) {
+					reachcrafting$typeFocusingKey(event);
+				}
 			}
 		}
+	}
+
+	// SDL only emits text for a key while text input is on, and focusing the
+	// search box is what turns it on, so the key that focused it produces no
+	// text of its own. Type that first character from the keymap instead.
+	private void reachcrafting$typeFocusingKey(KeyEvent event) {
+		// A Ctrl/Alt/Super chord is a shortcut, not typing: SDL sends no text
+		// for it, but the keymap lookup below ignores those modifiers.
+		if (event.hasControlDown() || event.hasAltDown()
+			|| (event.modifiers() & InputConstants.MOD_SUPER) != 0) {
+			return;
+		}
+		int codepoint = SDLKeyboard.SDL_GetKeyFromScancode(event.key(), (short) event.modifiers(), false);
+		if ((codepoint & SDLKeycode.SDLK_SCANCODE_MASK) != 0 || !StringUtil.isAllowedChatCharacter(codepoint)) {
+			return;
+		}
+		((RecipeBookComponent<?>) (Object) this).charTyped(new CharacterEvent(codepoint));
 	}
 
 	@Inject(method = "keyReleased", at = @At("HEAD"), cancellable = true)
