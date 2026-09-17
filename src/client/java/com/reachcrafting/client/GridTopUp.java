@@ -88,6 +88,10 @@ final class GridTopUp {
 	// Anything that "waits for room" needs a timeout longer than the window;
 	// a 1s wait built on the steady-drain reading silently dropped crafts.
 	private static boolean lastStageDeclineWasBudget = false;
+	// Whether the most recent tryStageInsteadOfPlace declined because the
+	// inventory holds no more of the unstackable key item. A key-cycle batch
+	// reads this to end at once instead of idling out a quiet window.
+	private static boolean lastStageDeclineWasMissingKey = false;
 
 	private GridTopUp() {
 	}
@@ -218,6 +222,10 @@ final class GridTopUp {
 	/** Did the last staging attempt fail purely on the click governor? */
 	static boolean lastStageDeclineWasBudget() {
 		return lastStageDeclineWasBudget;
+	}
+
+	static boolean lastStageDeclineWasMissingKey() {
+		return lastStageDeclineWasMissingKey;
 	}
 
 	/**
@@ -361,6 +369,7 @@ final class GridTopUp {
 	 */
 	static boolean tryStageInsteadOfPlace(Minecraft client, LocalPlayer player, RecipeIngredientSummary summary) {
 		lastStageDeclineWasBudget = false;
+		lastStageDeclineWasMissingKey = false;
 		if (client == null || player == null || summary == null || client.gameMode == null) {
 			return declined("null_input");
 		}
@@ -460,6 +469,10 @@ final class GridTopUp {
 			}
 			if (slot.maxStackSize() <= 1) {
 				if (inGrid.isEmpty()) {
+					if (findSourceSlot(menu, slot.itemIds(), true) < 0) {
+						lastStageDeclineWasMissingKey = true;
+						return declined("key_exhausted_slot_" + gridSlotIndex);
+					}
 					if (!insertSingle(client, menu, slot, gridSlotIndex)) {
 						return declined("insert_single_failed_slot_" + gridSlotIndex);
 					}
