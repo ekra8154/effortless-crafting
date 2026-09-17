@@ -434,6 +434,9 @@ public final class ReproHarness {
 				if (stack.isEmpty() || !itemId.equals(stack.getItem().builtInRegistryHolder().key().identifier().toString())) {
 					continue;
 				}
+				if (!pristineDisplay(stack) && hasPristineEntryFor(client, itemId)) {
+					continue; // a renamed stand-in (ViaBackwards); the plain item's own recipe exists
+				}
 				ExistingOutputRetrievalController.setEnabled(false);
 				AutoCraftController.setEnabledMode(ReachCraftingConfig.AutoCraftMode.NORMAL);
 				autoConfirmTicks = 400;
@@ -459,6 +462,9 @@ public final class ReproHarness {
 				ItemStack stack = RecipeVariantResolver.resolveDisplayStack(entry.display(), context);
 				if (stack.isEmpty() || !itemId.equals(stack.getItem().builtInRegistryHolder().key().identifier().toString())) {
 					continue;
+				}
+				if (!pristineDisplay(stack) && hasPristineEntryFor(client, itemId)) {
+					continue; // a renamed stand-in (ViaBackwards); the plain item's own recipe exists
 				}
 				ExistingOutputRetrievalController.setEnabled(false);
 				RecipeButtonNearbyIndicator.clearCaches();
@@ -512,6 +518,9 @@ public final class ReproHarness {
 				if (stack.isEmpty() || !itemId.equals(stack.getItem().builtInRegistryHolder().key().identifier().toString())) {
 					continue;
 				}
+				if (!pristineDisplay(stack) && hasPristineEntryFor(client, itemId)) {
+					continue; // a renamed stand-in (ViaBackwards); the plain item's own recipe exists
+				}
 				// Retrieval is a mode the player toggles with Ctrl double-tap;
 				// arm it directly, then drive the same click paths a user would.
 				ExistingOutputRetrievalController.setEnabled(true);
@@ -553,6 +562,29 @@ public final class ReproHarness {
 		}
 	}
 
+	/**
+	 * Through ViaBackwards an item this client does not know arrives as a
+	 * stand-in item wearing the original's name (1.21.9's copper chest shows
+	 * a 1.21.8 client a renamed plain chest), so once that recipe unlocks a
+	 * by-item search can land on it first. Prefer the plain item's display.
+	 */
+	private static boolean pristineDisplay(ItemStack stack) {
+		return ItemStack.isSameItemSameComponents(stack, stack.getItem().getDefaultInstance());
+	}
+
+	private static boolean hasPristineEntryFor(Minecraft client, String itemId) {
+		ContextMap context = SlotDisplayContext.fromLevel(client.level);
+		for (RecipeCollection collection : client.player.getRecipeBook().getCollections()) {
+			for (RecipeDisplayEntry entry : collection.getRecipes()) {
+				ItemStack stack = RecipeVariantResolver.resolveDisplayStack(entry.display(), context);
+				if (!stack.isEmpty() && itemId.equals(stack.getItem().builtInRegistryHolder().key().identifier().toString()) && pristineDisplay(stack)) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
 	private static void clickRecipeByItemId(Minecraft client, String itemId, boolean ctrl, boolean bulkLatch) {
 		ContextMap context = SlotDisplayContext.fromLevel(client.level);
 		for (RecipeCollection collection : client.player.getRecipeBook().getCollections()) {
@@ -560,6 +592,9 @@ public final class ReproHarness {
 				ItemStack stack = RecipeVariantResolver.resolveDisplayStack(entry.display(), context);
 				if (stack.isEmpty() || !itemId.equals(stack.getItem().builtInRegistryHolder().key().identifier().toString())) {
 					continue;
+				}
+				if (!pristineDisplay(stack) && hasPristineEntryFor(client, itemId)) {
+					continue; // a renamed stand-in (ViaBackwards); the plain item's own recipe exists
 				}
 				ReachCraftingMod.diag(
 					"[repro_harness] clicking recipe id={} item={} shift=true ctrl={} bulk_latch={}",
