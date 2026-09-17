@@ -48,6 +48,10 @@ final class GridExtractor {
 	private static int craftedCopies = 0;
 	private static int totalTicks = 0;
 	private static int quietTicks = 0;
+	// Tick of our last staging burst (begin() counts the ring staged just
+	// before it); the key-cycle holds still for STAGING_ACK_TICKS after it.
+	private static int lastStagingTick = -1;
+	private static final int STAGING_ACK_TICKS = 6;
 	/** Consecutive ticks the result slot has matched the expected output. */
 	private static int resultStableTicks = 0;
 	// Extraction mode telemetry: how the batch's crafts actually happened.
@@ -174,6 +178,7 @@ final class GridExtractor {
 		craftedCopies = 0;
 		totalTicks = 0;
 		quietTicks = 0;
+		lastStagingTick = 0;
 		resultStableTicks = 0;
 		quickMoves = 0;
 		pickups = 0;
@@ -253,6 +258,15 @@ final class GridExtractor {
 				// result reappears immediately. A cursor stack must be banked
 				// first: GridTopUp declines over a non-empty cursor.
 				if (keyCycleSummary != null) {
+					if (lastStagingTick >= 0 && totalTicks - lastStagingTick < STAGING_ACK_TICKS) {
+						// Our last staging burst is still being acknowledged. Its
+						// clicks all carried one state id, so each server reply is
+						// a full-state rewrite, and until the last one lands the
+						// local grid and cursor show intermediate states: phantom
+						// stacks back in the inventory, a cursor that is really
+						// empty. Acting on those re-stages from nothing. Hold still.
+						return;
+					}
 					if (!carried.isEmpty()) {
 						if (!depositCarried(client, menu)) {
 							finish(client, craftedCopies > 0, "deposit_blocked");
@@ -263,6 +277,7 @@ final class GridExtractor {
 					}
 					if (GridTopUp.tryStageInsteadOfPlace(client, client.player, keyCycleSummary)) {
 						quietTicks = 0;
+						lastStagingTick = totalTicks;
 						clicksThisTick++; // staging spent clicks; recount next loop
 						continue;
 					}
@@ -373,6 +388,7 @@ final class GridExtractor {
 				client.gameMode.handleInventoryMouseClick(menu.containerId, resultSlot.index, 0, ClickType.QUICK_MOVE, client.player);
 				GridTopUp.recordClick();
 				quickMoves++;
+				lastStagingTick = -1;
 				ReachCraftingMod.diag(
 					"[grid_extract] quick_move staged={} credited={} overshoot={}",
 					staged, Math.min(staged, remaining), allowOvershoot);
@@ -403,6 +419,8 @@ final class GridExtractor {
 			client.gameMode.handleInventoryMouseClick(menu.containerId, resultSlot.index, 0, ClickType.PICKUP, client.player);
 			GridTopUp.recordClick();
 			pickups++;
+			// A real result is the server's acknowledgement of the last staging.
+			lastStagingTick = -1;
 			craftedCopies++;
 			noteCraftPace("pickup");
 			clicksThisTick++;
