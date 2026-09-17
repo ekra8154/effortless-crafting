@@ -35,11 +35,24 @@ loom {
 		}
 	}
 
+	// 26.3 dev clients died at random with exit 0xC0000005 and no hs_err
+	// (2026-09-16, five crash dumps). A Java worker's 32 KB stack probe
+	// skips Windows' single guard page; HotSpot repairs that by re-committing
+	// the stack, which strips PAGE_GUARD, so the OS can no longer grow that
+	// thread's stack and a later jvm!__chkstk walks off the committed part.
+	// Pre-touching every Java thread stack at creation sidesteps the whole
+	// chain. Dev-only: players launch through Mojang's launcher.
+	def stackPretouchArgs = ["-XX:+UnlockDiagnosticVMOptions", "-XX:+AlwaysPreTouchStacks"]
+
 	// Temporary run config for the server packet-limit investigation:
 	// auto-joins the localhost Paper repro server as a fixed offline user.
 	runs {
+		client {
+			vmArgs(stackPretouchArgs as String[])
+		}
 		clientRepro {
 			client()
+			vmArgs(stackPretouchArgs as String[])
 			configName = "Repro Client (localhost Paper)"
 			def reproPort = project.hasProperty("ecServerPort") ? project.property("ecServerPort") : "25565"
 			programArgs("--username", "ReproBot", "--quickPlayMultiplayer", "localhost:${reproPort}")
