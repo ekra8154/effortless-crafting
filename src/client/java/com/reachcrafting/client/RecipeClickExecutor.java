@@ -781,7 +781,8 @@ final class RecipeClickExecutor {
 				// no_craft_staged). The bulk session is already armed here;
 				// scheduling the auto-move is all that remains.
 				ReachCraftingMod.diag("[recipe_place] grid_topup ring cycle, dry-run bypassed");
-				if (AutoCraftController.isEnabled()) {
+				if (AutoCraftController.isEnabled()
+					&& !tryArmFlatBulkKeyCycle(player, selectedRecipe, effectiveRequestedClicks, ingredientSummary)) {
 					ContainerUtils.scheduleAutoMove(selectedRecipe.displayStack());
 				}
 				return;
@@ -889,6 +890,7 @@ final class RecipeClickExecutor {
 				// Unstackable-ingredient bulk: the ingredient ring was built or
 				// maintained with ordinary clicks, saving the rationed place
 				// packet (see PlaceRecipeBudget / GridTopUp).
+				tryArmFlatBulkKeyCycle(player, selectedRecipe, effectiveRequestedClicks, ingredientSummary);
 			} else if (useBulkPlace) {
 				gameMode.handlePlaceRecipe(player.containerMenu.containerId, selectedRecipe.recipeId(), true);
 			} else {
@@ -1044,6 +1046,46 @@ final class RecipeClickExecutor {
 			1
 		);
 		return selection != null ? selection.displayStack().copy() : ItemStack.EMPTY;
+	}
+
+	/**
+	 * Flat bulk on a staged ring used to craft one copy per cycle: re-seat
+	 * the key item, wait to see the result, shift-click it, organize, settle,
+	 * replay - eight to ten ticks a dispenser. The chain finals already run
+	 * such a batch as a GridExtractor key-cycle (insert next key, take
+	 * result, repeat, several clicks a tick); this gives flat bulk the same
+	 * loop. Outputs are banked, so the batch needs somewhere to put them;
+	 * with no room the auto-move path keeps its eject-when-full handling.
+	 */
+	private static boolean tryArmFlatBulkKeyCycle(
+		LocalPlayer player,
+		RecipeVariantResolver.Selection selectedRecipe,
+		int copies,
+		RecipeIngredientSummary ingredientSummary
+	) {
+		if (copies <= 1
+			|| GridExtractor.isActive()
+			|| !BulkAutoCraftController.isActive()
+			|| ChainCraftController.isActive()
+			|| BulkChainCraftController.isActive()
+			|| !GridTopUp.isKeyCycleEligible(ingredientSummary)
+			|| player == null
+			|| player.containerMenu == null
+			|| !player.containerMenu.getCarried().isEmpty()) {
+			return false;
+		}
+		ItemStack output = selectedRecipe.displayStack();
+		String outputId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(output.getItem()).toString();
+		if (MenuTransferHelper.findPlayerDestinationSlot(player, player.containerMenu, outputId) == null) {
+			return false;
+		}
+		GridExtractor.begin(output, copies, ingredientSummary, true);
+		ReachCraftingMod.diag(
+			"[recipe_place] flat_bulk key-cycle batch copies={} recipe={}",
+			copies,
+			selectedRecipe.recipeId()
+		);
+		return true;
 	}
 
 	static int resolveRecipeQueueLimit(
