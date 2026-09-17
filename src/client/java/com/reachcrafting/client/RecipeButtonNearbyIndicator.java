@@ -177,14 +177,24 @@ public final class RecipeButtonNearbyIndicator {
 		StateKey stateKey = stateKeyFor(screen, inventoryHash, nearbyRevision, reachableView);
 
 		if (!stateKey.equals(currentStateKey)) {
-			mainCache.clear();
-			overlayCache.clear();
-			retrievableCache.clear();
-			collectionIndicatorCache.clear();
-			collectionRetrievableCache.clear();
-			collectionCraftabilityCache.clear();
-			currentStateKey = stateKey;
-			currentContext = null;
+			if (currentStateKey != null && AutoMoveController.isAutomatedInteractionRunning()) {
+				// An automation session changes the inventory every craft, and
+				// re-evaluating every visible button on each change cost the
+				// render thread ~200 ms per craft (a key-cycle dispenser batch ran
+				// at 4 ticks a craft with indicators on, 1 tick with them off).
+				// Keep the states the session started with; the first frame after
+				// it ends sees the real key change and recomputes as usual.
+				stateKey = currentStateKey;
+			} else {
+				mainCache.clear();
+				overlayCache.clear();
+				retrievableCache.clear();
+				collectionIndicatorCache.clear();
+				collectionRetrievableCache.clear();
+				collectionCraftabilityCache.clear();
+				currentStateKey = stateKey;
+				currentContext = null;
+			}
 		}
 
 		Map<RecipeDisplayId, Craftability> cacheMap = explicitVariantSelection ? overlayCache : mainCache;
