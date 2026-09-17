@@ -25,6 +25,10 @@ final class AutoMoveController {
 	private static final int FOREIGN_RESULT_DEBOUNCE_TICKS = 5;
 	private static int foreignResultTicks = 0;
 	private static int autoMoveWaitingTicks = 0;
+	// Ticks a visible result has sat over an EMPTY local grid (see the
+	// unsynced-snapshot wait in autoMoveResult).
+	private static int unsyncedResultTicks = 0;
+	private static final int UNSYNCED_RESULT_WAIT_TICKS = 5;
 	private static boolean pendingAutoMove = false;
 	private static ItemStack autoMoveTargetStack = ItemStack.EMPTY;
 	private static ItemStack autoMoveExpectedStack = ItemStack.EMPTY;
@@ -550,6 +554,27 @@ final class AutoMoveController {
 				}
 
 				foreignResultTicks = 0;
+
+				// The server sends the result slot the moment the grid changes but
+				// the grid and inventory slots only at the end of its tick, so a
+				// placement can show its result over an EMPTY local grid and a
+				// pre-placement inventory (the consumed bow still in its slot).
+				// Deciding on that snapshot took the inventory-full eject on a
+				// full-looking inventory and staged the ring against a grid the
+				// late broadcast then rewrote: on 1.21.1 the ring re-staged from
+				// phantom stacks, the redstone vanished and the batch died. Wait
+				// for the grid to catch up (a result never exists without one).
+				if (gridItemTotal(menu) == 0 && unsyncedResultTicks < UNSYNCED_RESULT_WAIT_TICKS) {
+					unsyncedResultTicks++;
+					if (unsyncedResultTicks == 1) {
+						com.reachcrafting.ReachCraftingMod.diag(
+							"[auto_move] result visible over an empty grid; waiting for the slot broadcast result={}",
+							ContainerUtils.formatStack(currentResult)
+						);
+					}
+					return;
+				}
+				unsyncedResultTicks = 0;
 
 				BulkAutoCraftController.BulkOutputDisposition bulkDisposition =
 					BulkAutoCraftController.determineCurrentBatchOutputDisposition(client, currentResult);
