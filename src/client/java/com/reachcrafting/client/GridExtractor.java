@@ -266,6 +266,12 @@ final class GridExtractor {
 						clicksThisTick++; // staging spent clicks; recount next loop
 						continue;
 					}
+					if (GridTopUp.lastStageDeclineWasMissingKey()) {
+						// No key item left to insert: the batch is over now, not
+						// after a quiet window that would read as "grid spent".
+						finish(client, craftedCopies > 0, "key_exhausted");
+						return;
+					}
 					if (GridTopUp.lastStageDeclineWasBudget()) {
 						// Ring intact, click window saturated. The window drains
 						// at ~40 clicks/s and the next cycle costs ~2 clicks, so
@@ -473,6 +479,13 @@ final class GridExtractor {
 		ejectOutputs = false;
 		allowOvershoot = false;
 		lastFinishMillis = System.currentTimeMillis();
-		ChainCraftController.onAutoMoveFinished(client, success);
+		// A chain batch reports to the chain as before; a flat-bulk key-cycle
+		// batch reports to the bulk controller, which credits progress by
+		// inventory delta exactly as it does after an auto-move.
+		if (ChainCraftController.isActive()) {
+			ChainCraftController.onAutoMoveFinished(client, success);
+		} else {
+			BulkAutoCraftController.onAutoMoveFinished(client, success);
+		}
 	}
 }
