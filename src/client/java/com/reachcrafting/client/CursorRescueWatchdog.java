@@ -26,8 +26,14 @@ import net.minecraft.world.item.ItemStack;
  * precede both. This watchdog covers every wait at once: while a bulk or
  * bulk-chain session is active, a carried stack that sits unchanged with
  * no automation clicks in flight is deposited back into the inventory.
+ *
+ * Only stacks the automation left there count. A stack the player picked up
+ * themselves is theirs to hold: before this rule, any stack held for ~1 s
+ * within 10 s of a craft was "rescued" back into the inventory, so moving
+ * freshly crafted items snapped them back to their slot, and each rescue
+ * restarted the 10 s window, so it kept happening until the screen closed.
  */
-final class CursorRescueWatchdog {
+public final class CursorRescueWatchdog {
 
 	/** Consecutive ticks the same stray stack must sit before rescue. */
 	private static final int STABLE_TICKS_BEFORE_RESCUE = 15;
@@ -40,6 +46,15 @@ final class CursorRescueWatchdog {
 
 	private static ItemStack observedCarried = ItemStack.EMPTY;
 	private static int stableTicks = 0;
+	/** The observed stack appeared after a physical mouse press, not after
+	 * an automation click: the player put it on the cursor. */
+	private static boolean observedIsPlayers = false;
+	private static long lastPlayerInputMillis = 0;
+
+	/** Called for every physical mouse button event (MouseHandlerMixin). */
+	public static void notePlayerInput() {
+		lastPlayerInputMillis = System.currentTimeMillis();
+	}
 
 	private CursorRescueWatchdog() {
 	}
@@ -78,6 +93,14 @@ final class CursorRescueWatchdog {
 			|| carried.getCount() != observedCarried.getCount()) {
 			observedCarried = carried.copy();
 			stableTicks = 0;
+			// Whoever acted last owns the new cursor stack. A pickup lands on
+			// the cursor the moment the press is handled, so a press newer
+			// than our last automation click means the player is holding it.
+			observedIsPlayers = lastPlayerInputMillis != 0
+				&& lastPlayerInputMillis >= GridTopUp.lastAutomationClickMillis();
+			return;
+		}
+		if (observedIsPlayers) {
 			return;
 		}
 		stableTicks++;
@@ -102,12 +125,13 @@ final class CursorRescueWatchdog {
 			ContainerUtils.formatStack(carried), stableTicks);
 		client.gameMode.handleContainerInput(
 			menu.containerId, destination.index, 0, ContainerInput.PICKUP, client.player);
-		GridTopUp.recordClick();
+		GridTopUp.recordRescueClick();
 		PlaceRecipeBudget.noteCursorRescue();
 	}
 
 	private static void reset() {
 		observedCarried = ItemStack.EMPTY;
 		stableTicks = 0;
+		observedIsPlayers = false;
 	}
 }
