@@ -66,6 +66,10 @@ public final class ReproHarness {
 	private static boolean pendingBulkLatch = true;
 	private static int pendingTimeoutTicks;
 	private static int autoConfirmTicks;
+	// The prompt already answered. A ConfirmScreen can stay up for a tick
+	// after Enter, and answering it again counted one prompt twice
+	// (craft-variant-chain-off: popups answered 2 == 1 on 1.20.1).
+	private static net.minecraft.client.gui.screens.Screen lastAnsweredPrompt;
 	// While a scripted run is in flight, suppress the window-focus guard so a
 	// backgrounded dev client (the normal case for automated tests) does not
 	// abort bulk-chain automation. Dev-only; armed per command, self-expiring.
@@ -331,7 +335,9 @@ public final class ReproHarness {
 			// retrieve-then-craft prompt may be followed by a chain prompt.
 			// Pre-1.21.2 presents them as a ConfirmScreen (no PopupScreen):
 			// Enter confirms, Esc (onClose) declines.
-			if (client.screen instanceof net.minecraft.client.gui.screens.ConfirmScreen confirm) {
+			if (client.screen instanceof net.minecraft.client.gui.screens.ConfirmScreen confirm
+				&& confirm != lastAnsweredPrompt) {
+				lastAnsweredPrompt = confirm;
 				ReachCraftingMod.diag("[repro_harness] auto-{} popup title={}", autoConfirmYes ? "confirming" : "declining", confirm.getTitle().getString());
 				if (autoConfirmYes) {
 					confirm.keyPressed(org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER, 0, 0);
