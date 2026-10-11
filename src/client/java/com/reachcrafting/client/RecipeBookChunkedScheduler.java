@@ -24,6 +24,8 @@ import net.minecraft.world.item.ItemStack;
 
 public final class RecipeBookChunkedScheduler {
 	private static final long CHUNK_TIME_BUDGET_NANOS = 5_000_000L; // 5ms
+	/** Buttons on one recipe book page (vanilla's 5 x 4 grid). */
+	private static final int PAGE_SIZE = 20;
 
 	private static Pass currentPass;
 	private static int lastObservedPageIndex = 0;
@@ -53,6 +55,8 @@ public final class RecipeBookChunkedScheduler {
 			currentPass.refreshOriginalOrder(collections, originalOrder);
 		}
 
+		// The page about to be drawn shows this snapshot's order.
+		currentPass.noteDrawnHead();
 		return currentPass.snapshot();
 	}
 
@@ -206,7 +210,13 @@ public final class RecipeBookChunkedScheduler {
 				+ " settled=" + currentPass.settledCount()
 				+ " pending=" + currentPass.pendingCount()
 		);
-		requestRefresh(client);
+		// Rebuild the page only when this chunk changed what it shows. Most
+		// chunks settle collections far down the book; rebuilding after every
+		// one (each tick of a 200+ collection pass) was a constant cost while
+		// the recipe book was open.
+		if (currentPass.headChanged()) {
+			requestRefresh(client);
+		}
 	}
 
 	private static void requestRefresh(Minecraft client) {
@@ -277,15 +287,10 @@ public final class RecipeBookChunkedScheduler {
 	}
 
 	private static long computeInventoryHash(LocalPlayer player, Screen screen) {
-		long hash = 0;
-		for (ItemStack stack : player.getInventory().getNonEquipmentItems()) {
-			if (!stack.isEmpty()) {
-				hash = hash * 31 + net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).hashCode();
-				hash = hash * 31 + stack.getCount();
-			} else {
-				hash = hash * 31;
-			}
-		}
+		// Item totals incl. the cursor: rearranging the inventory is not a
+		// change (see InventoryFingerprint). The grid below stays positional,
+		// since what sits in the grid does change what gets offered.
+		long hash = InventoryFingerprint.totals(player);
 		if (screen instanceof AbstractContainerScreen<?> containerScreen) {
 			int gridSlotCount = screen instanceof InventoryScreen ? 4 : screen instanceof CraftingScreen ? 9 : 0;
 			for (int slotIndex = 1; slotIndex <= gridSlotCount; slotIndex++) {
@@ -354,6 +359,8 @@ public final class RecipeBookChunkedScheduler {
 		private final LinkedHashSet<RecipeCollection> visiblePriority = new LinkedHashSet<>();
 		private final long startedAtNanos = PerformanceProfiler.start();
 		private int cursor = 0;
+		/** The first page as last drawn from this pass. */
+		private List<RecipeCollection> drawnHead = List.of();
 
 		private Pass(
 			StateKey stateKey,
@@ -461,6 +468,38 @@ public final class RecipeBookChunkedScheduler {
 
 		private boolean isComplete() {
 			return settledScores.size() >= collections.size();
+		}
+
+		private void noteDrawnHead() {
+			drawnHead = head();
+		}
+
+		private boolean headChanged() {
+			return !head().equals(drawnHead);
+		}
+
+		/**
+		 * The first page, ranked exactly as RecipeBookSmartSorter ranks a
+		 * snapshot: settled score, else the fast score, ties by book order.
+		 */
+		private List<RecipeCollection> head() {
+			List<RecipeCollection> ranked = new java.util.ArrayList<>(collections);
+			ranked.sort(java.util.Comparator
+				.comparing(this::effectiveScore)
+				.thenComparingInt(collection -> originalOrder.getOrDefault(collection, Integer.MAX_VALUE)));
+			return List.copyOf(ranked.subList(0, Math.min(PAGE_SIZE, ranked.size())));
+		}
+
+		private RecipeBookSmartSorter.SortScore effectiveScore(RecipeCollection collection) {
+			RecipeBookSmartSorter.SortScore settled = settledScores.get(collection);
+			if (settled != null) {
+				return settled;
+			}
+			RecipeBookSmartSorter.SortScore fast = fastScores.get(collection);
+			if (fast != null) {
+				return fast;
+			}
+			return new RecipeBookSmartSorter.SortScore(5, Integer.MAX_VALUE, originalOrder.getOrDefault(collection, Integer.MAX_VALUE));
 		}
 
 		private int settledCount() {
