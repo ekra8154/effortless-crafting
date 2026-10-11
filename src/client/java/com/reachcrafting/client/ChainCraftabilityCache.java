@@ -578,16 +578,8 @@ public final class ChainCraftabilityCache {
 	}
 
 	private static long computeInventoryHash(LocalPlayer player) {
-		long hash = 0;
-		for (ItemStack stack : player.getInventory().getNonEquipmentItems()) {
-			if (!stack.isEmpty()) {
-				hash = hash * 31 + BuiltInRegistries.ITEM.getKey(stack.getItem()).hashCode();
-				hash = hash * 31 + stack.getCount();
-			} else {
-				hash = hash * 31;
-			}
-		}
-		return hash;
+		// Item totals incl. the cursor, so moving stacks around is not a change.
+		return InventoryFingerprint.totals(player);
 	}
 
 	private static int reachableSignature(NearbyContainerCache.ReachableView view) {
