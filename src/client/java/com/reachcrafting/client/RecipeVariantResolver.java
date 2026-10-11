@@ -131,11 +131,15 @@ public final class RecipeVariantResolver {
 		}
 
 		ReachCraftingConfig.RevolvingCraftHandling handling = ReachCraftingConfig.get().revolvingCraftHandling();
-		if (handling == ReachCraftingConfig.RevolvingCraftHandling.SPECIFIC_VARIANT_ONLY) {
-			return exactSelection;
-		}
+		// "Current variant only" is about the OUTPUT (oak slabs never become
+		// birch slabs), not the recipe: sticks from planks and sticks from
+		// bamboo are the same stick, so the setting keeps every recipe that
+		// makes the clicked output and drops the rest. The clicked recipe
+		// keeps first refusal among them, as under the availability-fallback
+		// setting.
+		boolean sameOutputOnly = handling == ReachCraftingConfig.RevolvingCraftHandling.SPECIFIC_VARIANT_ONLY;
 
-		List<Selection> candidates = collection.getRecipes().stream()
+		List<Selection> allCandidates = collection.getRecipes().stream()
 			.map(candidate -> toSelection(
 				minecraft,
 				candidate,
@@ -147,6 +151,12 @@ public final class RecipeVariantResolver {
 				desiredCopiesPerSlot
 			))
 			.toList();
+		List<Selection> candidates = sameOutputOnly
+			? allCandidates.stream().filter(candidate -> sameOutput(candidate, exactSelection)).toList()
+			: allCandidates;
+		if (sameOutputOnly && candidates.size() <= 1) {
+			return exactSelection;
+		}
 		int requestedCopies = Math.max(desiredCopiesPerSlot, 1);
 		boolean lockToCurrentVariant = BulkAutoCraftController.shouldLockToCurrentVariant(clickedRecipe.id(), collection, explicitVariantSelection);
 
@@ -179,7 +189,7 @@ public final class RecipeVariantResolver {
 			&& BulkAutoCraftController.isActive()
 			&& BulkAutoCraftController.currentVariantContinuationMode() != BulkAutoCraftController.VariantContinuationMode.FAMILY_FALLBACK;
 
-		if (handling == ReachCraftingConfig.RevolvingCraftHandling.PREFER_CLICKED_TYPE_WITH_COUNT_FALLBACK
+		if ((handling == ReachCraftingConfig.RevolvingCraftHandling.PREFER_CLICKED_TYPE_WITH_COUNT_FALLBACK || sameOutputOnly)
 			&& exactSelection.copiesAvailable() > 0
 			&& (craftAll || bulkStrictOrUndecided || exactSelection.copiesAvailable() >= requestedCopies)) {
 			return exactSelection;
@@ -641,6 +651,22 @@ public final class RecipeVariantResolver {
 			return ItemStack.EMPTY;
 		}
 		return recipe.value().getResultItem(minecraft.level.registryAccess()).copy();
+	}
+
+	/**
+	 * Two recipes make the same thing: same item and components. The count
+	 * may differ (4 sticks from planks, 1 from bamboo); that is a recipe
+	 * detail, not a different variant.
+	 */
+	static boolean sameOutput(Selection a, Selection b) {
+		if (a == null || b == null) {
+			return false;
+		}
+		if (a.displayStack() == null || a.displayStack().isEmpty()
+			|| b.displayStack() == null || b.displayStack().isEmpty()) {
+			return a.outputItemId() != null && a.outputItemId().equals(b.outputItemId());
+		}
+		return ItemStack.isSameItemSameComponents(a.displayStack(), b.displayStack());
 	}
 
 	public record Selection(

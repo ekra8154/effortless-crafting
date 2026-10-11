@@ -1381,12 +1381,16 @@ final class RecipeClickExecutor {
 			|| vanillaShiftClick
 			|| collection == null
 			|| collection.getRecipes().size() <= 1
-			|| availableItems.hasReservedGrid()
-			|| ReachCraftingConfig.get().revolvingCraftHandling() == ReachCraftingConfig.RevolvingCraftHandling.SPECIFIC_VARIANT_ONLY) {
+			|| availableItems.hasReservedGrid()) {
 			return List.of(selectedRecipe);
 		}
 
-		List<RecipeVariantResolver.Selection> variants = RecipeVariantResolver.collectionCandidates(
+		// "Current variant only" scopes the fallback to recipes that make the
+		// clicked output (sticks from planks for a sticks button showing the
+		// bamboo recipe), never to a different output.
+		boolean sameOutputOnly = ReachCraftingConfig.get().revolvingCraftHandling()
+			== ReachCraftingConfig.RevolvingCraftHandling.SPECIFIC_VARIANT_ONLY;
+		List<RecipeVariantResolver.Selection> collectionVariants = RecipeVariantResolver.collectionCandidates(
 			minecraft,
 			player,
 			clickedRecipe,
@@ -1398,6 +1402,11 @@ final class RecipeClickExecutor {
 			effectiveCraftAll,
 			desiredVariantCopies
 		);
+		List<RecipeVariantResolver.Selection> variants = sameOutputOnly
+			? collectionVariants.stream()
+				.filter(candidate -> RecipeVariantResolver.sameOutput(candidate, selectedRecipe))
+				.toList()
+			: collectionVariants;
 
 		// Snapshot each variant's tier ONCE. Every ChainCraftabilityCache
 		// query re-walks the whole recipe book and re-hashes the inventory
@@ -1469,9 +1478,15 @@ final class RecipeClickExecutor {
 		// keeps the lead: resolve() picked it under this same count
 		// preference, and a chain-only sibling should not displace a variant
 		// that is already partly craftable outright.
+		// "Current variant only" also gives the clicked recipe first refusal
+		// among its same-output siblings, but only when it can actually be
+		// chained: an unreachable clicked recipe (bamboo sticks with no
+		// bamboo) must not sit ahead of the one that works.
 		boolean preferClickedVariant = selectedRecipe.copiesAvailable() > 0
 			|| ReachCraftingConfig.get().revolvingCraftHandling()
-				== ReachCraftingConfig.RevolvingCraftHandling.PREFER_CLICKED_TYPE_WITH_COUNT_FALLBACK;
+				== ReachCraftingConfig.RevolvingCraftHandling.PREFER_CLICKED_TYPE_WITH_COUNT_FALLBACK
+			|| (sameOutputOnly
+				&& chainTiers.getOrDefault(selectedRecipe.recipeId(), CHAIN_TIER_UNREACHABLE) != CHAIN_TIER_UNREACHABLE);
 
 		List<RecipeVariantResolver.Selection> candidates = new ArrayList<>();
 		candidates.add(selectedRecipe);
