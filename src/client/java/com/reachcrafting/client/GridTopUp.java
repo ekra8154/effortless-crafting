@@ -217,7 +217,20 @@ final class GridTopUp {
 		lastAutomationClickMillis = now;
 	}
 
+	/**
+	 * The cursor watchdog's own deposit: it spends the click budget like any
+	 * automation click but must not count as automation activity, or every
+	 * rescue would restart the watchdog's own recent-automation window.
+	 */
+	static void recordRescueClick() {
+		recentClicks.addLast(System.currentTimeMillis());
+	}
+
 	private static long lastAutomationClickMillis = 0;
+
+	static long lastAutomationClickMillis() {
+		return lastAutomationClickMillis;
+	}
 
 	/** Millis since ANY automation click (governor-recorded). The cursor
 	 * watchdog uses this to tell a stray carried stack (server resync landed
