@@ -445,15 +445,10 @@ public final class RecipeButtonNearbyIndicator {
 	}
 
 	private static long computeInventoryHash(LocalPlayer player, Screen screen) {
-		long hash = 0;
-		for (ItemStack stack : player.getInventory().getNonEquipmentItems()) {
-			if (!stack.isEmpty()) {
-				hash = hash * 31 + net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).hashCode();
-				hash = hash * 31 + stack.getCount();
-			} else {
-				hash = hash * 31;
-			}
-		}
+		// Item totals incl. the cursor: rearranging the inventory is not a
+		// change (see InventoryFingerprint). The grid below stays positional,
+		// since what sits in the grid does change what gets offered.
+		long hash = InventoryFingerprint.totals(player);
 		if (screen instanceof net.minecraft.client.gui.screens.inventory.AbstractContainerScreen<?> containerScreen) {
 			int gridSlotCount = screen instanceof InventoryScreen ? 4 : screen instanceof CraftingScreen ? 9 : 0;
 			for (int slotIndex = 1; slotIndex <= gridSlotCount; slotIndex++) {
