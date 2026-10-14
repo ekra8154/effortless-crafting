@@ -48,6 +48,7 @@ public final class ReachCraftingConfig {
 	private static final boolean DEFAULT_AUTO_CRAFT_ENABLED = false;
 	private static final AutoCraftMode DEFAULT_AUTO_CRAFT_ENABLED_MODE = AutoCraftMode.NORMAL;
 	private static final boolean DEFAULT_SHOW_TOTAL_OUTPUT_COUNTS = true;
+	private static final boolean DEFAULT_SHOW_GRID_PREVIEW = true;
 	private static final InputCounterVisibility DEFAULT_INPUT_COUNTER_VISIBILITY = InputCounterVisibility.SHOW_WHILE_QUEUEING;
 	private static final boolean DEFAULT_INVENTORY_2X2_OFFHAND_CONSOLIDATION = true;
 	private static final ScrollToPullMode DEFAULT_SCROLL_TO_PULL_MODE = ScrollToPullMode.WHILE_RESULT_OR_INVENTORY_SLOT_HOVERED;
@@ -122,6 +123,7 @@ public final class ReachCraftingConfig {
 	private boolean autoCraftEnabled;
 	private AutoCraftMode autoCraftEnabledMode;
 	private boolean showTotalOutputCounts;
+	private boolean showGridPreview;
 	private InputCounterVisibility inputCounterVisibility;
 	private boolean inventory2x2OffhandConsolidation;
 	private ScrollToPullMode scrollToPullMode;
@@ -207,6 +209,7 @@ public final class ReachCraftingConfig {
 			instance.showFilterOutlines = stored.showFilterOutlines != null ? stored.showFilterOutlines : DEFAULT_SHOW_FILTER_OUTLINES;
 			instance.sneakClickWhileHighlighted = stored.sneakClickWhileHighlighted != null ? stored.sneakClickWhileHighlighted : DEFAULT_SNEAK_CLICK_WHILE_HIGHLIGHTED;
 			instance.showTotalOutputCounts = stored.showTotalOutputCounts != null ? stored.showTotalOutputCounts : DEFAULT_SHOW_TOTAL_OUTPUT_COUNTS;
+			instance.showGridPreview = stored.showGridPreview != null ? stored.showGridPreview : DEFAULT_SHOW_GRID_PREVIEW;
 			instance.inputCounterVisibility = stored.inputCounterVisibility != null ? stored.inputCounterVisibility : DEFAULT_INPUT_COUNTER_VISIBILITY;
 			instance.inventory2x2OffhandConsolidation = stored.inventory2x2OffhandConsolidation != null ? stored.inventory2x2OffhandConsolidation : DEFAULT_INVENTORY_2X2_OFFHAND_CONSOLIDATION;
 			instance.scrollToPullMode = parseScrollToPullMode(stored.scrollToPullMode);
@@ -541,6 +544,14 @@ public final class ReachCraftingConfig {
 
 	public void setShowTotalOutputCounts(boolean showTotalOutputCounts) {
 		this.showTotalOutputCounts = showTotalOutputCounts;
+	}
+
+	public boolean showGridPreview() {
+		return showGridPreview;
+	}
+
+	public void setShowGridPreview(boolean showGridPreview) {
+		this.showGridPreview = showGridPreview;
 	}
 
 	public InputCounterVisibility inputCounterVisibility() {
@@ -930,6 +941,7 @@ public final class ReachCraftingConfig {
 		defaults.autoCraftEnabled = DEFAULT_AUTO_CRAFT_ENABLED;
 		defaults.autoCraftEnabledMode = DEFAULT_AUTO_CRAFT_ENABLED_MODE;
 		defaults.showTotalOutputCounts = DEFAULT_SHOW_TOTAL_OUTPUT_COUNTS;
+		defaults.showGridPreview = DEFAULT_SHOW_GRID_PREVIEW;
 		defaults.inputCounterVisibility = DEFAULT_INPUT_COUNTER_VISIBILITY;
 		defaults.inventory2x2OffhandConsolidation = DEFAULT_INVENTORY_2X2_OFFHAND_CONSOLIDATION;
 		defaults.scrollToPullMode = DEFAULT_SCROLL_TO_PULL_MODE;
@@ -1205,6 +1217,7 @@ public final class ReachCraftingConfig {
 		private OutlineDisplayMode showFilterOutlines;
 		private Boolean sneakClickWhileHighlighted;
 		private Boolean showTotalOutputCounts;
+		private Boolean showGridPreview;
 		private InputCounterVisibility inputCounterVisibility;
 		private Boolean inventory2x2OffhandConsolidation;
 		private JsonElement scrollToPullMode;
@@ -1268,6 +1281,7 @@ public final class ReachCraftingConfig {
 			this.showFilterOutlines = config.showFilterOutlines;
 			this.sneakClickWhileHighlighted = config.sneakClickWhileHighlighted;
 			this.showTotalOutputCounts = config.showTotalOutputCounts;
+			this.showGridPreview = config.showGridPreview;
 			this.inputCounterVisibility = config.inputCounterVisibility;
 			this.inventory2x2OffhandConsolidation = config.inventory2x2OffhandConsolidation;
 			this.scrollToPullMode = new JsonPrimitive(config.scrollToPullMode.name());
