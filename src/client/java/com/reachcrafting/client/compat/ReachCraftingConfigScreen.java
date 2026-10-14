@@ -385,6 +385,17 @@ public final class ReachCraftingConfigScreen {
 			.setEnumNameProvider(value -> Component.translatable("enum.reachcrafting.container_drain_order." + value.name().toLowerCase()))
 			.build());
 
+		nearbyGroup.add(entries.startEnumSelector(
+				Component.translatable("option.reachcrafting.furnace_slot_access"),
+				ReachCraftingConfig.FurnaceSlotAccess.class,
+				config.furnaceSlotAccess()
+			)
+			.setDefaultValue(ReachCraftingConfig.FurnaceSlotAccess.OUTPUT_ONLY)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.furnace_slot_access"))
+			.setSaveConsumer(config::setFurnaceSlotAccess)
+			.setEnumNameProvider(value -> Component.translatable("enum.reachcrafting.furnace_slot_access." + value.name().toLowerCase()))
+			.build());
+
 		containers.addEntry(nearbyGroup.build());
 
 		// Blacklists and Filtering
