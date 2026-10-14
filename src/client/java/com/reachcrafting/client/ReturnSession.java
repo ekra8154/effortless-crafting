@@ -148,6 +148,11 @@ final class ReturnSession extends BaseCraftSession {
 			BlockPos pos = uniquePositions.get(nextPositionIndex++);
 			BlockState blockState = level.getBlockState(pos);
 			if (!InWorldFilterManager.isContainerActive(level, pos, blockState)) continue;
+			// Never deposit into a furnace: the result slot refuses items, so
+			// the empty-slot fallback below would put them in the input or
+			// fuel slot and start smelts the player never asked for.
+			// Leftovers pulled from a furnace stay in the inventory.
+			if (ContainerUtils.isFurnace(blockState)) continue;
 			if (!ContainerUtils.canAttemptOpen(level, pos, blockState)) continue;
 			if (ContainerUtils.squaredDistanceToBlock(eyePos, pos) > net.minecraft.util.Mth.square(gameMode != null ? gameMode.getPickRange() : 4.5D)) continue;
 

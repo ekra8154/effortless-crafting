@@ -9,9 +9,11 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.AbstractFurnaceMenu;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.AbstractFurnaceBlock;
 import net.minecraft.world.level.block.BarrelBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -105,9 +107,38 @@ public final class ContainerUtils {
 		if (block instanceof ChestBlock || block instanceof BarrelBlock || block instanceof ShulkerBoxBlock || block instanceof EnderChestBlock || block instanceof HopperBlock) {
 			return true;
 		}
+		if (isFurnace(state)) {
+			return true;
+		}
 		
 		String blockId = BuiltInRegistries.BLOCK.getKey(block).toString();
 		return blockId.endsWith("chest") || blockId.endsWith("barrel") || blockId.endsWith("shulker_box") || blockId.endsWith("hopper") || blockId.contains("container");
+	}
+
+	/** Furnace, blast furnace, smoker, and modded blocks built on the same base. */
+	public static boolean isFurnace(BlockState state) {
+		return state.getBlock() instanceof AbstractFurnaceBlock;
+	}
+
+	/**
+	 * True for a container-side slot that may be pulled from. Player
+	 * inventory slots never are; a furnace menu only offers the slots the
+	 * Furnace Slots setting allows (output always, input and fuel on
+	 * request), so a running smelt is never disturbed by default.
+	 */
+	public static boolean isPullableContainerSlot(AbstractContainerMenu menu, Slot slot) {
+		if (slot.container instanceof Inventory) {
+			return false;
+		}
+		if (!(menu instanceof AbstractFurnaceMenu)) {
+			return true;
+		}
+		return switch (slot.getContainerSlot()) {
+			case AbstractFurnaceMenu.RESULT_SLOT -> true;
+			case AbstractFurnaceMenu.INGREDIENT_SLOT -> ReachCraftingConfig.get().furnaceSlotAccess() != ReachCraftingConfig.FurnaceSlotAccess.OUTPUT_ONLY;
+			case AbstractFurnaceMenu.FUEL_SLOT -> ReachCraftingConfig.get().furnaceSlotAccess() == ReachCraftingConfig.FurnaceSlotAccess.ALL_SLOTS;
+			default -> false;
+		};
 	}
 
 	public static boolean canAttemptOpen(Level level, BlockPos pos, BlockState state) {
@@ -149,7 +180,7 @@ public final class ContainerUtils {
 	public static Map<String, Integer> collectAllItems(AbstractContainerMenu menu) {
 		Map<String, Integer> allItems = new LinkedHashMap<>();
 		for (Slot slot : menu.slots) {
-			if (slot.container instanceof Inventory || !slot.hasItem()) {
+			if (!isPullableContainerSlot(menu, slot) || !slot.hasItem()) {
 				continue;
 			}
 
