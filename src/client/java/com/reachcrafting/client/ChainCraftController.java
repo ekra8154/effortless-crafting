@@ -27,6 +27,10 @@ public final class ChainCraftController {
 	private static ChainCraftRun activeRun;
 	private static PendingWarmupRetry pendingWarmupRetry;
 	private static RecipeDisplayId activeFinalStepRecipeId;
+	// Hotbar slots (0-8) that were empty when the run began, and whether the
+	// intermediate leftovers have been moved out of them before the final step.
+	private static boolean[] hotbarEmptyAtRunStart;
+	private static boolean hotbarTidied;
 
 	private ChainCraftController() {
 	}
@@ -41,6 +45,19 @@ public final class ChainCraftController {
 		}
 		abort(false);
 		activeRun = ChainCraftRun.start(plan);
+		hotbarEmptyAtRunStart = snapshotEmptyHotbar(Minecraft.getInstance());
+		hotbarTidied = false;
+	}
+
+	private static boolean[] snapshotEmptyHotbar(Minecraft client) {
+		if (client.player == null) {
+			return null;
+		}
+		boolean[] empty = new boolean[9];
+		for (int h = 0; h < 9; h++) {
+			empty[h] = client.player.getInventory().getItem(h).isEmpty();
+		}
+		return empty;
 	}
 
 	static boolean isActive() {
@@ -450,6 +467,9 @@ public final class ChainCraftController {
 				if (tryStowCarriedStack(client)) {
 					return;
 				}
+				if (tidyIntermediatesOutOfHotbar(client)) {
+					return;
+				}
 				scheduleCurrentStep();
 			}
 			return;
@@ -632,6 +652,111 @@ public final class ChainCraftController {
 		);
 		client.gameMode.handleContainerInput(client.player.containerMenu.containerId, destination.index, 0, ContainerInput.PICKUP, client.player);
 		return true;
+	}
+
+	/**
+	 * Before the final step, moves intermediate leftovers (spare planks,
+	 * sticks) out of hotbar slots that were empty when the run began, so the
+	 * final output gets the player's first free hotbar slot. Vanilla
+	 * shift-click fills the hotbar before the main inventory, so every
+	 * harvest path lands intermediates there. Each stack merges into
+	 * main-inventory stacks of the same item first, then the first empty
+	 * main slot; one with nowhere to go stays put. Moves one stack per tick
+	 * and returns true while it still has work.
+	 */
+	private static boolean tidyIntermediatesOutOfHotbar(Minecraft client) {
+		if (hotbarTidied || hotbarEmptyAtRunStart == null || activeRun == null
+			|| !isRunningFinalStep() || activeRun.plan().steps().size() < 2) {
+			return false;
+		}
+		if (client.player == null || client.gameMode == null || client.player.containerMenu == null) {
+			return false;
+		}
+		net.minecraft.world.inventory.AbstractContainerMenu menu = client.player.containerMenu;
+		if (!menu.getCarried().isEmpty()) {
+			return false;
+		}
+		ItemStack finalOutput = activeRun.plan().finalOutput();
+		for (int h = 0; h < 9; h++) {
+			if (!hotbarEmptyAtRunStart[h]) {
+				continue;
+			}
+			Slot source = findInventoryMenuSlot(menu, h);
+			if (source == null || !source.hasItem() || source.getItem().is(finalOutput.getItem())) {
+				continue;
+			}
+			java.util.List<Slot> targets = mainInventoryTargets(menu, source.getItem());
+			if (targets.isEmpty()) {
+				continue;
+			}
+			if (!GridTopUp.clickBudgetAllowsQuietly(targets.size() + 2)) {
+				return true;
+			}
+			ReachCraftingMod.diag(
+				"[chain_execute] hotbar_tidy slot={} stack={} targets={}",
+				h,
+				ContainerUtils.formatStack(source.getItem()),
+				targets.size()
+			);
+			tidyClick(client, menu, source);
+			for (Slot target : targets) {
+				tidyClick(client, menu, target);
+				if (menu.getCarried().isEmpty()) {
+					break;
+				}
+			}
+			if (!menu.getCarried().isEmpty()) {
+				tidyClick(client, menu, source);
+			}
+			return true;
+		}
+		hotbarTidied = true;
+		return false;
+	}
+
+	private static void tidyClick(Minecraft client, net.minecraft.world.inventory.AbstractContainerMenu menu, Slot slot) {
+		client.gameMode.handleContainerInput(menu.containerId, slot.index, 0, ContainerInput.PICKUP, client.player);
+		GridTopUp.recordClick();
+	}
+
+	private static Slot findInventoryMenuSlot(net.minecraft.world.inventory.AbstractContainerMenu menu, int inventoryIndex) {
+		for (Slot slot : menu.slots) {
+			if (slot.container instanceof Inventory && slot.getContainerSlot() == inventoryIndex) {
+				return slot;
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * Main-inventory slots (9-35) that can take the stack: partial stacks of
+	 * the same item first, then the first empty slot if those fall short.
+	 * Empty when the main inventory has no room for any of it.
+	 */
+	private static java.util.List<Slot> mainInventoryTargets(net.minecraft.world.inventory.AbstractContainerMenu menu, ItemStack stack) {
+		java.util.List<Slot> targets = new java.util.ArrayList<>();
+		int room = 0;
+		for (int i = 9; i < 36 && room < stack.getCount(); i++) {
+			Slot slot = findInventoryMenuSlot(menu, i);
+			if (slot == null || !slot.hasItem() || !ItemStack.isSameItemSameComponents(slot.getItem(), stack)) {
+				continue;
+			}
+			int free = Math.min(slot.getMaxStackSize(), stack.getMaxStackSize()) - slot.getItem().getCount();
+			if (free > 0) {
+				targets.add(slot);
+				room += free;
+			}
+		}
+		if (room < stack.getCount()) {
+			for (int i = 9; i < 36; i++) {
+				Slot slot = findInventoryMenuSlot(menu, i);
+				if (slot != null && !slot.hasItem()) {
+					targets.add(slot);
+					break;
+				}
+			}
+		}
+		return targets;
 	}
 
 	private static boolean shouldAttemptPreStage(Minecraft client, ChainCraftPlan plan) {
