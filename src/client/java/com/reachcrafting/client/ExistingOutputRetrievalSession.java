@@ -286,7 +286,7 @@ final class ExistingOutputRetrievalSession extends BaseCraftSession {
 		RetrievalPlan plan = pendingPlan;
 		int available = 0;
 		for (Slot slot : menu.slots) {
-			if (!(slot.container instanceof Inventory) && slot.hasItem() && isRequestedItem(slot.getItem())) {
+			if (ContainerUtils.isPullableContainerSlot(menu, slot) && slot.hasItem() && isRequestedItem(slot.getItem())) {
 				available += slot.getItem().getCount();
 			}
 		}
@@ -939,7 +939,7 @@ final class ExistingOutputRetrievalSession extends BaseCraftSession {
 	private List<Slot> sortedMatchingContainerSources(AbstractContainerMenu menu, String itemId) {
 		List<Slot> matchingSources = new ArrayList<>();
 		for (Slot slot : menu.slots) {
-			if (slot.container instanceof Inventory || !slot.hasItem() || !slot.mayPickup(player)) {
+			if (!ContainerUtils.isPullableContainerSlot(menu, slot) || !slot.hasItem() || !slot.mayPickup(player)) {
 				continue;
 			}
 			String slotItemId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(slot.getItem().getItem()).toString();
