@@ -141,6 +141,15 @@ public final class ReachCraftingConfigScreen {
 		var queuingGroup = entries.startSubCategory(Component.translatable("category.reachcrafting.sub.craft_queuing"));
 		queuingGroup.setExpanded(true);
 
+		queuingGroup.add(entries.startBooleanToggle(
+				Component.translatable("option.reachcrafting.show_grid_preview"),
+				config.showGridPreview()
+			)
+			.setDefaultValue(true)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.show_grid_preview"))
+			.setSaveConsumer(config::setShowGridPreview)
+			.build());
+
 		queuingGroup.add(entries.startEnumSelector(
 				Component.translatable("option.reachcrafting.revolving_craft_handling"),
 				ReachCraftingConfig.RevolvingCraftHandling.class,
