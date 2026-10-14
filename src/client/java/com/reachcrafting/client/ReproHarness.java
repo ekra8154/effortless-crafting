@@ -312,6 +312,10 @@ public final class ReproHarness {
 					boolean on = parts[2].equals("on");
 					ReachCraftingConfig.get().setEjectItemsWhenFull(on);
 					ReachCraftingMod.diag("[repro_harness] set eject_items_when_full={}", on);
+				} else if (parts.length == 3 && parts[1].equals("preview")) {
+					boolean on = parts[2].equals("on");
+					ReachCraftingConfig.get().setShowGridPreview(on);
+					ReachCraftingMod.diag("[repro_harness] set show_grid_preview={}", on);
 				} else if (parts.length == 3 && parts[1].equals("furnace")) {
 					ReachCraftingConfig.FurnaceSlotAccess access = switch (parts[2]) {
 						case "input" -> ReachCraftingConfig.FurnaceSlotAccess.OUTPUT_AND_INPUT;
