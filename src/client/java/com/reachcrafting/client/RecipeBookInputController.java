@@ -706,6 +706,13 @@ final class RecipeBookInputController {
 			return;
 		}
 
+		GridPreview.commitForRelease(
+			minecraft,
+			state.pendingHeldRecipe().action(),
+			state.pendingHeldRecipe().clickCount(),
+			resolvedRequest.allowNearby(),
+			resolvedRequest.autoCraftRequested()
+		);
 		if (!ContainerUtils.isGridEmpty(minecraft.player.containerMenu)) {
 			ContainerUtils.flushCraftingGrid(minecraft, resolvedRequest.allowNearby(), true);
 		}
