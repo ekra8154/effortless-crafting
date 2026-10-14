@@ -34,6 +34,7 @@ public final class ReachCraftingConfig {
 	private static final ExistingOutputHandling DEFAULT_EXISTING_OUTPUT_HANDLING = ExistingOutputHandling.RETRIEVE_THEN_ASK;
 	private static final boolean DEFAULT_CACHE_CONTAINERS_FOR_FASTER_SEARCH = true;
 	private static final ContainerDrainOrder DEFAULT_CONTAINER_DRAIN_ORDER = ContainerDrainOrder.SMALLEST_FIRST;
+	private static final FurnaceSlotAccess DEFAULT_FURNACE_SLOT_ACCESS = FurnaceSlotAccess.OUTPUT_ONLY;
 	private static final boolean DEFAULT_REACH_CRAFT_HOLD_AND_RELEASE = true;
 	private static final boolean DEFAULT_REACH_CRAFT_CLOSE_OVERLAY_AFTER_RELEASE = true;
 	private static final boolean DEFAULT_REACH_CRAFT_PREFER_INVENTORY = true;
@@ -106,6 +107,7 @@ public final class ReachCraftingConfig {
 	private ExistingOutputHandling existingOutputHandling;
 	private boolean cacheContainersForFasterSearch;
 	private ContainerDrainOrder containerDrainOrder;
+	private FurnaceSlotAccess furnaceSlotAccess;
 	private boolean reachCraftHoldAndRelease;
 	private boolean reachCraftCloseOverlayAfterRelease;
 	private boolean reachCraftPreferInventory;
@@ -188,6 +190,7 @@ public final class ReachCraftingConfig {
 				? stored.cacheContainersForFasterSearch
 				: DEFAULT_CACHE_CONTAINERS_FOR_FASTER_SEARCH;
 			instance.containerDrainOrder = stored.containerDrainOrder != null ? stored.containerDrainOrder : DEFAULT_CONTAINER_DRAIN_ORDER;
+			instance.furnaceSlotAccess = stored.furnaceSlotAccess != null ? stored.furnaceSlotAccess : DEFAULT_FURNACE_SLOT_ACCESS;
 			instance.reachCraftHoldAndRelease = stored.reachCraftHoldAndRelease != null ? stored.reachCraftHoldAndRelease : DEFAULT_REACH_CRAFT_HOLD_AND_RELEASE;
 			instance.reachCraftCloseOverlayAfterRelease = stored.reachCraftCloseOverlayAfterRelease != null ? stored.reachCraftCloseOverlayAfterRelease : DEFAULT_REACH_CRAFT_CLOSE_OVERLAY_AFTER_RELEASE;
 			instance.reachCraftPreferInventory = stored.reachCraftPreferInventory != null ? stored.reachCraftPreferInventory : DEFAULT_REACH_CRAFT_PREFER_INVENTORY;
@@ -398,6 +401,14 @@ public final class ReachCraftingConfig {
 
 	public void setContainerDrainOrder(ContainerDrainOrder containerDrainOrder) {
 		this.containerDrainOrder = containerDrainOrder != null ? containerDrainOrder : DEFAULT_CONTAINER_DRAIN_ORDER;
+	}
+
+	public FurnaceSlotAccess furnaceSlotAccess() {
+		return furnaceSlotAccess;
+	}
+
+	public void setFurnaceSlotAccess(FurnaceSlotAccess furnaceSlotAccess) {
+		this.furnaceSlotAccess = furnaceSlotAccess != null ? furnaceSlotAccess : DEFAULT_FURNACE_SLOT_ACCESS;
 	}
 
 	public boolean reachCraftHoldAndRelease() {
@@ -904,6 +915,7 @@ public final class ReachCraftingConfig {
 		defaults.existingOutputHandling = DEFAULT_EXISTING_OUTPUT_HANDLING;
 		defaults.cacheContainersForFasterSearch = DEFAULT_CACHE_CONTAINERS_FOR_FASTER_SEARCH;
 		defaults.containerDrainOrder = DEFAULT_CONTAINER_DRAIN_ORDER;
+		defaults.furnaceSlotAccess = DEFAULT_FURNACE_SLOT_ACCESS;
 		defaults.reachCraftHoldAndRelease = DEFAULT_REACH_CRAFT_HOLD_AND_RELEASE;
 		defaults.reachCraftCloseOverlayAfterRelease = DEFAULT_REACH_CRAFT_CLOSE_OVERLAY_AFTER_RELEASE;
 		defaults.reachCraftPreferInventory = DEFAULT_REACH_CRAFT_PREFER_INVENTORY;
@@ -1100,6 +1112,17 @@ public final class ReachCraftingConfig {
 		WHILE_RESULT_OR_INVENTORY_SLOT_HOVERED
 	}
 
+	/**
+	 * Which slots of a furnace, blast furnace or smoker may be pulled from.
+	 * Whether a furnace is used at all is the container filters' call
+	 * (type blacklist, in-world black/whitelist), never this setting's.
+	 */
+	public enum FurnaceSlotAccess {
+		OUTPUT_ONLY,
+		OUTPUT_AND_INPUT,
+		ALL_SLOTS
+	}
+
 	public enum ContainerDrainOrder {
 		SMALLEST_FIRST,
 		LARGEST_FIRST
@@ -1168,6 +1191,7 @@ public final class ReachCraftingConfig {
 		private ExistingOutputHandling existingOutputHandling;
 		private Boolean cacheContainersForFasterSearch;
 		private ContainerDrainOrder containerDrainOrder;
+	private FurnaceSlotAccess furnaceSlotAccess;
 		private Boolean reachCraftHoldAndRelease;
 		private Boolean reachCraftCloseOverlayAfterRelease;
 		private Boolean reachCraftPreferInventory;
@@ -1231,6 +1255,7 @@ public final class ReachCraftingConfig {
 			this.existingOutputHandling = config.existingOutputHandling;
 			this.cacheContainersForFasterSearch = config.cacheContainersForFasterSearch;
 			this.containerDrainOrder = config.containerDrainOrder;
+			this.furnaceSlotAccess = config.furnaceSlotAccess;
 			this.reachCraftHoldAndRelease = config.reachCraftHoldAndRelease;
 			this.reachCraftCloseOverlayAfterRelease = config.reachCraftCloseOverlayAfterRelease;
 			this.reachCraftPreferInventory = config.reachCraftPreferInventory;

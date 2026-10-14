@@ -1,5 +1,7 @@
 package com.reachcrafting.client;
 
+import java.util.ArrayList;
+import java.util.List;
 import net.minecraft.client.multiplayer.MultiPlayerGameMode;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -169,6 +171,9 @@ final class MenuTransferHelper {
 			}
 			return new WithdrawalMoveResult(moveCount, WithdrawalExecutionMode.FULL_STACK);
 		}
+		if (!sourceSlot.mayPlace(sourceStack)) {
+			return executeWholeStackFromResultSlot(menu, sourceSlot, targetSlot, sourceStack.getCount(), roomInTarget, player, gameMode);
+		}
 
 		boolean canUseSplitPickup = moveCount <= splitCarryCount;
 		int splitClickCost = canUseSplitPickup ? 2 + splitRemainderClicks : Integer.MAX_VALUE;
@@ -182,6 +187,81 @@ final class MenuTransferHelper {
 			case REPEATED_TARGET_PLACEMENT -> executeRepeatedTargetPlacement(menu, sourceSlot, targetSlot, moveCount, player, gameMode);
 			case FULL_STACK, FAILED -> WithdrawalMoveResult.failed();
 		};
+	}
+
+	/**
+	 * A result slot (furnace output) refuses items, and every partial mode
+	 * below ends by clicking a remainder back onto the source: it would stay
+	 * on the cursor, and clicking a result slot while carrying the same item
+	 * TAKES more instead. Output therefore comes out whole: the target takes
+	 * what it has room for and the rest is parked in other inventory slots.
+	 * Refused before any click when the inventory cannot hold the stack.
+	 * Reports the whole stack as moved, so callers see the over-pull.
+	 */
+	private static WithdrawalMoveResult executeWholeStackFromResultSlot(
+		AbstractContainerMenu menu,
+		Slot sourceSlot,
+		Slot targetSlot,
+		int sourceCount,
+		int roomInTarget,
+		LocalPlayer player,
+		MultiPlayerGameMode gameMode
+	) {
+		List<Slot> parking = findParkingSlots(menu, targetSlot, sourceSlot.getItem(), sourceCount - roomInTarget, player);
+		if (parking == null) {
+			return WithdrawalMoveResult.failed();
+		}
+		pickup(gameMode, player, menu, sourceSlot, LEFT_CLICK);
+		if (player.containerMenu.getCarried().isEmpty()) {
+			return WithdrawalMoveResult.failed();
+		}
+		pickup(gameMode, player, menu, targetSlot, LEFT_CLICK);
+		for (Slot slot : parking) {
+			if (player.containerMenu.getCarried().isEmpty()) {
+				break;
+			}
+			pickup(gameMode, player, menu, slot, LEFT_CLICK);
+		}
+		int stranded = player.containerMenu.getCarried().isEmpty() ? 0 : player.containerMenu.getCarried().getCount();
+		return new WithdrawalMoveResult(sourceCount - stranded, WithdrawalExecutionMode.FULL_STACK);
+	}
+
+	/**
+	 * Inventory slots other than the target that can absorb `overflow` of
+	 * the stack: partial stacks of the same item first, then empty slots.
+	 * Null when they cannot hold all of it; empty when nothing overflows.
+	 */
+	private static List<Slot> findParkingSlots(AbstractContainerMenu menu, Slot targetSlot, ItemStack stack, int overflow, LocalPlayer player) {
+		List<Slot> parking = new ArrayList<>();
+		if (overflow <= 0) {
+			return parking;
+		}
+		int room = 0;
+		for (Slot slot : menu.slots) {
+			if (room >= overflow) {
+				break;
+			}
+			if (slot == targetSlot || !(slot.container instanceof Inventory) || !slot.hasItem()
+				|| !ItemStack.isSameItemSameComponents(slot.getItem(), stack)) {
+				continue;
+			}
+			int free = Math.min(slot.getMaxStackSize(), stack.getMaxStackSize()) - slot.getItem().getCount();
+			if (free > 0) {
+				parking.add(slot);
+				room += free;
+			}
+		}
+		for (Slot slot : menu.slots) {
+			if (room >= overflow) {
+				break;
+			}
+			if (slot == targetSlot || !(slot.container instanceof Inventory) || slot.hasItem() || !slot.mayPlace(stack)) {
+				continue;
+			}
+			parking.add(slot);
+			room += Math.min(slot.getMaxStackSize(), stack.getMaxStackSize());
+		}
+		return room >= overflow ? parking : null;
 	}
 
 	private static WithdrawalExecutionMode selectWithdrawalExecutionMode(int splitClickCost, int remainderBackCost, int repeatedTargetCost) {
