@@ -1071,6 +1071,14 @@ final class AutoMoveController {
 						}
 					}
 
+					// Intermediate chain outputs are not promoted to the
+					// first free hotbar slot: that slot belongs to the final
+					// output (ChainCraftController moves leftovers out of the
+					// hotbar before the final step).
+					if (ChainCraftController.isRunningIntermediateStep()) {
+						autoMoveSnapshotCounts.put(i, currentCount);
+						continue;
+					}
 					for (int h = 0; h < i && h < 9; h++) {
 						Slot targetSlot = findInventorySlot(menu, h);
 						if (targetSlot == null) {
