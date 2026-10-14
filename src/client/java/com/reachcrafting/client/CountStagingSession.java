@@ -336,7 +336,7 @@ final class CountStagingSession extends BaseCraftSession {
 	private static List<Slot> sortedMatchingContainerSources(AbstractContainerMenu menu, String itemId) {
 		List<Slot> sources = new ArrayList<>();
 		for (Slot slot : menu.slots) {
-			if (slot.container instanceof Inventory || !slot.hasItem()) {
+			if (!ContainerUtils.isPullableContainerSlot(menu, slot) || !slot.hasItem()) {
 				continue;
 			}
 			String slotItemId = BuiltInRegistries.ITEM.getKey(slot.getItem().getItem()).toString();
