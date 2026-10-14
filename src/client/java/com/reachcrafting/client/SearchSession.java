@@ -2282,7 +2282,7 @@ final class SearchSession extends BaseCraftSession {
 	private static Map<String, Integer> collectUsefulItems(AbstractContainerMenu menu, Set<String> acceptedItemIds) {
 		Map<String, Integer> usefulItems = new LinkedHashMap<>();
 		for (Slot slot : menu.slots) {
-			if (slot.container instanceof Inventory || !slot.hasItem()) {
+			if (!ContainerUtils.isPullableContainerSlot(menu, slot) || !slot.hasItem()) {
 				continue;
 			}
 
@@ -2488,7 +2488,7 @@ final class SearchSession extends BaseCraftSession {
 	private List<Slot> sortedMatchingContainerSources(AbstractContainerMenu menu, String itemId) {
 		List<Slot> matchingSources = new ArrayList<>();
 		for (Slot slot : menu.slots) {
-			if (slot.container instanceof Inventory || !slot.hasItem() || !slot.mayPickup(player)) {
+			if (!ContainerUtils.isPullableContainerSlot(menu, slot) || !slot.hasItem() || !slot.mayPickup(player)) {
 				continue;
 			}
 			String slotItemId = BuiltInRegistries.ITEM.getKey(slot.getItem().getItem()).toString();
