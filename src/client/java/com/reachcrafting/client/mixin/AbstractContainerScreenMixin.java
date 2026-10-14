@@ -303,6 +303,7 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 	private void reachcrafting$renderOutputCounter(GuiGraphics guiGraphics, Slot slot, int i, int j, CallbackInfo ci) {
 		if (!ReachCraftingConfig.get().enabled()) return;
 		com.reachcrafting.client.RecipeOutputCounter.render(guiGraphics, (AbstractContainerScreen<?>) (Object) this, slot);
+		com.reachcrafting.client.GridPreviewRenderer.render(guiGraphics, (AbstractContainerScreen<?>) (Object) this, slot);
 	}
 
 	private boolean reachcrafting$isArrowClickTarget(Slot slot, double mouseX, double mouseY) {
