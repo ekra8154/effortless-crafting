@@ -109,7 +109,7 @@ final class GridPreview {
 	static Plan current(Minecraft client) {
 		ReachCraftingConfig config = ReachCraftingConfig.get();
 		LocalPlayer player = client.player;
-		Screen screen = client.gui.screen();
+		Screen screen = client.screen;
 		if (!config.enabled() || !config.showGridPreview() || player == null || client.level == null
 			|| (!(screen instanceof CraftingScreen) && !(screen instanceof InventoryScreen))) {
 			return null;
@@ -165,7 +165,7 @@ final class GridPreview {
 		if (!config.enabled() || !config.showGridPreview() || client.player == null || action == null) {
 			return;
 		}
-		Plan plan = computeSafely(client, client.player, client.gui.screen(), action, clickCount, allowNearby, autoCraft);
+		Plan plan = computeSafely(client, client.player, client.screen, action, clickCount, allowNearby, autoCraft);
 		if (plan == null || plan.slots().isEmpty()) {
 			// Nothing to place (a retrieval that covers the request).
 			return;
@@ -395,7 +395,7 @@ final class GridPreview {
 	) {
 		AbstractContainerMenu menu = player.containerMenu;
 		List<ItemStack> gridStacks = new ArrayList<>();
-		int gridSlotCount = gridSlotCount(client.gui.screen());
+		int gridSlotCount = gridSlotCount(client.screen);
 		for (int i = 1; i <= gridSlotCount && i < menu.slots.size(); i++) {
 			gridStacks.add(menu.getSlot(i).getItem());
 		}
