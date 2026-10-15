@@ -147,6 +147,9 @@ final class RecipeBookInputController {
 		boolean altModifierDown,
 		boolean explicitVariantSelection
 	) {
+		// A fresh click is a new request: a queue preview's commitment from an
+		// earlier release that never placed must not attach itself to it.
+		GridPreview.clearCommitment();
 		if (!ReachCraftingConfig.get().enabled()) {
 			return;
 		}
