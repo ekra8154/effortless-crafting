@@ -1,7 +1,7 @@
 package com.reachcrafting.client;
 
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.world.inventory.CraftingContainer;
 import net.minecraft.world.inventory.ResultSlot;
@@ -19,10 +19,9 @@ import net.minecraft.world.item.ItemStack;
  * staged counts' text shadows and clashed with resource packs that retexture
  * the slots. Skipping the item draw leaves the GUI texture's own slot.</p>
  *
- * <p>Backport: the only GUI-API surface of the queue preview. Pre-1.21.2
- * trees draw with GuiGraphics (renderFakeItem / renderItemDecorations) and
- * hook renderSlot; 26.x uses GuiGraphicsExtractor (fakeItem / itemDecorations)
- * and extractSlot.</p>
+ * <p>Backport: the only GUI-API surface of the queue preview. 1.21.x trees
+ * draw with GuiGraphics (renderFakeItem / drawString) and hook renderSlot;
+ * 26.x uses GuiGraphicsExtractor (fakeItem / text) and extractSlot.</p>
  */
 public final class GridPreviewRenderer {
 	/**
@@ -46,7 +45,7 @@ public final class GridPreviewRenderer {
 	 * @return true when the preview owns this slot and vanilla must skip
 	 *     drawing its real item
 	 */
-	public static boolean renderInPlaceOfSlot(GuiGraphicsExtractor graphics, AbstractContainerScreen<?> screen, Slot slot) {
+	public static boolean renderInPlaceOfSlot(GuiGraphics graphics, AbstractContainerScreen<?> screen, Slot slot) {
 		boolean resultSlot = slot instanceof ResultSlot;
 		if (!resultSlot && !(slot.container instanceof CraftingContainer)) {
 			return false;
@@ -76,12 +75,12 @@ public final class GridPreviewRenderer {
 		}
 		int x = slot.x;
 		int y = slot.y;
-		graphics.fakeItem(ghost, x, y);
+		graphics.renderFakeItem(ghost, x, y);
 		graphics.fill(x, y, x + 16, y + 16, GHOST_WASH);
 		if (ghost.getCount() > 1) {
 			// Vanilla's count placement (ItemStack decorations), muted.
 			String count = String.valueOf(ghost.getCount());
-			graphics.text(client.font, count, x + 17 - client.font.width(count), y + 9, GHOST_COUNT_COLOR, true);
+			graphics.drawString(client.font, count, x + 17 - client.font.width(count), y + 9, GHOST_COUNT_COLOR, true);
 		}
 		// Same colors as the recipe book's indicators: yellow for nearby
 		// containers, orange for what the chain crafts on the way.
