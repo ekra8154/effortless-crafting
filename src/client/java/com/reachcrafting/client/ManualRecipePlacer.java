@@ -214,6 +214,42 @@ final class ManualRecipePlacer {
 	}
 
 	/**
+	 * Click cost of placeCrafts for these per-slot choices, rounded up.
+	 *
+	 * <p>Must track the fill algorithm: same-item slots are filled by
+	 * left-drag rounds that divide a carried stack evenly, so each slot only
+	 * pays per-click for the remainder the drag could not divide - bounded by
+	 * one stack spread across the group. Estimating one click per item would
+	 * decline on a cost no longer paid.
+	 * Priced PER INGREDIENT GROUP, because that is how the placer fills: a
+	 * group of T slots takes drag rounds of floor(64/T) each (costing T+4
+	 * clicks a round), then pays per-item for the remainder. Pricing off the
+	 * total filled-slot count instead treated a SINGLE-slot group as if it
+	 * had drag partners - it costs one click per item and has none - which
+	 * under-estimated a piston by ~40% and let the window overshoot its cap
+	 * (observed at 479/450).
+	 */
+	static int estimateClicks(List<String> slotChoices, int copies) {
+		Map<String, Integer> groupSizes = new LinkedHashMap<>();
+		for (String choice : slotChoices) {
+			if (choice != null) {
+				groupSizes.merge(choice, 1, Integer::sum);
+			}
+		}
+		int estimatedClicks = 0;
+		for (int groupSlots : groupSizes.values()) {
+			int perRound = Math.max(1, 64 / groupSlots);
+			int rounds = groupSlots > 1 ? copies / perRound : 0;
+			int remainder = copies - rounds * perRound;
+			// Per-slot remainder costs the CHEAPER direction: place what is
+			// wanted, or take the whole stack and shed the excess.
+			int perSlot = Math.min(remainder, Math.max(1, 64 - remainder));
+			estimatedClicks += rounds * (groupSlots + 4) + groupSlots * (perSlot + 2);
+		}
+		return estimatedClicks;
+	}
+
+	/**
 	 * Reconstructs the plan's per-slot input choice from the step's
 	 * aggregated required inputs: each non-empty ingredient slot consumed
 	 * exactly one item per craft, so allocating the per-craft counts across
@@ -221,7 +257,7 @@ final class ManualRecipePlacer {
 	 * list is positional — empty ingredient slots yield null entries so
 	 * shaped patterns survive.
 	 */
-	private static List<String> resolvePerSlotInputs(ChainCraftPlan.Step step) {
+	static List<String> resolvePerSlotInputs(ChainCraftPlan.Step step) {
 		int stepCopies = Math.max(step.recipeCopies(), 1);
 		Map<String, Integer> perCraftRemaining = new LinkedHashMap<>();
 		for (Map.Entry<String, Integer> entry : step.requiredInputs().entrySet()) {

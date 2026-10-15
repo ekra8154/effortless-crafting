@@ -682,7 +682,7 @@ final class SearchSession extends BaseCraftSession {
 				);
 			}
 		}
-		plannedTargets = plannedResult.slotTargets();
+		plannedTargets = GridPreview.alignToCommitment(recipeId, plannedResult.slotTargets(), totalAvailable);
 		remainingItemIds.clear();
 		remainingItemIds.addAll(redistributeReservedGrid ? computeRedistributedFetchItemIds(plannedTargets) : computeFetchItemIds(plannedTargets));
 
@@ -1672,68 +1672,11 @@ final class SearchSession extends BaseCraftSession {
 	}
 
 	private IngredientPlanning.Policy planningPolicyForSelection(RecipeVariantResolver.Selection selection) {
-		if (selection == null) {
-			return planningPolicy;
-		}
-
-		Set<String> preferredVariants = preferredIngredientVariantsFor(selection);
-		if (preferredVariants.isEmpty()) {
-			return planningPolicy;
-		}
-
-		return planningPolicy.withPreferredVariants(preferredVariants);
+		return PlanningPreferences.policyFor(planningPolicy, selection, recipeCollection);
 	}
 
 	private Map<String, Integer> preferenceTotalsForSelection(Map<String, Integer> baseTotals, RecipeVariantResolver.Selection selection) {
-		Set<String> preferredVariants = preferredIngredientVariantsFor(selection);
-		if (preferredVariants.isEmpty()) {
-			return baseTotals;
-		}
-
-		Map<String, Integer> boostedTotals = new LinkedHashMap<>(baseTotals);
-		for (String itemId : preferredVariants) {
-			boostedTotals.merge(itemId, 1_000_000, Integer::sum);
-		}
-		return Map.copyOf(boostedTotals);
-	}
-
-	private Set<String> preferredIngredientVariantsFor(RecipeVariantResolver.Selection selection) {
-		if (selection == null || recipeCollection == null || recipeCollection.getRecipes().size() <= 1) {
-			return Set.of();
-		}
-		if (ReachCraftingConfig.get().revolvingCraftHandling() != ReachCraftingConfig.RevolvingCraftHandling.PREFER_CLICKED_TYPE_WITH_COUNT_FALLBACK) {
-			return Set.of();
-		}
-
-		int bestScore = 0;
-		LinkedHashSet<String> preferred = new LinkedHashSet<>();
-		for (String itemId : selection.ingredientSummary().acceptedItemIds()) {
-			int score = variantMatchScore(selection.outputItemId(), itemId);
-			if (score <= 0) {
-				continue;
-			}
-			if (score > bestScore) {
-				bestScore = score;
-				preferred.clear();
-			}
-			if (score == bestScore) {
-				preferred.add(itemId);
-			}
-		}
-		return preferred.isEmpty() ? Set.of() : Set.copyOf(preferred);
-	}
-
-	private int variantMatchScore(String outputItemId, String ingredientItemId) {
-		String outputPath = outputItemId.substring(outputItemId.indexOf(':') + 1);
-		String ingredientPath = ingredientItemId.substring(ingredientItemId.indexOf(':') + 1);
-		String[] outputTokens = outputPath.split("_");
-		String[] ingredientTokens = ingredientPath.split("_");
-		int max = Math.min(outputTokens.length, ingredientTokens.length);
-		int matched = 0;
-		while (matched < max && outputTokens[matched].equals(ingredientTokens[matched])) {
-			matched++;
-		}
-		return matched;
+		return PlanningPreferences.preferenceTotalsFor(baseTotals, selection, recipeCollection);
 	}
 
 	private BulkAutoCraftController.VariantContinuationMode resolveBulkVariantContinuationMode(RecipeVariantResolver.Selection resolvedSelection) {
@@ -1975,7 +1918,8 @@ final class SearchSession extends BaseCraftSession {
 				summarizeRemainingItems(remainingItemIds),
 				updatedDeficit.compactMissingSummary()
 			);
-			if (!ChainCraftController.tryManualSelfReferentialPlacement(client, null)) {
+			if (!GridPreview.tryPlaceCommitted(client, recipeId, "idx=" + recipeIndex, false, targetCopiesPerSlot)
+				&& !ChainCraftController.tryManualSelfReferentialPlacement(client, null)) {
 				gameMode.handlePlaceRecipe(player.containerMenu.containerId, recipe, craftAll);
 			}
 			autoMoveReady = true;
@@ -2165,7 +2109,9 @@ final class SearchSession extends BaseCraftSession {
 		// Assigned inside the chain below so the self-referential and ring
 		// paths keep their precedence - clicking must not pre-empt them.
 		ClickStageResult clickStage = ClickStageResult.DECLINED;
-		if (ChainCraftController.tryManualSelfReferentialPlacement(client, null)) {
+		if (GridPreview.tryPlaceCommitted(client, recipeId, "idx=" + recipeIndex, false, targetCopiesPerSlot)) {
+			// The queue preview's first batch, placed exactly as it was shown.
+		} else if (ChainCraftController.tryManualSelfReferentialPlacement(client, null)) {
 			ReachCraftingMod.diag("[recipe_place] manual self-referential placement from SearchSession.placePlannedGrid target={}", targetCopiesPerSlot);
 		} else if (GridTopUp.tryStageInsteadOfPlace(client, player, recipeId, recipeCollection)) {
 			ReachCraftingMod.diag("[recipe_place] grid_topup staged from SearchSession.placePlannedGrid target={}", targetCopiesPerSlot);
@@ -2249,36 +2195,7 @@ final class SearchSession extends BaseCraftSession {
 		if (slotChoices.isEmpty()) {
 			return ClickStageResult.DECLINED;
 		}
-		// Cost model must track ManualRecipePlacer: same-item slots are filled
-		// by left-drag rounds that divide a carried stack evenly, so each slot
-		// only pays per-click for the remainder the drag could not divide -
-		// bounded by one stack spread across the group. Estimating the old
-		// one-click-per-item price here would decline on a cost we no longer
-		// pay. Deliberately rounded up; a decline falls through to the
-		// placement loop, same as before.
-		// Priced PER INGREDIENT GROUP, because that is how the placer fills:
-		// a group of T slots takes drag rounds of floor(64/T) each (costing
-		// T+4 clicks a round), then pays per-item for the remainder. Pricing
-		// off the total filled-slot count instead treated a SINGLE-slot group
-		// as if it had drag partners - it costs one click per item and has
-		// none - which under-estimated a piston by ~40% and let the window
-		// overshoot its cap (observed at 479/450).
-		Map<String, Integer> groupSizes = new LinkedHashMap<>();
-		for (String choice : slotChoices) {
-			if (choice != null) {
-				groupSizes.merge(choice, 1, Integer::sum);
-			}
-		}
-		int estimatedClicks = 0;
-		for (int groupSlots : groupSizes.values()) {
-			int perRound = Math.max(1, 64 / groupSlots);
-			int rounds = groupSlots > 1 ? targetCopiesPerSlot / perRound : 0;
-			int remainder = targetCopiesPerSlot - rounds * perRound;
-			// Per-slot remainder costs the CHEAPER direction: place what is
-			// wanted, or take the whole stack and shed the excess.
-			int perSlot = Math.min(remainder, Math.max(1, 64 - remainder));
-			estimatedClicks += rounds * (groupSlots + 4) + groupSlots * (perSlot + 2);
-		}
+		int estimatedClicks = ManualRecipePlacer.estimateClicks(slotChoices, targetCopiesPerSlot);
 		if (!GridTopUp.clickBudgetAllows(estimatedClicks)) {
 			// A SATURATED window, not a structural refusal: the same request
 			// succeeds once the window drains, so ask the caller to wait

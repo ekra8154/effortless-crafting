@@ -199,8 +199,15 @@ final class RecipeClickExecutor {
 			int targetItems = craftAll ? bulkRecipeQueueLimit() : Math.max(requestedClicks, 1) * outputPerCraft;
 			int nearbyOutput = nearbyTotals.getOrDefault(retrieveItemId, 0);
 			boolean cacheComplete = outputView.snapshotsByKey().size() >= outputView.nearestAccessByKey().size();
+			int nearbyRetrievable = RetrieveThenCraftController.nearbyRetrievableOutput(
+				minecraft, recipe, retrievalSelection.recipe(), collection, explicitVariantSelection, retrieveItemId, nearbyTotals);
+			// On an incomplete cache this may be 0; RetrieveThenCraftController
+			// then warms the cache and plans again before retrieving.
+			int retrieveItems = RetrieveThenCraftController.plannedRetrievalItems(craftAll, outputHandling, targetItems, outputPerCraft, nearbyRetrievable);
 			if (nearbyOutput <= 0 && cacheComplete) {
 				RetrieveThenCraftController.logNoneNearby(retrieveItemId, targetItems, outputHandling);
+			} else if (retrieveItems <= 0 && cacheComplete) {
+				RetrieveThenCraftController.logNoWholeCraft(retrieveItemId, targetItems, nearbyRetrievable, outputPerCraft, outputHandling);
 			} else {
 				// What the materials can DIRECTLY make, so the prompt never
 				// offers a remainder it will not deliver. Deliberately not a
@@ -226,6 +233,7 @@ final class RecipeClickExecutor {
 						autoCraftRequested,
 						outputPerCraft,
 						targetItems,
+						retrieveItems,
 						craftableCopies,
 						retrieveItemId,
 						retrieveStack,
@@ -712,7 +720,9 @@ final class RecipeClickExecutor {
 				// Calling handlePlaceRecipe(false) in a loop triggers N server-side
 				// grid clears, each of which consumes the previous result and injects
 				// byproducts into inventory via Inventory.add(), causing fragmentation.
-				if (!ChainCraftController.tryManualSelfReferentialPlacement(minecraft, resolvedItemId)) {
+				if (GridPreview.tryPlaceCommitted(minecraft, selectedRecipe.recipeId(), "nearby_bulk", false, Integer.MAX_VALUE)) {
+					// The queue preview's first batch, placed exactly as it was shown.
+				} else if (!ChainCraftController.tryManualSelfReferentialPlacement(minecraft, resolvedItemId)) {
 					// M3 (T2): bulk-chain finals with a single unstackable
 					// ingredient run the whole batch as a GridExtractor
 					// key-cycle over the ring — zero place packets and no
@@ -771,6 +781,19 @@ final class RecipeClickExecutor {
 				);
 			}
 
+			if (AutoCraftController.isBulkModeEnabled()
+				&& GridPreview.tryPlaceCommitted(minecraft, selectedRecipe.recipeId(), "bulk_first_batch", true, Integer.MAX_VALUE)) {
+				// The queue preview's first batch, placed exactly as it was
+				// shown, from the inventory alone (a commitment that needs a
+				// nearby pull waits for SearchSession instead). Later batches
+				// take the ring or session paths below; like the ring, this
+				// bypasses the dry run with the bulk session already armed.
+				ReachCraftingMod.diag("[recipe_place] grid_preview first batch, dry-run bypassed");
+				if (AutoCraftController.isEnabled()) {
+					ContainerUtils.scheduleAutoMove(selectedRecipe.displayStack());
+				}
+				return;
+			}
 			if (GridTopUp.tryStageInsteadOfPlace(minecraft, player, ingredientSummary)) {
 				// Ring cycle: unstackable slot(s) refilled via clicks. Bypass
 				// the dry-run/search-session machinery entirely — its restore
@@ -864,7 +887,10 @@ final class RecipeClickExecutor {
 				|| (AutoCraftController.isBulkModeEnabled() && !ChainCraftController.isActive() && requestedClicks >= queueLimit);
 			boolean repeatDirectPlacement = AutoCraftController.isBulkModeEnabled() || directChainReplay;
 
-			if (ChainCraftController.tryManualSelfReferentialPlacement(minecraft, resolvedItemId)) {
+			if (GridPreview.tryPlaceCommitted(minecraft, selectedRecipe.recipeId(), "direct", false, Math.max(effectiveRequestedClicks, 1))) {
+				// The queue preview's batch (a chain's final step), placed
+				// exactly as it was shown.
+			} else if (ChainCraftController.tryManualSelfReferentialPlacement(minecraft, resolvedItemId)) {
 				// Self-referential chain step: inputs were placed client-side so
 				// the server cannot pick the step's own output as an ingredient.
 			} else if (ChainCraftController.tryManualLastResortPlacement(minecraft, resolvedItemId)) {
@@ -1233,6 +1259,164 @@ final class RecipeClickExecutor {
 	 * the planner can actually build. The clicked variant always leads, so a
 	 * collection that chains on its own recipe never gets swapped away from.
 	 */
+	/**
+	 * What executeRecipeButtonClick's retrieve-first step will do for a queue
+	 * release, predicted from the container cache.
+	 *
+	 * @param runs the release hands off to RetrieveThenCraftController (it
+	 *     does whenever the cache shows the output nearby or is incomplete)
+	 * @param retrievedItems output the cache says the retrieval will find;
+	 *     containers the cache has not seen yet count as empty
+	 * @param retrieveStack the output the retrieval looks for (one craft's worth)
+	 */
+	record QueueRetrieveFirst(boolean runs, int retrievedItems, int targetItems, int outputPerCraft, ItemStack retrieveStack) {
+		static final QueueRetrieveFirst NONE = new QueueRetrieveFirst(false, 0, 0, 1, ItemStack.EMPTY);
+	}
+
+	/** Lockstep with executeRecipeButtonClick's retrieve-first step, for a queue release (never craftAll). */
+	static QueueRetrieveFirst predictQueueRetrieveFirst(
+		Minecraft minecraft,
+		LocalPlayer player,
+		RecipeBookClickCapture.HeldRecipeAction action,
+		RecipeVariantResolver.Selection selectedRecipe,
+		boolean allowNearbyChests,
+		int requestedClicks
+	) {
+		ReachCraftingConfig config = ReachCraftingConfig.get();
+		if (config.existingOutputHandling() == ReachCraftingConfig.ExistingOutputHandling.CRAFT_ONLY
+			|| !allowNearbyChests
+			|| !config.enableNearbyContainerUsage()
+			|| !config.cacheContainersForFasterSearch()
+			|| ChainCraftController.isActive()
+			|| BulkAutoCraftController.isActive()
+			|| BulkChainCraftController.isActive()
+			|| RetrieveThenCraftController.isActive()) {
+			return QueueRetrieveFirst.NONE;
+		}
+		NearbyContainerCache.ReachableView outputView = NearbyContainerCache.getReachableView(minecraft.level, minecraft.getCameraEntity(), player.blockInteractionRange());
+		Map<String, Integer> nearbyTotals = outputView.aggregateCounts();
+		RecipeVariantResolver.Selection retrievalSelection = RecipeVariantResolver.resolveRetrievalVariant(
+			minecraft,
+			player,
+			action.recipe(),
+			action.collection(),
+			action.displayStack() != null ? action.displayStack().copy() : ItemStack.EMPTY,
+			action.explicitVariantSelection(),
+			true,
+			AvailableItemSnapshot.empty(),
+			nearbyTotals,
+			nearbyTotals,
+			false,
+			false,
+			Math.max(requestedClicks, 1)
+		);
+		if (retrievalSelection == null || retrievalSelection.displayStack().isEmpty()) {
+			retrievalSelection = selectedRecipe;
+		}
+		ItemStack retrieveStack = retrievalSelection.displayStack();
+		String retrieveItemId = BuiltInRegistries.ITEM.getKey(retrieveStack.getItem()).toString();
+		int outputPerCraft = Math.max(retrieveStack.getCount(), 1);
+		int targetItems = Math.max(requestedClicks, 1) * outputPerCraft;
+		int nearbyOutput = nearbyTotals.getOrDefault(retrieveItemId, 0);
+		boolean cacheComplete = outputView.snapshotsByKey().size() >= outputView.nearestAccessByKey().size();
+		int nearbyRetrievable = RetrieveThenCraftController.nearbyRetrievableOutput(
+			minecraft, action.recipe(), retrievalSelection.recipe(), action.collection(), action.explicitVariantSelection(), retrieveItemId, nearbyTotals);
+		int retrieveItems = RetrieveThenCraftController.plannedRetrievalItems(
+			false, config.existingOutputHandling(), targetItems, outputPerCraft, nearbyRetrievable);
+		if ((nearbyOutput <= 0 && cacheComplete) || (retrieveItems <= 0 && cacheComplete)) {
+			return QueueRetrieveFirst.NONE;
+		}
+		// Planned from what the cache shows; an incomplete cache is warmed at
+		// release and may then retrieve more (the preview's accepted blind spot).
+		return new QueueRetrieveFirst(true, Math.min(nearbyRetrievable, retrieveItems), targetItems, outputPerCraft, retrieveStack.copy());
+	}
+
+	/**
+	 * Lockstep with executeRecipeButtonClick's output variant continuation,
+	 * for a queue release: true when a release short of the requested copies
+	 * crafts what this variant allows and continues with sibling variants.
+	 */
+	static boolean queueReleaseContinuesVariants(
+		RecipeBookClickCapture.HeldRecipeAction action,
+		RecipeVariantResolver.Selection selectedRecipe,
+		boolean autoCraftRequested
+	) {
+		return !AutoCraftController.isBulkModeEnabled()
+			&& !ChainCraftController.isActive()
+			&& !BulkChainCraftController.isActive()
+			&& !BulkAutoCraftController.isActive()
+			&& (autoCraftRequested || AutoCraftController.isEnabled())
+			&& ReachCraftingConfig.get().outputVariantSwitching()
+			&& !action.explicitVariantSelection()
+			&& action.collection() != null
+			&& action.collection().getRecipes().size() > 1
+			&& BulkAutoCraftController.determineVariantContinuationMode(action.recipeId(), selectedRecipe.recipeId(), action.explicitVariantSelection())
+				== BulkAutoCraftController.VariantContinuationMode.FAMILY_FALLBACK;
+	}
+
+	/**
+	 * Lockstep with executeRecipeButtonClick's chain gate, for a queue
+	 * release (forceDryRun, never craftAll or refillable, so a direct bulk
+	 * never takes priority): the chain offer the release would open instead
+	 * of crafting flat, if any. GridPreview previews its final step.
+	 */
+	static Optional<ChainCraftOffer> predictQueueChainOffer(
+		Minecraft minecraft,
+		LocalPlayer player,
+		RecipeBookClickCapture.HeldRecipeAction action,
+		AvailableItemSnapshot availableItems,
+		RecipeVariantResolver.Selection selectedRecipe,
+		RecipeDeficitReport deficitReport,
+		boolean allowNearbyChests,
+		boolean autoCraftRequested,
+		int requestedClicks
+	) {
+		String resolvedItemId = BuiltInRegistries.ITEM.getKey(selectedRecipe.displayStack().getItem()).toString();
+		boolean selfReferentialRecipe = selectedRecipe.ingredientSummary().acceptedItemIds().contains(resolvedItemId);
+		boolean canOfferChainCraft = (deficitReport.hasMissingIngredients()
+				|| (selfReferentialRecipe && AutoCraftController.isBulkModeEnabled()))
+			&& (autoCraftRequested || AutoCraftController.isBulkModeEnabled())
+			&& ReachCraftingConfig.get().chainCraftingMode() != ReachCraftingConfig.ChainCraftingMode.DISABLED
+			&& !ChainCraftController.isActive()
+			&& !BulkAutoCraftController.isActive()
+			&& !BulkChainCraftController.isActive();
+		if (!canOfferChainCraft) {
+			return Optional.empty();
+		}
+		Map<String, Integer> chainAvailableCounts = availableItems.totalCounts();
+		if (allowNearbyChests && ReachCraftingConfig.get().cacheContainersForFasterSearch()) {
+			NearbyContainerCache.ReachableView reachableView = NearbyContainerCache.getReachableView(minecraft.level, minecraft.getCameraEntity(), player.blockInteractionRange());
+			chainAvailableCounts = AvailableItemSnapshot.mergeCounts(availableItems.totalCounts(), reachableView.aggregateCounts());
+		}
+		chainAvailableCounts = ContainerUtils.subtractNonPristineLocalStacks(minecraft, chainAvailableCounts);
+		int desiredVariantCopies = Math.max(requestedClicks, 1);
+		List<RecipeVariantResolver.Selection> candidates = chainVariantFallbackCandidates(
+			minecraft,
+			player,
+			action.recipe(),
+			action.collection(),
+			action.displayStack(),
+			availableItems,
+			chainAvailableCounts,
+			selectedRecipe,
+			action.explicitVariantSelection(),
+			false,
+			false,
+			desiredVariantCopies,
+			allowNearbyChests
+		);
+		return planChainCraftOffer(
+			minecraft,
+			player,
+			candidates,
+			chainAvailableCounts,
+			allowNearbyChests,
+			false,
+			requestedClicks,
+			desiredVariantCopies
+		);
+	}
+
 	private static java.util.Optional<ChainCraftOffer> planChainCraftOffer(
 		Minecraft minecraft,
 		LocalPlayer player,
@@ -1586,7 +1770,7 @@ final class RecipeClickExecutor {
 		return report.hasMissingIngredients() ? "Missing: " + report.compactMissingSummary() : "";
 	}
 
-	private record ChainCraftOffer(
+	record ChainCraftOffer(
 		ChainCraftPlan plan,
 		RecipeVariantResolver.Selection selection,
 		int requestedRecipeCopies,

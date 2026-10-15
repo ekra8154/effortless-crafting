@@ -508,17 +508,32 @@ final class ExistingOutputRetrievalSession extends BaseCraftSession {
 
 	/** Same rules bulk crafting uses to decide whether it may continue on another family variant. */
 	private boolean variantSwitchingAllowed() {
+		return variantSwitchingAllowed(
+			request.requestedRecipeId(),
+			request.resolvedRecipeId(),
+			request.recipeCollection(),
+			request.explicitVariantSelection()
+		);
+	}
+
+	/** Whether a retrieval of this request may continue onto other family variants once the first runs out. */
+	static boolean variantSwitchingAllowed(
+		net.minecraft.resources.ResourceLocation requestedRecipeId,
+		net.minecraft.resources.ResourceLocation resolvedRecipeId,
+		net.minecraft.client.gui.screens.recipebook.RecipeCollection recipeCollection,
+		boolean explicitVariantSelection
+	) {
 		if (!ReachCraftingConfig.get().outputVariantSwitching()) {
 			return false;
 		}
-		if (request.recipeCollection() == null
-			|| request.recipeCollection().getRecipes().size() <= 1) {
+		if (recipeCollection == null
+			|| recipeCollection.getRecipes().size() <= 1) {
 			return false;
 		}
 		return BulkAutoCraftController.determineVariantContinuationMode(
-			request.requestedRecipeId(),
-			request.resolvedRecipeId(),
-			request.explicitVariantSelection()
+			requestedRecipeId,
+			resolvedRecipeId,
+			explicitVariantSelection
 		) == BulkAutoCraftController.VariantContinuationMode.FAMILY_FALLBACK;
 	}
 

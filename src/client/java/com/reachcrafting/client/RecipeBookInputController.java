@@ -142,6 +142,9 @@ final class RecipeBookInputController {
 		boolean altModifierDown,
 		boolean explicitVariantSelection
 	) {
+		// A fresh click is a new request: a queue preview's commitment from an
+		// earlier release that never placed must not attach itself to it.
+		GridPreview.clearCommitment();
 		if (!ReachCraftingConfig.get().enabled()) {
 			return;
 		}
@@ -636,6 +639,13 @@ final class RecipeBookInputController {
 			return;
 		}
 
+		GridPreview.commitForRelease(
+			minecraft,
+			state.pendingHeldRecipe().action(),
+			state.pendingHeldRecipe().clickCount(),
+			resolvedRequest.allowNearby(),
+			resolvedRequest.autoCraftRequested()
+		);
 		if (!ContainerUtils.isGridEmpty(minecraft.player.containerMenu)) {
 			ContainerUtils.flushCraftingGrid(minecraft, resolvedRequest.allowNearby(), true);
 		}

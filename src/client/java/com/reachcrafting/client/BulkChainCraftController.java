@@ -349,26 +349,41 @@ public final class BulkChainCraftController {
 		return false;
 	}
 
-	private static void startNextIteration(Minecraft client) {
-		BulkChainSession session = activeSession;
-		int remaining = session.requestedTotalCopies() - session.completedCopies();
-		int batchTarget = Math.min(Math.max(remaining, 1), session.batchCap());
-		Map<String, Integer> availableCounts = collectAvailableCounts(client, session.allowNearby());
+	/** Why planIteration found no plan: MATERIALS may switch variant, INVENTORY stops the session. */
+	enum IterationFailure {
+		MATERIALS,
+		INVENTORY
+	}
+
+	record IterationPlan(Optional<ChainCraftPlan> plan, IterationFailure failure, Map<String, Integer> availableCounts, int batchTarget) {
+	}
+
+	/**
+	 * Plans one bulk-chain iteration without acting on it: material-limited
+	 * plan, place-packet budget clamp, inventory-fit shrink. The session runs
+	 * exactly this; GridPreview calls it to show the first iteration's final
+	 * step before a queued bulk chain is released.
+	 */
+	static IterationPlan planIteration(
+		Minecraft client,
+		RecipeVariantResolver.Selection selection,
+		boolean allowNearby,
+		int batchTarget,
+		int completedCopies,
+		int requestedTotalCopies
+	) {
+		Map<String, Integer> availableCounts = collectAvailableCounts(client, allowNearby);
 		Optional<ChainCraftPlan> plan = ChainCraftPlanner.planMax(
 			client,
 			client.player,
-			session.selection(),
+			selection,
 			availableCounts,
-			session.allowNearby(),
+			allowNearby,
 			batchTarget,
 			true
 		);
 		if (plan.isEmpty()) {
-			if (trySwitchVariant(client, availableCounts, batchTarget)) {
-				return;
-			}
-			stop(false, "materials_exhausted");
-			return;
+			return new IterationPlan(plan, IterationFailure.MATERIALS, availableCounts, batchTarget);
 		}
 		// Size the iteration to what the place-packet budget can afford so
 		// progress stays continuous instead of exhausting the server's window
@@ -390,18 +405,14 @@ public final class BulkChainCraftController {
 				plan = ChainCraftPlanner.planMax(
 					client,
 					client.player,
-					session.selection(),
+					selection,
 					availableCounts,
-					session.allowNearby(),
+					allowNearby,
 					batchTarget,
 					true
 				);
 				if (plan.isEmpty()) {
-					if (trySwitchVariant(client, availableCounts, batchTarget)) {
-						return;
-					}
-					stop(false, "materials_exhausted");
-					return;
+					return new IterationPlan(plan, IterationFailure.MATERIALS, availableCounts, batchTarget);
 				}
 			}
 		}
@@ -413,7 +424,7 @@ public final class BulkChainCraftController {
 		// halving overshoots downward and can waste a third of the usable
 		// slots every iteration (observed: batches of 16 leaving a whole
 		// row idle, and 2 where 3 would fit).
-		if (!ChainInventoryFitEstimator.planFits(client, client.player, plan.get(), willEjectFinalOutputs(session, plan.get()))) {
+		if (!ChainInventoryFitEstimator.planFits(client, client.player, plan.get(), willEjectFinalOutputs(allowNearby, completedCopies, requestedTotalCopies, plan.get()))) {
 			int failCopies = plan.get().finalRecipeCopies();
 			ReachCraftingMod.diag("[bulk_chain] batch_shrink from_copies={} reason=inventory_fit", failCopies);
 			Optional<ChainCraftPlan> best = Optional.empty();
@@ -424,9 +435,9 @@ public final class BulkChainCraftController {
 				Optional<ChainCraftPlan> candidate = ChainCraftPlanner.planMax(
 					client,
 					client.player,
-					session.selection(),
+					selection,
 					availableCounts,
-					session.allowNearby(),
+					allowNearby,
 					mid,
 					true
 				);
@@ -434,7 +445,7 @@ public final class BulkChainCraftController {
 					hi = mid;
 					continue;
 				}
-				if (ChainInventoryFitEstimator.planFits(client, client.player, candidate.get(), willEjectFinalOutputs(session, candidate.get()))) {
+				if (ChainInventoryFitEstimator.planFits(client, client.player, candidate.get(), willEjectFinalOutputs(allowNearby, completedCopies, requestedTotalCopies, candidate.get()))) {
 					best = candidate;
 					if (candidate.get().finalRecipeCopies() < mid) {
 						// Materials cap below mid: this is already the max.
@@ -448,10 +459,41 @@ public final class BulkChainCraftController {
 			plan = best;
 		}
 		if (plan.isEmpty()) {
+			return new IterationPlan(plan, IterationFailure.INVENTORY, availableCounts, batchTarget);
+		}
+		return new IterationPlan(plan, null, availableCounts, batchTarget);
+	}
+
+	/** First iteration batch target for a session asked for requestedTotalCopies (BulkChainSession.start's batch cap). */
+	static int firstIterationBatchTarget(int requestedTotalCopies) {
+		return Math.min(Math.max(requestedTotalCopies, 1), MAX_BATCH_FINAL_COPIES);
+	}
+
+	private static void startNextIteration(Minecraft client) {
+		BulkChainSession session = activeSession;
+		int remaining = session.requestedTotalCopies() - session.completedCopies();
+		int batchTarget = Math.min(Math.max(remaining, 1), session.batchCap());
+		IterationPlan iteration = planIteration(
+			client,
+			session.selection(),
+			session.allowNearby(),
+			batchTarget,
+			session.completedCopies(),
+			session.requestedTotalCopies()
+		);
+		if (iteration.failure() == IterationFailure.MATERIALS) {
+			if (trySwitchVariant(client, iteration.availableCounts(), iteration.batchTarget())) {
+				return;
+			}
+			stop(false, "materials_exhausted");
+			return;
+		}
+		if (iteration.failure() == IterationFailure.INVENTORY) {
 			ReachCraftingModClient.sendChat("Bulk chain craft stopped: not enough inventory space to continue. Free up some slots and request again.");
 			stop(true, "inventory_full");
 			return;
 		}
+		Optional<ChainCraftPlan> plan = iteration.plan();
 		int baselineOutputCount = BulkAutoCraftController.countAccessibleOutput(client, session.selection().displayStack());
 		activeSession = session.withChainStarted(baselineOutputCount, plan.get().finalRecipeCopies());
 		ReachCraftingMod.diag(
@@ -483,10 +525,10 @@ public final class BulkChainCraftController {
 		return cost;
 	}
 
-	private static boolean willEjectFinalOutputs(BulkChainSession session, ChainCraftPlan plan) {
-		return session.allowNearby()
+	private static boolean willEjectFinalOutputs(boolean allowNearby, int completedCopies, int requestedTotalCopies, ChainCraftPlan plan) {
+		return allowNearby
 			&& ReachCraftingConfig.get().ejectItemsWhenFull()
-			&& session.completedCopies() + plan.finalRecipeCopies() < session.requestedTotalCopies();
+			&& completedCopies + plan.finalRecipeCopies() < requestedTotalCopies;
 	}
 
 	// Must stay in lockstep with the chainAvailableCounts construction in

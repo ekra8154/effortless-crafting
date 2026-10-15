@@ -33,6 +33,8 @@ final class RetrieveThenCraftController {
 		boolean autoCraftRequested,
 		int outputPerCraft,
 		int targetItems,
+		/** What the retrieval pulls: whole crafts' worth (plannedRetrievalItems), at most targetItems. */
+		int retrieveItems,
 		/** Copies the materials can actually produce, measured before the retrieval ran. */
 		int craftableCopies,
 		String outputItemId,
@@ -42,6 +44,11 @@ final class RetrieveThenCraftController {
 		boolean fillOnly,
 		boolean variantRetried
 	) {
+		FollowUp withRetrieveItems(int nextRetrieveItems) {
+			return new FollowUp(action, requestedClicks, allowNearby, craftAll, refillableBulkMaxMode, autoCraftRequested,
+				outputPerCraft, targetItems, nextRetrieveItems, craftableCopies, outputItemId, displayStack, handling,
+				resolvedRecipe, fillOnly, variantRetried);
+		}
 	}
 
 	private record Result(FollowUp followUp, int retrieved, boolean aborted) {
@@ -51,6 +58,8 @@ final class RetrieveThenCraftController {
 	}
 
 	private static FollowUp active;
+	/** Waiting on a cache warmup before deciding how much to retrieve (planWithWarmCache). */
+	private static FollowUp warming;
 	private static Result pendingResult;
 	private static int contextWaitTicks;
 	private static PendingReplay pendingReplay;
@@ -59,7 +68,134 @@ final class RetrieveThenCraftController {
 	}
 
 	static boolean isActive() {
-		return active != null || pendingResult != null || pendingReplay != null;
+		return active != null || pendingResult != null || pendingReplay != null || warming != null;
+	}
+
+	/**
+	 * How much of a request to pull from containers before crafting the rest.
+	 *
+	 * <p>Crafts come in whole batches of outputPerCraft. A retrieval that does
+	 * not replace a whole craft saves nothing and only tops the craft past the
+	 * request: 3 diamonds nearby plus a block's 9 made 12 for a 9-diamond
+	 * request. So a count request pulls whole crafts' worth of what the cache
+	 * shows, and crafts the rest; the two then add up to the request exactly.
+	 * One-item crafts keep the full target, so the session may still scan
+	 * containers the cache has not seen. A craft-all has no target to keep.</p>
+	 */
+	static int plannedRetrievalItems(
+		boolean craftAll,
+		ReachCraftingConfig.ExistingOutputHandling handling,
+		int targetItems,
+		int outputPerCraft,
+		int nearbyOutput
+	) {
+		// Nothing is crafted after a Retrieve Only, so it keeps everything up
+		// to the request.
+		if (craftAll || outputPerCraft <= 1 || handling == ReachCraftingConfig.ExistingOutputHandling.RETRIEVE_ONLY) {
+			return targetItems;
+		}
+		int usable = Math.min(Math.max(nearbyOutput, 0), targetItems);
+		return usable / outputPerCraft * outputPerCraft;
+	}
+
+	/**
+	 * The output the retrieval session would take, by the cache: the chosen
+	 * variant, plus the rest of the family when the session may switch
+	 * variants (ExistingOutputRetrievalSession.variantSwitchingAllowed).
+	 */
+	static int nearbyRetrievableOutput(
+		Minecraft client,
+		RecipeHolder<?> requestedRecipe,
+		RecipeHolder<?> resolvedRecipe,
+		net.minecraft.client.gui.screens.recipebook.RecipeCollection collection,
+		boolean explicitVariantSelection,
+		String outputItemId,
+		java.util.Map<String, Integer> nearbyTotals
+	) {
+		int total = nearbyTotals.getOrDefault(outputItemId, 0);
+		if (client.level == null
+			|| !ExistingOutputRetrievalSession.variantSwitchingAllowed(
+				requestedRecipe != null ? requestedRecipe.id() : null,
+				resolvedRecipe != null ? resolvedRecipe.id() : null,
+				collection,
+				explicitVariantSelection
+			)) {
+			return total;
+		}
+		java.util.Set<String> seen = new java.util.HashSet<>();
+		seen.add(outputItemId);
+		for (var entry : collection.getRecipes()) {
+			ItemStack stack = RecipeVariantResolver.resolveDisplayStack(entry, client);
+			if (stack.isEmpty()) {
+				continue;
+			}
+			String itemId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+			if (seen.add(itemId)) {
+				total += nearbyTotals.getOrDefault(itemId, 0);
+			}
+		}
+		return total;
+	}
+
+	/**
+	 * A count request for a multi-output recipe on an incomplete cache: how
+	 * much to retrieve depends on what the unopened containers hold, so warm
+	 * the cache first and decide from complete counts.
+	 */
+	private static boolean needsWarmCache(FollowUp followUp) {
+		Minecraft client = Minecraft.getInstance();
+		if (followUp.craftAll()
+			|| followUp.outputPerCraft() <= 1
+			|| followUp.handling() == ReachCraftingConfig.ExistingOutputHandling.RETRIEVE_ONLY
+			|| client.player == null
+			|| client.level == null
+			|| client.getCameraEntity() == null) {
+			return false;
+		}
+		NearbyContainerCache.ReachableView view = NearbyContainerCache.getReachableView(
+			client.level, client.getCameraEntity(), client.player.blockInteractionRange());
+		return view.snapshotsByKey().size() < view.nearestAccessByKey().size();
+	}
+
+	/** After the warmup: plan the retrieval from the now-complete cache, or craft it all if no whole craft is nearby. */
+	private static void planWithWarmCache(Minecraft client, FollowUp followUp) {
+		java.util.Map<String, Integer> nearbyTotals = NearbyContainerCache.getReachableView(
+			client.level, client.getCameraEntity(), client.player.blockInteractionRange()).aggregateCounts();
+		int nearby = nearbyRetrievableOutput(
+			client,
+			followUp.action().recipe(),
+			followUp.resolvedRecipe(),
+			followUp.action().collection(),
+			followUp.action().explicitVariantSelection(),
+			followUp.outputItemId(),
+			nearbyTotals
+		);
+		int retrieveItems = plannedRetrievalItems(followUp.craftAll(), followUp.handling(), followUp.targetItems(), followUp.outputPerCraft(), nearby);
+		ReachCraftingMod.diag(
+			"[retrieve_then_craft] warm_cache_planned item={} target={} nearby={} retrieve={}",
+			followUp.outputItemId(),
+			followUp.targetItems(),
+			nearby,
+			retrieveItems
+		);
+		if (retrieveItems <= 0) {
+			scheduleRemainder(followUp, followUp.requestedClicks(), nearby > 0 ? "no_whole_craft" : "none_nearby", 0);
+			return;
+		}
+		startRetrieval(followUp.withRetrieveItems(retrieveItems));
+	}
+
+	/** Executor shortcut: nearby output exists, but not a whole craft's worth, so retrieving it would save no craft. */
+	static void logNoWholeCraft(String outputItemId, int targetItems, int nearbyOutput, int outputPerCraft, ReachCraftingConfig.ExistingOutputHandling handling) {
+		ReachCraftingMod.diag(
+			"[retrieve_then_craft] rtc_complete outcome=no_whole_craft via=cache item={} target={} retrieved=0 shortfall={} remainder_clicks=0 nearby={} per_craft={} handling={}",
+			outputItemId,
+			targetItems,
+			targetItems,
+			nearbyOutput,
+			outputPerCraft,
+			handling
+		);
 	}
 
 	/** Executor shortcut: the cache is complete for reach and holds none of the output. */
@@ -74,14 +210,45 @@ final class RetrieveThenCraftController {
 	}
 
 	static void start(FollowUp followUp) {
+		if (needsWarmCache(followUp)) {
+			active = null;
+			pendingResult = null;
+			pendingReplay = null;
+			NearbyContainerDryRun.startCacheWarmup("retrieve_then_craft");
+			if (NearbyContainerDryRun.isActiveSessionRunning()) {
+				warming = followUp;
+				contextWaitTicks = 0;
+				ReachCraftingMod.diag(
+					"[retrieve_then_craft] warm_cache_first item={} target={} per_craft={}",
+					followUp.outputItemId(),
+					followUp.targetItems(),
+					followUp.outputPerCraft()
+				);
+				return;
+			}
+		}
+		startRetrieval(followUp);
+	}
+
+	private static void startRetrieval(FollowUp followUp) {
+		if (!followUp.craftAll() && followUp.retrieveItems() <= 0) {
+			// Nothing worth retrieving (the warmup could not run): decide as
+			// a retrieval that found nothing, which crafts the request.
+			active = null;
+			pendingReplay = null;
+			pendingResult = new Result(followUp, 0, false);
+			contextWaitTicks = 0;
+			return;
+		}
 		boolean fillOnly = followUp.fillOnly();
 		active = followUp;
 		pendingResult = null;
 		pendingReplay = null;
 		ReachCraftingMod.diag(
-			"[retrieve_then_craft] start item={} target={} clicks={} craft_all={} fill_only={} handling={} variant_retry={}",
+			"[retrieve_then_craft] start item={} target={} retrieve={} clicks={} craft_all={} fill_only={} handling={} variant_retry={}",
 			followUp.outputItemId(),
 			followUp.targetItems(),
+			followUp.retrieveItems(),
 			followUp.requestedClicks(),
 			followUp.craftAll(),
 			fillOnly,
@@ -96,7 +263,7 @@ final class RetrieveThenCraftController {
 			followUp.outputItemId(),
 			followUp.outputItemId() + " x" + followUp.displayStack().getCount(),
 			followUp.displayStack().copy(),
-			followUp.targetItems(),
+			followUp.retrieveItems(),
 			fillOnly,
 			followUp
 		));
@@ -121,6 +288,26 @@ final class RetrieveThenCraftController {
 	}
 
 	static void tick(Minecraft client) {
+		if (warming != null) {
+			if (client.player == null) {
+				warming = null;
+				return;
+			}
+			if (NearbyContainerDryRun.isActiveSessionRunning()) {
+				return;
+			}
+			if (!isCraftingContext(client)) {
+				if (++contextWaitTicks > CONTEXT_WAIT_LIMIT_TICKS) {
+					logComplete(warming, "context_lost", 0, 0);
+					warming = null;
+				}
+				return;
+			}
+			FollowUp followUp = warming;
+			warming = null;
+			planWithWarmCache(client, followUp);
+			return;
+		}
 		if (pendingReplay != null) {
 			tickPendingReplay(client);
 			return;
@@ -325,6 +512,10 @@ final class RetrieveThenCraftController {
 		}
 		int outputPerCraft = Math.max(stack.getCount(), 1);
 		int targetItems = followUp.craftAll() ? RecipeClickExecutor.bulkRecipeQueueLimit() : Math.max(followUp.requestedClicks(), 1) * outputPerCraft;
+		int retrieveItems = plannedRetrievalItems(followUp.craftAll(), followUp.handling(), targetItems, outputPerCraft, nearbyTotals.getOrDefault(itemId, 0));
+		if (retrieveItems <= 0) {
+			return null;
+		}
 		return new FollowUp(
 			followUp.action(),
 			followUp.requestedClicks(),
@@ -334,6 +525,7 @@ final class RetrieveThenCraftController {
 			followUp.autoCraftRequested(),
 			outputPerCraft,
 			targetItems,
+			retrieveItems,
 			// Carried over: this retry only swaps which variant is retrieved, and
 			// the executor context needed to re-measure is long gone by here.
 			followUp.craftableCopies(),
