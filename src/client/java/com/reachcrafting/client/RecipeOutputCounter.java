@@ -59,7 +59,10 @@ public final class RecipeOutputCounter {
 		// 3. Resolve Total Count and Logic
 		int displayCount = 0;
 		boolean includesQueued = false;
-		if (!gridResultStack.isEmpty()) {
+		// The queue preview draws the queued craft in place of what is
+		// staged, so the count follows the queue, not the staged result.
+		boolean previewShown = hasQueuedState && GridPreview.current(minecraft) != null;
+		if (!gridResultStack.isEmpty() && !previewShown) {
 			displayCount = gridOutputCount;
 			
 			// If queued item is the same, the queued amount is the intended total.
@@ -71,7 +74,7 @@ public final class RecipeOutputCounter {
 				}
 			}
 		} else if (hasQueuedState && queuedOutputCount >= 0) {
-			// Grid is empty, show queued output
+			// Grid is empty (or previewed over), show queued output
 			displayCount = queuedOutputCount;
 			includesQueued = true;
 		}
