@@ -15,7 +15,7 @@ import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.client.gui.screens.recipebook.RecipeCollection;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.context.ContextMap;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.item.ItemStack;
@@ -877,7 +877,7 @@ final class GridPreview {
 			return ItemStack.EMPTY;
 		}
 		try {
-			var item = BuiltInRegistries.ITEM.getValue(Identifier.parse(itemId));
+			var item = BuiltInRegistries.ITEM.getValue(ResourceLocation.parse(itemId));
 			return item == null ? ItemStack.EMPTY : item.getDefaultInstance();
 		} catch (Exception ignored) {
 			return ItemStack.EMPTY;
