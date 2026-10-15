@@ -19,10 +19,10 @@ import net.minecraft.world.item.ItemStack;
  * staged counts' text shadows and clashed with resource packs that retexture
  * the slots. Skipping the item draw leaves the GUI texture's own slot.</p>
  *
- * <p>Backport: the only GUI-API surface of the queue preview. Pre-1.21.2
- * trees draw with GuiGraphics (renderFakeItem / renderItemDecorations) and
- * hook renderSlot; 26.x uses GuiGraphicsExtractor (fakeItem / itemDecorations)
- * and extractSlot.</p>
+ * <p>Backport: the only GUI-API surface of the queue preview. 1.21.x trees
+ * draw with GuiGraphics (renderFakeItem / drawString) and hook renderSlot;
+ * 26.x uses GuiGraphicsExtractor (fakeItem / text) and extractSlot. 1.21.5
+ * and older have a 3D GUI pose, so the overlay needs a z lift.</p>
  */
 public final class GridPreviewRenderer {
 	/**
