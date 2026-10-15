@@ -257,7 +257,7 @@ final class ManualRecipePlacer {
 	 * list is positional — empty ingredient slots yield null entries so
 	 * shaped patterns survive.
 	 */
-	private static List<String> resolvePerSlotInputs(ChainCraftPlan.Step step) {
+	static List<String> resolvePerSlotInputs(ChainCraftPlan.Step step) {
 		int stepCopies = Math.max(step.recipeCopies(), 1);
 		Map<String, Integer> perCraftRemaining = new LinkedHashMap<>();
 		for (Map.Entry<String, Integer> entry : step.requiredInputs().entrySet()) {
