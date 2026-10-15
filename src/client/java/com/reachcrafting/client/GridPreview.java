@@ -65,9 +65,11 @@ final class GridPreview {
 	 *     empty pattern cell), in RecipeIngredientSummary order - exactly what
 	 *     ManualRecipePlacer.placeCrafts takes
 	 * @param copies per-slot count of the first batch (0 when nothing is crafted)
-	 * @param result what the result slot shows: the batch's output plus what
-	 *     a retrieve-first step pulls from containers
+	 * @param result what the result slot shows: the batch's output plus
+	 *     retrieve-first's haul, i.e. what this release really produces
 	 * @param retrievedItems the part of result that comes from containers
+	 * @param shortOfRequest the plan cannot make everything the queue asks
+	 *     for; RecipeOutputCounter turns the queued total orange
 	 */
 	record Plan(
 		RecipeDisplayId recipeId,
@@ -77,7 +79,8 @@ final class GridPreview {
 		List<PreviewSlot> slots,
 		ItemStack result,
 		boolean chain,
-		int retrievedItems
+		int retrievedItems,
+		boolean shortOfRequest
 	) {
 		PreviewSlot slotAt(int menuSlotIndex) {
 			for (PreviewSlot slot : slots) {
@@ -176,6 +179,12 @@ final class GridPreview {
 			plan.slotItemIds(),
 			plan.chain()
 		);
+	}
+
+	/** RecipeOutputCounter: the queued total is more than the previewed plan can make. */
+	static boolean isCurrentShortOfRequest(Minecraft client) {
+		Plan plan = current(client);
+		return plan != null && plan.shortOfRequest();
 	}
 
 	static void clearCommitment() {
@@ -507,7 +516,8 @@ final class GridPreview {
 					List.of(),
 					retrieveFirst.retrieveStack().copyWithCount(retrieveFirst.retrievedItems()),
 					false,
-					retrieveFirst.retrievedItems()
+					retrieveFirst.retrievedItems(),
+					retrieveFirst.retrievedItems() < retrieveFirst.targetItems()
 				);
 			}
 			requested = (shortfall + retrieveFirst.outputPerCraft() - 1) / retrieveFirst.outputPerCraft();
@@ -527,7 +537,13 @@ final class GridPreview {
 			java.util.Optional<RecipeClickExecutor.ChainCraftOffer> chainOffer = RecipeClickExecutor.predictQueueChainOffer(
 				client, player, action, flushed, selected, deficit, allowNearby, autoCraft, requested);
 			if (chainOffer.isPresent()) {
-				return withRetrieved(computeChainFinalStep(client, gridSlotCount, chainOffer.get(), allowNearby, bulk, local), retrieved);
+				return finish(
+					computeChainFinalStep(client, gridSlotCount, chainOffer.get(), allowNearby, bulk, local),
+					requested,
+					chainOffer.get().plan().finalRecipeCopies(),
+					retrieved,
+					true
+				);
 			}
 		}
 
@@ -633,17 +649,20 @@ final class GridPreview {
 		}
 		// Not List.copyOf: a shaped pattern's gaps (a furnace's middle) are
 		// null entries, and List.copyOf rejects nulls.
-		ItemStack output = selection.displayStack();
-		return withRetrieved(new Plan(
+		// What the whole release can make: a local-direct bulk places its
+		// first batch from the inventory, but later batches pull too.
+		int achievableCopies = localDirect ? deficit.possibleCopies() : maxCopies;
+		return finish(new Plan(
 			selection.recipeId(),
 			summary,
 			java.util.Collections.unmodifiableList(slotItemIds),
 			copies,
 			List.copyOf(slots),
-			output.copyWithCount(copies * Math.max(output.getCount(), 1)),
+			selection.displayStack().copy(),
 			false,
-			0
-		), retrieved);
+			0,
+			false
+		), requested, achievableCopies, retrieved, !continuesVariants);
 	}
 
 	/**
@@ -735,31 +754,52 @@ final class GridPreview {
 			java.util.Collections.unmodifiableList(new ArrayList<>(slotItemIds)),
 			copies,
 			List.copyOf(slots),
-			finalStep.displayStack().copyWithCount(copies * Math.max(finalStep.displayStack().getCount(), 1)),
+			finalStep.displayStack().copy(),
 			true,
-			0
+			0,
+			false
 		);
 	}
 
 	/**
-	 * Adds a retrieve-first step's haul to the result slot, when it is the
-	 * same item the craft makes (a retrieval can settle on another variant,
-	 * which then has no slot of its own to show in).
+	 * Sizes the result slot to what the release produces (the batch, plus
+	 * retrieve-first's haul) and flags when that falls short of the request.
+	 * plan.result() comes in as one craft's output. Retrieve-first's haul is
+	 * added when it is the same item the craft makes (a retrieval can settle
+	 * on another variant, which has no slot of its own to show in).
+	 *
+	 * @param requestedCopies crafts the release asks for (after retrieve-first)
+	 * @param achievableCopies crafts the plan can make in all
+	 * @param flagShort false where a shortfall is not final (output variant
+	 *     continuation goes on to sibling variants)
 	 */
-	private static Plan withRetrieved(Plan plan, RecipeClickExecutor.QueueRetrieveFirst retrieved) {
-		if (plan == null || retrieved.retrievedItems() <= 0
-			|| !ItemStack.isSameItemSameComponents(plan.result(), retrieved.retrieveStack())) {
-			return plan;
+	private static Plan finish(
+		Plan plan,
+		int requestedCopies,
+		int achievableCopies,
+		RecipeClickExecutor.QueueRetrieveFirst retrieved,
+		boolean flagShort
+	) {
+		if (plan == null) {
+			return null;
 		}
+		ItemStack perCraft = plan.result();
+		int outputPerCraft = Math.max(perCraft.getCount(), 1);
+		int retrievedItems = retrieved.retrievedItems() > 0 && ItemStack.isSameItemSameComponents(perCraft, retrieved.retrieveStack())
+			? retrieved.retrievedItems()
+			: 0;
+		int requestedItems = Math.max(requestedCopies, 1) * outputPerCraft + retrievedItems;
+		int achievableItems = Math.min(Math.max(achievableCopies, 0), Math.max(requestedCopies, 1)) * outputPerCraft + retrievedItems;
 		return new Plan(
 			plan.recipeId(),
 			plan.summary(),
 			plan.slotItemIds(),
 			plan.copies(),
 			plan.slots(),
-			plan.result().copyWithCount(plan.result().getCount() + retrieved.retrievedItems()),
+			perCraft.copyWithCount(plan.copies() * outputPerCraft + retrievedItems),
 			plan.chain(),
-			retrieved.retrievedItems()
+			retrievedItems,
+			flagShort && achievableItems < requestedItems
 		);
 	}
 
