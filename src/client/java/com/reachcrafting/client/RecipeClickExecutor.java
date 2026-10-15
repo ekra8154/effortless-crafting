@@ -211,8 +211,15 @@ final class RecipeClickExecutor {
 			int targetItems = craftAll ? bulkRecipeQueueLimit() : Math.max(requestedClicks, 1) * outputPerCraft;
 			int nearbyOutput = nearbyTotals.getOrDefault(retrieveItemId, 0);
 			boolean cacheComplete = outputView.snapshotsByKey().size() >= outputView.nearestAccessByKey().size();
+			int nearbyRetrievable = RetrieveThenCraftController.nearbyRetrievableOutput(
+				minecraft, recipeId, retrievalSelection.recipeId(), collection, explicitVariantSelection, retrieveItemId, nearbyTotals);
+			// On an incomplete cache this may be 0; RetrieveThenCraftController
+			// then warms the cache and plans again before retrieving.
+			int retrieveItems = RetrieveThenCraftController.plannedRetrievalItems(craftAll, outputHandling, targetItems, outputPerCraft, nearbyRetrievable);
 			if (nearbyOutput <= 0 && cacheComplete) {
 				RetrieveThenCraftController.logNoneNearby(retrieveItemId, targetItems, outputHandling);
+			} else if (retrieveItems <= 0 && cacheComplete) {
+				RetrieveThenCraftController.logNoWholeCraft(retrieveItemId, targetItems, nearbyRetrievable, outputPerCraft, outputHandling);
 			} else {
 				// What the materials can DIRECTLY make, so the prompt never
 				// offers a remainder it will not deliver. Deliberately not a
@@ -237,6 +244,7 @@ final class RecipeClickExecutor {
 						autoCraftRequested,
 						outputPerCraft,
 						targetItems,
+						retrieveItems,
 						craftableCopies,
 						retrieveItemId,
 						retrieveStack,
@@ -879,7 +887,10 @@ final class RecipeClickExecutor {
 				|| (AutoCraftController.isBulkModeEnabled() && !ChainCraftController.isActive() && requestedClicks >= queueLimit);
 			boolean repeatDirectPlacement = AutoCraftController.isBulkModeEnabled() || directChainReplay;
 
-			if (ChainCraftController.tryManualSelfReferentialPlacement(minecraft, resolvedItemId)) {
+			if (GridPreview.tryPlaceCommitted(minecraft, selectedRecipe.recipeId(), "direct", false, Math.max(effectiveRequestedClicks, 1))) {
+				// The queue preview's batch (a chain's final step), placed
+				// exactly as it was shown.
+			} else if (ChainCraftController.tryManualSelfReferentialPlacement(minecraft, resolvedItemId)) {
 				// Self-referential chain step: inputs were placed client-side so
 				// the server cannot pick the step's own output as an ingredient.
 			} else if (ChainCraftController.tryManualLastResortPlacement(minecraft, resolvedItemId)) {
@@ -1286,17 +1297,27 @@ final class RecipeClickExecutor {
 	}
 
 	/**
-	 * Lockstep with executeRecipeButtonClick's retrieve-first step, for a
-	 * queue release: true when the release would retrieve existing output
-	 * from nearby containers before crafting. GridPreview stays hidden then.
+	 * What executeRecipeButtonClick's retrieve-first step will do for a queue
+	 * release, predicted from the container cache.
+	 *
+	 * @param runs the release hands off to RetrieveThenCraftController (it
+	 *     does whenever the cache shows the output nearby or is incomplete)
+	 * @param retrievedItems output the cache says the retrieval will find;
+	 *     containers the cache has not seen yet count as empty
+	 * @param retrieveStack the output the retrieval looks for (one craft's worth)
 	 */
-	static boolean queueReleaseRetrievesFirst(
+	record QueueRetrieveFirst(boolean runs, int retrievedItems, int targetItems, int outputPerCraft, ItemStack retrieveStack) {
+		static final QueueRetrieveFirst NONE = new QueueRetrieveFirst(false, 0, 0, 1, ItemStack.EMPTY);
+	}
+
+	/** Lockstep with executeRecipeButtonClick's retrieve-first step, for a queue release (never craftAll). */
+	static QueueRetrieveFirst predictQueueRetrieveFirst(
 		Minecraft minecraft,
 		LocalPlayer player,
 		RecipeBookClickCapture.HeldRecipeAction action,
 		RecipeVariantResolver.Selection selectedRecipe,
 		boolean allowNearbyChests,
-		int desiredVariantCopies
+		int requestedClicks
 	) {
 		ReachCraftingConfig config = ReachCraftingConfig.get();
 		if (config.existingOutputHandling() == ReachCraftingConfig.ExistingOutputHandling.CRAFT_ONLY
@@ -1307,7 +1328,7 @@ final class RecipeClickExecutor {
 			|| BulkAutoCraftController.isActive()
 			|| BulkChainCraftController.isActive()
 			|| RetrieveThenCraftController.isActive()) {
-			return false;
+			return QueueRetrieveFirst.NONE;
 		}
 		NearbyContainerCache.ReachableView outputView = NearbyContainerCache.getReachableView(minecraft.level, minecraft.getCameraEntity(), player.blockInteractionRange());
 		Map<String, Integer> nearbyTotals = outputView.aggregateCounts();
@@ -1324,14 +1345,27 @@ final class RecipeClickExecutor {
 			nearbyTotals,
 			false,
 			false,
-			desiredVariantCopies
+			Math.max(requestedClicks, 1)
 		);
 		if (retrievalSelection == null || retrievalSelection.displayStack().isEmpty()) {
 			retrievalSelection = selectedRecipe;
 		}
-		String retrieveItemId = BuiltInRegistries.ITEM.getKey(retrievalSelection.displayStack().getItem()).toString();
+		ItemStack retrieveStack = retrievalSelection.displayStack();
+		String retrieveItemId = BuiltInRegistries.ITEM.getKey(retrieveStack.getItem()).toString();
+		int outputPerCraft = Math.max(retrieveStack.getCount(), 1);
+		int targetItems = Math.max(requestedClicks, 1) * outputPerCraft;
+		int nearbyOutput = nearbyTotals.getOrDefault(retrieveItemId, 0);
 		boolean cacheComplete = outputView.snapshotsByKey().size() >= outputView.nearestAccessByKey().size();
-		return nearbyTotals.getOrDefault(retrieveItemId, 0) > 0 || !cacheComplete;
+		int nearbyRetrievable = RetrieveThenCraftController.nearbyRetrievableOutput(
+			minecraft, action.recipeId(), retrievalSelection.recipeId(), action.collection(), action.explicitVariantSelection(), retrieveItemId, nearbyTotals);
+		int retrieveItems = RetrieveThenCraftController.plannedRetrievalItems(
+			false, config.existingOutputHandling(), targetItems, outputPerCraft, nearbyRetrievable);
+		if ((nearbyOutput <= 0 && cacheComplete) || (retrieveItems <= 0 && cacheComplete)) {
+			return QueueRetrieveFirst.NONE;
+		}
+		// Planned from what the cache shows; an incomplete cache is warmed at
+		// release and may then retrieve more (the preview's accepted blind spot).
+		return new QueueRetrieveFirst(true, Math.min(nearbyRetrievable, retrieveItems), targetItems, outputPerCraft, retrieveStack.copy());
 	}
 
 	/**
@@ -1360,10 +1394,10 @@ final class RecipeClickExecutor {
 	/**
 	 * Lockstep with executeRecipeButtonClick's chain gate, for a queue
 	 * release (forceDryRun, never craftAll or refillable, so a direct bulk
-	 * never takes priority): true when the release would open a chain offer
-	 * instead of crafting flat. GridPreview stays hidden then.
+	 * never takes priority): the chain offer the release would open instead
+	 * of crafting flat, if any. GridPreview previews its final step.
 	 */
-	static boolean queueReleaseOffersChain(
+	static Optional<ChainCraftOffer> predictQueueChainOffer(
 		Minecraft minecraft,
 		LocalPlayer player,
 		RecipeBookClickCapture.HeldRecipeAction action,
@@ -1384,7 +1418,7 @@ final class RecipeClickExecutor {
 			&& !BulkAutoCraftController.isActive()
 			&& !BulkChainCraftController.isActive();
 		if (!canOfferChainCraft) {
-			return false;
+			return Optional.empty();
 		}
 		Map<String, Integer> chainAvailableCounts = availableItems.totalCounts();
 		if (allowNearbyChests && ReachCraftingConfig.get().cacheContainersForFasterSearch()) {
@@ -1417,7 +1451,7 @@ final class RecipeClickExecutor {
 			false,
 			requestedClicks,
 			desiredVariantCopies
-		).isPresent();
+		);
 	}
 
 	private static Optional<ChainCraftOffer> planChainCraftOffer(
@@ -1736,7 +1770,7 @@ final class RecipeClickExecutor {
 		return report.hasMissingIngredients() ? "Missing: " + report.compactMissingSummary() : "";
 	}
 
-	private record ChainCraftOffer(
+	record ChainCraftOffer(
 		ChainCraftPlan plan,
 		RecipeVariantResolver.Selection selection,
 		int requestedRecipeCopies,

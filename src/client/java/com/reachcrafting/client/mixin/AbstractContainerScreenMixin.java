@@ -247,6 +247,20 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 		}
 	}
 
+	// Declared after renderResultArrow on purpose: HEAD injectors run in
+	// declaration order and a cancel skips the ones after it, so the arrow
+	// still draws under the preview's result ghost.
+	@Inject(method = "extractSlot", at = @At("HEAD"), cancellable = true)
+	private void reachcrafting$renderGridPreview(GuiGraphicsExtractor guiGraphics, Slot slot, int mouseX, int mouseY, CallbackInfo ci) {
+		if (!ReachCraftingConfig.get().enabled()) return;
+		AbstractContainerScreen<?> screen = (AbstractContainerScreen<?>) (Object) this;
+		if (com.reachcrafting.client.GridPreviewRenderer.renderInPlaceOfSlot(guiGraphics, screen, slot)) {
+			// The cancel skips the TAIL output counter too; keep it.
+			com.reachcrafting.client.RecipeOutputCounter.render(guiGraphics, screen, slot);
+			ci.cancel();
+		}
+	}
+
 	@Inject(method = "keyPressed", at = @At("HEAD"), cancellable = true)
 	private void reachcrafting$onKeyPressed(KeyEvent event, CallbackInfoReturnable<Boolean> cir) {
 		if (!ReachCraftingConfig.get().enabled()) return;
@@ -302,7 +316,6 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 	private void reachcrafting$renderOutputCounter(GuiGraphicsExtractor guiGraphics, Slot slot, int mouseX, int mouseY, CallbackInfo ci) {
 		if (!ReachCraftingConfig.get().enabled()) return;
 		com.reachcrafting.client.RecipeOutputCounter.render(guiGraphics, (AbstractContainerScreen<?>) (Object) this, slot);
-		com.reachcrafting.client.GridPreviewRenderer.render(guiGraphics, (AbstractContainerScreen<?>) (Object) this, slot);
 	}
 
 	private boolean reachcrafting$isArrowClickTarget(Slot slot, double mouseX, double mouseY) {

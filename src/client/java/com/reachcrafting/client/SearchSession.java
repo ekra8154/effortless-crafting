@@ -678,7 +678,7 @@ final class SearchSession extends BaseCraftSession {
 				);
 			}
 		}
-		plannedTargets = plannedResult.slotTargets();
+		plannedTargets = GridPreview.alignToCommitment(recipeId, plannedResult.slotTargets(), totalAvailable);
 		remainingItemIds.clear();
 		remainingItemIds.addAll(redistributeReservedGrid ? computeRedistributedFetchItemIds(plannedTargets) : computeFetchItemIds(plannedTargets));
 
