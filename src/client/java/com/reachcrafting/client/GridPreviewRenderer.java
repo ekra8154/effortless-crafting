@@ -3,64 +3,82 @@ package com.reachcrafting.client;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
-import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.inventory.CraftingContainer;
 import net.minecraft.world.inventory.ResultSlot;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 
 /**
- * Draws GridPreview's plan over the crafting grid, styled like vanilla's
- * ghost recipe (washed-out item) but with the batch count and a yellow
- * nearby dot on items that come from containers.
+ * Draws GridPreview's plan in the crafting grid, styled like vanilla's ghost
+ * recipe (washed-out item) but with the batch count, a yellow dot on items
+ * pulled from containers and an orange one on items a chain crafts.
+ *
+ * <p>It replaces the grid and result slots' own item drawing rather than
+ * painting over it: the release flushes the grid, so whatever is staged there
+ * now must not show, and covering it with a slot-colored square leaked the
+ * staged counts' text shadows and clashed with resource packs that retexture
+ * the slots. Skipping the item draw leaves the GUI texture's own slot.</p>
  *
  * <p>Backport: the only GUI-API surface of the queue preview. Pre-1.21.2
- * trees draw with GuiGraphics (renderFakeItem / renderItemDecorations);
- * 26.x with GuiGraphicsExtractor (fakeItem / itemDecorations).</p>
+ * trees draw with GuiGraphics (renderFakeItem / renderItemDecorations) and
+ * hook renderSlot; 26.x uses GuiGraphicsExtractor (fakeItem / itemDecorations)
+ * and extractSlot.</p>
  */
 public final class GridPreviewRenderer {
-	/** Vanilla's slot interior, drawn first to hide whatever the release will flush. */
-	private static final int SLOT_BACKGROUND = 0xFF8B8B8B;
 	/** Vanilla GhostSlots' wash over the item. */
 	private static final int GHOST_WASH = 0x30FFFFFF;
 
 	private GridPreviewRenderer() {
 	}
 
-	/** Called per slot, inside the container's translated pose (slot.x/y are container-local). */
-	public static void render(GuiGraphicsExtractor graphics, AbstractContainerScreen<?> screen, Slot slot) {
-		// Only the result and crafting grid slots can carry a ghost; skip the
-		// inventory slots before asking for the plan.
-		if (!(slot instanceof ResultSlot) && (slot.container instanceof Inventory || slot.index > 9)) {
-			return;
+	/**
+	 * Draws the preview for a grid or result slot in place of its contents.
+	 * Called at the head of the slot draw, inside the container's translated
+	 * pose (slot.x/y are container-local).
+	 *
+	 * @return true when the preview owns this slot and vanilla must skip
+	 *     drawing its real item
+	 */
+	public static boolean renderInPlaceOfSlot(GuiGraphicsExtractor graphics, AbstractContainerScreen<?> screen, Slot slot) {
+		boolean resultSlot = slot instanceof ResultSlot;
+		if (!resultSlot && !(slot.container instanceof CraftingContainer)) {
+			return false;
 		}
 		Minecraft client = Minecraft.getInstance();
 		GridPreview.Plan plan = GridPreview.current(client);
 		if (plan == null) {
-			return;
+			return false;
 		}
 		ItemStack ghost;
-		boolean fromNearby = false;
-		if (slot instanceof ResultSlot) {
+		GridPreview.Source source = GridPreview.Source.INVENTORY;
+		if (resultSlot) {
 			ghost = plan.result();
+			if (plan.retrievedItems() > 0) {
+				// Some of the result comes out of containers, not the craft.
+				source = GridPreview.Source.NEARBY;
+			}
 		} else {
 			GridPreview.PreviewSlot previewSlot = plan.slotAt(slot.index);
-			if (previewSlot == null) {
-				return;
-			}
-			ghost = previewSlot.stack();
-			fromNearby = previewSlot.fromNearby();
+			// A grid cell outside the new pattern will be empty after the
+			// release's flush: draw nothing.
+			ghost = previewSlot == null ? ItemStack.EMPTY : previewSlot.stack();
+			source = previewSlot == null ? GridPreview.Source.INVENTORY : previewSlot.source();
 		}
 		if (ghost.isEmpty()) {
-			return;
+			return true;
 		}
 		int x = slot.x;
 		int y = slot.y;
-		graphics.fill(x, y, x + 16, y + 16, SLOT_BACKGROUND);
 		graphics.fakeItem(ghost, x, y);
 		graphics.fill(x, y, x + 16, y + 16, GHOST_WASH);
 		graphics.itemDecorations(client.font, ghost, x, y);
-		if (fromNearby) {
+		// Same colors as the recipe book's indicators: yellow for nearby
+		// containers, orange for what the chain crafts on the way.
+		if (source == GridPreview.Source.NEARBY) {
 			RecipeButtonNearbyIndicator.renderDot(graphics, x - 1, y - 1);
+		} else if (source == GridPreview.Source.CHAIN) {
+			RecipeButtonNearbyIndicator.renderChainDot(graphics, x - 1, y - 1);
 		}
+		return true;
 	}
 }
