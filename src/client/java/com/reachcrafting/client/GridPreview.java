@@ -36,24 +36,38 @@ import net.minecraft.world.item.crafting.display.SlotDisplayContext;
  * equivalent items (oak vs birch planks) in a hash order the client cannot
  * see on a dedicated server. Later bulk batches use the normal paths.</p>
  *
- * <p>Chain crafts, retrieve-first and Retrieval Mode releases are not
- * previewed yet: compute returns null for them.</p>
+ * <p>A release that opens a chain offer previews the chain's final step
+ * (the first iteration's, for a bulk chain); its commitment arms when that
+ * same chain starts and is consumed by the final step's first batch.
+ * Retrieve-first releases preview the craft of the shortfall. Retrieval Mode
+ * releases craft nothing and show nothing.</p>
  *
  * <p>Backport: nothing here touches the GUI; GridPreviewRenderer holds the
  * version-specific drawing.</p>
  */
 final class GridPreview {
 	/** A commitment older than this belongs to some other release. */
-	private static final long COMMITMENT_TTL_MILLIS = 10_000L;
+	private static final long COMMITMENT_TTL_MILLIS = 60_000L;
 
-	record PreviewSlot(int menuSlotIndex, ItemStack stack, boolean fromNearby) {
+	/** Where a previewed slot's items come from. */
+	enum Source {
+		INVENTORY,
+		NEARBY,
+		/** Crafted by an earlier step of the chain. */
+		CHAIN
+	}
+
+	record PreviewSlot(int menuSlotIndex, ItemStack stack, Source source) {
 	}
 
 	/**
 	 * @param slotItemIds the planned item per ingredient slot (null for an
 	 *     empty pattern cell), in RecipeIngredientSummary order - exactly what
 	 *     ManualRecipePlacer.placeCrafts takes
-	 * @param copies per-slot count of the first batch
+	 * @param copies per-slot count of the first batch (0 when nothing is crafted)
+	 * @param result what the result slot shows: the batch's output plus what
+	 *     a retrieve-first step pulls from containers
+	 * @param retrievedItems the part of result that comes from containers
 	 */
 	record Plan(
 		RecipeDisplayId recipeId,
@@ -61,7 +75,9 @@ final class GridPreview {
 		List<String> slotItemIds,
 		int copies,
 		List<PreviewSlot> slots,
-		ItemStack result
+		ItemStack result,
+		boolean chain,
+		int retrievedItems
 	) {
 		PreviewSlot slotAt(int menuSlotIndex) {
 			for (PreviewSlot slot : slots) {
@@ -77,7 +93,11 @@ final class GridPreview {
 	private static Plan cachedPlan;
 	private static Plan commitment;
 	private static long commitmentMillis;
+	/** A chain commitment applies only once its own chain has started (onChainStarted). */
+	private static boolean chainArmed;
 	private static boolean loggedFailure;
+	/** Why the last compute returned no plan; logged on each recompute so a missing preview explains itself. */
+	private static String hiddenReason;
 
 	private GridPreview() {
 	}
@@ -103,7 +123,26 @@ final class GridPreview {
 		List<Object> key = cacheKey(client, player, pending, allowNearby, autoCraft);
 		if (!key.equals(cachedKey)) {
 			cachedKey = key;
+			hiddenReason = null;
 			cachedPlan = computeSafely(client, player, screen, pending.action(), pending.clickCount(), allowNearby, autoCraft);
+			if (cachedPlan == null) {
+				ReachCraftingMod.diag(
+					"[grid_preview] hidden reason={} recipe={} count={} nearby={} auto_craft={}",
+					hiddenReason,
+					pending.action().recipeId(),
+					pending.clickCount(),
+					allowNearby,
+					autoCraft
+				);
+			} else {
+				ReachCraftingMod.diag(
+					"[grid_preview] shown recipe={} copies={} slots={} nearby={}",
+					cachedPlan.recipeId(),
+					cachedPlan.copies(),
+					cachedPlan.slotItemIds(),
+					allowNearby
+				);
+			}
 		}
 		return cachedPlan;
 	}
@@ -117,27 +156,63 @@ final class GridPreview {
 		boolean autoCraft
 	) {
 		commitment = null;
+		chainArmed = false;
 		cachedKey = null;
 		ReachCraftingConfig config = ReachCraftingConfig.get();
 		if (!config.enabled() || !config.showGridPreview() || client.player == null || action == null) {
 			return;
 		}
 		Plan plan = computeSafely(client, client.player, client.gui.screen(), action, clickCount, allowNearby, autoCraft);
-		if (plan == null) {
+		if (plan == null || plan.slots().isEmpty()) {
+			// Nothing to place (a retrieval that covers the request).
 			return;
 		}
 		commitment = plan;
 		commitmentMillis = System.currentTimeMillis();
 		ReachCraftingMod.diag(
-			"[grid_preview] commit recipe={} copies={} slots={}",
+			"[grid_preview] commit recipe={} copies={} slots={} chain={}",
 			plan.recipeId(),
 			plan.copies(),
-			plan.slotItemIds()
+			plan.slotItemIds(),
+			plan.chain()
 		);
 	}
 
 	static void clearCommitment() {
 		commitment = null;
+		chainArmed = false;
+	}
+
+	/**
+	 * ChainCraftController.start: a chain commitment arms only for the chain
+	 * it previewed (same final recipe, same per-slot inputs). Any other chain
+	 * starting means the commitment is stale; a flat commitment never covers
+	 * a chain.
+	 */
+	static void onChainStarted(ChainCraftPlan chainPlan) {
+		Plan plan = commitment;
+		if (plan == null) {
+			return;
+		}
+		if (!plan.chain() || chainArmed || chainPlan == null || chainPlan.steps().isEmpty()) {
+			clearCommitment();
+			ReachCraftingMod.diag("[grid_preview] commitment_dropped reason=other_chain recipe={}", plan.recipeId());
+			return;
+		}
+		ChainCraftPlan.Step finalStep = chainPlan.steps().getLast();
+		if (!finalStep.recipeId().equals(plan.recipeId())
+			|| !ManualRecipePlacer.resolvePerSlotInputs(finalStep).equals(plan.slotItemIds())) {
+			clearCommitment();
+			ReachCraftingMod.diag(
+				"[grid_preview] commitment_dropped reason=chain_mismatch planned={} started={} slots={}",
+				plan.recipeId(),
+				finalStep.recipeId(),
+				ManualRecipePlacer.resolvePerSlotInputs(finalStep)
+			);
+			return;
+		}
+		chainArmed = true;
+		ReachCraftingMod.diag("[grid_preview] chain_armed recipe={} copies={}", plan.recipeId(), plan.copies());
 	}
 
 	/**
@@ -159,15 +234,25 @@ final class GridPreview {
 		if (plan == null || client.player == null) {
 			return false;
 		}
-		if (ChainCraftController.isActive() || BulkChainCraftController.isActive() || RetrieveThenCraftController.isActive()) {
-			// Previews never cover these flows; a commitment still around
-			// belongs to a release that diverted into one.
-			commitment = null;
+		if (plan.chain()) {
+			// Intermediate steps place through the same branches: wait for
+			// the final step of the chain this commitment armed for.
+			if (!chainArmed || !ChainCraftController.isRunningFinalStep()) {
+				return false;
+			}
+			// Lockstep: ChainCraftRun.nextBatchCopies, capped like placeCrafts.
+			maxCopies = Math.min(maxCopies, ChainCraftController.currentScheduledBatchCopies());
+		} else if (ChainCraftController.isActive() || BulkChainCraftController.isActive() || RetrieveThenCraftController.isActive()) {
+			// A flat commitment still around belongs to a release that
+			// diverted into one of these flows.
+			clearCommitment();
 			ReachCraftingMod.diag("[grid_preview] commitment_dropped reason=other_flow recipe={} at={}", plan.recipeId(), label);
 			return false;
 		}
-		if (System.currentTimeMillis() - commitmentMillis > COMMITMENT_TTL_MILLIS) {
-			commitment = null;
+		// An armed chain commitment lives as long as its chain, which can run
+		// for minutes before its final step; only a loose one expires.
+		if (!chainArmed && System.currentTimeMillis() - commitmentMillis > COMMITMENT_TTL_MILLIS) {
+			clearCommitment();
 			ReachCraftingMod.diag("[grid_preview] commitment_expired recipe={}", plan.recipeId());
 			return false;
 		}
@@ -175,12 +260,12 @@ final class GridPreview {
 			if (beforeSession) {
 				return false;
 			}
-			commitment = null;
+			clearCommitment();
 			ReachCraftingMod.diag("[grid_preview] commitment_mismatch planned={} placing={} at={}", plan.recipeId(), recipeId, label);
 			return false;
 		}
 		if (plan.copies() > maxCopies) {
-			commitment = null;
+			clearCommitment();
 			ReachCraftingMod.diag("[grid_preview] commitment_exceeds_target recipe={} planned={} target={} at={}", plan.recipeId(), plan.copies(), maxCopies, label);
 			return false;
 		}
@@ -191,24 +276,26 @@ final class GridPreview {
 				needed.merge(itemId, plan.copies(), Integer::sum);
 			}
 		}
+		// Chain steps place pristine stacks only (ManualRecipePlacer.placeStepCrafts).
+		boolean pristineOnly = plan.chain();
 		for (Map.Entry<String, Integer> entry : needed.entrySet()) {
-			if (ManualRecipePlacer.countSources(menu, entry.getKey(), false) < entry.getValue()) {
+			if (ManualRecipePlacer.countSources(menu, entry.getKey(), pristineOnly) < entry.getValue()) {
 				if (beforeSession) {
 					return false;
 				}
-				commitment = null;
+				clearCommitment();
 				ReachCraftingMod.diag(
 					"[grid_preview] commitment_inputs_missing recipe={} item={} need={} have={} at={}",
 					plan.recipeId(),
 					entry.getKey(),
 					entry.getValue(),
-					ManualRecipePlacer.countSources(menu, entry.getKey(), false),
+					ManualRecipePlacer.countSources(menu, entry.getKey(), pristineOnly),
 					label
 				);
 				return false;
 			}
 		}
-		commitment = null;
+		clearCommitment();
 		if (!menu.getCarried().isEmpty() || !ContainerUtils.isGridEmpty(menu)) {
 			ReachCraftingMod.diag("[grid_preview] commitment_grid_busy recipe={} at={}", plan.recipeId(), label);
 			return false;
@@ -224,7 +311,7 @@ final class GridPreview {
 			);
 			return false;
 		}
-		int staged = ManualRecipePlacer.placeCrafts(client, plan.summary(), plan.slotItemIds(), plan.copies(), false, "preview " + label);
+		int staged = ManualRecipePlacer.placeCrafts(client, plan.summary(), plan.slotItemIds(), plan.copies(), pristineOnly, "preview " + label);
 		ReachCraftingMod.diag(
 			"[grid_preview] committed_place recipe={} planned={} staged={} at={}",
 			plan.recipeId(),
@@ -247,6 +334,47 @@ final class GridPreview {
 			|| BulkAutoCraftController.isActive()
 			|| ChainCraftController.isActive()
 			|| BulkChainCraftController.isActive();
+	}
+
+	/**
+	 * SearchSession plans its pulls before the committed batch is placed. If
+	 * the plan changed since the preview (a retrieve-first scan opened chests
+	 * the cache had not seen, so the counts moved), pull the previewed items
+	 * instead, as long as every slot accepts them and enough are available.
+	 * Otherwise the session keeps its own plan and the commitment, finding
+	 * its inputs missing, falls back to the normal placement.
+	 */
+	static List<IngredientPlanning.SlotTarget> alignToCommitment(
+		RecipeDisplayId recipeId,
+		List<IngredientPlanning.SlotTarget> slotTargets,
+		Map<String, Integer> available
+	) {
+		Plan plan = commitment;
+		if (plan == null || !plan.recipeId().equals(recipeId) || slotTargets.isEmpty()) {
+			return slotTargets;
+		}
+		List<IngredientPlanning.SlotTarget> aligned = new ArrayList<>(slotTargets.size());
+		Map<String, Integer> needed = new LinkedHashMap<>();
+		boolean changed = false;
+		for (IngredientPlanning.SlotTarget slotTarget : slotTargets) {
+			int index = slotTarget.slotIndex() - 1;
+			String committed = index >= 0 && index < plan.slotItemIds().size() ? plan.slotItemIds().get(index) : null;
+			if (committed == null || slotTarget.itemId() == null || !slotTarget.ingredientSlot().itemIds().contains(committed)) {
+				return slotTargets;
+			}
+			changed |= !committed.equals(slotTarget.itemId());
+			aligned.add(new IngredientPlanning.SlotTarget(slotTarget.slotIndex(), slotTarget.ingredientSlot(), committed, slotTarget.targetCount()));
+			needed.merge(committed, slotTarget.targetCount(), Integer::sum);
+		}
+		for (Map.Entry<String, Integer> entry : needed.entrySet()) {
+			if (available.getOrDefault(entry.getKey(), 0) < entry.getValue()) {
+				return slotTargets;
+			}
+		}
+		if (changed) {
+			ReachCraftingMod.diag("[grid_preview] session_plan_aligned recipe={} slots={}", recipeId, plan.slotItemIds());
+		}
+		return List.copyOf(aligned);
 	}
 
 	private static List<Object> cacheKey(
@@ -302,7 +430,7 @@ final class GridPreview {
 				loggedFailure = true;
 				ReachCraftingMod.LOGGER.warn("[grid_preview] compute failed; preview hidden", e);
 			}
-			return null;
+			return hidden("compute_failed");
 		}
 	}
 
@@ -316,8 +444,11 @@ final class GridPreview {
 		boolean autoCraft
 	) {
 		int gridSlotCount = gridSlotCount(screen);
-		if (gridSlotCount == 0 || clickCount <= 0 || ExistingOutputRetrievalController.isEnabled()) {
-			return null;
+		if (gridSlotCount == 0 || clickCount <= 0) {
+			return hidden("no_grid");
+		}
+		if (ExistingOutputRetrievalController.isEnabled()) {
+			return hidden("retrieval_mode");
 		}
 		ReachCraftingConfig config = ReachCraftingConfig.get();
 		boolean bulk = AutoCraftController.isBulkModeEnabled();
@@ -346,7 +477,7 @@ final class GridPreview {
 			requested
 		);
 		if (selected == null) {
-			return null;
+			return hidden("no_variant");
 		}
 		NearbyContainerCache.ReachableView view = allowNearby && config.cacheContainersForFasterSearch()
 			? NearbyContainerCache.getReachableView(client.level, client.getCameraEntity(), player.blockInteractionRange())
@@ -355,8 +486,31 @@ final class GridPreview {
 			? local
 			: AvailableItemSnapshot.mergeCounts(local, view.countsFor(selected.ingredientSummary().acceptedItemIds()));
 
-		if (RecipeClickExecutor.queueReleaseRetrievesFirst(client, player, action, selected, allowNearby, requested)) {
-			return null;
+		// Retrieve-first: the release pulls existing output before crafting
+		// and crafts only the shortfall (RetrieveThenCraftController.decide).
+		// Planned from what the cache knows; unopened containers count as
+		// empty, so with nothing cached the full request is crafted.
+		RecipeClickExecutor.QueueRetrieveFirst retrieveFirst =
+			RecipeClickExecutor.predictQueueRetrieveFirst(client, player, action, selected, allowNearby, requested);
+		RecipeClickExecutor.QueueRetrieveFirst retrieved = RecipeClickExecutor.QueueRetrieveFirst.NONE;
+		if (retrieveFirst.runs() && retrieveFirst.retrievedItems() > 0) {
+			retrieved = retrieveFirst;
+			int shortfall = retrieveFirst.targetItems() - retrieveFirst.retrievedItems();
+			if (shortfall <= 0 || config.existingOutputHandling() == ReachCraftingConfig.ExistingOutputHandling.RETRIEVE_ONLY) {
+				// Nothing is crafted: the result slot alone shows what the
+				// retrieval brings.
+				return new Plan(
+					selected.recipeId(),
+					selected.ingredientSummary(),
+					List.of(),
+					0,
+					List.of(),
+					retrieveFirst.retrieveStack().copyWithCount(retrieveFirst.retrievedItems()),
+					false,
+					retrieveFirst.retrievedItems()
+				);
+			}
+			requested = (shortfall + retrieveFirst.outputPerCraft() - 1) / retrieveFirst.outputPerCraft();
 		}
 		RecipeDeficitReport deficit = RecipeDeficitReport.from(selected.ingredientSummary(), availableCounts, List.of(), requested);
 		boolean continuesVariants = false;
@@ -369,9 +523,12 @@ final class GridPreview {
 				continuesVariants = true;
 			}
 		}
-		if (!continuesVariants && RecipeClickExecutor.queueReleaseOffersChain(
-			client, player, action, flushed, selected, deficit, allowNearby, autoCraft, requested)) {
-			return null;
+		if (!continuesVariants) {
+			java.util.Optional<RecipeClickExecutor.ChainCraftOffer> chainOffer = RecipeClickExecutor.predictQueueChainOffer(
+				client, player, action, flushed, selected, deficit, allowNearby, autoCraft, requested);
+			if (chainOffer.isPresent()) {
+				return withRetrieved(computeChainFinalStep(client, gridSlotCount, chainOffer.get(), allowNearby, bulk, local), retrieved);
+			}
 		}
 
 		// Lockstep: the nearby bulk branch of RecipeClickExecutor places
@@ -424,7 +581,14 @@ final class GridPreview {
 			}
 		}
 		if (target <= 0 || planned.hasMissingIngredients()) {
-			return null;
+			Map<String, Integer> acceptedTotals = new LinkedHashMap<>();
+			for (String itemId : summary.acceptedItemIds()) {
+				acceptedTotals.put(itemId, totals.getOrDefault(itemId, 0));
+			}
+			return hidden("missing_ingredients target=" + target + " max=" + maxCopies
+				+ " output=" + selection.outputItemId()
+				+ " needs=[" + summary.compactSummary() + "]"
+				+ " have=" + acceptedTotals);
 		}
 
 		List<String> slotItemIds = new ArrayList<>();
@@ -443,7 +607,7 @@ final class GridPreview {
 			}
 			ItemStack prototype = prototype(itemId);
 			if (prototype.isEmpty()) {
-				return null;
+				return hidden("unplanned_slot " + i);
 			}
 			slotItemIds.add(itemId);
 			batchCap = Math.min(batchCap, Math.max(prototype.getMaxStackSize(), 1));
@@ -453,7 +617,7 @@ final class GridPreview {
 		// cells are the cells the committed batch lands in.
 		List<Integer> gridIndices = summary.gridSlotIndices(gridSlotCount);
 		if (copies <= 0 || gridIndices.size() != slotItemIds.size()) {
-			return null;
+			return hidden("shape_unmappable");
 		}
 
 		Map<String, Integer> localLeft = new LinkedHashMap<>(local);
@@ -465,9 +629,143 @@ final class GridPreview {
 			}
 			int have = localLeft.getOrDefault(itemId, 0);
 			localLeft.put(itemId, Math.max(have - copies, 0));
-			slots.add(new PreviewSlot(gridIndices.get(i), prototype(itemId).copyWithCount(copies), have < copies));
+			slots.add(new PreviewSlot(gridIndices.get(i), prototype(itemId).copyWithCount(copies), have < copies ? Source.NEARBY : Source.INVENTORY));
 		}
-		return new Plan(selection.recipeId(), summary, List.copyOf(slotItemIds), copies, List.copyOf(slots), selection.displayStack().copy());
+		// Not List.copyOf: a shaped pattern's gaps (a furnace's middle) are
+		// null entries, and List.copyOf rejects nulls.
+		ItemStack output = selection.displayStack();
+		return withRetrieved(new Plan(
+			selection.recipeId(),
+			summary,
+			java.util.Collections.unmodifiableList(slotItemIds),
+			copies,
+			List.copyOf(slots),
+			output.copyWithCount(copies * Math.max(output.getCount(), 1)),
+			false,
+			0
+		), retrieved);
+	}
+
+	/**
+	 * The final step of the chain a release would offer: what the chain's
+	 * last craft puts in the grid (its first batch). A bulk chain runs
+	 * iteration by iteration, so this is the first iteration's final step,
+	 * planned by the same function the session runs.
+	 */
+	private static Plan computeChainFinalStep(
+		Minecraft client,
+		int gridSlotCount,
+		RecipeClickExecutor.ChainCraftOffer offer,
+		boolean allowNearby,
+		boolean bulk,
+		Map<String, Integer> local
+	) {
+		ChainCraftPlan chainPlan = offer.plan();
+		if (bulk) {
+			if (!ReachCraftingConfig.get().enableBulkChainCrafting()) {
+				return hidden("bulk_chain_disabled");
+			}
+			// Lockstep: ChainCraftPopupController.handleBulkChainPlan sizes the
+			// session to the offer, BulkChainCraftController plans iteration one.
+			int targetCopies = chainPlan.finalRecipeCopies();
+			BulkChainCraftController.IterationPlan iteration = BulkChainCraftController.planIteration(
+				client,
+				offer.selection(),
+				allowNearby,
+				BulkChainCraftController.firstIterationBatchTarget(targetCopies),
+				0,
+				targetCopies
+			);
+			if (iteration.plan().isEmpty()) {
+				return hidden("bulk_chain_no_iteration " + iteration.failure());
+			}
+			chainPlan = iteration.plan().get();
+		}
+		if (chainPlan.steps().isEmpty()) {
+			return hidden("chain_empty");
+		}
+		ChainCraftPlan.Step finalStep = chainPlan.steps().getLast();
+		// Lockstep: ManualRecipePlacer.placeStepCrafts places these per slot.
+		List<String> slotItemIds = ManualRecipePlacer.resolvePerSlotInputs(finalStep);
+		if (slotItemIds.isEmpty()) {
+			return hidden("chain_final_unresolved");
+		}
+		int batchCap = Integer.MAX_VALUE;
+		for (String itemId : slotItemIds) {
+			if (itemId == null) {
+				continue;
+			}
+			ItemStack prototype = prototype(itemId);
+			if (prototype.isEmpty()) {
+				return hidden("chain_final_unknown_item " + itemId);
+			}
+			batchCap = Math.min(batchCap, Math.max(prototype.getMaxStackSize(), 1));
+		}
+		// Lockstep: ChainCraftRun.nextBatchCopies (at most 64 a batch).
+		int copies = Math.min(Math.min(Math.max(finalStep.recipeCopies(), 1), 64), batchCap);
+		RecipeIngredientSummary summary = finalStep.ingredientSummary();
+		List<Integer> gridIndices = summary.gridSlotIndices(gridSlotCount);
+		if (copies <= 0 || gridIndices.size() != slotItemIds.size()) {
+			return hidden("shape_unmappable");
+		}
+
+		Set<String> craftedByChain = new HashSet<>();
+		for (ChainCraftPlan.Step step : chainPlan.steps()) {
+			if (!step.finalStep()) {
+				craftedByChain.add(BuiltInRegistries.ITEM.getKey(step.displayStack().getItem()).toString());
+			}
+		}
+		Map<String, Integer> localLeft = new LinkedHashMap<>(local);
+		List<PreviewSlot> slots = new ArrayList<>();
+		for (int i = 0; i < slotItemIds.size(); i++) {
+			String itemId = slotItemIds.get(i);
+			if (itemId == null) {
+				continue;
+			}
+			int have = localLeft.getOrDefault(itemId, 0);
+			localLeft.put(itemId, Math.max(have - copies, 0));
+			Source source = have >= copies
+				? Source.INVENTORY
+				: craftedByChain.contains(itemId) ? Source.CHAIN : Source.NEARBY;
+			slots.add(new PreviewSlot(gridIndices.get(i), prototype(itemId).copyWithCount(copies), source));
+		}
+		return new Plan(
+			finalStep.recipeId(),
+			summary,
+			java.util.Collections.unmodifiableList(new ArrayList<>(slotItemIds)),
+			copies,
+			List.copyOf(slots),
+			finalStep.displayStack().copyWithCount(copies * Math.max(finalStep.displayStack().getCount(), 1)),
+			true,
+			0
+		);
+	}
+
+	/**
+	 * Adds a retrieve-first step's haul to the result slot, when it is the
+	 * same item the craft makes (a retrieval can settle on another variant,
+	 * which then has no slot of its own to show in).
+	 */
+	private static Plan withRetrieved(Plan plan, RecipeClickExecutor.QueueRetrieveFirst retrieved) {
+		if (plan == null || retrieved.retrievedItems() <= 0
+			|| !ItemStack.isSameItemSameComponents(plan.result(), retrieved.retrieveStack())) {
+			return plan;
+		}
+		return new Plan(
+			plan.recipeId(),
+			plan.summary(),
+			plan.slotItemIds(),
+			plan.copies(),
+			plan.slots(),
+			plan.result().copyWithCount(plan.result().getCount() + retrieved.retrievedItems()),
+			plan.chain(),
+			retrieved.retrievedItems()
+		);
+	}
+
+	private static Plan hidden(String reason) {
+		hiddenReason = reason;
+		return null;
 	}
 
 	/** Lockstep: SearchSession's scanAcceptedItemIds. */
