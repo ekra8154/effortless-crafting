@@ -253,7 +253,7 @@ final class MenuTransferHelper {
 				break;
 			}
 			if (slot == targetSlot || !(slot.container instanceof Inventory) || !slot.hasItem()
-				|| !ItemStack.isSameItemSameComponents(slot.getItem(), stack)) {
+				|| !ItemStack.isSameItemSameTags(slot.getItem(), stack)) {
 				continue;
 			}
 			int free = Math.min(slot.getMaxStackSize(), stack.getMaxStackSize()) - slot.getItem().getCount();

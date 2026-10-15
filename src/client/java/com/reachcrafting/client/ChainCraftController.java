@@ -42,6 +42,7 @@ public final class ChainCraftController {
 		}
 		abort(false);
 		activeRun = ChainCraftRun.start(plan);
+		GridPreview.onChainStarted(plan);
 		hotbarEmptyAtRunStart = snapshotEmptyHotbar(Minecraft.getInstance());
 		hotbarTidied = false;
 	}
@@ -126,6 +127,11 @@ public final class ChainCraftController {
 
 	static boolean isRunningIntermediateStep() {
 		return activeRun != null && activeRun.currentStepIndex() < activeRun.plan().steps().size() - 1;
+	}
+
+	/** Copies the current step's batch was scheduled for (ChainCraftRun.nextBatchCopies at scheduling). */
+	static int currentScheduledBatchCopies() {
+		return activeRun == null ? 0 : activeRun.scheduledBatchCopies();
 	}
 
 	static boolean isRunningFinalStep() {
@@ -735,7 +741,7 @@ public final class ChainCraftController {
 		int room = 0;
 		for (int i = 9; i < 36 && room < stack.getCount(); i++) {
 			Slot slot = findInventoryMenuSlot(menu, i);
-			if (slot == null || !slot.hasItem() || !ItemStack.isSameItemSameComponents(slot.getItem(), stack)) {
+			if (slot == null || !slot.hasItem() || !ItemStack.isSameItemSameTags(slot.getItem(), stack)) {
 				continue;
 			}
 			int free = Math.min(slot.getMaxStackSize(), stack.getMaxStackSize()) - slot.getItem().getCount();

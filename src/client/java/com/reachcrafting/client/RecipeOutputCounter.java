@@ -13,6 +13,9 @@ import java.util.List;
 
 public final class RecipeOutputCounter {
 	private static final int TEXT_COLOR = 0xFFFFFFFF;
+	private static final int QUEUED_COLOR = 0xFFF2D15B;
+	/** Queued total the queue preview says cannot all be made. */
+	private static final int QUEUED_SHORT_COLOR = 0xFFE8650A;
 	private static final int SHADOW_COLOR = 0xFF000000;
 
 	private RecipeOutputCounter() {
@@ -82,7 +85,9 @@ public final class RecipeOutputCounter {
 		}
 
 		// 4. Render
-		int color = includesQueued ? 0xFFF2D15B : TEXT_COLOR; // Gold if queued
+		int color = !includesQueued
+			? TEXT_COLOR
+			: GridPreview.isCurrentShortOfRequest(minecraft) ? QUEUED_SHORT_COLOR : QUEUED_COLOR;
 		renderCount(guiGraphics, minecraft.font, displayCount, slot.x, slot.y, color);
 	}
 
