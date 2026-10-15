@@ -25,8 +25,15 @@ import net.minecraft.world.item.ItemStack;
  * and extractSlot.</p>
  */
 public final class GridPreviewRenderer {
-	/** Vanilla GhostSlots' wash over the item. */
-	private static final int GHOST_WASH = 0x30FFFFFF;
+	/**
+	 * Fades the item halfway into vanilla's slot gray, so a preview reads as
+	 * "not placed yet" next to real stacks. (Vanilla GhostSlots' 0x30FFFFFF
+	 * looked too much like staged items.) Translucent, so a resource pack's
+	 * slot still shows through.
+	 */
+	private static final int GHOST_WASH = 0x608B8B8B;
+	/** Preview counts: muted, unlike a real stack's white count. */
+	private static final int GHOST_COUNT_COLOR = 0xFFC0C0C0;
 
 	private GridPreviewRenderer() {
 	}
@@ -71,7 +78,11 @@ public final class GridPreviewRenderer {
 		int y = slot.y;
 		graphics.fakeItem(ghost, x, y);
 		graphics.fill(x, y, x + 16, y + 16, GHOST_WASH);
-		graphics.itemDecorations(client.font, ghost, x, y);
+		if (ghost.getCount() > 1) {
+			// Vanilla's count placement (ItemStack decorations), muted.
+			String count = String.valueOf(ghost.getCount());
+			graphics.text(client.font, count, x + 17 - client.font.width(count), y + 9, GHOST_COUNT_COLOR, true);
+		}
 		// Same colors as the recipe book's indicators: yellow for nearby
 		// containers, orange for what the chain crafts on the way.
 		if (source == GridPreview.Source.NEARBY) {
