@@ -68,6 +68,8 @@ public final class ReproHarness {
 	// staged in the grid. "noalt" drives the plain path a player gets
 	// without auto craft.
 	private static boolean pendingNoAlt;
+	/** "hold": queue the craft and leave it pending (no release), for looking at the queue preview. */
+	private static boolean pendingHold;
 	// Existing Output Handling as it was before a bulk/chain run forced
 	// Craft Only, so the run can hand it back. The setter itself does not
 	// persist, but auto craft toggles during the run call save(), which
@@ -266,6 +268,7 @@ public final class ReproHarness {
 				pendingShift = false;
 				pendingOverlay = false;
 				pendingNoAlt = false;
+				pendingHold = false;
 				for (int i = 2; i < parts.length; i++) {
 					if (parts[i].startsWith("count=")) {
 						pendingRetrieveCount = Integer.parseInt(parts[i].substring("count=".length()));
@@ -277,6 +280,8 @@ public final class ReproHarness {
 						pendingOverlay = true;
 					} else if (parts[i].equals("noalt")) {
 						pendingNoAlt = true;
+					} else if (parts[i].equals("hold")) {
+						pendingHold = true;
 					}
 				}
 				pendingBulkLatch = false;
@@ -286,6 +291,11 @@ public final class ReproHarness {
 				focusBypassTicks = 6000;
 				// Always start from a fresh container session so leftover
 				// screens/grids from a previous run can't contaminate the test.
+				// A held queue keeps an open table: its grid is what the
+				// preview must hide.
+				if (pendingHold && client.gui.screen() instanceof CraftingScreen) {
+					return;
+				}
 				if (client.gui.screen() != null) {
 					client.player.closeContainer();
 				}
@@ -370,6 +380,13 @@ public final class ReproHarness {
 				} else {
 					ReachCraftingMod.LOGGER.warn("[repro_harness] unknown set target {}", command);
 				}
+			}
+			case "shot" -> {
+				// Vanilla's F2 capture into run/screenshots/<name>.png, so the
+				// rig can look at the GUI without the window in front.
+				String name = (parts.length > 1 ? parts[1] : "shot") + ".png";
+				net.minecraft.client.Screenshot.grab(client.gameDirectory, name, client.gameRenderer.mainRenderTarget(), 1,
+					message -> ReachCraftingMod.diag("[repro_harness] shot {} {}", name, message.getString()));
 			}
 			case "abort" -> {
 				// What Esc does mid-session (AbstractContainerScreenMixin):
@@ -456,7 +473,9 @@ public final class ReproHarness {
 					"[repro_harness] craft armed recipe id={} item={} ctrl={} shift={} alt={} count={} handling={}",
 					entry.id(), itemId, ctrl, shift, !noAlt, count < 0 ? "1" : String.valueOf(count),
 					ReachCraftingConfig.get().existingOutputHandling());
-				if (count < 0) {
+				if (pendingHold) {
+					RecipeBookInputController.getInstance().harnessQueueHold(entry.id(), collection, stack, Math.max(count, 1));
+				} else if (count < 0) {
 					RecipeBookClickCapture.onRecipeButtonClicked(entry.id(), collection, stack, 0, shift, ctrl, !noAlt, false);
 				} else {
 					RecipeBookInputController.getInstance().harnessQueueAndRelease(entry.id(), collection, stack, count, ctrl, !noAlt);
