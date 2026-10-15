@@ -612,6 +612,26 @@ final class RecipeBookInputController {
 		releasePendingHeldRecipe(currentModifierState(ctrl, false, alt));
 	}
 
+	/** Harness: queue like held clicks but never release (no modifier went down), so the queue preview stays up. */
+	void harnessQueueHold(
+		Recipe<?> recipe,
+		net.minecraft.client.gui.screens.recipebook.RecipeCollection collection,
+		ItemStack displayStack,
+		int count
+	) {
+		RecipeBookClickCapture.HeldRecipeAction action = new RecipeBookClickCapture.HeldRecipeAction(
+			recipe,
+			recipe.getId(),
+			collection,
+			displayStack != null ? displayStack.copy() : ItemStack.EMPTY,
+			GLFW.GLFW_MOUSE_BUTTON_LEFT,
+			false
+		);
+		int queued = clampQueuedCount(0, count, resolveQueueLimit(Minecraft.getInstance(), action));
+		com.reachcrafting.ReachCraftingMod.diag("[recipe_input] harness_hold recipe={} queued={}", recipe.getId(), queued);
+		state.setPendingHeldRecipe(new RecipeBookClickCapture.PendingHeldRecipe(action, queued, queued >= 2));
+	}
+
 	private void releasePendingHeldRecipe(ModifierState modifierState) {
 		if (!ReachCraftingConfig.get().enabled() || state.pendingHeldRecipe() == null) {
 			return;
