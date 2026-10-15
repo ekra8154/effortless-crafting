@@ -249,8 +249,8 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 	// Declared after renderResultArrow on purpose: HEAD injectors run in
 	// declaration order and a cancel skips the ones after it, so the arrow
 	// still draws under the preview's result ghost.
-	@Inject(method = "extractSlot", at = @At("HEAD"), cancellable = true)
-	private void reachcrafting$renderGridPreview(GuiGraphicsExtractor guiGraphics, Slot slot, int mouseX, int mouseY, CallbackInfo ci) {
+	@Inject(method = "renderSlot", at = @At("HEAD"), cancellable = true)
+	private void reachcrafting$renderGridPreview(GuiGraphics guiGraphics, Slot slot, int mouseX, int mouseY, CallbackInfo ci) {
 		if (!ReachCraftingConfig.get().enabled()) return;
 		AbstractContainerScreen<?> screen = (AbstractContainerScreen<?>) (Object) this;
 		if (com.reachcrafting.client.GridPreviewRenderer.renderInPlaceOfSlot(guiGraphics, screen, slot)) {
