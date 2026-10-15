@@ -21,7 +21,8 @@ import net.minecraft.world.item.ItemStack;
  *
  * <p>Backport: the only GUI-API surface of the queue preview. 1.21.x trees
  * draw with GuiGraphics (renderFakeItem / drawString) and hook renderSlot;
- * 26.x uses GuiGraphicsExtractor (fakeItem / text) and extractSlot.</p>
+ * 26.x uses GuiGraphicsExtractor (fakeItem / text) and extractSlot. 1.21.5
+ * and older have a 3D GUI pose, so the overlay needs a z lift.</p>
  */
 public final class GridPreviewRenderer {
 	/**
@@ -76,6 +77,10 @@ public final class GridPreviewRenderer {
 		int x = slot.x;
 		int y = slot.y;
 		graphics.renderFakeItem(ghost, x, y);
+		// The GUI is 3D here and renderItem draws at z 150: lift the wash,
+		// count and dots above it (vanilla draws decorations at 200).
+		graphics.pose().pushPose();
+		graphics.pose().translate(0.0F, 0.0F, 200.0F);
 		graphics.fill(x, y, x + 16, y + 16, GHOST_WASH);
 		if (ghost.getCount() > 1) {
 			// Vanilla's count placement (ItemStack decorations), muted.
@@ -89,6 +94,7 @@ public final class GridPreviewRenderer {
 		} else if (source == GridPreview.Source.CHAIN) {
 			RecipeButtonNearbyIndicator.renderChainDot(graphics, x - 1, y - 1);
 		}
+		graphics.pose().popPose();
 		return true;
 	}
 }
