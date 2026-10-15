@@ -222,16 +222,16 @@ final class MenuTransferHelper {
 		if (parking == null) {
 			return WithdrawalMoveResult.failed();
 		}
-		pickup(gameMode, player, menu, sourceSlot, LEFT_CLICK);
+		pickup(gameMode, player, menu, sourceSlot, 0);
 		if (player.containerMenu.getCarried().isEmpty()) {
 			return WithdrawalMoveResult.failed();
 		}
-		pickup(gameMode, player, menu, targetSlot, LEFT_CLICK);
+		pickup(gameMode, player, menu, targetSlot, 0);
 		for (Slot slot : parking) {
 			if (player.containerMenu.getCarried().isEmpty()) {
 				break;
 			}
-			pickup(gameMode, player, menu, slot, LEFT_CLICK);
+			pickup(gameMode, player, menu, slot, 0);
 		}
 		int stranded = player.containerMenu.getCarried().isEmpty() ? 0 : player.containerMenu.getCarried().getCount();
 		return new WithdrawalMoveResult(sourceCount - stranded, WithdrawalExecutionMode.FULL_STACK);

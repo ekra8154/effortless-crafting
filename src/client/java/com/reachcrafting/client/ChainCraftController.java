@@ -712,7 +712,7 @@ public final class ChainCraftController {
 	}
 
 	private static void tidyClick(Minecraft client, net.minecraft.world.inventory.AbstractContainerMenu menu, Slot slot) {
-		client.gameMode.handleContainerInput(menu.containerId, slot.index, 0, ContainerInput.PICKUP, client.player);
+		client.gameMode.handleInventoryMouseClick(menu.containerId, slot.index, 0, ClickType.PICKUP, client.player);
 		GridTopUp.recordClick();
 	}
 
