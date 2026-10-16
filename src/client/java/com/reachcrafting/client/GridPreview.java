@@ -105,19 +105,28 @@ final class GridPreview {
 	private static boolean hiddenCannotCraft;
 	/** hiddenCannotCraft for cachedKey's compute. */
 	private static boolean cachedCannotCraft;
-	/** What the latest current() call found: no plan, because nothing queued can be made. */
+	/** What the latest queuedPlan() call found: no plan, because nothing queued can be made. */
 	private static boolean currentCannotCraft;
 
 	private GridPreview() {
 	}
 
-	/** The preview for the recipe queued right now, or null. Cheap per frame: recomputed only when an input changes. */
+	/** The preview for the recipe queued right now, or null when Queue Preview is off. */
 	static Plan current(Minecraft client) {
+		return ReachCraftingConfig.get().showGridPreview() ? queuedPlan(client) : null;
+	}
+
+	/**
+	 * The plan for the recipe queued right now, or null, whether or not the
+	 * preview draws it: the queued total's color reads it too. Cheap per
+	 * frame: recomputed only when an input changes.
+	 */
+	private static Plan queuedPlan(Minecraft client) {
 		currentCannotCraft = false;
 		ReachCraftingConfig config = ReachCraftingConfig.get();
 		LocalPlayer player = client.player;
 		Screen screen = client.gui.screen();
-		if (!config.enabled() || !config.showGridPreview() || player == null || client.level == null
+		if (!config.enabled() || player == null || client.level == null
 			|| (!(screen instanceof CraftingScreen) && !(screen instanceof InventoryScreen))) {
 			return null;
 		}
@@ -193,11 +202,11 @@ final class GridPreview {
 
 	/**
 	 * RecipeOutputCounter: the queued total is more than the release can
-	 * make, by the previewed plan or, with no preview, because none of it
-	 * can be made.
+	 * make, by the plan or, with no plan, because none of it can be made.
+	 * Independent of the Queue Preview setting.
 	 */
 	static boolean isCurrentShortOfRequest(Minecraft client) {
-		Plan plan = current(client);
+		Plan plan = queuedPlan(client);
 		return plan != null ? plan.shortOfRequest() : currentCannotCraft;
 	}
 
