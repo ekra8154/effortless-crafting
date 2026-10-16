@@ -98,12 +98,19 @@ final class GridPreview {
 	private static boolean loggedFailure;
 	/** Why the last compute returned no plan; logged on each recompute so a missing preview explains itself. */
 	private static String hiddenReason;
+	/** The last compute hid the preview because nothing queued can be made (cannotCraft). */
+	private static boolean hiddenCannotCraft;
+	/** hiddenCannotCraft for cachedKey's compute. */
+	private static boolean cachedCannotCraft;
+	/** What the latest current() call found: no plan, because nothing queued can be made. */
+	private static boolean currentCannotCraft;
 
 	private GridPreview() {
 	}
 
 	/** The preview for the recipe queued right now, or null. Cheap per frame: recomputed only when an input changes. */
 	static Plan current(Minecraft client) {
+		currentCannotCraft = false;
 		ReachCraftingConfig config = ReachCraftingConfig.get();
 		LocalPlayer player = client.player;
 		Screen screen = client.screen;
@@ -124,7 +131,9 @@ final class GridPreview {
 		if (!key.equals(cachedKey)) {
 			cachedKey = key;
 			hiddenReason = null;
+			hiddenCannotCraft = false;
 			cachedPlan = computeSafely(client, player, screen, pending.action(), pending.clickCount(), allowNearby, autoCraft);
+			cachedCannotCraft = cachedPlan == null && hiddenCannotCraft;
 			if (cachedPlan == null) {
 				ReachCraftingMod.diag(
 					"[grid_preview] hidden reason={} recipe={} count={} nearby={} auto_craft={}",
@@ -144,6 +153,7 @@ final class GridPreview {
 				);
 			}
 		}
+		currentCannotCraft = cachedCannotCraft;
 		return cachedPlan;
 	}
 
@@ -178,10 +188,14 @@ final class GridPreview {
 		);
 	}
 
-	/** RecipeOutputCounter: the queued total is more than the previewed plan can make. */
+	/**
+	 * RecipeOutputCounter: the queued total is more than the release can
+	 * make, by the previewed plan or, with no preview, because none of it
+	 * can be made.
+	 */
 	static boolean isCurrentShortOfRequest(Minecraft client) {
 		Plan plan = current(client);
-		return plan != null && plan.shortOfRequest();
+		return plan != null ? plan.shortOfRequest() : currentCannotCraft;
 	}
 
 	static void clearCommitment() {
@@ -598,7 +612,7 @@ final class GridPreview {
 			for (String itemId : summary.acceptedItemIds()) {
 				acceptedTotals.put(itemId, totals.getOrDefault(itemId, 0));
 			}
-			return hidden("missing_ingredients target=" + target + " max=" + maxCopies
+			return cannotCraft("missing_ingredients target=" + target + " max=" + maxCopies
 				+ " output=" + selection.outputItemId()
 				+ " needs=[" + summary.compactSummary() + "]"
 				+ " have=" + acceptedTotals);
@@ -693,7 +707,9 @@ final class GridPreview {
 				targetCopies
 			);
 			if (iteration.plan().isEmpty()) {
-				return hidden("bulk_chain_no_iteration " + iteration.failure());
+				return iteration.failure() == BulkChainCraftController.IterationFailure.MATERIALS
+					? cannotCraft("bulk_chain_no_iteration " + iteration.failure())
+					: hidden("bulk_chain_no_iteration " + iteration.failure());
 			}
 			chainPlan = iteration.plan().get();
 		}
@@ -803,6 +819,12 @@ final class GridPreview {
 	private static Plan hidden(String reason) {
 		hiddenReason = reason;
 		return null;
+	}
+
+	/** hidden(), for a release that would make none of the queued crafts: the queued total shows as short. */
+	private static Plan cannotCraft(String reason) {
+		hiddenCannotCraft = true;
+		return hidden(reason);
 	}
 
 	/** Lockstep: SearchSession's scanAcceptedItemIds. */
