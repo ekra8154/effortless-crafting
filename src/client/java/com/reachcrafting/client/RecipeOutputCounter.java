@@ -15,7 +15,7 @@ public final class RecipeOutputCounter {
 	private static final int TEXT_COLOR = 0xFFFFFFFF;
 	private static final int QUEUED_COLOR = 0xFFF2D15B;
 	/** Queued total the queue preview says cannot all be made. */
-	private static final int QUEUED_SHORT_COLOR = 0xFFE8650A;
+	private static final int QUEUED_SHORT_COLOR = 0xFFFF8800;
 	private static final int SHADOW_COLOR = 0xFF000000;
 
 	private RecipeOutputCounter() {
