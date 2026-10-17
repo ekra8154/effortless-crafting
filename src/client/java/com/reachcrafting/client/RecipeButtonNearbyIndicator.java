@@ -300,11 +300,15 @@ public final class RecipeButtonNearbyIndicator {
 			indicatorState = lastKnownState.get(stateKey);
 			retrievable = lastKnownRetrievable.getOrDefault(stateKey, false);
 		} else {
-			indicatorState = ReachCraftingConfig.get().showCraftabilityIndicators()
-				? (collection.getRecipes().size() > 1
-					? resolveCollectionIndicatorState(collection)
-					: indicatorStateForRecipe(recipe, collection, ItemStack.EMPTY, false))
-				: IndicatorState.NONE;
+			// A queued recipe shows how the queued count is made, not one craft.
+			IndicatorState queued = GridPreview.queuedIndicatorState(Minecraft.getInstance(), collection);
+			indicatorState = !ReachCraftingConfig.get().showCraftabilityIndicators()
+				? IndicatorState.NONE
+				: queued != null
+					? queued
+					: (collection.getRecipes().size() > 1
+						? resolveCollectionIndicatorState(collection)
+						: indicatorStateForRecipe(recipe, collection, ItemStack.EMPTY, false));
 			retrievable = resolveRetrievable(button);
 			lastKnownState.put(stateKey, indicatorState);
 			lastKnownRetrievable.put(stateKey, retrievable);
