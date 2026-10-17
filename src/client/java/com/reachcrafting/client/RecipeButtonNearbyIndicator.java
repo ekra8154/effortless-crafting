@@ -244,6 +244,22 @@ public final class RecipeButtonNearbyIndicator {
 		return ReachCraftingConfig.get().showCraftabilityIndicators();
 	}
 
+	/**
+	 * The indicator state a button for this recipe shows, without the display
+	 * setting: Dynamic Auto Craft acts on it whether or not the dots are drawn.
+	 * A rotating (multi-variant) collection reports its best member, as the
+	 * button does.
+	 */
+	static IndicatorState stateFor(RecipeDisplayId recipe, RecipeCollection collection, ItemStack displayStack) {
+		if (collection == null) {
+			return IndicatorState.NONE;
+		}
+		if (collection.getRecipes().size() > 1) {
+			return collectionIndicatorCache.computeIfAbsent(collection, RecipeButtonNearbyIndicator::resolveCollectionIndicatorState);
+		}
+		return indicatorStateForRecipe(recipe, collection, displayStack != null ? displayStack.copy() : ItemStack.EMPTY, false);
+	}
+
 	private static IndicatorState resolveIndicatorState(RecipeButton button) {
 		if (!ReachCraftingConfig.get().showCraftabilityIndicators()) {
 			return IndicatorState.NONE;
