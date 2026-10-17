@@ -287,6 +287,12 @@ public final class RecipeButtonNearbyIndicator {
 			return IndicatorState.NONE;
 		}
 
+		// A queued recipe shows how the queued count is made, not one craft.
+		IndicatorState queued = GridPreview.queuedIndicatorState(Minecraft.getInstance(), collection);
+		if (queued != null) {
+			return queued;
+		}
+
 		if (collection.getRecipes().size() > 1) {
 			return collectionIndicatorCache.computeIfAbsent(collection, RecipeButtonNearbyIndicator::resolveCollectionIndicatorState);
 		}
