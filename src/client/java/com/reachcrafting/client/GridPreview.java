@@ -298,6 +298,15 @@ final class GridPreview {
 			ReachCraftingMod.diag("[grid_preview] commitment_exceeds_target recipe={} planned={} target={} at={}", plan.recipeId(), plan.copies(), maxCopies, label);
 			return false;
 		}
+		if (plan.shortOfRequest() && plan.copies() < maxCopies) {
+			// The preview planned from the container cache and fell short; the
+			// session has since found more (a container the cache had not
+			// seen), so placing only the previewed copies would leave the rest
+			// of the request uncrafted.
+			clearCommitment();
+			ReachCraftingMod.diag("[grid_preview] commitment_short_of_target recipe={} planned={} target={} at={}", plan.recipeId(), plan.copies(), maxCopies, label);
+			return false;
+		}
 		AbstractContainerMenu menu = client.player.containerMenu;
 		Map<String, Integer> needed = new LinkedHashMap<>();
 		for (String itemId : plan.slotItemIds()) {
