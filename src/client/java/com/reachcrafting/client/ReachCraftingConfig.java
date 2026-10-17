@@ -50,6 +50,7 @@ public final class ReachCraftingConfig {
 	private static final boolean DEFAULT_SHOW_TOTAL_OUTPUT_COUNTS = true;
 	private static final boolean DEFAULT_SHOW_GRID_PREVIEW = true;
 	private static final boolean DEFAULT_DYNAMIC_AUTO_CRAFT = true;
+	private static final boolean DEFAULT_ONLY_PROMPT_WHEN_DIFFERENT = true;
 	private static final InputCounterVisibility DEFAULT_INPUT_COUNTER_VISIBILITY = InputCounterVisibility.SHOW_WHILE_QUEUEING;
 	private static final boolean DEFAULT_INVENTORY_2X2_OFFHAND_CONSOLIDATION = true;
 	private static final ScrollToPullMode DEFAULT_SCROLL_TO_PULL_MODE = ScrollToPullMode.WHILE_RESULT_OR_INVENTORY_SLOT_HOVERED;
@@ -126,6 +127,7 @@ public final class ReachCraftingConfig {
 	private boolean showTotalOutputCounts;
 	private boolean showGridPreview;
 	private boolean dynamicAutoCraft;
+	private boolean onlyPromptWhenDifferent;
 	private InputCounterVisibility inputCounterVisibility;
 	private boolean inventory2x2OffhandConsolidation;
 	private ScrollToPullMode scrollToPullMode;
@@ -213,6 +215,7 @@ public final class ReachCraftingConfig {
 			instance.showTotalOutputCounts = stored.showTotalOutputCounts != null ? stored.showTotalOutputCounts : DEFAULT_SHOW_TOTAL_OUTPUT_COUNTS;
 			instance.showGridPreview = stored.showGridPreview != null ? stored.showGridPreview : DEFAULT_SHOW_GRID_PREVIEW;
 			instance.dynamicAutoCraft = stored.dynamicAutoCraft != null ? stored.dynamicAutoCraft : DEFAULT_DYNAMIC_AUTO_CRAFT;
+			instance.onlyPromptWhenDifferent = stored.onlyPromptWhenDifferent != null ? stored.onlyPromptWhenDifferent : DEFAULT_ONLY_PROMPT_WHEN_DIFFERENT;
 			instance.inputCounterVisibility = stored.inputCounterVisibility != null ? stored.inputCounterVisibility : DEFAULT_INPUT_COUNTER_VISIBILITY;
 			instance.inventory2x2OffhandConsolidation = stored.inventory2x2OffhandConsolidation != null ? stored.inventory2x2OffhandConsolidation : DEFAULT_INVENTORY_2X2_OFFHAND_CONSOLIDATION;
 			instance.scrollToPullMode = parseScrollToPullMode(stored.scrollToPullMode);
@@ -564,6 +567,15 @@ public final class ReachCraftingConfig {
 
 	public void setDynamicAutoCraft(boolean dynamicAutoCraft) {
 		this.dynamicAutoCraft = dynamicAutoCraft;
+	}
+
+	/** Chain and retrieve-then-ask prompts skip what the preview already showed (PromptExpectation). */
+	public boolean onlyPromptWhenDifferent() {
+		return onlyPromptWhenDifferent;
+	}
+
+	public void setOnlyPromptWhenDifferent(boolean onlyPromptWhenDifferent) {
+		this.onlyPromptWhenDifferent = onlyPromptWhenDifferent;
 	}
 
 	public InputCounterVisibility inputCounterVisibility() {
@@ -955,6 +967,7 @@ public final class ReachCraftingConfig {
 		defaults.showTotalOutputCounts = DEFAULT_SHOW_TOTAL_OUTPUT_COUNTS;
 		defaults.showGridPreview = DEFAULT_SHOW_GRID_PREVIEW;
 		defaults.dynamicAutoCraft = DEFAULT_DYNAMIC_AUTO_CRAFT;
+		defaults.onlyPromptWhenDifferent = DEFAULT_ONLY_PROMPT_WHEN_DIFFERENT;
 		defaults.inputCounterVisibility = DEFAULT_INPUT_COUNTER_VISIBILITY;
 		defaults.inventory2x2OffhandConsolidation = DEFAULT_INVENTORY_2X2_OFFHAND_CONSOLIDATION;
 		defaults.scrollToPullMode = DEFAULT_SCROLL_TO_PULL_MODE;
@@ -1232,6 +1245,7 @@ public final class ReachCraftingConfig {
 		private Boolean showTotalOutputCounts;
 		private Boolean showGridPreview;
 		private Boolean dynamicAutoCraft;
+		private Boolean onlyPromptWhenDifferent;
 		private InputCounterVisibility inputCounterVisibility;
 		private Boolean inventory2x2OffhandConsolidation;
 		private JsonElement scrollToPullMode;
@@ -1297,6 +1311,7 @@ public final class ReachCraftingConfig {
 			this.showTotalOutputCounts = config.showTotalOutputCounts;
 			this.showGridPreview = config.showGridPreview;
 			this.dynamicAutoCraft = config.dynamicAutoCraft;
+			this.onlyPromptWhenDifferent = config.onlyPromptWhenDifferent;
 			this.inputCounterVisibility = config.inputCounterVisibility;
 			this.inventory2x2OffhandConsolidation = config.inventory2x2OffhandConsolidation;
 			this.scrollToPullMode = new JsonPrimitive(config.scrollToPullMode.name());
