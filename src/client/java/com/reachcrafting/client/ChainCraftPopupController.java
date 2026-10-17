@@ -64,6 +64,14 @@ public final class ChainCraftPopupController {
 			ChainCraftController.start(plan);
 			return;
 		}
+		if (PromptExpectation.matchesChain(plan)) {
+			// The preview (or the orange dot) already showed this chain.
+			if (downgraded) {
+				ReachCraftingModClient.sendChainCraftChat(alwaysPartialMessage(plan, requestedRecipeCopies).getString());
+			}
+			ChainCraftController.start(plan);
+			return;
+		}
 
 		showConfirmPopup(messageFor(plan, requestedRecipeCopies), new PendingPopup(plan, deferredMissingMessage, null, null, null));
 	}
@@ -79,6 +87,15 @@ public final class ChainCraftPopupController {
 			return;
 		}
 		if (mode == ReachCraftingConfig.ChainCraftingMode.ALWAYS) {
+			if (requestedRecipeCopies > plan.finalRecipeCopies()) {
+				ReachCraftingModClient.sendChainCraftChat(alwaysPartialMessage(plan, requestedRecipeCopies).getString());
+			}
+			onConfirm.run();
+			ChainCraftController.start(plan);
+			return;
+		}
+		// A prompt that names other variants says more than the preview did.
+		if (variantTotalCopies <= plan.finalRecipeCopies() && PromptExpectation.matchesChain(plan)) {
 			if (requestedRecipeCopies > plan.finalRecipeCopies()) {
 				ReachCraftingModClient.sendChainCraftChat(alwaysPartialMessage(plan, requestedRecipeCopies).getString());
 			}
@@ -146,7 +163,8 @@ public final class ChainCraftPopupController {
 		// craftable indicator promises needs no chaining. Flat bulk max never
 		// prompts for that, so neither does bulk chain; the per-iteration
 		// replans still add conversion steps later if directs run dry.
-		if (mode == ReachCraftingConfig.ChainCraftingMode.ALWAYS || plan.steps().size() <= 1) {
+		if (mode == ReachCraftingConfig.ChainCraftingMode.ALWAYS || plan.steps().size() <= 1
+			|| (!switching && PromptExpectation.matchesChain(plan))) {
 			if (downgraded) {
 				ReachCraftingModClient.sendChainCraftChat(bulkAlwaysPartialMessage(plan, requestedRecipeCopies).getString());
 			}
