@@ -111,6 +111,10 @@ final class GridPreview {
 	private static boolean cachedCannotCraft;
 	/** What the latest queuedPlan() call found: no plan, because nothing queued can be made. */
 	private static boolean currentCannotCraft;
+	/** The queued recipe's indicator at the queued count, for cachedKey's compute (null: keep the 1-craft state). */
+	private static RecipeButtonNearbyIndicator.IndicatorState cachedIndicator;
+	/** cachedIndicator as the latest queuedPlan() call found it (null when it found no queue to judge). */
+	private static RecipeButtonNearbyIndicator.IndicatorState currentIndicator;
 
 	private GridPreview() {
 	}
@@ -127,6 +131,7 @@ final class GridPreview {
 	 */
 	private static Plan queuedPlan(Minecraft client) {
 		currentCannotCraft = false;
+		currentIndicator = null;
 		ReachCraftingConfig config = ReachCraftingConfig.get();
 		LocalPlayer player = client.player;
 		Screen screen = client.gui.screen();
@@ -157,6 +162,7 @@ final class GridPreview {
 			hiddenCannotCraft = false;
 			cachedPlan = computeSafely(client, player, screen, pending.action(), pending.clickCount(), allowNearby, autoCraft);
 			cachedCannotCraft = cachedPlan == null && hiddenCannotCraft;
+			cachedIndicator = indicatorFor(client, pending, cachedPlan, cachedCannotCraft, allowNearby, autoCraft);
 			if (cachedPlan == null) {
 				ReachCraftingMod.diag(
 					"[grid_preview] hidden reason={} recipe={} count={} nearby={} auto_craft={}",
@@ -177,7 +183,57 @@ final class GridPreview {
 			}
 		}
 		currentCannotCraft = cachedCannotCraft;
+		currentIndicator = cachedIndicator;
 		return cachedPlan;
+	}
+
+	/**
+	 * RecipeButtonNearbyIndicator: the indicator a queued recipe's button
+	 * shows for the queued count instead of one craft, or null to keep the
+	 * one-craft state (another recipe, nothing queued, or no plan to judge).
+	 */
+	static RecipeButtonNearbyIndicator.IndicatorState queuedIndicatorState(Minecraft client, RecipeCollection collection) {
+		RecipeBookClickCapture.PendingHeldRecipe pending = RecipeBookClickCapture.getPendingHeldRecipe();
+		if (pending == null || collection == null || pending.action().collection() != collection) {
+			return null;
+		}
+		queuedPlan(client);
+		return currentIndicator;
+	}
+
+	/** The indicator state that describes how the release makes the queue: the plan's way, at the queued count. */
+	private static RecipeButtonNearbyIndicator.IndicatorState indicatorFor(
+		Minecraft client,
+		RecipeBookClickCapture.PendingHeldRecipe pending,
+		Plan plan,
+		boolean cannotCraft,
+		boolean allowNearby,
+		boolean autoCraft
+	) {
+		if (plan == null) {
+			return cannotCraft ? RecipeButtonNearbyIndicator.IndicatorState.NONE : null;
+		}
+		if (plan.chain()) {
+			// The final step's slots do not show where the earlier steps'
+			// materials come from, so ask whether the inventory alone chains it.
+			if (!allowNearby) {
+				return RecipeButtonNearbyIndicator.IndicatorState.CHAIN_LOCAL;
+			}
+			Plan local = planFor(client, pending.action(), pending.clickCount(), false, autoCraft);
+			return local != null && local.chain() && !local.shortOfRequest()
+				? RecipeButtonNearbyIndicator.IndicatorState.CHAIN_LOCAL
+				: RecipeButtonNearbyIndicator.IndicatorState.CHAIN_NEARBY;
+		}
+		if (plan.slots().isEmpty()) {
+			// A retrieval covers it: no craft to describe.
+			return null;
+		}
+		for (PreviewSlot slot : plan.slots()) {
+			if (slot.source() == Source.NEARBY) {
+				return RecipeButtonNearbyIndicator.IndicatorState.NEARBY;
+			}
+		}
+		return RecipeButtonNearbyIndicator.IndicatorState.LOCAL;
 	}
 
 	/** One plan, outside the queue: what DynamicAutoCraft weighs each way with. */
