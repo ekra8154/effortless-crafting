@@ -117,6 +117,22 @@ public final class RecipeButtonNearbyIndicator {
 		return ChainCraftabilityCache.isChainCraftable(recipe.id()) ? IndicatorState.CHAIN_NEARBY : IndicatorState.NONE;
 	}
 
+	/**
+	 * The indicator state a button for this recipe shows, without the display
+	 * setting: Dynamic Auto Craft acts on it whether or not the dots are drawn.
+	 * A rotating (multi-variant) collection reports its best member, as the
+	 * button does.
+	 */
+	static IndicatorState stateFor(RecipeHolder<?> recipe, RecipeCollection collection, ItemStack displayStack) {
+		if (collection == null) {
+			return IndicatorState.NONE;
+		}
+		if (collection.getRecipes().size() > 1) {
+			return resolveCollectionIndicatorState(collection);
+		}
+		return indicatorStateForRecipe(recipe, collection, displayStack != null ? displayStack.copy() : ItemStack.EMPTY, false);
+	}
+
 	private static boolean retrievableIndicatorEnabled() {
 		// Retrieval Mode turns every click into a pull, so the dot is the whole
 		// signal there and the handling setting does not apply.
