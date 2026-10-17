@@ -70,6 +70,9 @@ final class GridPreview {
 	 * @param retrievedItems the part of result that comes from containers
 	 * @param shortOfRequest the plan cannot make everything the queue asks
 	 *     for; RecipeOutputCounter turns the queued total orange
+	 * @param expectedCrafts crafts the whole release makes by this plan (all
+	 *     batches, after any retrieval); PromptExpectation compares offers
+	 *     against it
 	 */
 	record Plan(
 		RecipeDisplayId recipeId,
@@ -80,7 +83,8 @@ final class GridPreview {
 		ItemStack result,
 		boolean chain,
 		int retrievedItems,
-		boolean shortOfRequest
+		boolean shortOfRequest,
+		int expectedCrafts
 	) {
 		PreviewSlot slotAt(int menuSlotIndex) {
 			for (PreviewSlot slot : slots) {
@@ -201,11 +205,14 @@ final class GridPreview {
 		commitment = null;
 		chainArmed = false;
 		cachedKey = null;
+		PromptExpectation.clear();
 		ReachCraftingConfig config = ReachCraftingConfig.get();
 		if (!config.enabled() || !config.showGridPreview() || client.player == null || action == null) {
 			return;
 		}
 		Plan plan = computeSafely(client, client.player, client.screen, action, clickCount, allowNearby, autoCraft);
+		// What the player was shown, which the release's prompts compare to.
+		PromptExpectation.recordPreview(plan);
 		if (plan == null || plan.slots().isEmpty()) {
 			// Nothing to place (a retrieval that covers the request).
 			return;
@@ -570,7 +577,8 @@ final class GridPreview {
 					retrieveFirst.retrieveStack().copyWithCount(retrieveFirst.retrievedItems()),
 					false,
 					retrieveFirst.retrievedItems(),
-					retrieveFirst.retrievedItems() < retrieveFirst.targetItems()
+					retrieveFirst.retrievedItems() < retrieveFirst.targetItems(),
+					0
 				);
 			}
 			requested = (shortfall + retrieveFirst.outputPerCraft() - 1) / retrieveFirst.outputPerCraft();
@@ -714,7 +722,8 @@ final class GridPreview {
 			selection.displayStack().copy(),
 			false,
 			0,
-			false
+			false,
+			0
 		), requested, achievableCopies, retrieved, !continuesVariants);
 	}
 
@@ -812,7 +821,8 @@ final class GridPreview {
 			finalStep.displayStack().copy(),
 			true,
 			0,
-			false
+			false,
+			0
 		);
 	}
 
@@ -854,7 +864,8 @@ final class GridPreview {
 			perCraft.copyWithCount(plan.copies() * outputPerCraft + retrievedItems),
 			plan.chain(),
 			retrievedItems,
-			flagShort && achievableItems < requestedItems
+			flagShort && achievableItems < requestedItems,
+			Math.min(Math.max(achievableCopies, 0), Math.max(requestedCopies, 1))
 		);
 	}
 
