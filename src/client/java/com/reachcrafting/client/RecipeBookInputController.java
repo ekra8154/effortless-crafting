@@ -195,6 +195,21 @@ final class RecipeBookInputController {
 			return;
 		}
 
+		if (!retrievalRequested && DynamicAutoCraft.applies(autoCraftRequested, ctrlModifierDown)) {
+			allowNearbyChests = DynamicAutoCraft.allowNearby(
+				minecraft,
+				new RecipeBookClickCapture.HeldRecipeAction(
+					recipe,
+					recipe.id(),
+					collection,
+					displayStack != null ? displayStack.copy() : ItemStack.EMPTY,
+					mouseButton,
+					explicitVariantSelection
+				),
+				1,
+				maxCraftRequested
+			);
+		}
 		if (autoCraftRequested) {
 			AutoCraftController.consumeQuickCraft();
 		}
@@ -651,6 +666,15 @@ final class RecipeBookInputController {
 
 		Minecraft minecraft = Minecraft.getInstance();
 		ResolvedRequest resolvedRequest = resolveRequest(modifierState);
+		if (state.pendingHeldRecipe().clickCount() > 0
+			&& DynamicAutoCraft.applies(resolvedRequest.autoCraftRequested(), modifierState.controlRequested())) {
+			// Lockstep: GridPreview.queuedPlan asks the same question.
+			resolvedRequest = new ResolvedRequest(
+				DynamicAutoCraft.allowNearby(minecraft, state.pendingHeldRecipe().action(), state.pendingHeldRecipe().clickCount(), false),
+				resolvedRequest.maxCraftRequested(),
+				resolvedRequest.autoCraftRequested()
+			);
+		}
 		if (state.pendingHeldRecipe().clickCount() <= 0) {
 			if (!ContainerUtils.isGridEmpty(minecraft.player.containerMenu)) {
 				ContainerUtils.flushCraftingGrid(minecraft, resolvedRequest.allowNearby(), true);

@@ -406,7 +406,7 @@ final class RecipeClickExecutor {
 		boolean canOfferChainCraft = (deficitReport.hasMissingIngredients()
 				|| (selfReferentialRecipe && AutoCraftController.isBulkModeEnabled()))
 			&& !directBulkTakesPriority
-			&& (autoCraftRequested || AutoCraftController.isBulkModeEnabled())
+			&& (autoCraftRequested || AutoCraftController.isBulkModeEnabled() || DynamicAutoCraft.chainsWithoutAlt())
 			&& chainMode != ReachCraftingConfig.ChainCraftingMode.DISABLED
 			&& !ChainCraftController.isActive()
 			&& !BulkAutoCraftController.isActive()
@@ -1375,7 +1375,7 @@ final class RecipeClickExecutor {
 		boolean selfReferentialRecipe = selectedRecipe.ingredientSummary().acceptedItemIds().contains(resolvedItemId);
 		boolean canOfferChainCraft = (deficitReport.hasMissingIngredients()
 				|| (selfReferentialRecipe && AutoCraftController.isBulkModeEnabled()))
-			&& (autoCraftRequested || AutoCraftController.isBulkModeEnabled())
+			&& (autoCraftRequested || AutoCraftController.isBulkModeEnabled() || DynamicAutoCraft.chainsWithoutAlt())
 			&& ReachCraftingConfig.get().chainCraftingMode() != ReachCraftingConfig.ChainCraftingMode.DISABLED
 			&& !ChainCraftController.isActive()
 			&& !BulkAutoCraftController.isActive()

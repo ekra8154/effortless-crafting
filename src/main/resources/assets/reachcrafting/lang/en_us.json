@@ -126,6 +126,8 @@
   "enum.reachcrafting.chain_crafting_mode.always": "Always",
   "option.reachcrafting.alt_as_request_key": "Alt as Request Key",
   "tooltip.reachcrafting.alt_as_request_key": "Treat Alt + scroll as an alias for Shift + scroll, and automatically craft the requested items once Alt is released.",
+  "option.reachcrafting.dynamic_auto_craft": "Dynamic Auto Craft",
+  "tooltip.reachcrafting.dynamic_auto_craft": "Auto crafts choose where to get items from, so you never need to hold Ctrl. They take the strictest way that covers the request: finished items already in nearby containers (the green dot), then your inventory, then nearby containers, then a chain craft from your inventory, then a chain craft with nearby containers. A Shift max stops at the way the recipe's indicator shows. Crafts without auto craft keep the usual keys, and Ctrl still turns nearby containers on.",
   "option.reachcrafting.alt_click_instant_craft": "Alt Click Instant Craft",
   "tooltip.reachcrafting.alt_click_instant_craft": "If enabled, Alt + click instantly crafts 1 of the requested item instead of queuing it until Alt is released.",
   "category.reachcrafting.sub.messages": "Messages",
