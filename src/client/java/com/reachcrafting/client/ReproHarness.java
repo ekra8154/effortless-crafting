@@ -312,6 +312,10 @@ public final class ReproHarness {
 					boolean on = parts[2].equals("on");
 					ReachCraftingConfig.get().setEjectItemsWhenFull(on);
 					ReachCraftingMod.diag("[repro_harness] set eject_items_when_full={}", on);
+				} else if (parts.length == 3 && parts[1].equals("promptdiff")) {
+					boolean on = parts[2].equals("on");
+					ReachCraftingConfig.get().setOnlyPromptWhenDifferent(on);
+					ReachCraftingMod.diag("[repro_harness] set only_prompt_when_different={}", on);
 				} else if (parts.length == 3 && parts[1].equals("dynamic")) {
 					boolean on = parts[2].equals("on");
 					ReachCraftingConfig.get().setDynamicAutoCraft(on);
