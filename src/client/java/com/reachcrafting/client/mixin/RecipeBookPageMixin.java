@@ -103,13 +103,18 @@ public abstract class RecipeBookPageMixin {
 			|| com.reachcrafting.client.ContainerUtils.isExistingOutputRetrievalEnabled()
 			|| (shiftDown && RecipeBookClickCapture.isBulkModeEnabled())
 			|| (altDown && ReachCraftingConfig.get().altAsRequestKey());
-		if (!interceptWithMod) {
-			return;
-		}
 
 		for (RecipeButton button : this.buttons) {
 			if (!button.isMouseOver(mouseX, mouseY)) {
 				continue;
+			}
+			// A plain click in a latched auto craft mode is placed by vanilla,
+			// which only reaches the inventory. Under Dynamic Auto Craft it
+			// takes the mod's path when the inventory alone does not make it.
+			if (!interceptWithMod
+				&& (shiftDown || altDown || !RecipeBookClickCapture.dynamicPlainClickNeedsModPath(
+					button.getCurrentRecipe(), button.getCollection(), button.getDisplayStack()))) {
+				return;
 			}
 
 			RecipeBookClickCapture.onRecipeButtonClicked(

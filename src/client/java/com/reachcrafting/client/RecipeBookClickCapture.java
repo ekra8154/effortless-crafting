@@ -49,6 +49,17 @@ public final class RecipeBookClickCapture {
 		CONTROLLER.onVanillaRecipeButtonClicked(recipeId, collection, displayStack, explicitVariantSelection, altModifierDown);
 	}
 
+	/** Mixin bridge: DynamicAutoCraft.needsModPathForPlainClick. */
+	public static boolean dynamicPlainClickNeedsModPath(RecipeDisplayId recipeId, RecipeCollection collection, ItemStack displayStack) {
+		return DynamicAutoCraft.needsModPathForPlainClick(new HeldRecipeAction(
+			recipeId,
+			collection,
+			displayStack != null ? displayStack.copy() : ItemStack.EMPTY,
+			0,
+			false
+		));
+	}
+
 	public static void suppressNextVanillaRecipeClick() {
 		suppressNextVanillaRecipeClick = true;
 	}

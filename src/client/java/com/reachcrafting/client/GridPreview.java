@@ -135,13 +135,20 @@ final class GridPreview {
 			return null;
 		}
 		// The release resolves these from the same keys (RecipeBookInputController.resolveRequest).
-		boolean allowNearby = (RecipeBookFocusManager.isControlKeyDown(client) || config.nearbyAlwaysAllowed())
+		boolean ctrl = RecipeBookFocusManager.isControlKeyDown(client);
+		boolean allowNearby = (ctrl || config.nearbyAlwaysAllowed())
 			&& config.enableNearbyContainerUsage();
 		boolean autoCraft = config.altAsRequestKey() && RecipeBookFocusManager.isAltKeyDown(client);
+		// Lockstep: the release asks DynamicAutoCraft the same question.
+		boolean dynamic = DynamicAutoCraft.applies(autoCraft, ctrl);
 
-		List<Object> key = cacheKey(client, player, pending, allowNearby, autoCraft);
+		List<Object> key = new ArrayList<>(cacheKey(client, player, pending, allowNearby || dynamic, autoCraft));
+		key.add(dynamic);
 		if (!key.equals(cachedKey)) {
 			cachedKey = key;
+			if (dynamic) {
+				allowNearby = DynamicAutoCraft.allowNearby(client, pending.action(), pending.clickCount(), false);
+			}
 			hiddenReason = null;
 			hiddenCannotCraft = false;
 			cachedPlan = computeSafely(client, player, screen, pending.action(), pending.clickCount(), allowNearby, autoCraft);
@@ -167,6 +174,20 @@ final class GridPreview {
 		}
 		currentCannotCraft = cachedCannotCraft;
 		return cachedPlan;
+	}
+
+	/** One plan, outside the queue: what DynamicAutoCraft weighs each way with. */
+	static Plan planFor(
+		Minecraft client,
+		RecipeBookClickCapture.HeldRecipeAction action,
+		int clickCount,
+		boolean allowNearby,
+		boolean autoCraft
+	) {
+		if (client.player == null || client.level == null || action == null) {
+			return null;
+		}
+		return computeSafely(client, client.player, client.gui.screen(), action, clickCount, allowNearby, autoCraft);
 	}
 
 	/** Called by the queue release, before it flushes the grid: freezes the plan its first placement must follow. */
