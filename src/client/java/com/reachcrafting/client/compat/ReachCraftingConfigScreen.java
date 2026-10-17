@@ -251,6 +251,15 @@ public final class ReachCraftingConfigScreen {
 			.build());
 
 		autoGroup.add(entries.startBooleanToggle(
+				Component.translatable("option.reachcrafting.only_prompt_when_different"),
+				config.onlyPromptWhenDifferent()
+			)
+			.setDefaultValue(true)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.only_prompt_when_different"))
+			.setSaveConsumer(config::setOnlyPromptWhenDifferent)
+			.build());
+
+		autoGroup.add(entries.startBooleanToggle(
 				Component.translatable("option.reachcrafting.enable_bulk_chain_crafting"),
 				config.enableBulkChainCrafting()
 			)

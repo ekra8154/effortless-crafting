@@ -145,6 +145,7 @@ final class RecipeBookInputController {
 		// A fresh click is a new request: a queue preview's commitment from an
 		// earlier release that never placed must not attach itself to it.
 		GridPreview.clearCommitment();
+		PromptExpectation.clear();
 		if (!ReachCraftingConfig.get().enabled()) {
 			return;
 		}
@@ -209,6 +210,14 @@ final class RecipeBookInputController {
 				1,
 				maxCraftRequested
 			);
+		}
+		if (!retrievalRequested && !maxCraftRequested && ReachCraftingConfig.get().showCraftabilityIndicators()) {
+			// An orange dot on the recipe already said "chain craft".
+			RecipeButtonNearbyIndicator.IndicatorState shownState = RecipeButtonNearbyIndicator.stateFor(recipeId, collection, displayStack);
+			if (shownState == RecipeButtonNearbyIndicator.IndicatorState.CHAIN_LOCAL
+				|| shownState == RecipeButtonNearbyIndicator.IndicatorState.CHAIN_NEARBY) {
+				PromptExpectation.recordChainClick(displayStack);
+			}
 		}
 		if (autoCraftRequested) {
 			AutoCraftController.consumeQuickCraft();
