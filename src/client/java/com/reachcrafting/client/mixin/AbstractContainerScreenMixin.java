@@ -121,8 +121,10 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 	@Inject(method = "mouseClicked", at = @At("HEAD"), cancellable = true)
 	private void reachcrafting$onMouseClicked(double mouseX, double mouseY, int button, CallbackInfoReturnable<Boolean> cir) {
 		if (!ReachCraftingConfig.get().enabled()) return;
+		boolean retrievalModeOn = com.reachcrafting.client.ContainerUtils.isExistingOutputRetrievalEnabled();
 		if (button == 0
 			&& Screen.hasAltDown()
+			&& !retrievalModeOn
 			&& com.reachcrafting.client.ContainerUtils.isAutoCraftEnabled()
 			&& ((Object) this instanceof CraftingScreen || (Object) this instanceof InventoryScreen)) {
 			Slot hoveredSlot = ((AbstractContainerScreenAccessor) this).getHoveredSlot();
@@ -136,9 +138,11 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 				return;
 			}
 		}
+		// In Retrieval Mode Alt is the same as Ctrl, so Alt + click the result
+		// slot toggles the mode too.
 		if (button == 0
 			&& ReachCraftingConfig.get().enableExistingOutputRetrieval()
-			&& Screen.hasControlDown()
+			&& (Screen.hasControlDown() || (retrievalModeOn && Screen.hasAltDown()))
 			&& ((Object) this instanceof CraftingScreen || (Object) this instanceof InventoryScreen)) {
 			Slot hoveredSlot = ((AbstractContainerScreenAccessor) this).getHoveredSlot();
 			if (hoveredSlot instanceof ResultSlot && reachcrafting$isArrowClickTarget(hoveredSlot, mouseX, mouseY)) {
@@ -264,10 +268,13 @@ public abstract class AbstractContainerScreenMixin<T extends AbstractContainerMe
 	private void reachcrafting$onKeyPressed(int keyCode, int scanCode, int modifiers, CallbackInfoReturnable<Boolean> cir) {
 		if (!ReachCraftingConfig.get().enabled()) return;
 		if (keyCode == GLFW.GLFW_KEY_LEFT_ALT || keyCode == GLFW.GLFW_KEY_RIGHT_ALT) {
-			if (com.reachcrafting.client.ContainerUtils.isExistingOutputRetrievalEnabled()) {
-				com.reachcrafting.client.ContainerUtils.disableExistingOutputRetrieval();
+			// Retrieval Mode only takes from nearby containers, so Alt there is
+			// one more modifier for a retrieval: it neither leaves the mode nor
+			// drives auto craft. (Alt + click on the result arrow still
+			// switches to auto craft on purpose.)
+			if (!com.reachcrafting.client.ContainerUtils.isExistingOutputRetrievalEnabled()) {
+				com.reachcrafting.client.ContainerUtils.handleAutoCraftKeyPress();
 			}
-			com.reachcrafting.client.ContainerUtils.handleAutoCraftKeyPress();
 			cir.setReturnValue(true);
 		} else if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
 			if (com.reachcrafting.client.ContainerUtils.isAnySessionActive() || com.reachcrafting.client.ContainerUtils.isAutomatedInteractionRunning()) {
