@@ -236,7 +236,11 @@ final class RecipeBookInputController {
 			);
 		}
 		if (!retrievalRequested && !maxCraftRequested && ReachCraftingConfig.get().showCraftabilityIndicators()) {
-			// An orange dot on the recipe already said "chain craft".
+			// An orange dot on the recipe already said "chain craft". The chain
+			// cache refreshes in the background; settle it first, as the chain
+			// gate does, so a click right after the inventory changed reads
+			// the dot it now shows.
+			ChainCraftabilityCache.refreshNow(minecraft);
 			RecipeButtonNearbyIndicator.IndicatorState shownState = RecipeButtonNearbyIndicator.stateFor(recipeId, collection, displayStack);
 			if (shownState == RecipeButtonNearbyIndicator.IndicatorState.CHAIN_LOCAL
 				|| shownState == RecipeButtonNearbyIndicator.IndicatorState.CHAIN_NEARBY) {
@@ -1138,7 +1142,8 @@ final class RecipeBookInputController {
 		boolean allowNearby = (modifierState.controlRequested() || ReachCraftingConfig.get().nearbyAlwaysAllowed())
 			&& ReachCraftingConfig.get().enableNearbyContainerUsage();
 		boolean maxCraftRequested = modifierState.shiftRequested();
-		boolean autoCraftRequested = modifierState.altRequested();
+		// In Retrieval Mode an Alt queue is a retrieval like any other.
+		boolean autoCraftRequested = modifierState.altRequested() && !ExistingOutputRetrievalController.isEnabled();
 		return new ResolvedRequest(allowNearby, maxCraftRequested, autoCraftRequested);
 	}
 

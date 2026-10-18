@@ -391,7 +391,10 @@ final class AutoCraftController {
 
 	private static boolean isPhysicalAltHeld() {
 		Minecraft minecraft = Minecraft.getInstance();
-		return minecraft != null && RecipeBookFocusManager.isAltKeyDown(minecraft);
+		// In Retrieval Mode Alt is a retrieval modifier like Ctrl, not the
+		// auto craft key: holding it neither arms nor shows auto craft.
+		return minecraft != null && RecipeBookFocusManager.isAltKeyDown(minecraft)
+			&& !ExistingOutputRetrievalController.isEnabled();
 	}
 
 	private static void logLatchWipe(String site) {
