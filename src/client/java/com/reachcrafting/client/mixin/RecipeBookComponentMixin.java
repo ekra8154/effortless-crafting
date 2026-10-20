@@ -307,9 +307,9 @@ public abstract class RecipeBookComponentMixin {
 	 * so a cycle mid-queue swapped the variant (moss to pale moss): hold the
 	 * clock while a request is queued.
 	 */
-	@Redirect(method = "render", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/Minecraft;hasControlDown()Z"))
-	private boolean reachcrafting$holdVariantCycleWhileQueuing(Minecraft minecraft) {
-		if (minecraft.hasControlDown()) {
+	@Redirect(method = "render", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/screens/Screen;hasControlDown()Z"))
+	private boolean reachcrafting$holdVariantCycleWhileQueuing() {
+		if (net.minecraft.client.gui.screens.Screen.hasControlDown()) {
 			return true;
 		}
 		ReachCraftingConfig config = ReachCraftingConfig.get();
