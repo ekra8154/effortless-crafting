@@ -328,6 +328,75 @@ public final class RecipeButtonNearbyIndicator {
 		guiGraphics.pose().popPose();
 	}
 
+	/** The dots sit 3 px into the button's corner; this square covers both with some slack. */
+	private static final int HOVER_ZONE = 12;
+
+	/**
+	 * What the dots under the mouse mean, or null when the mouse is not on
+	 * them (or there are none). Says exactly what {@link #renderIndicators}
+	 * draws: in Retrieval Mode only the green dot shows.
+	 */
+	public static net.minecraft.network.chat.Component hoverText(RecipeButton button, int mouseX, int mouseY) {
+		if (!ReachCraftingConfig.get().enabled()) {
+			return null;
+		}
+		AbstractWidget widget = (AbstractWidget) (Object) button;
+		if (mouseX < widget.getX() || mouseX >= widget.getX() + HOVER_ZONE
+			|| mouseY < widget.getY() || mouseY >= widget.getY() + HOVER_ZONE) {
+			return null;
+		}
+		// What renderButton drew for this button this frame.
+		if (button.getRecipe() == null) {
+			return null;
+		}
+		net.minecraft.resources.ResourceLocation drawnKey = button.getRecipe().id();
+		IndicatorState state = ExistingOutputRetrievalController.isEnabled()
+			? IndicatorState.NONE
+			: lastKnownState.getOrDefault(drawnKey, IndicatorState.NONE);
+		boolean retrievable = lastKnownRetrievable.getOrDefault(drawnKey, false);
+		String craftKey = switch (state) {
+			case LOCAL -> "indicator.reachcrafting.local";
+			case NEARBY -> "indicator.reachcrafting.nearby";
+			case CHAIN_LOCAL -> "indicator.reachcrafting.chain_local";
+			case CHAIN_NEARBY -> "indicator.reachcrafting.chain_nearby";
+			case NONE -> null;
+		};
+		if (craftKey == null) {
+			return retrievable ? net.minecraft.network.chat.Component.translatable("indicator.reachcrafting.existing") : null;
+		}
+		net.minecraft.network.chat.Component craft = net.minecraft.network.chat.Component.translatable(craftKey);
+		return retrievable
+			? net.minecraft.network.chat.Component.translatable("indicator.reachcrafting.existing_and", craft)
+			: craft;
+	}
+
+	/**
+	 * How long the mouse rests on the dots before their tooltip replaces the
+	 * recipe's, so sweeping across the book never flickers it.
+	 */
+	private static final long HOVER_TOOLTIP_DELAY_MS = 200L;
+	private static RecipeButton dotHoverButton;
+	private static long dotHoverSinceMs;
+
+	/**
+	 * The dots' tooltip text once the mouse has rested on them for
+	 * {@link #HOVER_TOOLTIP_DELAY_MS}; null before that and off the dots, when
+	 * the recipe's own tooltip shows.
+	 */
+	public static net.minecraft.network.chat.Component hoverTextAfterDelay(RecipeButton button, int mouseX, int mouseY) {
+		net.minecraft.network.chat.Component text = hoverText(button, mouseX, mouseY);
+		if (text == null) {
+			dotHoverButton = null;
+			return null;
+		}
+		long now = net.minecraft.Util.getMillis();
+		if (dotHoverButton != button) {
+			dotHoverButton = button;
+			dotHoverSinceMs = now;
+		}
+		return now - dotHoverSinceMs >= HOVER_TOOLTIP_DELAY_MS ? text : null;
+	}
+
 	/**
 	 * Green (retrievable) sits two pixels down-right of the craft dot and is
 	 * drawn first, so the yellow/orange dot covers most of it and the green
