@@ -319,7 +319,7 @@ public final class ReachCraftingConfig {
 	public void setNearbyContainerUsageMode(NearbyContainerUsageMode mode) {
 		this.enableNearbyContainerUsage = mode != null ? mode : DEFAULT_ENABLE_NEARBY_CONTAINER_USAGE;
 		if (this.enableNearbyContainerUsage == NearbyContainerUsageMode.DISABLED) {
-			NearbyContainerCache.clear();
+			NearbyContainerCache.forgetKeepingSaved();
 		}
 		RecipeButtonNearbyIndicator.clearCaches();
 		ChainCraftabilityCache.clearCache();
@@ -404,7 +404,7 @@ public final class ReachCraftingConfig {
 	public void setCacheContainersForFasterSearch(boolean cacheContainersForFasterSearch) {
 		this.cacheContainersForFasterSearch = cacheContainersForFasterSearch;
 		if (!cacheContainersForFasterSearch) {
-			NearbyContainerCache.clear();
+			NearbyContainerCache.forgetKeepingSaved();
 		}
 		RecipeButtonNearbyIndicator.clearCaches();
 		ChainCraftabilityCache.clearCache();
@@ -875,7 +875,6 @@ public final class ReachCraftingConfig {
 			RecipeBookChunkedScheduler.clear();
 			ExistingOutputRetrievalController.setEnabled(false);
 			ChainCraftabilityCache.clearCache();
-			NearbyContainerCache.clear();
 			RecipeButtonNearbyIndicator.clearCaches();
 		}
 	}
@@ -951,12 +950,14 @@ public final class ReachCraftingConfig {
 
 	public void setBlacklistedContainerIds(Set<String> blacklistedContainerIds) {
 		Set<String> updated = new LinkedHashSet<>(blacklistedContainerIds);
-		// The settings screen saves every entry, changed or not; only a real
-		// change may wipe the (now persistent) container cache.
 		boolean changed = !updated.equals(this.blacklistedContainerIds);
 		this.blacklistedContainerIds = updated;
 		if (changed) {
-			NearbyContainerCache.clear();
+			// The blacklist is applied whenever the cache is read, so the
+			// saved contents stay: un-blacklisting a type brings them back.
+			NearbyContainerCache.bumpRevision();
+			RecipeButtonNearbyIndicator.clearCaches();
+			ChainCraftabilityCache.clearCache();
 		}
 	}
 
