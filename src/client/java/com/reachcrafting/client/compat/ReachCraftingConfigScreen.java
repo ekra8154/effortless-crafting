@@ -161,6 +161,15 @@ public final class ReachCraftingConfigScreen {
 			.setEnumNameProvider(value -> Component.translatable("enum.reachcrafting.revolving_craft_handling." + value.name().toLowerCase()))
 			.build());
 
+		queuingGroup.add(entries.startBooleanToggle(
+				Component.translatable("option.reachcrafting.freeze_revolving_while_queuing"),
+				config.freezeRevolvingWhileQueuing()
+			)
+			.setDefaultValue(true)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.freeze_revolving_while_queuing"))
+			.setSaveConsumer(config::setFreezeRevolvingWhileQueuing)
+			.build());
+
 		queuingGroup.add(entries.startEnumSelector(
 				Component.translatable("option.reachcrafting.count_preference"),
 				IngredientPlanning.CountPreference.class,
