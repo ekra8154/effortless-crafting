@@ -27,7 +27,7 @@
   "option.reachcrafting.cache_containers_for_faster_search": "Nearby Container Caching",
   "tooltip.reachcrafting.cache_containers_for_faster_search": "Remember observed nearby container contents to power the recipe-book indicator and speed up Ctrl-assisted nearby searches.",
   "option.reachcrafting.remember_containers": "Remember Containers",
-  "tooltip.reachcrafting.remember_containers": "Save observed container contents for each world, so they are still known after you leave, walk away or relaunch instead of being rescanned. Changes are saved as soon as they are seen. Needs Nearby Container Caching. Files are in effortless-crafting/container-cache in the game folder; delete a world's file while not in that world to forget it.",
+  "tooltip.reachcrafting.remember_containers": "Save observed container contents for each world, so they are still known after you leave, walk away or relaunch instead of being rescanned. Changes are saved as soon as they are seen. Needs Nearby Container Caching. Single-player worlds keep them in an effortless-crafting folder inside the save, servers in effortless-crafting/container-cache in the game folder. To make the mod forget a world, delete its files while not in that world.",
   "option.reachcrafting.reach_craft_hold_and_release": "Reach Craft Hold And Release",
   "tooltip.reachcrafting.reach_craft_hold_and_release": "When enabled, plain Ctrl recipe clicks are queued while Ctrl is held and replayed one at a time when you release the key.",
   "option.reachcrafting.revolving_craft_handling": "Revolving Craft Handling",

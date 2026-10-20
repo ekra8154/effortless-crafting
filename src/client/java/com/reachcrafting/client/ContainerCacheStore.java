@@ -31,7 +31,9 @@ import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.Minecraft;
+import com.reachcrafting.client.mixin.BiomeManagerAccessor;
 import net.minecraft.client.multiplayer.ClientPacketListener;
+import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.client.server.IntegratedServer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
@@ -45,11 +47,23 @@ import net.minecraft.world.level.storage.LevelResource;
  * containers are known again after rejoining or relaunching instead of being
  * rescanned.
  *
- * <p>Each world has two files. {@code <world>.eccache} is the whole cache,
- * gzip compressed, rewritten when the world is left. {@code <world>.eccache.log}
+ * <p>Each world has two files. {@code containers.cache} is the whole cache,
+ * gzip compressed, rewritten when the world is left. {@code containers.cache.log}
  * holds every change since then, appended the moment the cache learns it, so a
  * crash loses nothing. Loading reads the cache, replays the log on top and
  * folds the two back into one file.</p>
+ *
+ * <p>A single-player world keeps them inside its own save folder
+ * ({@code saves/<world>/effortless-crafting/}), so deleting or copying the
+ * world takes its cache with it and two worlds can never share one. A server
+ * cannot be written to, so its files live in the game folder
+ * ({@code effortless-crafting/container-cache/}), named by address and the
+ * hashed seed the server sends: that tells apart the worlds a network serves
+ * behind one address.</p>
+ *
+ * <p>Every file starts with one line of plain text saying what it is, so a
+ * player who opens one knows it is a disposable cache, not part of the
+ * save.</p>
  *
  * <p>Both files store each string (dimension, container type, item id) once
  * and refer to it by index. Positions in the cache file are deltas from the
@@ -59,6 +73,8 @@ import net.minecraft.world.level.storage.LevelResource;
 final class ContainerCacheStore {
 	private static final int CACHE_MAGIC = 0x45434331; // ECC1
 	private static final int LOG_MAGIC = 0x45434c31; // ECL1
+	// Older versions keep their readers, so a mod update upgrades a file
+	// instead of starting the cache over.
 	private static final int FORMAT_VERSION = 1;
 	private static final int OP_DEFINE = 1;
 	private static final int OP_PUT = 2;
@@ -67,9 +83,17 @@ final class ContainerCacheStore {
 	private static final long COMPACT_AFTER_LOG_BYTES = 512L * 1024L;
 	private static final int MAX_CONTAINERS_PER_WORLD = 50_000;
 	private static final long FORGET_UNUSED_WORLD_MILLIS = 180L * 24L * 60L * 60L * 1000L;
+	private static final String FOLDER_NAME = "effortless-crafting";
+	private static final String CACHE_FILE = "containers.cache";
+	private static final String LOG_SUFFIX = ".log";
 	private static final Path DIRECTORY = FabricLoader.getInstance().getGameDir()
-		.resolve("effortless-crafting")
+		.resolve(FOLDER_NAME)
 		.resolve("container-cache");
+	/** The first line of every file, readable in any text editor. */
+	private static final byte[] FILE_HEADER = (
+		"Effortless Crafting container cache: what the mod remembers about your containers. "
+			+ "Safe to delete, it is rebuilt as you open them.\n"
+	).getBytes(StandardCharsets.US_ASCII);
 
 	private static final ExecutorService IO = Executors.newSingleThreadExecutor(runnable -> {
 		Thread thread = new Thread(runnable, "Effortless Crafting container cache");
@@ -79,6 +103,8 @@ final class ContainerCacheStore {
 
 	// Game thread.
 	private static WorldFiles attached;
+	// The world the in-memory cache describes, saved to disk or not.
+	private static String memoryWorldId;
 	private static boolean compactionRequested;
 	// The load in flight; a clear before it lands discards it.
 	private static Object pendingLoad;
@@ -105,14 +131,39 @@ final class ContainerCacheStore {
 		if (client == null) {
 			return;
 		}
-		String worldId = enabled() ? worldId(client) : null;
-		if (attached != null && attached.worldId().equals(worldId)) {
+		WorldFiles world = enabled() ? currentWorld(client) : null;
+		if (attached != null && world != null && attached.worldId().equals(world.worldId())) {
 			return;
 		}
 		detach();
-		if (worldId != null) {
-			attach(client, filesFor(worldId));
+		if (world != null) {
+			attach(client, world);
 		}
+	}
+
+	/**
+	 * The client got a new level: a join, a dimension change, or a server
+	 * network moving the player to another world behind the same address
+	 * (which only a respawn with a new hashed seed shows). A new world must
+	 * not inherit the old one's containers.
+	 */
+	static void onLevelChanged(Minecraft client) {
+		WorldFiles world = currentWorld(client);
+		if (world == null) {
+			return;
+		}
+		if (memoryWorldId != null && !memoryWorldId.equals(world.worldId())) {
+			ReachCraftingMod.diag("[container_store] world_switch from={} to={}", memoryWorldId, world.worldId());
+			NearbyContainerCache.forgetKeepingSaved();
+		}
+		memoryWorldId = world.worldId();
+		refresh(client);
+	}
+
+	/** Left the server or world: save, and let the next one start clean. */
+	static void onDisconnect() {
+		detach();
+		memoryWorldId = null;
 	}
 
 	/** Write the whole cache for the attached world and stop journaling. */
@@ -240,32 +291,47 @@ final class ContainerCacheStore {
 
 	// ---- World identity -------------------------------------------------
 
-	static String worldId(Minecraft client) {
+	/** Where the current world's cache lives, or null when there is no world to name yet. */
+	static WorldFiles currentWorld(Minecraft client) {
 		IntegratedServer server = client.getSingleplayerServer();
 		if (client.hasSingleplayerServer() && server != null) {
-			// The save folder is unique within this instance; the seed tells a
-			// world apart from a newer one made under the same folder name.
+			// Inside the save itself: a deleted world takes its cache along,
+			// and a copied world gets its own copy.
 			Path root = server.getWorldPath(LevelResource.ROOT).toAbsolutePath().normalize();
-			Path folder = root.getFileName();
-			long seed = server.overworld() != null ? server.overworld().getSeed() : 0L;
-			return "local:" + (folder != null ? folder.toString() : root.toString()) + ":" + seed;
+			Path folder = root.resolve(FOLDER_NAME);
+			return new WorldFiles("local:" + root, folder.resolve(CACHE_FILE), folder.resolve(CACHE_FILE + LOG_SUFFIX));
 		}
 		ClientPacketListener connection = client.getConnection();
-		if (connection != null && connection.getServerData() != null && connection.getServerData().ip != null) {
-			return "server:" + connection.getServerData().ip.trim().toLowerCase(Locale.ROOT);
+		ServerData data = connection != null ? connection.getServerData() : null;
+		if (data == null || data.ip == null || client.level == null) {
+			return null;
 		}
-		return null;
-	}
-
-	private static WorldFiles filesFor(String worldId) {
-		String readable = worldId.replaceAll("[^a-zA-Z0-9._-]", "_");
+		String kind = "server";
+		String address = data.ip.trim().toLowerCase(Locale.ROOT);
+		if (data.type() == ServerData.Type.LAN) {
+			// A LAN world opens on a new port every time.
+			kind = "lan";
+			address = withoutPort(address);
+		}
+		long hashedSeed = ((BiomeManagerAccessor) client.level.getBiomeManager()).getBiomeZoomSeed();
+		String worldId = kind + ":" + address + ":" + Long.toHexString(hashedSeed);
+		String readable = (kind + "_" + address).replaceAll("[^a-zA-Z0-9._-]", "_");
 		if (readable.length() > 48) {
 			readable = readable.substring(0, 48);
 		}
 		CRC32 crc = new CRC32();
 		crc.update(worldId.getBytes(StandardCharsets.UTF_8));
-		String name = readable + "-" + String.format(Locale.ROOT, "%08x", crc.getValue());
-		return new WorldFiles(worldId, DIRECTORY.resolve(name + ".eccache"), DIRECTORY.resolve(name + ".eccache.log"));
+		String name = readable + "-" + String.format(Locale.ROOT, "%08x", crc.getValue()) + "." + CACHE_FILE;
+		return new WorldFiles(worldId, DIRECTORY.resolve(name), DIRECTORY.resolve(name + LOG_SUFFIX));
+	}
+
+	private static String withoutPort(String address) {
+		if (address.startsWith("[")) {
+			int end = address.indexOf(']');
+			return end > 0 ? address.substring(0, end + 1) : address;
+		}
+		int colon = address.lastIndexOf(':');
+		return colon > 0 && address.indexOf(':') == colon ? address.substring(0, colon) : address;
 	}
 
 	private static String dimensionId(ResourceKey<Level> dimension) {
@@ -297,6 +363,7 @@ final class ContainerCacheStore {
 			this.file = Files.newOutputStream(files.log(),
 				StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE);
 			this.out = new DataOutputStream(new BufferedOutputStream(file, 8192));
+			out.write(FILE_HEADER);
 			out.writeInt(LOG_MAGIC);
 			writeVarInt(out, FORMAT_VERSION);
 		}
@@ -363,8 +430,9 @@ final class ContainerCacheStore {
 		long startNanos = System.nanoTime();
 		Map<NearbyContainerCache.ContainerKey, NearbyContainerCache.ContainerSnapshot> state = new LinkedHashMap<>();
 		if (Files.exists(files.cache())) {
-			try (DataInputStream in = new DataInputStream(new BufferedInputStream(
-				new GZIPInputStream(Files.newInputStream(files.cache()), 1 << 16)))) {
+			try (InputStream raw = new BufferedInputStream(Files.newInputStream(files.cache()))) {
+				skipHeader(raw);
+				DataInputStream in = new DataInputStream(new BufferedInputStream(new GZIPInputStream(raw, 1 << 16)));
 				readCache(in, state);
 			} catch (IOException | RuntimeException e) {
 				ReachCraftingMod.LOGGER.warn("[container_store] unreadable {} (starting fresh): {}", files.cache().getFileName(), e.toString());
@@ -375,6 +443,7 @@ final class ContainerCacheStore {
 		boolean hadLog = Files.exists(files.log());
 		if (hadLog) {
 			try (DataInputStream in = new DataInputStream(new BufferedInputStream(Files.newInputStream(files.log())))) {
+				skipHeader(in);
 				replayed = replayLog(in, state);
 			} catch (IOException | RuntimeException e) {
 				ReachCraftingMod.LOGGER.warn("[container_store] unreadable {}: {}", files.log().getFileName(), e.toString());
@@ -406,9 +475,11 @@ final class ContainerCacheStore {
 		Path temp = files.cache().resolveSibling(files.cache().getFileName() + ".tmp");
 		try {
 			Files.createDirectories(files.cache().getParent());
-			try (DataOutputStream out = new DataOutputStream(new BufferedOutputStream(
-				new GZIPOutputStream(Files.newOutputStream(temp), 1 << 16)))) {
+			try (OutputStream raw = Files.newOutputStream(temp)) {
+				raw.write(FILE_HEADER);
+				DataOutputStream out = new DataOutputStream(new BufferedOutputStream(new GZIPOutputStream(raw, 1 << 16)));
 				writeCache(out, kept);
+				out.close();
 			}
 			try {
 				Files.move(temp, files.cache(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
@@ -436,10 +507,13 @@ final class ContainerCacheStore {
 		long cutoff = System.currentTimeMillis() - FORGET_UNUSED_WORLD_MILLIS;
 		try (DirectoryStream<Path> entries = Files.newDirectoryStream(DIRECTORY)) {
 			for (Path entry : entries) {
+				String name = entry.getFileName().toString();
 				if (entry.equals(current.cache()) || entry.equals(current.log())) {
 					continue;
 				}
-				if (Files.getLastModifiedTime(entry).toMillis() < cutoff) {
+				// Files of the unreleased first format, before the header.
+				boolean preRelease = name.endsWith(".eccache") || name.endsWith(".eccache.log");
+				if (preRelease || Files.getLastModifiedTime(entry).toMillis() < cutoff) {
 					Files.deleteIfExists(entry);
 					ReachCraftingMod.diag("[container_store] forgot unused world file {}", entry.getFileName());
 				}
@@ -515,9 +589,16 @@ final class ContainerCacheStore {
 			throw new IOException("not a container cache file");
 		}
 		int version = readVarInt(in);
-		if (version != FORMAT_VERSION) {
-			throw new IOException("unknown format version " + version);
+		switch (version) {
+			case 1 -> readCacheV1(in, state);
+			default -> throw new IOException("format version " + version + " is newer than this mod");
 		}
+	}
+
+	private static void readCacheV1(
+		DataInputStream in,
+		Map<NearbyContainerCache.ContainerKey, NearbyContainerCache.ContainerSnapshot> state
+	) throws IOException {
 		int paletteSize = readVarInt(in);
 		List<String> palette = new ArrayList<>(paletteSize);
 		for (int i = 0; i < paletteSize; i++) {
@@ -560,8 +641,12 @@ final class ContainerCacheStore {
 		DataInputStream in,
 		Map<NearbyContainerCache.ContainerKey, NearbyContainerCache.ContainerSnapshot> state
 	) throws IOException {
-		if (in.readInt() != LOG_MAGIC || readVarInt(in) != FORMAT_VERSION) {
+		if (in.readInt() != LOG_MAGIC) {
 			throw new IOException("not a container cache log");
+		}
+		int version = readVarInt(in);
+		if (version > FORMAT_VERSION) {
+			throw new IOException("log format version " + version + " is newer than this mod");
 		}
 		List<String> palette = new ArrayList<>();
 		Map<String, ResourceKey<Level>> dimensions = new HashMap<>();
@@ -630,6 +715,22 @@ final class ContainerCacheStore {
 			}
 		}
 		return Map.copyOf(items);
+	}
+
+	// ---- Header ----------------------------------------------
+
+	/** Skips the plain-text first line. */
+	private static void skipHeader(InputStream in) throws IOException {
+		for (int i = 0; i < 1024; i++) {
+			int b = in.read();
+			if (b == -1) {
+				throw new EOFException();
+			}
+			if (b == '\n') {
+				return;
+			}
+		}
+		throw new IOException("no header line");
 	}
 
 	// ---- Varints --------------------------------------------------------
