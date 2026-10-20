@@ -6,6 +6,7 @@
 		"AbstractContainerMenuMixin",
 		"AbstractContainerScreenMixin",
 		"AbstractRecipeBookScreenAccessor",
+		"BiomeManagerAccessor",
 		"ClientRecipeBookAccessor",
 		"EditBoxAccessor",
 		"KeyMappingAccessor",
