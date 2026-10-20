@@ -41,7 +41,7 @@ public abstract class RecipeBookPageMixin {
 		if (text == null) {
 			return;
 		}
-		graphics.setTooltipForNextFrame(net.minecraft.client.Minecraft.getInstance().font, text, mouseX, mouseY);
+		graphics.renderTooltip(net.minecraft.client.Minecraft.getInstance().font, text, mouseX, mouseY);
 		ci.cancel();
 	}
 
