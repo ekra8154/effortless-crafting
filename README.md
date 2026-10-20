@@ -50,7 +50,7 @@ The three main modifiers are:
 - `Ctrl`: allow nearby containers to be used
 - `Alt`: queue the craft as an autocraft request
 
-If dynamic auto crafting is enabled, 'Alt' works for all requests, and will dynamically decide whether to do an inventory only craft, nearby craft, or chain craft depending on resources based on the queued recipe.
+If dynamic auto crafting is enabled, 'Alt' works for all requests, and will dynamically decide whether to retrieve existing items, do an inventory only craft, nearby craft, or chain craft depending on resources and based on the queued recipe.
 
 Queue a craft with just one modifier, or all 3 at once! Ctrl + Alt for example performs a nearby autocraft. 
 

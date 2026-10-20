@@ -12,6 +12,7 @@
 		"KeyMappingAccessor",
 		"MinecraftInteractionBlockMixin",
 		"MouseHandlerMixin",
+		"MouseHandlerAccessor",
 		"MultiPlayerGameModeMixin",
 		"WindowMixin",
 		"OverlayRecipeButtonMixin",

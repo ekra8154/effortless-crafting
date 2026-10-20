@@ -123,6 +123,72 @@ public final class RecipeButtonNearbyIndicator {
 		renderIndicators(guiGraphics, widget.getX() + 3, widget.getY() + 3, indicatorState, retrievable);
 	}
 
+	/** The dots sit 3 px into the button's corner; this square covers both with some slack. */
+	private static final int HOVER_ZONE = 12;
+
+	/**
+	 * What the dots under the mouse mean, or null when the mouse is not on
+	 * them (or there are none). Says exactly what {@link #renderIndicators}
+	 * draws: in Retrieval Mode only the green dot shows.
+	 */
+	public static net.minecraft.network.chat.Component hoverText(RecipeButton button, int mouseX, int mouseY) {
+		if (!ReachCraftingConfig.get().enabled()) {
+			return null;
+		}
+		AbstractWidget widget = (AbstractWidget) (Object) button;
+		if (mouseX < widget.getX() || mouseX >= widget.getX() + HOVER_ZONE
+			|| mouseY < widget.getY() || mouseY >= widget.getY() + HOVER_ZONE) {
+			return null;
+		}
+		IndicatorState state = ExistingOutputRetrievalController.isEnabled() ? IndicatorState.NONE : resolveIndicatorState(button);
+		boolean retrievable = resolveRetrievable(button);
+		String craftKey = switch (state) {
+			case LOCAL -> "indicator.reachcrafting.local";
+			case NEARBY -> "indicator.reachcrafting.nearby";
+			case CHAIN_LOCAL -> "indicator.reachcrafting.chain_local";
+			case CHAIN_NEARBY -> "indicator.reachcrafting.chain_nearby";
+			case NONE -> null;
+		};
+		if (craftKey == null) {
+			return retrievable ? net.minecraft.network.chat.Component.translatable("indicator.reachcrafting.existing") : null;
+		}
+		net.minecraft.network.chat.Component craft = net.minecraft.network.chat.Component.translatable(craftKey);
+		return retrievable
+			? net.minecraft.network.chat.Component.translatable("indicator.reachcrafting.existing_and", craft)
+			: craft;
+	}
+
+	/**
+	 * A small tooltip-style label above the cursor, in half-size text. At GUI
+	 * scale 1 half-size text cannot be read, so it stays full size there.
+	 */
+	public static void renderHoverLabel(
+		net.minecraft.client.gui.GuiGraphicsExtractor guiGraphics,
+		net.minecraft.network.chat.Component text,
+		int mouseX,
+		int mouseY
+	) {
+		Minecraft client = Minecraft.getInstance();
+		net.minecraft.client.gui.Font font = client.font;
+		float scale = client.getWindow().getGuiScale() >= 2 ? 0.5f : 1.0f;
+		int width = (int) Math.ceil(font.width(text) * scale);
+		int height = (int) Math.ceil(font.lineHeight * scale);
+		int x = Math.min(mouseX + 6, guiGraphics.guiWidth() - width - 3);
+		int y = Math.max(mouseY - height - 6, 3);
+		guiGraphics.nextStratum();
+		guiGraphics.fill(x - 2, y - 2, x + width + 2, y + height + 1, 0xF0100010);
+		guiGraphics.fill(x - 2, y - 2, x + width + 2, y - 1, 0x505000FF);
+		guiGraphics.fill(x - 2, y + height, x + width + 2, y + height + 1, 0x5028007F);
+		guiGraphics.pose().pushMatrix();
+		guiGraphics.pose().translate(x, y);
+		guiGraphics.pose().scale(scale, scale);
+		try {
+			guiGraphics.text(font, text, 0, 0, 0xFFFFFFFF, false);
+		} finally {
+			guiGraphics.pose().popMatrix();
+		}
+	}
+
 	/**
 	 * Green (retrievable) sits two pixels down-right of the craft dot and is
 	 * drawn first, so the yellow/orange dot covers most of it and the green
