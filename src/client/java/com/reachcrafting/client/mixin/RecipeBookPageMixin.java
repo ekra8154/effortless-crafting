@@ -3,7 +3,6 @@ package com.reachcrafting.client.mixin;
 import com.reachcrafting.client.ReachCraftingConfig;
 import com.reachcrafting.client.RecipeBookClickCapture;
 import com.reachcrafting.client.RecipeButtonNearbyIndicator;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.network.chat.Component;
 import java.util.List;
 import net.minecraft.client.gui.screens.recipebook.OverlayRecipeComponent;
@@ -32,17 +31,17 @@ public abstract class RecipeBookPageMixin {
 	@Final
 	private OverlayRecipeComponent overlay;
 
-	/** On the craftability dots, a small label saying what they mean replaces the item tooltip. */
-	@Inject(method = "extractTooltip", at = @At("HEAD"), cancellable = true)
-	private void reachcrafting$indicatorHoverLabel(GuiGraphicsExtractor graphics, int mouseX, int mouseY, CallbackInfo ci) {
+	/** Resting on the craftability dots, a tooltip saying what they mean replaces the item tooltip. */
+	@Inject(method = "renderTooltip", at = @At("HEAD"), cancellable = true)
+	private void reachcrafting$indicatorHoverLabel(net.minecraft.client.gui.GuiGraphics graphics, int mouseX, int mouseY, CallbackInfo ci) {
 		if (this.hoveredButton == null || this.overlay.isVisible()) {
 			return;
 		}
-		Component text = RecipeButtonNearbyIndicator.hoverText(this.hoveredButton, mouseX, mouseY);
+		Component text = RecipeButtonNearbyIndicator.hoverTextAfterDelay(this.hoveredButton, mouseX, mouseY);
 		if (text == null) {
 			return;
 		}
-		RecipeButtonNearbyIndicator.renderHoverLabel(graphics, text, mouseX, mouseY);
+		graphics.setTooltipForNextFrame(net.minecraft.client.Minecraft.getInstance().font, text, mouseX, mouseY);
 		ci.cancel();
 	}
 

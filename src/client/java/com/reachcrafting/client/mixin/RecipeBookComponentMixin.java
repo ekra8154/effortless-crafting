@@ -24,6 +24,7 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.ModifyArg;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
@@ -301,6 +302,21 @@ public abstract class RecipeBookComponentMixin {
 			ReachCraftingConfig.setLastSearchText(this.searchBox.getValue());
 			this.checkSearchStringUpdate();
 		}
+	}
+
+	/**
+	 * Revolving recipe buttons cycle on a clock vanilla only stops while Ctrl
+	 * is held. A queue rebuilds its request from the button on every scroll,
+	 * so a cycle mid-queue swapped the variant (moss to pale moss): hold the
+	 * clock while a request is queued.
+	 */
+	@Redirect(method = "render", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/Minecraft;hasControlDown()Z"))
+	private boolean reachcrafting$holdVariantCycleWhileQueuing(Minecraft minecraft) {
+		if (minecraft.hasControlDown()) {
+			return true;
+		}
+		ReachCraftingConfig config = ReachCraftingConfig.get();
+		return config.enabled() && config.freezeRevolvingWhileQueuing() && ContainerUtils.isInputQueueActive();
 	}
 
 	@Inject(method = "render", at = @At("TAIL"))
