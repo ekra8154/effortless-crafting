@@ -186,7 +186,7 @@ public final class RecipeButtonNearbyIndicator {
 			dotHoverButton = null;
 			return null;
 		}
-		long now = net.minecraft.util.Util.getMillis();
+		long now = net.minecraft.Util.getMillis();
 		if (dotHoverButton != button) {
 			dotHoverButton = button;
 			dotHoverSinceMs = now;
