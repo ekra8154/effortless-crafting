@@ -397,6 +397,40 @@ public final class ReproHarness {
 				net.minecraft.client.Screenshot.grab(client.gameDirectory, name, client.getMainRenderTarget(),
 					message -> ReachCraftingMod.diag("[repro_harness] shot {} {}", name, message.getString()));
 			}
+			case "hoverdots" -> {
+				// Park the cursor on a recipe button's craftability dots so a
+				// following `shot` shows their hover label. "hoverdots <n>"
+				// picks the n-th visible button that has dots (default 0).
+				int wanted = parts.length > 1 ? Integer.parseInt(parts[1]) : 0;
+				if (!(client.screen instanceof net.minecraft.client.gui.screens.inventory.AbstractRecipeBookScreen<?> screen)) {
+					ReachCraftingMod.LOGGER.warn("[repro_harness] hoverdots needs a recipe book screen");
+					return;
+				}
+				net.minecraft.client.gui.screens.recipebook.RecipeBookPage page =
+					((com.reachcrafting.client.mixin.RecipeBookComponentAccessor) ((com.reachcrafting.client.mixin.AbstractRecipeBookScreenAccessor) screen)
+						.getRecipeBookComponent()).getRecipeBookPage();
+				int seen = 0;
+				for (net.minecraft.client.gui.screens.recipebook.RecipeButton button
+					: ((com.reachcrafting.client.mixin.RecipeBookPageAccessor) page).getButtons()) {
+					net.minecraft.client.gui.components.AbstractWidget widget = (net.minecraft.client.gui.components.AbstractWidget) (Object) button;
+					if (!widget.visible) {
+						continue;
+					}
+					int guiX = widget.getX() + 5;
+					int guiY = widget.getY() + 5;
+					net.minecraft.network.chat.Component text = RecipeButtonNearbyIndicator.hoverText(button, guiX, guiY);
+					if (text == null || seen++ < wanted) {
+						continue;
+					}
+					double factor = (double) client.getWindow().getScreenWidth() / client.getWindow().getGuiScaledWidth();
+					com.reachcrafting.client.mixin.MouseHandlerAccessor mouse = (com.reachcrafting.client.mixin.MouseHandlerAccessor) client.mouseHandler;
+					mouse.reachcrafting$setXpos((guiX + 0.5) * factor);
+					mouse.reachcrafting$setYpos((guiY + 0.5) * factor);
+					ReachCraftingMod.diag("[repro_harness] hoverdots n={} text='{}'", wanted, text.getString());
+					return;
+				}
+				ReachCraftingMod.LOGGER.warn("[repro_harness] hoverdots found no button with dots");
+			}
 			case "abort" -> {
 				// What Esc does mid-session (AbstractContainerScreenMixin):
 				// abort every session, then close whatever screen is up.

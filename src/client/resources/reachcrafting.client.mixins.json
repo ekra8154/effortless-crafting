@@ -13,6 +13,7 @@
 		"EditBoxAccessor",
 		"KeyMappingAccessor",
 		"MinecraftInteractionBlockMixin",
+		"MouseHandlerAccessor",
 		"MultiPlayerGameModeMixin",
 		"OverlayRecipeButtonMixin",
 		"OverlayRecipeButtonAccessor",

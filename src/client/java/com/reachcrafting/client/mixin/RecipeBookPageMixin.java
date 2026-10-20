@@ -2,6 +2,9 @@ package com.reachcrafting.client.mixin;
 
 import com.reachcrafting.client.ReachCraftingConfig;
 import com.reachcrafting.client.RecipeBookClickCapture;
+import com.reachcrafting.client.RecipeButtonNearbyIndicator;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.network.chat.Component;
 import java.util.List;
 import net.minecraft.client.gui.screens.recipebook.OverlayRecipeComponent;
 import net.minecraft.client.gui.screens.recipebook.RecipeButton;
@@ -13,6 +16,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(RecipeBookPage.class)
@@ -20,6 +24,27 @@ public abstract class RecipeBookPageMixin {
 	@Shadow
 	@Final
 	private List<RecipeButton> buttons;
+
+	@Shadow
+	private RecipeButton hoveredButton;
+
+	@Shadow
+	@Final
+	private OverlayRecipeComponent overlay;
+
+	/** On the craftability dots, a small label saying what they mean replaces the item tooltip. */
+	@Inject(method = "extractTooltip", at = @At("HEAD"), cancellable = true)
+	private void reachcrafting$indicatorHoverLabel(GuiGraphicsExtractor graphics, int mouseX, int mouseY, CallbackInfo ci) {
+		if (this.hoveredButton == null || this.overlay.isVisible()) {
+			return;
+		}
+		Component text = RecipeButtonNearbyIndicator.hoverText(this.hoveredButton, mouseX, mouseY);
+		if (text == null) {
+			return;
+		}
+		RecipeButtonNearbyIndicator.renderHoverLabel(graphics, text, mouseX, mouseY);
+		ci.cancel();
+	}
 
 	@Inject(
 		method = "mouseClicked(DDIIIII)Z",
