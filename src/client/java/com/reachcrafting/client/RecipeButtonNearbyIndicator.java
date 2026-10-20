@@ -123,7 +123,7 @@ public final class RecipeButtonNearbyIndicator {
 	 * A rotating (multi-variant) collection reports its best member, as the
 	 * button does.
 	 */
-	static IndicatorState stateFor(RecipeHolder<?> recipe, RecipeCollection collection, ItemStack displayStack) {
+	static IndicatorState stateFor(Recipe<?> recipe, RecipeCollection collection, ItemStack displayStack) {
 		if (collection == null) {
 			return IndicatorState.NONE;
 		}

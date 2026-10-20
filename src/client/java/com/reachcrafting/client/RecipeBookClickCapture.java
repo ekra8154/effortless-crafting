@@ -63,13 +63,13 @@ public final class RecipeBookClickCapture {
 	}
 
 	/** Mixin bridge: DynamicAutoCraft.needsModPathForPlainClick. */
-	public static boolean dynamicPlainClickNeedsModPath(RecipeHolder<?> recipe, RecipeCollection collection, ItemStack displayStack) {
+	public static boolean dynamicPlainClickNeedsModPath(Recipe<?> recipe, RecipeCollection collection, ItemStack displayStack) {
 		if (recipe == null) {
 			return false;
 		}
 		return DynamicAutoCraft.needsModPathForPlainClick(new HeldRecipeAction(
 			recipe,
-			recipe.id(),
+			recipe.getId(),
 			collection,
 			displayStack != null ? displayStack.copy() : ItemStack.EMPTY,
 			0,

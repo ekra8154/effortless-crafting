@@ -201,7 +201,7 @@ final class RecipeBookInputController {
 				minecraft,
 				new RecipeBookClickCapture.HeldRecipeAction(
 					recipe,
-					recipe.id(),
+					recipe.getId(),
 					collection,
 					displayStack != null ? displayStack.copy() : ItemStack.EMPTY,
 					mouseButton,

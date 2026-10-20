@@ -308,7 +308,7 @@ final class ContainerCacheStore {
 		}
 		String kind = "server";
 		String address = data.ip.trim().toLowerCase(Locale.ROOT);
-		if (data.type() == ServerData.Type.LAN) {
+		if (data.isLan()) {
 			// A LAN world opens on a new port every time.
 			kind = "lan";
 			address = withoutPort(address);
