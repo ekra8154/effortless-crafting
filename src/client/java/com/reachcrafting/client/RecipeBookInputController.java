@@ -217,7 +217,7 @@ final class RecipeBookInputController {
 			// gate does, so a click right after the inventory changed reads
 			// the dot it now shows.
 			ChainCraftabilityCache.refreshNow(minecraft);
-			RecipeButtonNearbyIndicator.IndicatorState shownState = RecipeButtonNearbyIndicator.stateFor(recipeId, collection, displayStack);
+			RecipeButtonNearbyIndicator.IndicatorState shownState = RecipeButtonNearbyIndicator.stateFor(recipe, collection, displayStack);
 			if (shownState == RecipeButtonNearbyIndicator.IndicatorState.CHAIN_LOCAL
 				|| shownState == RecipeButtonNearbyIndicator.IndicatorState.CHAIN_NEARBY) {
 				PromptExpectation.recordChainClick(displayStack);
