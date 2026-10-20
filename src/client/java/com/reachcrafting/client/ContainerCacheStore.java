@@ -37,7 +37,7 @@ import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.client.server.IntegratedServer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.resources.Identifier;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.storage.LevelResource;
@@ -335,11 +335,11 @@ final class ContainerCacheStore {
 	}
 
 	private static String dimensionId(ResourceKey<Level> dimension) {
-		return dimension.identifier().toString();
+		return dimension.location().toString();
 	}
 
 	private static ResourceKey<Level> dimensionKey(String id) {
-		Identifier identifier = Identifier.tryParse(id);
+		ResourceLocation identifier = ResourceLocation.tryParse(id);
 		return identifier != null ? ResourceKey.create(Registries.DIMENSION, identifier) : null;
 	}
 
