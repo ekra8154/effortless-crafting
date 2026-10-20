@@ -33,6 +33,7 @@ public final class ReachCraftingConfig {
 	private static final boolean DEFAULT_ENABLE_EXISTING_OUTPUT_RETRIEVAL = true;
 	private static final ExistingOutputHandling DEFAULT_EXISTING_OUTPUT_HANDLING = ExistingOutputHandling.RETRIEVE_THEN_ASK;
 	private static final boolean DEFAULT_CACHE_CONTAINERS_FOR_FASTER_SEARCH = true;
+	private static final boolean DEFAULT_REMEMBER_CONTAINERS = true;
 	private static final ContainerDrainOrder DEFAULT_CONTAINER_DRAIN_ORDER = ContainerDrainOrder.SMALLEST_FIRST;
 	private static final FurnaceSlotAccess DEFAULT_FURNACE_SLOT_ACCESS = FurnaceSlotAccess.OUTPUT_ONLY;
 	private static final boolean DEFAULT_REACH_CRAFT_HOLD_AND_RELEASE = true;
@@ -109,6 +110,7 @@ public final class ReachCraftingConfig {
 	private boolean enableExistingOutputRetrieval;
 	private ExistingOutputHandling existingOutputHandling;
 	private boolean cacheContainersForFasterSearch;
+	private boolean rememberContainers;
 	private ContainerDrainOrder containerDrainOrder;
 	private FurnaceSlotAccess furnaceSlotAccess;
 	private boolean reachCraftHoldAndRelease;
@@ -195,6 +197,9 @@ public final class ReachCraftingConfig {
 			instance.cacheContainersForFasterSearch = stored.cacheContainersForFasterSearch != null
 				? stored.cacheContainersForFasterSearch
 				: DEFAULT_CACHE_CONTAINERS_FOR_FASTER_SEARCH;
+			instance.rememberContainers = stored.rememberContainers != null
+				? stored.rememberContainers
+				: DEFAULT_REMEMBER_CONTAINERS;
 			instance.containerDrainOrder = stored.containerDrainOrder != null ? stored.containerDrainOrder : DEFAULT_CONTAINER_DRAIN_ORDER;
 			instance.furnaceSlotAccess = stored.furnaceSlotAccess != null ? stored.furnaceSlotAccess : DEFAULT_FURNACE_SLOT_ACCESS;
 			instance.reachCraftHoldAndRelease = stored.reachCraftHoldAndRelease != null ? stored.reachCraftHoldAndRelease : DEFAULT_REACH_CRAFT_HOLD_AND_RELEASE;
@@ -318,6 +323,7 @@ public final class ReachCraftingConfig {
 		}
 		RecipeButtonNearbyIndicator.clearCaches();
 		ChainCraftabilityCache.clearCache();
+		ContainerCacheStore.refresh(net.minecraft.client.Minecraft.getInstance());
 	}
 
 	public IngredientPlanning.Policy toPlanningPolicy() {
@@ -402,6 +408,17 @@ public final class ReachCraftingConfig {
 		}
 		RecipeButtonNearbyIndicator.clearCaches();
 		ChainCraftabilityCache.clearCache();
+		ContainerCacheStore.refresh(net.minecraft.client.Minecraft.getInstance());
+	}
+
+	/** Keep observed container contents on disk per world (needs Nearby Container Caching). */
+	public boolean rememberContainers() {
+		return rememberContainers;
+	}
+
+	public void setRememberContainers(boolean rememberContainers) {
+		this.rememberContainers = rememberContainers;
+		ContainerCacheStore.refresh(net.minecraft.client.Minecraft.getInstance());
 	}
 
 	public ContainerDrainOrder containerDrainOrder() {
@@ -933,8 +950,14 @@ public final class ReachCraftingConfig {
 	}
 
 	public void setBlacklistedContainerIds(Set<String> blacklistedContainerIds) {
-		this.blacklistedContainerIds = new LinkedHashSet<>(blacklistedContainerIds);
-		NearbyContainerCache.clear();
+		Set<String> updated = new LinkedHashSet<>(blacklistedContainerIds);
+		// The settings screen saves every entry, changed or not; only a real
+		// change may wipe the (now persistent) container cache.
+		boolean changed = !updated.equals(this.blacklistedContainerIds);
+		this.blacklistedContainerIds = updated;
+		if (changed) {
+			NearbyContainerCache.clear();
+		}
 	}
 
 	private static ReachCraftingConfig defaults() {
@@ -949,6 +972,7 @@ public final class ReachCraftingConfig {
 		defaults.enableExistingOutputRetrieval = DEFAULT_ENABLE_EXISTING_OUTPUT_RETRIEVAL;
 		defaults.existingOutputHandling = DEFAULT_EXISTING_OUTPUT_HANDLING;
 		defaults.cacheContainersForFasterSearch = DEFAULT_CACHE_CONTAINERS_FOR_FASTER_SEARCH;
+		defaults.rememberContainers = DEFAULT_REMEMBER_CONTAINERS;
 		defaults.containerDrainOrder = DEFAULT_CONTAINER_DRAIN_ORDER;
 		defaults.furnaceSlotAccess = DEFAULT_FURNACE_SLOT_ACCESS;
 		defaults.reachCraftHoldAndRelease = DEFAULT_REACH_CRAFT_HOLD_AND_RELEASE;
@@ -1228,6 +1252,7 @@ public final class ReachCraftingConfig {
 		private Boolean enableExistingOutputRetrieval;
 		private ExistingOutputHandling existingOutputHandling;
 		private Boolean cacheContainersForFasterSearch;
+		private Boolean rememberContainers;
 		private ContainerDrainOrder containerDrainOrder;
 	private FurnaceSlotAccess furnaceSlotAccess;
 		private Boolean reachCraftHoldAndRelease;
@@ -1295,6 +1320,7 @@ public final class ReachCraftingConfig {
 			this.enableExistingOutputRetrieval = config.enableExistingOutputRetrieval;
 			this.existingOutputHandling = config.existingOutputHandling;
 			this.cacheContainersForFasterSearch = config.cacheContainersForFasterSearch;
+			this.rememberContainers = config.rememberContainers;
 			this.containerDrainOrder = config.containerDrainOrder;
 			this.furnaceSlotAccess = config.furnaceSlotAccess;
 			this.reachCraftHoldAndRelease = config.reachCraftHoldAndRelease;

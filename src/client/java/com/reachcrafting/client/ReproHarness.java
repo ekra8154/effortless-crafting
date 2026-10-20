@@ -300,6 +300,13 @@ public final class ReproHarness {
 			}
 			case "screen" -> ReachCraftingMod.diag("[repro_harness] screen={}",
 				client.screen == null ? "null" : client.screen.getClass().getName());
+			case "cachereload" -> {
+				// What leaving and rejoining the world does to the container
+				// cache: save it, forget it, load it back from disk. Logs
+				// "merged_from_disk" once the load lands.
+				NearbyContainerCache.reloadFromStore(Minecraft.getInstance());
+				ReachCraftingMod.diag("[repro_harness] container cache reload started");
+			}
 			case "warmcache" -> {
 				// Scan every uncached container in reach so a following
 				// retrieve runs against a warm cache. Logs "warmup finish"
@@ -316,6 +323,10 @@ public final class ReproHarness {
 					boolean on = parts[2].equals("on");
 					ReachCraftingConfig.get().setOnlyPromptWhenDifferent(on);
 					ReachCraftingMod.diag("[repro_harness] set only_prompt_when_different={}", on);
+				} else if (parts.length == 3 && parts[1].equals("remember")) {
+					boolean on = parts[2].equals("on");
+					ReachCraftingConfig.get().setRememberContainers(on);
+					ReachCraftingMod.diag("[repro_harness] set remember_containers={}", on);
 				} else if (parts.length == 3 && parts[1].equals("dynamic")) {
 					boolean on = parts[2].equals("on");
 					ReachCraftingConfig.get().setDynamicAutoCraft(on);
