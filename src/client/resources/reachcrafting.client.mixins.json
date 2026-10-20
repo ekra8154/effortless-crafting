@@ -9,6 +9,7 @@
 		"AbstractContainerScreenAccessor",
 		"AbstractContainerScreenMixin",
 		"AbstractRecipeBookScreenAccessor",
+		"BiomeManagerAccessor",
 		"ClientRecipeBookAccessor",
 		"DebugRendererMixin",
 		"EditBoxAccessor",
