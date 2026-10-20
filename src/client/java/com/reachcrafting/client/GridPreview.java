@@ -247,7 +247,7 @@ final class GridPreview {
 		if (client.player == null || client.level == null || action == null) {
 			return null;
 		}
-		return computeSafely(client, client.player, client.gui.screen(), action, clickCount, allowNearby, autoCraft);
+		return computeSafely(client, client.player, client.screen, action, clickCount, allowNearby, autoCraft);
 	}
 
 	/** Called by the queue release, before it flushes the grid: freezes the plan its first placement must follow. */
