@@ -24,6 +24,27 @@ public abstract class RecipeBookPageMixin {
 	@Final
 	private List<RecipeButton> buttons;
 
+	@Shadow
+	private RecipeButton hoveredButton;
+
+	@Shadow
+	@Final
+	private OverlayRecipeComponent overlay;
+
+	/** Resting on the craftability dots, a tooltip saying what they mean replaces the item tooltip. */
+	@Inject(method = "renderTooltip", at = @At("HEAD"), cancellable = true)
+	private void reachcrafting$indicatorHoverLabel(net.minecraft.client.gui.GuiGraphics graphics, int mouseX, int mouseY, org.spongepowered.asm.mixin.injection.callback.CallbackInfo ci) {
+		if (this.hoveredButton == null || this.overlay.isVisible()) {
+			return;
+		}
+		net.minecraft.network.chat.Component text = com.reachcrafting.client.RecipeButtonNearbyIndicator.hoverTextAfterDelay(this.hoveredButton, mouseX, mouseY);
+		if (text == null) {
+			return;
+		}
+		graphics.renderTooltip(Minecraft.getInstance().font, text, mouseX, mouseY);
+		ci.cancel();
+	}
+
 	@Inject(method = "mouseClicked", at = @At("HEAD"), cancellable = true)
 	private void reachcrafting$interceptRecipeButtonClick(
 		double mouseX,

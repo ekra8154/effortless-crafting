@@ -11,6 +11,7 @@
 		"AbstractContainerScreenMixin",
 		"BiomeManagerAccessor",
 		"MinecraftInteractionBlockMixin",
+		"MouseHandlerAccessor",
 		"MultiPlayerGameModeMixin",
 		"OverlayRecipeButtonMixin",
 		"OverlayRecipeButtonAccessor",

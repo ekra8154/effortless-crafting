@@ -11,6 +11,22 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(RecipeButton.class)
 public abstract class RecipeButtonMixin {
+	/**
+	 * Revolving recipe buttons cycle on a clock vanilla only stops while Ctrl
+	 * is held. A queue rebuilds its request from the button on every scroll,
+	 * so a cycle mid-queue swapped the variant (moss to pale moss): hold the
+	 * clock while a request is queued.
+	 */
+	@org.spongepowered.asm.mixin.injection.Redirect(method = "renderWidget", at = @At(value = "INVOKE", target = "Lnet/minecraft/client/gui/screens/Screen;hasControlDown()Z"))
+	private boolean reachcrafting$holdVariantCycleWhileQueuing() {
+		if (net.minecraft.client.gui.screens.Screen.hasControlDown()) {
+			return true;
+		}
+		ReachCraftingConfig config = ReachCraftingConfig.get();
+		return config.enabled() && config.freezeRevolvingWhileQueuing()
+			&& com.reachcrafting.client.ContainerUtils.isInputQueueActive();
+	}
+
 	@Inject(method = "renderWidget", at = @At("TAIL"))
 	private void reachcrafting$renderNearbyIndicator(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick, CallbackInfo ci) {
 		if (!ReachCraftingConfig.get().enabled()) return;

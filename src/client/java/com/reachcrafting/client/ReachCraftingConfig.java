@@ -35,6 +35,7 @@ public final class ReachCraftingConfig {
 	private static final ExistingOutputHandling DEFAULT_EXISTING_OUTPUT_HANDLING = ExistingOutputHandling.RETRIEVE_THEN_ASK;
 	private static final boolean DEFAULT_CACHE_CONTAINERS_FOR_FASTER_SEARCH = true;
 	private static final boolean DEFAULT_REMEMBER_CONTAINERS = true;
+	private static final boolean DEFAULT_FREEZE_REVOLVING_WHILE_QUEUING = true;
 	private static final ContainerDrainOrder DEFAULT_CONTAINER_DRAIN_ORDER = ContainerDrainOrder.SMALLEST_FIRST;
 	private static final FurnaceSlotAccess DEFAULT_FURNACE_SLOT_ACCESS = FurnaceSlotAccess.OUTPUT_ONLY;
 	private static final boolean DEFAULT_REACH_CRAFT_HOLD_AND_RELEASE = true;
@@ -112,6 +113,7 @@ public final class ReachCraftingConfig {
 	private ExistingOutputHandling existingOutputHandling;
 	private boolean cacheContainersForFasterSearch;
 	private boolean rememberContainers;
+	private boolean freezeRevolvingWhileQueuing;
 	private ContainerDrainOrder containerDrainOrder;
 	private FurnaceSlotAccess furnaceSlotAccess;
 	private boolean reachCraftHoldAndRelease;
@@ -201,6 +203,9 @@ public final class ReachCraftingConfig {
 			instance.rememberContainers = stored.rememberContainers != null
 				? stored.rememberContainers
 				: DEFAULT_REMEMBER_CONTAINERS;
+			instance.freezeRevolvingWhileQueuing = stored.freezeRevolvingWhileQueuing != null
+				? stored.freezeRevolvingWhileQueuing
+				: DEFAULT_FREEZE_REVOLVING_WHILE_QUEUING;
 			instance.containerDrainOrder = stored.containerDrainOrder != null ? stored.containerDrainOrder : DEFAULT_CONTAINER_DRAIN_ORDER;
 			instance.furnaceSlotAccess = stored.furnaceSlotAccess != null ? stored.furnaceSlotAccess : DEFAULT_FURNACE_SLOT_ACCESS;
 			instance.reachCraftHoldAndRelease = stored.reachCraftHoldAndRelease != null ? stored.reachCraftHoldAndRelease : DEFAULT_REACH_CRAFT_HOLD_AND_RELEASE;
@@ -350,6 +355,15 @@ public final class ReachCraftingConfig {
 
 	public void setInWorldFilterMode(InWorldFilterMode inWorldFilterMode) {
 		this.inWorldFilterMode = inWorldFilterMode;
+	}
+
+	/** Recipe buttons stop cycling variants while a request is queued (vanilla only stops for Ctrl). */
+	public boolean freezeRevolvingWhileQueuing() {
+		return freezeRevolvingWhileQueuing;
+	}
+
+	public void setFreezeRevolvingWhileQueuing(boolean freezeRevolvingWhileQueuing) {
+		this.freezeRevolvingWhileQueuing = freezeRevolvingWhileQueuing;
 	}
 
 	public RevolvingCraftHandling revolvingCraftHandling() {
@@ -976,6 +990,7 @@ public final class ReachCraftingConfig {
 		defaults.existingOutputHandling = DEFAULT_EXISTING_OUTPUT_HANDLING;
 		defaults.cacheContainersForFasterSearch = DEFAULT_CACHE_CONTAINERS_FOR_FASTER_SEARCH;
 		defaults.rememberContainers = DEFAULT_REMEMBER_CONTAINERS;
+		defaults.freezeRevolvingWhileQueuing = DEFAULT_FREEZE_REVOLVING_WHILE_QUEUING;
 		defaults.containerDrainOrder = DEFAULT_CONTAINER_DRAIN_ORDER;
 		defaults.furnaceSlotAccess = DEFAULT_FURNACE_SLOT_ACCESS;
 		defaults.reachCraftHoldAndRelease = DEFAULT_REACH_CRAFT_HOLD_AND_RELEASE;
@@ -1258,6 +1273,7 @@ public final class ReachCraftingConfig {
 		private ExistingOutputHandling existingOutputHandling;
 		private Boolean cacheContainersForFasterSearch;
 		private Boolean rememberContainers;
+		private Boolean freezeRevolvingWhileQueuing;
 		private ContainerDrainOrder containerDrainOrder;
 	private FurnaceSlotAccess furnaceSlotAccess;
 		private Boolean reachCraftHoldAndRelease;
@@ -1326,6 +1342,7 @@ public final class ReachCraftingConfig {
 			this.existingOutputHandling = config.existingOutputHandling;
 			this.cacheContainersForFasterSearch = config.cacheContainersForFasterSearch;
 			this.rememberContainers = config.rememberContainers;
+			this.freezeRevolvingWhileQueuing = config.freezeRevolvingWhileQueuing;
 			this.containerDrainOrder = config.containerDrainOrder;
 			this.furnaceSlotAccess = config.furnaceSlotAccess;
 			this.reachCraftHoldAndRelease = config.reachCraftHoldAndRelease;
