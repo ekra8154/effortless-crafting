@@ -32,17 +32,17 @@ public abstract class RecipeBookPageMixin {
 	@Final
 	private OverlayRecipeComponent overlay;
 
-	/** On the craftability dots, a small label saying what they mean replaces the item tooltip. */
+	/** Resting on the craftability dots, a tooltip saying what they mean replaces the item tooltip. */
 	@Inject(method = "extractTooltip", at = @At("HEAD"), cancellable = true)
 	private void reachcrafting$indicatorHoverLabel(GuiGraphicsExtractor graphics, int mouseX, int mouseY, CallbackInfo ci) {
 		if (this.hoveredButton == null || this.overlay.isVisible()) {
 			return;
 		}
-		Component text = RecipeButtonNearbyIndicator.hoverText(this.hoveredButton, mouseX, mouseY);
+		Component text = RecipeButtonNearbyIndicator.hoverTextAfterDelay(this.hoveredButton, mouseX, mouseY);
 		if (text == null) {
 			return;
 		}
-		RecipeButtonNearbyIndicator.renderHoverLabel(graphics, text, mouseX, mouseY);
+		graphics.setTooltipForNextFrame(net.minecraft.client.Minecraft.getInstance().font, text, mouseX, mouseY);
 		ci.cancel();
 	}
 
