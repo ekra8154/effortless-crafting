@@ -168,34 +168,30 @@ public final class RecipeButtonNearbyIndicator {
 	}
 
 	/**
-	 * A small tooltip-style label above the cursor, in half-size text. At GUI
-	 * scale 1 half-size text cannot be read, so it stays full size there.
+	 * How long the mouse rests on the dots before their tooltip replaces the
+	 * recipe's, so sweeping across the book never flickers it.
 	 */
-	public static void renderHoverLabel(
-		net.minecraft.client.gui.GuiGraphicsExtractor guiGraphics,
-		net.minecraft.network.chat.Component text,
-		int mouseX,
-		int mouseY
-	) {
-		Minecraft client = Minecraft.getInstance();
-		net.minecraft.client.gui.Font font = client.font;
-		float scale = client.getWindow().getGuiScale() >= 2 ? 0.5f : 1.0f;
-		int width = (int) Math.ceil(font.width(text) * scale);
-		int height = (int) Math.ceil(font.lineHeight * scale);
-		int x = Math.min(mouseX + 6, guiGraphics.guiWidth() - width - 3);
-		int y = Math.max(mouseY - height - 6, 3);
-		guiGraphics.nextStratum();
-		guiGraphics.fill(x - 2, y - 2, x + width + 2, y + height + 1, 0xF0100010);
-		guiGraphics.fill(x - 2, y - 2, x + width + 2, y - 1, 0x505000FF);
-		guiGraphics.fill(x - 2, y + height, x + width + 2, y + height + 1, 0x5028007F);
-		guiGraphics.pose().pushMatrix();
-		guiGraphics.pose().translate(x, y);
-		guiGraphics.pose().scale(scale, scale);
-		try {
-			guiGraphics.text(font, text, 0, 0, 0xFFFFFFFF, false);
-		} finally {
-			guiGraphics.pose().popMatrix();
+	private static final long HOVER_TOOLTIP_DELAY_MS = 200L;
+	private static RecipeButton dotHoverButton;
+	private static long dotHoverSinceMs;
+
+	/**
+	 * The dots' tooltip text once the mouse has rested on them for
+	 * {@link #HOVER_TOOLTIP_DELAY_MS}; null before that and off the dots, when
+	 * the recipe's own tooltip shows.
+	 */
+	public static net.minecraft.network.chat.Component hoverTextAfterDelay(RecipeButton button, int mouseX, int mouseY) {
+		net.minecraft.network.chat.Component text = hoverText(button, mouseX, mouseY);
+		if (text == null) {
+			dotHoverButton = null;
+			return null;
 		}
+		long now = net.minecraft.util.Util.getMillis();
+		if (dotHoverButton != button) {
+			dotHoverButton = button;
+			dotHoverSinceMs = now;
+		}
+		return now - dotHoverSinceMs >= HOVER_TOOLTIP_DELAY_MS ? text : null;
 	}
 
 	/**

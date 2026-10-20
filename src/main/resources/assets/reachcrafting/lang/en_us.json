@@ -12,6 +12,8 @@
   "category.reachcrafting.sub.blacklists_filtering": "Blacklists and Filtering",
   "option.reachcrafting.enable_nearby_container_usage": "Nearby Container Usage",
   "tooltip.reachcrafting.enable_nearby_container_usage": "Controls when crafting may pull from and return items to nearby containers. While Ctrl Held: only requests made with Ctrl held use nearby chests (default). Always On: every craft can access nearby chests even if Ctrl is not held. Disabled: only the player inventory is used.",
+  "option.reachcrafting.freeze_revolving_while_queuing": "Freeze Revolving Recipes While Queuing",
+  "tooltip.reachcrafting.freeze_revolving_while_queuing": "Recipe buttons that cycle through variants, like moss and pale moss, stop cycling while a request is being queued, so the queue keeps the variant you started on. Vanilla only stops them while Ctrl is held.",
   "option.reachcrafting.count_preference": "Count Preference",
   "tooltip.reachcrafting.count_preference": "Controls whether craft queuing prioritizes higher-count or lower-count variants when multiple valid choices exist.",
   "enum.reachcrafting.count_preference.highest_total": "Prefer Highest Counts",
