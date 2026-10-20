@@ -401,6 +401,15 @@ public final class ReachCraftingConfigScreen {
 			.setSaveConsumer(config::setCacheContainersForFasterSearch)
 			.build());
 
+		nearbyGroup.add(entries.startBooleanToggle(
+				Component.translatable("option.reachcrafting.remember_containers"),
+				config.rememberContainers()
+			)
+			.setDefaultValue(true)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.remember_containers"))
+			.setSaveConsumer(config::setRememberContainers)
+			.build());
+
 		nearbyGroup.add(entries.startEnumSelector(
 				Component.translatable("option.reachcrafting.container_drain_order"),
 				ReachCraftingConfig.ContainerDrainOrder.class,
