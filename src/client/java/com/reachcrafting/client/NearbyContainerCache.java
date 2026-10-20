@@ -84,9 +84,22 @@ public final class NearbyContainerCache {
 		ClientLifecycleEvents.CLIENT_STOPPING.register(client -> ContainerCacheStore.shutdown());
 	}
 
-	/** Forget every container, on disk too. */
+	/**
+	 * Forget every container, on disk too. Only the harness does this:
+	 * settings changes keep the saved files, and a player who wants a world
+	 * forgotten deletes its file.
+	 */
 	public static void clear() {
 		ContainerCacheStore.journalClear();
+		clearMemory();
+	}
+
+	/**
+	 * Settings turned the cache off: save what is known, then forget it in
+	 * memory. Turning it back on loads the file again.
+	 */
+	public static void forgetKeepingSaved() {
+		ContainerCacheStore.detach();
 		clearMemory();
 	}
 
