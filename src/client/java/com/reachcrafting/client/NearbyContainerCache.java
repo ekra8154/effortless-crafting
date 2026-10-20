@@ -55,6 +55,7 @@ public final class NearbyContainerCache {
 	private static ReachableView lastView;
 	private static final TrackedContainerContext TRACKED_CONTEXT = new TrackedContainerContext();
 	private static Map<String, Integer> lastOpenContents;
+	private static Level lastLevel;
 
 	private NearbyContainerCache() {
 	}
@@ -62,6 +63,13 @@ public final class NearbyContainerCache {
 	public static void init() {
 		ClientTickEvents.END_CLIENT_TICK.register(client -> {
 			TRACKED_CONTEXT.tick();
+			if (client.level != lastLevel) {
+				// A join, a dimension change, or a network's world switch.
+				lastLevel = client.level;
+				if (client.level != null) {
+					ContainerCacheStore.onLevelChanged(client);
+				}
+			}
 			if (client.level == null) {
 				PENDING_CHUNK_CHECKS.clear();
 				lastOpenContents = null;
@@ -74,11 +82,10 @@ public final class NearbyContainerCache {
 			level.dimension(), chunk.getPos().getMinBlockX() >> 4, chunk.getPos().getMinBlockZ() >> 4));
 		ClientBlockEntityEvents.BLOCK_ENTITY_LOAD.register((blockEntity, level) -> queueBlockCheck(level, blockEntity.getBlockPos()));
 		ClientBlockEntityEvents.BLOCK_ENTITY_UNLOAD.register((blockEntity, level) -> queueBlockCheck(level, blockEntity.getBlockPos()));
-		ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> client.execute(() -> ContainerCacheStore.refresh(client)));
 		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> client.execute(() -> {
 			// Keys carry a dimension but not a world, so nothing may cross
 			// into the next world joined.
-			ContainerCacheStore.detach();
+			ContainerCacheStore.onDisconnect();
 			clearMemory();
 		}));
 		ClientLifecycleEvents.CLIENT_STOPPING.register(client -> ContainerCacheStore.shutdown());
@@ -455,6 +462,9 @@ public final class NearbyContainerCache {
 		Map<String, Integer> normalizedCounts = normalizeCounts(itemCounts);
 		ContainerSnapshot previous = SNAPSHOTS.get(key);
 		if (previous != null && previous.itemCounts().equals(normalizedCounts)) {
+			// Unchanged, but seen: the time says how fresh the entry is, and
+			// the per-world cap drops the stalest first.
+			putSnapshot(new ContainerSnapshot(key, normalizedCounts, level.getGameTime()));
 			return;
 		}
 

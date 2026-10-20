@@ -9,6 +9,7 @@
 		"WindowMixin",
 		"AbstractContainerMenuMixin",
 		"AbstractContainerScreenMixin",
+		"BiomeManagerAccessor",
 		"MinecraftInteractionBlockMixin",
 		"MultiPlayerGameModeMixin",
 		"OverlayRecipeButtonMixin",
