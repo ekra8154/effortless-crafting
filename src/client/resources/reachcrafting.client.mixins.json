@@ -15,6 +15,7 @@
 		"MouseHandlerAccessor",
 		"MultiPlayerGameModeMixin",
 		"WindowMixin",
+		"OptionsFileMixin",
 		"OverlayRecipeButtonMixin",
 		"OverlayRecipeButtonAccessor",
 		"OverlayRecipeComponentAccessor",

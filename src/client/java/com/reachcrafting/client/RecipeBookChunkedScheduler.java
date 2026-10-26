@@ -341,7 +341,7 @@ public final class RecipeBookChunkedScheduler {
 			if (fast != null) {
 				return fast;
 			}
-			return new RecipeBookSmartSorter.SortScore(5, Integer.MAX_VALUE, originalIndex);
+			return new RecipeBookSmartSorter.SortScore(RecipeBookSmartSorter.UNSCORED_TIER, Integer.MAX_VALUE, originalIndex);
 		}
 	}
 
@@ -499,7 +499,7 @@ public final class RecipeBookChunkedScheduler {
 			if (fast != null) {
 				return fast;
 			}
-			return new RecipeBookSmartSorter.SortScore(5, Integer.MAX_VALUE, originalOrder.getOrDefault(collection, Integer.MAX_VALUE));
+			return new RecipeBookSmartSorter.SortScore(RecipeBookSmartSorter.UNSCORED_TIER, Integer.MAX_VALUE, originalOrder.getOrDefault(collection, Integer.MAX_VALUE));
 		}
 
 		private int settledCount() {

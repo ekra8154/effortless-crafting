@@ -60,7 +60,7 @@ import java.nio.file.Path;
  * follow the run in logs/latest.log.
  */
 public final class ReproHarness {
-	private enum PendingKind { CRAFT, RETRIEVE, CRAFT_PLAIN, INDICATOR }
+	private enum PendingKind { CRAFT, RETRIEVE, CRAFT_PLAIN, INDICATOR, BOOK }
 	private static boolean pendingShift;
 	/** retrieve only: click the item's entry on the retrieval-mode variant menu (overlay) instead of the page button. */
 	private static boolean pendingOverlay;
@@ -71,6 +71,8 @@ public final class ReproHarness {
 	private static boolean pendingNoAlt;
 	/** "hold": queue the craft and leave it pending (no release), for looking at the queue preview. */
 	private static boolean pendingHold;
+	// Retrieve by clicking the item's retrieval-only entry in the normal book.
+	private static boolean pendingBook;
 	// Existing Output Handling as it was before a bulk/chain run forced
 	// Craft Only, so the run can hand it back. The setter itself does not
 	// persist, but auto craft toggles during the run call save(), which
@@ -119,6 +121,11 @@ public final class ReproHarness {
 		"true".equalsIgnoreCase(System.getProperty("reachcrafting.repro.quiet", ""));
 	private static boolean freeMouse = QUIET_LAUNCH;
 	private static boolean freeMouseKeyWasDown;
+
+	/** Launched by the automated scripts (the quiet flag), not by hand. */
+	public static boolean isQuietLaunch() {
+		return QUIET_LAUNCH;
+	}
 
 	/** Launch-time: suppress GLFW focus-on-show so the client does not steal
 	 * foreground / flash the taskbar. Read by WindowMixin at window creation. */
@@ -252,7 +259,7 @@ public final class ReproHarness {
 				}
 				openNearestCraftingTable(client);
 			}
-			case "retrieve", "craft", "indicator" -> {
+			case "retrieve", "craft", "indicator", "book" -> {
 				if (parts.length < 2) {
 					ReachCraftingMod.LOGGER.warn("[repro_harness] {} requires an item id", parts[0]);
 					return;
@@ -261,6 +268,7 @@ public final class ReproHarness {
 				pendingKind = switch (parts[0]) {
 					case "retrieve" -> PendingKind.RETRIEVE;
 					case "craft" -> PendingKind.CRAFT_PLAIN;
+					case "book" -> PendingKind.BOOK;
 					default -> PendingKind.INDICATOR;
 				};
 				pendingRetrieveCount = -1;
@@ -269,6 +277,7 @@ public final class ReproHarness {
 				pendingOverlay = false;
 				pendingNoAlt = false;
 				pendingHold = false;
+				pendingBook = false;
 				for (int i = 2; i < parts.length; i++) {
 					if (parts[i].startsWith("count=")) {
 						pendingRetrieveCount = Integer.parseInt(parts[i].substring("count=".length()));
@@ -282,6 +291,8 @@ public final class ReproHarness {
 						pendingNoAlt = true;
 					} else if (parts[i].equals("hold")) {
 						pendingHold = true;
+					} else if (parts[i].equals("book")) {
+						pendingBook = true;
 					}
 				}
 				pendingBulkLatch = false;
@@ -337,6 +348,12 @@ public final class ReproHarness {
 					boolean on = parts[2].equals("on");
 					ReachCraftingConfig.get().setRememberContainers(on);
 					ReachCraftingMod.diag("[repro_harness] set remember_containers={}", on);
+				} else if (parts.length == 3 && parts[1].equals("retrievalonly")) {
+					ReachCraftingConfig.RetrievalOnlyRecipes value = parts[2].equals("mode")
+						? ReachCraftingConfig.RetrievalOnlyRecipes.RETRIEVAL_MODE
+						: ReachCraftingConfig.RetrievalOnlyRecipes.RETRIEVAL_AND_CRAFTING;
+					ReachCraftingConfig.get().setRetrievalOnlyRecipes(value);
+					ReachCraftingMod.diag("[repro_harness] set retrieval_only_recipes={}", value);
 				} else if (parts.length == 3 && parts[1].equals("dynamic")) {
 					boolean on = parts[2].equals("on");
 					ReachCraftingConfig.get().setDynamicAutoCraft(on);
@@ -488,7 +505,16 @@ public final class ReproHarness {
 		boolean bulkLatch = pendingBulkLatch;
 		boolean noAlt = pendingNoAlt;
 		pendingBulkItem = null;
+		if (pendingKind == PendingKind.BOOK) {
+			// count=N: also log the queue preview for N queued on the entry.
+			bookEntryForItemId(client, itemId, false, pendingRetrieveCount);
+			return;
+		}
 		if (pendingKind == PendingKind.RETRIEVE) {
+			if (pendingBook) {
+				bookEntryForItemId(client, itemId, true, pendingRetrieveCount);
+				return;
+			}
 			if (pendingOverlay) {
 				retrieveFromVariantOverlay(client, itemId, pendingRetrieveCount);
 			} else {
@@ -631,6 +657,81 @@ public final class ReproHarness {
 			return;
 		}
 		ReachCraftingMod.LOGGER.warn("[repro_harness] no recipe collection found for {}", itemId);
+	}
+
+	/**
+	 * The normal crafting book (Retrieval Mode off), searched for the item the
+	 * way a player types it: logs whether its retrieval-only entry is listed,
+	 * whether it is backed by a nearby container, its sort tier and whether
+	 * the whole list is in tier order. With click, retrieves through that
+	 * entry like a player clicking it (count = how many, -1 = all); without,
+	 * a count logs the result-slot ghost the queue preview shows for that
+	 * many queued on it (GridPreview.planFor, the queue's own compute).
+	 */
+	private static void bookEntryForItemId(Minecraft client, String itemId, boolean click, int count) {
+		if (!(client.gui.screen() instanceof net.minecraft.client.gui.screens.inventory.AbstractRecipeBookScreen<?> screen)) {
+			ReachCraftingMod.LOGGER.warn("[repro_harness] book needs a recipe book screen");
+			return;
+		}
+		ExistingOutputRetrievalController.setEnabled(false);
+		net.minecraft.client.gui.screens.recipebook.RecipeBookComponent<?> component =
+			((com.reachcrafting.client.mixin.AbstractRecipeBookScreenAccessor) screen).getRecipeBookComponent();
+		if (!component.isVisible()) {
+			component.toggleVisibility();
+		}
+		com.reachcrafting.client.mixin.RecipeBookComponentAccessor accessor = (com.reachcrafting.client.mixin.RecipeBookComponentAccessor) component;
+		String search = itemId.substring(itemId.indexOf(':') + 1).replace('_', ' ');
+		accessor.getSearchBox().setValue(search);
+		accessor.invokeUpdateCollections(true, Boolean.TRUE.equals(accessor.getFilterButton().getValue()));
+		java.util.List<RecipeCollection> listed = ((com.reachcrafting.client.mixin.RecipeBookPageAccessor) accessor.getRecipeBookPage()).getRecipeCollections();
+		ContextMap context = SlotDisplayContext.fromLevel(client.level);
+		int index = -1;
+		int firstRetrievalOnly = -1;
+		int realAfter = 0;
+		int previousTier = -1;
+		boolean tierOrdered = true;
+		RecipeDisplayEntry found = null;
+		RecipeCollection foundCollection = null;
+		for (int i = 0; i < listed.size(); i++) {
+			RecipeCollection collection = listed.get(i);
+			int tier = RecipeBookSmartSorter.tierFor(collection);
+			tierOrdered &= tier >= previousTier;
+			previousTier = tier;
+			RecipeDisplayEntry entry = collection.getRecipes().isEmpty() ? null : collection.getRecipes().getFirst();
+			boolean retrievalOnly = entry != null && VirtualRetrievalRecipeBookEntries.isSyntheticRecipeId(entry.id());
+			if (!retrievalOnly) {
+				if (firstRetrievalOnly >= 0) {
+					realAfter++;
+				}
+				continue;
+			}
+			if (firstRetrievalOnly < 0) {
+				firstRetrievalOnly = i;
+			}
+			ItemStack stack = RecipeVariantResolver.resolveDisplayStack(entry.display(), context);
+			if (found == null && !stack.isEmpty() && itemId.equals(stack.getItem().builtInRegistryHolder().key().identifier().toString())) {
+				found = entry;
+				foundCollection = collection;
+				index = i;
+			}
+		}
+		int previewResult = -1;
+		boolean previewShort = false;
+		if (!click && found != null && count > 0) {
+			GridPreview.Plan plan = GridPreview.planFor(client,
+				new RecipeBookClickCapture.HeldRecipeAction(found.id(), foundCollection,
+					RecipeVariantResolver.resolveDisplayStack(found.display(), context), InputConstants.MOUSE_BUTTON_LEFT, false),
+				count, false, false);
+			previewResult = plan == null ? -1 : plan.result().getCount();
+			previewShort = plan != null && plan.shortOfRequest();
+		}
+		ReachCraftingMod.diag("[repro_harness] book_entry item={} present={} live={} index={} total={} tier={} tier_ordered={} real_after_retrieval_only={} preview_result={} preview_short={} search='{}'",
+			itemId, found != null, found != null && VirtualRetrievalRecipeBookEntries.hasLiveNearbyBacking(found.id()),
+			index, listed.size(), found != null ? RecipeBookSmartSorter.tierFor(foundCollection) : -1, tierOrdered, realAfter,
+			previewResult, previewShort, search);
+		if (click && found != null) {
+			driveRetrieveClick(found.id(), foundCollection, RecipeVariantResolver.resolveDisplayStack(found.display(), context), count);
+		}
 	}
 
 	private static void driveRetrieveClick(
