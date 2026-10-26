@@ -28,6 +28,14 @@ public final class InWorldFilterManager {
 	// the server entry), so the id is not rebuilt for every container check.
 	private static Object storageIdSource;
 	private static String storageIdCache;
+	// The same entries as packed positions per dimension, so a check is a
+	// long lookup instead of building and hashing two key strings. Rebuilt
+	// lazily after the sets change (load, validateFilters, toggleInclusion).
+	private static final java.util.Map<String, it.unimi.dsi.fastutil.longs.LongSet> BLACKLIST_INDEX = new java.util.HashMap<>();
+	private static final java.util.Map<String, it.unimi.dsi.fastutil.longs.LongSet> WHITELIST_INDEX = new java.util.HashMap<>();
+	private static boolean indexStale = true;
+	private static net.minecraft.resources.ResourceKey<Level> lastDimension;
+	private static String lastDimensionPrefix;
 
 	public enum InclusionState {
 		MANUAL_WHITELIST,
@@ -82,7 +90,7 @@ public final class InWorldFilterManager {
 			return ContainerUtils.isSupportedContainer(state);
 		}
 
-		InclusionState manual = getManualState(level, pos);
+		InclusionState manual = getManualState(level, pos, state);
 		if (manual == InclusionState.MANUAL_WHITELIST) return true;
 		if (manual == InclusionState.MANUAL_BLACKLIST) return false;
 		
@@ -94,19 +102,75 @@ public final class InWorldFilterManager {
 	}
 
 	public static InclusionState getManualState(Level level, BlockPos pos) {
+		return getManualState(level, pos, null);
+	}
+
+	/**
+	 * Same answer as looking up keysFor's strings, from the packed-position
+	 * index: a nearby scan asks this for every container in reach (hundreds
+	 * in a storage room), and building two key strings each time was most of
+	 * the filter's cost. {@code state} is the block's state when the caller
+	 * already has it, saving a lookup.
+	 */
+	static InclusionState getManualState(Level level, BlockPos pos, BlockState state) {
 		updateContext();
 		if (INSTANCE_WHITELIST.isEmpty() && INSTANCE_BLACKLIST.isEmpty()) {
-			// Most worlds have no manual entries; skip building the keys.
+			// Most worlds have no manual entries.
 			return InclusionState.UNSET;
 		}
-		java.util.List<String> keys = keysFor(level, pos);
-		for (String key : keys) {
-			if (INSTANCE_WHITELIST.contains(key)) return InclusionState.MANUAL_WHITELIST;
+		rebuildIndexIfStale();
+		String dimension = dimensionPrefix(level);
+		it.unimi.dsi.fastutil.longs.LongSet whitelist = WHITELIST_INDEX.get(dimension);
+		it.unimi.dsi.fastutil.longs.LongSet blacklist = BLACKLIST_INDEX.get(dimension);
+		if (whitelist == null && blacklist == null) {
+			return InclusionState.UNSET;
 		}
-		for (String key : keys) {
-			if (INSTANCE_BLACKLIST.contains(key)) return InclusionState.MANUAL_BLACKLIST;
-		}
+		long own = pos.asLong();
+		long partner = ContainerUtils.getOtherHalfOfLargeChest(level, pos, state != null ? state : level.getBlockState(pos))
+			.map(BlockPos::asLong)
+			.orElse(own);
+		if (whitelist != null && (whitelist.contains(own) || whitelist.contains(partner))) return InclusionState.MANUAL_WHITELIST;
+		if (blacklist != null && (blacklist.contains(own) || blacklist.contains(partner))) return InclusionState.MANUAL_BLACKLIST;
 		return InclusionState.UNSET;
+	}
+
+	/** rawPosKey's dimension part, built once per dimension instead of per key. */
+	private static String dimensionPrefix(Level level) {
+		if (level.dimension() != lastDimension) {
+			lastDimension = level.dimension();
+			lastDimensionPrefix = lastDimension.toString();
+		}
+		return lastDimensionPrefix;
+	}
+
+	private static void rebuildIndexIfStale() {
+		if (!indexStale) {
+			return;
+		}
+		indexStale = false;
+		indexInto(INSTANCE_BLACKLIST, BLACKLIST_INDEX);
+		indexInto(INSTANCE_WHITELIST, WHITELIST_INDEX);
+	}
+
+	/** Parses rawPosKey strings ("<dimension>:x,y,z"); malformed ones are skipped, as validateSet does. */
+	private static void indexInto(Set<String> keys, java.util.Map<String, it.unimi.dsi.fastutil.longs.LongSet> index) {
+		index.clear();
+		for (String key : keys) {
+			int lastColon = key.lastIndexOf(':');
+			if (lastColon <= 0) {
+				continue;
+			}
+			String[] coords = key.substring(lastColon + 1).split(",");
+			if (coords.length != 3) {
+				continue;
+			}
+			try {
+				long packed = BlockPos.asLong(Integer.parseInt(coords[0]), Integer.parseInt(coords[1]), Integer.parseInt(coords[2]));
+				index.computeIfAbsent(key.substring(0, lastColon), ignored -> new it.unimi.dsi.fastutil.longs.LongOpenHashSet()).add(packed);
+			} catch (NumberFormatException ignored) {
+				// Malformed: never matches, as with the string lookup.
+			}
+		}
 	}
 
 	/**
@@ -146,6 +210,7 @@ public final class InWorldFilterManager {
 		if (!toRemoveBlack.isEmpty() || !toRemoveWhite.isEmpty()) {
 			INSTANCE_BLACKLIST.removeAll(toRemoveBlack);
 			INSTANCE_WHITELIST.removeAll(toRemoveWhite);
+			indexStale = true;
 			dirty = true;
 			saveIfDirty();
 		}
@@ -271,6 +336,7 @@ public final class InWorldFilterManager {
 		}
 		// White -> Reset: everything already removed.
 
+		indexStale = true;
 		dirty = true;
 		saveIfDirty(); // Trigger a save check after toggle
 		NearbyContainerCache.bumpRevision();
@@ -288,6 +354,7 @@ public final class InWorldFilterManager {
 	private static void load() {
 		INSTANCE_BLACKLIST.clear();
 		INSTANCE_WHITELIST.clear();
+		indexStale = true;
 		
 		if (currentStorageId.equals("unknown")) return;
 		
