@@ -169,7 +169,7 @@ public final class ContainerUtils {
 			if (ChestBlock.isChestBlockedAt(level, pos)) {
 				return false;
 			}
-			return getOtherHalfOfLargeChest(level, pos)
+			return getOtherHalfOfLargeChest(level, pos, state)
 				.map(otherHalf -> !ChestBlock.isChestBlockedAt(level, otherHalf))
 				.orElse(true);
 		}
@@ -177,7 +177,11 @@ public final class ContainerUtils {
 	}
 
 	public static Optional<BlockPos> getOtherHalfOfLargeChest(Level level, BlockPos pos) {
-		BlockState state = level.getBlockState(pos);
+		return getOtherHalfOfLargeChest(level, pos, level.getBlockState(pos));
+	}
+
+	/** For a caller that already holds the state at pos (a nearby scan does, per container). */
+	public static Optional<BlockPos> getOtherHalfOfLargeChest(Level level, BlockPos pos, BlockState state) {
 		if (!(state.getBlock() instanceof ChestBlock) || state.getValue(ChestBlock.TYPE) == ChestType.SINGLE) {
 			return Optional.empty();
 		}
