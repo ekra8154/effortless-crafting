@@ -200,7 +200,7 @@ final class ReturnSession extends BaseCraftSession {
 		if (ReachCraftingConfig.get().restoreInventoryItemPositions()) {
 			restoreProtectedInventoryLayout(menu);
 		}
-		NearbyContainerCache.recordObservedContents(level, pendingContainerPos, ContainerUtils.collectAllItems(menu));
+		NearbyContainerCache.recordObservedContents(level, pendingContainerPos, ContainerUtils.collectContents(menu));
 
 		player.closeContainer();
 		pendingContainerPos = null;
