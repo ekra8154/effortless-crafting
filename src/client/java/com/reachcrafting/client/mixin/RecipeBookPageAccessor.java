@@ -17,6 +17,9 @@ public interface RecipeBookPageAccessor {
 	@Accessor("buttons")
 	List<RecipeButton> getButtons();
 
+	@Accessor("recipeCollections")
+	List<net.minecraft.client.gui.screens.recipebook.RecipeCollection> getRecipeCollections();
+
 	@Accessor("isFiltering")
 	boolean getIsFiltering();
 

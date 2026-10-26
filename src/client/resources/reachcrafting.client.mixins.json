@@ -15,6 +15,7 @@
 		"MinecraftInteractionBlockMixin",
 		"MouseHandlerAccessor",
 		"MultiPlayerGameModeMixin",
+		"OptionsFileMixin",
 		"OverlayRecipeButtonMixin",
 		"OverlayRecipeButtonAccessor",
 		"OverlayRecipeComponentAccessor",
