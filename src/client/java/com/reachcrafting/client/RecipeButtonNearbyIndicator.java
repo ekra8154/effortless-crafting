@@ -237,6 +237,11 @@ public final class RecipeButtonNearbyIndicator {
 		if (recipe == null || collection == null) {
 			return Craftability.NOT_CRAFTABLE;
 		}
+		// A retrieval-only entry has no ingredients, which would otherwise
+		// read as craftable from nothing. Its green dot says what it can do.
+		if (VirtualRetrievalRecipeBookEntries.isSyntheticRecipeId(recipe)) {
+			return Craftability.NOT_CRAFTABLE;
+		}
 
 		NearbyContainerCache.ReachableView reachableView = NearbyContainerCache.getReachableView(
 			minecraft.level,
