@@ -106,9 +106,9 @@ final class RecipeClickExecutor {
 		boolean nearbyCacheIncomplete = false;
 		if (allowNearbyChests && ReachCraftingConfig.get().cacheContainersForFasterSearch()) {
 			NearbyContainerCache.ReachableView reachableView = NearbyContainerCache.getReachableView(minecraft.level, minecraft.getCameraEntity(), reachDistance(minecraft, player));
-			availableCounts = AvailableItemSnapshot.mergeCounts(availableCounts, reachableView.countsFor(ingredientSummary.acceptedItemIds()));
+			availableCounts = AvailableItemSnapshot.mergeCounts(availableCounts, reachableView.craftableCountsFor(ingredientSummary.acceptedItemIds()));
 			// Lockstep with BulkChainCraftController.collectAvailableCounts.
-			chainAvailableCounts = AvailableItemSnapshot.mergeCounts(localAvailableCounts, reachableView.aggregateCounts());
+			chainAvailableCounts = AvailableItemSnapshot.mergeCounts(localAvailableCounts, reachableView.chainCraftableCounts());
 			nearbyCacheIncomplete = reachableView.snapshotsByKey().size() < reachableView.nearestAccessByKey().size();
 		}
 		// Lockstep with BulkChainCraftController.collectAvailableCounts:
@@ -1057,7 +1057,7 @@ final class RecipeClickExecutor {
 		Map<String, Integer> availableCounts = availableItems.totalCounts();
 		if (ReachCraftingConfig.get().cacheContainersForFasterSearch()) {
 			NearbyContainerCache.ReachableView reachableView = NearbyContainerCache.getReachableView(minecraft.level, minecraft.getCameraEntity(), reachDistance(minecraft, player));
-			availableCounts = AvailableItemSnapshot.mergeCounts(availableCounts, reachableView.aggregateCounts());
+			availableCounts = AvailableItemSnapshot.mergeCounts(availableCounts, reachableView.craftableCounts());
 		}
 		RecipeVariantResolver.Selection selection = RecipeVariantResolver.resolve(
 			minecraft,
@@ -1386,7 +1386,7 @@ final class RecipeClickExecutor {
 		Map<String, Integer> chainAvailableCounts = availableItems.totalCounts();
 		if (allowNearbyChests && ReachCraftingConfig.get().cacheContainersForFasterSearch()) {
 			NearbyContainerCache.ReachableView reachableView = NearbyContainerCache.getReachableView(minecraft.level, minecraft.getCameraEntity(), (net.minecraft.client.Minecraft.getInstance().gameMode != null ? net.minecraft.client.Minecraft.getInstance().gameMode.getPickRange() : 4.5D));
-			chainAvailableCounts = AvailableItemSnapshot.mergeCounts(availableItems.totalCounts(), reachableView.aggregateCounts());
+			chainAvailableCounts = AvailableItemSnapshot.mergeCounts(availableItems.totalCounts(), reachableView.chainCraftableCounts());
 		}
 		chainAvailableCounts = ContainerUtils.subtractNonPristineLocalStacks(minecraft, chainAvailableCounts);
 		int desiredVariantCopies = Math.max(requestedClicks, 1);

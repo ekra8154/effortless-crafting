@@ -130,7 +130,7 @@ final class CacheWarmupSession extends BaseCraftSession {
 			return;
 		}
 
-		NearbyContainerCache.recordObservedContents(level, pendingContainerPos, ContainerUtils.collectAllItems(menu));
+		NearbyContainerCache.recordObservedContents(level, pendingContainerPos, ContainerUtils.collectContents(menu));
 		scannedContainers++;
 		player.closeContainer();
 		pendingContainerPos = null;

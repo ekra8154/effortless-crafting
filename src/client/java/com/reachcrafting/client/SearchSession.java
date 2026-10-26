@@ -171,7 +171,7 @@ final class SearchSession extends BaseCraftSession {
 		if (useCachedSearch) {
 			refreshReachableView();
 			discoveredNearby.clear();
-			discoveredNearby.putAll(reachableView.countsFor(scanAcceptedItemIds));
+			discoveredNearby.putAll(reachableView.craftableCountsFor(scanAcceptedItemIds));
 			ReachCraftingMod.diag(
 				"[nearby_cache] idx={} seeded cached_items={} snapshots={} reachable_containers={} requested_recipe={} requested_output={}",
 				recipeIndex,
@@ -363,8 +363,7 @@ final class SearchSession extends BaseCraftSession {
 			return;
 		}
 
-		Map<String, Integer> allItems = ContainerUtils.collectAllItems(menu);
-		NearbyContainerCache.recordObservedContents(level, pendingContainerPos, allItems);
+		NearbyContainerCache.recordObservedContents(level, pendingContainerPos, ContainerUtils.collectContents(menu));
 		Map<String, Integer> usefulItems = collectUsefulItems(menu, scanAcceptedItemIds);
 		boolean shouldMergeDiscovery = phase == SearchPhase.DISCOVERY || !useCachedSearch;
 		if (!usefulItems.isEmpty() && shouldMergeDiscovery) {
@@ -493,7 +492,7 @@ final class SearchSession extends BaseCraftSession {
 		refreshReachableView();
 		if (useCachedSearch) {
 			discoveredNearby.clear();
-			discoveredNearby.putAll(reachableView.countsFor(scanAcceptedItemIds));
+			discoveredNearby.putAll(reachableView.craftableCountsFor(scanAcceptedItemIds));
 		}
 		applySearchPlanDecision(buildSearchPlanDecision());
 	}
@@ -525,12 +524,13 @@ final class SearchSession extends BaseCraftSession {
 			: inventoryCounts;
 		List<ItemStack> planningGridStacks = redistributeReservedGrid ? List.of() : originalContext.gridStacks();
 		AvailableItemSnapshot resolverItems = redistributeReservedGrid
-			? new AvailableItemSnapshot(Map.copyOf(totalAvailable), Map.of(), Map.copyOf(totalAvailable), List.of())
+			? new AvailableItemSnapshot(Map.copyOf(totalAvailable), Map.of(), Map.copyOf(totalAvailable), List.of(), Map.of())
 			: new AvailableItemSnapshot(
 				Map.copyOf(inventoryCounts),
 				localItems.gridCounts(),
 				AvailableItemSnapshot.mergeCounts(inventoryCounts, localItems.gridCounts()),
-				localItems.gridStacks()
+				localItems.gridStacks(),
+				localItems.unusableCounts()
 			);
 		int desiredVariantCopies = craftAll
 			? 1
@@ -1609,8 +1609,9 @@ final class SearchSession extends BaseCraftSession {
 
 	private int cachedDistinctMatchesAt(BlockPos pos, Map<String, Integer> neededCounts) {
 		int matches = 0;
+		Map<String, Integer> itemCounts = reachableView.craftableCountsAt(pos);
 		for (String itemId : neededCounts.keySet()) {
-			if (reachableView.itemCountsAt(pos).getOrDefault(itemId, 0) > 0) {
+			if (itemCounts.getOrDefault(itemId, 0) > 0) {
 				matches++;
 			}
 		}
@@ -1619,7 +1620,7 @@ final class SearchSession extends BaseCraftSession {
 
 	private int cachedMatchUnitsAt(BlockPos pos, Map<String, Integer> neededCounts) {
 		int matches = 0;
-		Map<String, Integer> itemCounts = reachableView.itemCountsAt(pos);
+		Map<String, Integer> itemCounts = reachableView.craftableCountsAt(pos);
 		for (Map.Entry<String, Integer> entry : neededCounts.entrySet()) {
 			matches += Math.min(itemCounts.getOrDefault(entry.getKey(), 0), entry.getValue());
 		}
@@ -1628,7 +1629,7 @@ final class SearchSession extends BaseCraftSession {
 
 	private int cachedPreferenceTotalAt(BlockPos pos, Map<String, Integer> neededCounts) {
 		int total = 0;
-		Map<String, Integer> itemCounts = reachableView.itemCountsAt(pos);
+		Map<String, Integer> itemCounts = reachableView.craftableCountsAt(pos);
 		for (String itemId : neededCounts.keySet()) {
 			total += itemCounts.getOrDefault(itemId, 0);
 		}
@@ -2458,7 +2459,9 @@ final class SearchSession extends BaseCraftSession {
 	private static Map<String, Integer> collectUsefulItems(AbstractContainerMenu menu, Set<String> acceptedItemIds) {
 		Map<String, Integer> usefulItems = new LinkedHashMap<>();
 		for (Slot slot : menu.slots) {
-			if (!ContainerUtils.isPullableContainerSlot(menu, slot) || !slot.hasItem()) {
+			// Only what a withdrawal will actually take (sortedMatchingContainerSources).
+			if (!ContainerUtils.isPullableContainerSlot(menu, slot) || !slot.hasItem()
+				|| !ManualRecipePlacer.isUsableForCrafting(slot.getItem())) {
 				continue;
 			}
 
@@ -2765,7 +2768,10 @@ final class SearchSession extends BaseCraftSession {
 	private List<Slot> sortedMatchingContainerSources(AbstractContainerMenu menu, String itemId) {
 		List<Slot> matchingSources = new ArrayList<>();
 		for (Slot slot : menu.slots) {
-			if (!ContainerUtils.isPullableContainerSlot(menu, slot) || !slot.hasItem() || !slot.mayPickup(player)) {
+			// A stack no placement will use is not a source: pulling it only
+			// leaves the craft short (and an enchanted bow in the inventory).
+			if (!ContainerUtils.isPullableContainerSlot(menu, slot) || !slot.hasItem() || !slot.mayPickup(player)
+				|| !ManualRecipePlacer.isUsableForCrafting(slot.getItem())) {
 				continue;
 			}
 			String slotItemId = BuiltInRegistries.ITEM.getKey(slot.getItem().getItem()).toString();
@@ -2800,7 +2806,9 @@ final class SearchSession extends BaseCraftSession {
 			int virtualCount = virtualPlayerCounts.getOrDefault(slot.index, slot.hasItem() ? slot.getItem().getCount() : 0);
 			if (slot.hasItem()) {
 				String slotItemId = BuiltInRegistries.ITEM.getKey(slot.getItem().getItem()).toString();
-				if (!itemId.equals(slotItemId)) {
+				// A renamed or enchanted stack of the same id never merges
+				// with the plain stack being withdrawn.
+				if (!itemId.equals(slotItemId) || !ManualRecipePlacer.isUsableForCrafting(slot.getItem())) {
 					continue;
 				}
 

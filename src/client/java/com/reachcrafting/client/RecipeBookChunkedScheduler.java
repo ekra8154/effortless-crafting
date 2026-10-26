@@ -306,7 +306,7 @@ public final class RecipeBookChunkedScheduler {
 
 	private static int reachableSignature(NearbyContainerCache.ReachableView view) {
 		int signature = 1;
-		signature = (31 * signature) + view.aggregateCounts().hashCode();
+		signature = (31 * signature) + view.contentHash();
 		signature = (31 * signature) + view.snapshotsByKey().keySet().hashCode();
 		return signature;
 	}

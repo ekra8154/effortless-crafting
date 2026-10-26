@@ -543,7 +543,7 @@ public final class BulkChainCraftController {
 				client.getCameraEntity(),
 				client.gameMode != null ? client.gameMode.getPickRange() : 4.5D
 			);
-			counts = AvailableItemSnapshot.mergeCounts(counts, reachableView.aggregateCounts());
+			counts = AvailableItemSnapshot.mergeCounts(counts, reachableView.chainCraftableCounts());
 		}
 		return ContainerUtils.subtractNonPristineLocalStacks(client, counts);
 	}

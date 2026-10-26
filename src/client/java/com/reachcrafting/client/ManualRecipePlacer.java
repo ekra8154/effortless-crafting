@@ -26,6 +26,12 @@ import net.minecraft.world.item.ItemStack;
  * inputs ourselves with ordinary container clicks. Sources are restricted
  * to PRISTINE stacks (no components beyond the item default) so filled
  * bundles or shulker boxes in use as storage are never consumed.
+ *
+ * <p>Click staging reuses it for ordinary recipes too. Those callers pass
+ * pristineOnly=false, which still keeps vanilla's own rule (no damaged,
+ * enchanted or renamed stacks, see isUsableForCrafting): a filled shulker
+ * box can be dyed, as in vanilla, but an enchanted bow never becomes a
+ * dispenser.</p>
  */
 final class ManualRecipePlacer {
 	private ManualRecipePlacer() {
@@ -474,10 +480,22 @@ final class ManualRecipePlacer {
 		return slotItemIds;
 	}
 
+	/**
+	 * The rule for ordinary crafts (StackReasons.CRAFTING): vanilla's own for
+	 * automatic placement, never a damaged, enchanted or renamed stack. Every
+	 * path that clicks inputs into the grid itself must apply it, because no
+	 * server is choosing the stacks there (issue #5: an enchanted bow consumed
+	 * by a dispenser). Pristine-only callers apply the stricter isPristine
+	 * instead, which implies this.
+	 */
+	static boolean isUsableForCrafting(ItemStack stack) {
+		return StackReasons.allows(StackReasons.CRAFTING, StackReasons.of(stack));
+	}
+
 	private static boolean isUsableSource(ItemStack stack, String itemId, boolean pristineOnly) {
 		return !stack.isEmpty()
 			&& itemId.equals(itemIdOf(stack))
-			&& (!pristineOnly || isPristine(stack));
+			&& (pristineOnly ? isPristine(stack) : isUsableForCrafting(stack));
 	}
 
 	private static int findSource(AbstractContainerMenu menu, String itemId, boolean pristineOnly) {

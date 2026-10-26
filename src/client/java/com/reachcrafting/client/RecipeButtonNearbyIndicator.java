@@ -466,7 +466,7 @@ public final class RecipeButtonNearbyIndicator {
 		);
 
 		AvailableItemSnapshot availableItems = AvailableItemSnapshot.capture(player, screen);
-		Map<String, Integer> cachedNearbyCounts = reachableView.aggregateCounts();
+		Map<String, Integer> cachedNearbyCounts = reachableView.craftableCounts();
 		Map<String, Integer> totalAvailable = AvailableItemSnapshot.mergeCounts(availableItems.inventoryCounts(), cachedNearbyCounts);
 		
 		// If the variant matches the grid, we check for a 'top-up' (current + 1).
