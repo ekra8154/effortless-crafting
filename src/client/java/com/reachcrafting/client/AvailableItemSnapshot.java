@@ -15,21 +15,35 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.item.ItemStack;
 
+/**
+ * What the player can craft with right now, counted by item id.
+ *
+ * <p>Inventory counts leave out stacks vanilla never places automatically
+ * (damaged, enchanted or renamed, see ManualRecipePlacer.isUsableForCrafting):
+ * every planner, preview and indicator reads these counts, so an enchanted
+ * bow must not cover a recipe's bow when no placement will ever use it.
+ * Those stacks are kept apart in unusableCounts. The grid is counted as it
+ * is: whatever sits there was put there by the player and the planner
+ * treats it as already placed.</p>
+ */
 public record AvailableItemSnapshot(
 	Map<String, Integer> inventoryCounts,
 	Map<String, Integer> gridCounts,
 	Map<String, Integer> totalCounts,
-	List<ItemStack> gridStacks
+	List<ItemStack> gridStacks,
+	Map<String, Integer> unusableCounts
 ) {
 	public static AvailableItemSnapshot empty() {
-		return new AvailableItemSnapshot(Map.of(), Map.of(), Map.of(), List.of());
+		return new AvailableItemSnapshot(Map.of(), Map.of(), Map.of(), List.of(), Map.of());
 	}
 	public static AvailableItemSnapshot capture(LocalPlayer player, Screen screen) {
 		Map<String, Integer> inventoryCounts = new LinkedHashMap<>();
+		Map<String, Integer> unusableCounts = new LinkedHashMap<>();
 		for (ItemStack stack : player.getInventory().getNonEquipmentItems()) {
-			addStack(inventoryCounts, stack);
+			addStack(ManualRecipePlacer.isUsableForCrafting(stack) ? inventoryCounts : unusableCounts, stack);
 		}
 		ReachCraftingConfig.get().noteExperiencedItemIds(inventoryCounts.keySet());
+		ReachCraftingConfig.get().noteExperiencedItemIds(unusableCounts.keySet());
 
 		Map<String, Integer> gridCounts = new LinkedHashMap<>();
 		List<ItemStack> gridStacks = new ArrayList<>();
@@ -52,7 +66,8 @@ public record AvailableItemSnapshot(
 			Map.copyOf(inventoryCounts),
 			Map.copyOf(gridCounts),
 			Map.copyOf(totalCounts),
-			List.copyOf(gridStacks)
+			List.copyOf(gridStacks),
+			Map.copyOf(unusableCounts)
 		);
 	}
 
