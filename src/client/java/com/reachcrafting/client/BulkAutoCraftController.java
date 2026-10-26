@@ -602,7 +602,7 @@ public final class BulkAutoCraftController {
 		}
 		java.util.Map<String, Integer> available = new java.util.HashMap<>();
 		for (ItemStack stack : client.player.getInventory().getNonEquipmentItems()) {
-			if (!stack.isEmpty()) {
+			if (!stack.isEmpty() && ManualRecipePlacer.isUsableForCrafting(stack)) {
 				available.merge(itemIdOf(stack), stack.getCount(), Integer::sum);
 			}
 		}
@@ -622,7 +622,7 @@ public final class BulkAutoCraftController {
 			&& client.level != null) {
 			NearbyContainerCache.ReachableView view = NearbyContainerCache.getReachableView(
 				client.level, client.getCameraEntity(), client.player.blockInteractionRange());
-			for (java.util.Map.Entry<String, Integer> entry : view.aggregateCounts().entrySet()) {
+			for (java.util.Map.Entry<String, Integer> entry : view.craftableCounts().entrySet()) {
 				available.merge(entry.getKey(), entry.getValue(), Integer::sum);
 			}
 		}
