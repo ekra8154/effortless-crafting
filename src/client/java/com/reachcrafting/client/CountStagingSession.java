@@ -157,7 +157,7 @@ final class CountStagingSession extends BaseCraftSession {
 			return;
 		}
 
-		NearbyContainerCache.recordObservedContents(level, pendingContainerPos, ContainerUtils.collectAllItems(menu));
+		NearbyContainerCache.recordObservedContents(level, pendingContainerPos, ContainerUtils.collectContents(menu));
 		Map<String, Integer> executedWithdrawals = executeWithdrawalPlan(menu, buildWithdrawalPlan(menu));
 		for (Map.Entry<String, Integer> entry : executedWithdrawals.entrySet()) {
 			subtract(remainingCounts, entry.getKey(), entry.getValue());
@@ -331,7 +331,8 @@ final class CountStagingSession extends BaseCraftSession {
 	private static List<Slot> sortedMatchingContainerSources(AbstractContainerMenu menu, String itemId) {
 		List<Slot> sources = new ArrayList<>();
 		for (Slot slot : menu.slots) {
-			if (!ContainerUtils.isPullableContainerSlot(menu, slot) || !slot.hasItem()) {
+			if (!ContainerUtils.isPullableContainerSlot(menu, slot) || !slot.hasItem()
+				|| !ManualRecipePlacer.isUsableForCrafting(slot.getItem())) {
 				continue;
 			}
 			String slotItemId = BuiltInRegistries.ITEM.getKey(slot.getItem().getItem()).toString();
@@ -383,6 +384,11 @@ final class CountStagingSession extends BaseCraftSession {
 				continue;
 			}
 			if (!itemId.equals(virtualItemId)) {
+				continue;
+			}
+			// A renamed or enchanted stack of the same id never merges with
+			// the plain stack being withdrawn.
+			if (slot.hasItem() && !ManualRecipePlacer.isUsableForCrafting(slot.getItem())) {
 				continue;
 			}
 			// The slot may be virtually filled while the real stack is still

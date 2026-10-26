@@ -582,7 +582,7 @@ final class GridPreview {
 		// The release flushes the grid into the inventory before it runs, so
 		// plan against inventory + grid with an empty grid.
 		Map<String, Integer> local = AvailableItemSnapshot.capture(player, screen).totalCounts();
-		AvailableItemSnapshot flushed = new AvailableItemSnapshot(local, Map.of(), local, List.of());
+		AvailableItemSnapshot flushed = new AvailableItemSnapshot(local, Map.of(), local, List.of(), Map.of());
 
 		// Lockstep: RecipeClickExecutor's first resolve (a release is a
 		// forced dry run, so variant switching is allowed).
@@ -609,7 +609,7 @@ final class GridPreview {
 			: null;
 		Map<String, Integer> availableCounts = view == null
 			? local
-			: AvailableItemSnapshot.mergeCounts(local, view.countsFor(selected.ingredientSummary().acceptedItemIds()));
+			: AvailableItemSnapshot.mergeCounts(local, view.craftableCountsFor(selected.ingredientSummary().acceptedItemIds()));
 
 		// Retrieve-first: the release pulls existing output before crafting
 		// and crafts only the shortfall (RetrieveThenCraftController.decide).
@@ -677,7 +677,7 @@ final class GridPreview {
 			// buildSearchPlanDecision re-resolves (no reserved grid).
 			boolean sessionNearby = allowNearby && config.enableNearbyContainerUsage();
 			if (sessionNearby && view != null && !view.isEmpty()) {
-				totals = AvailableItemSnapshot.mergeCounts(local, view.countsFor(scanAcceptedItemIds(client, selected, action.collection())));
+				totals = AvailableItemSnapshot.mergeCounts(local, view.craftableCountsFor(scanAcceptedItemIds(client, selected, action.collection())));
 			}
 			RecipeVariantResolver.Selection resolved = RecipeVariantResolver.resolve(
 				client,

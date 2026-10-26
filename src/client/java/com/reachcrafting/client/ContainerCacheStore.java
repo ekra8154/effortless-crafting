@@ -67,15 +67,22 @@ import net.minecraft.world.level.storage.LevelResource;
  *
  * <p>Both files store each string (dimension, container type, item id) once
  * and refer to it by index. Positions in the cache file are deltas from the
- * previous container. All disk work runs on one background thread in
- * submission order; the game thread only copies immutable snapshots into it.</p>
+ * previous container. Since version 2 each container also carries its
+ * flagged items: per item id, how many stacks carry each StackReasons mask
+ * (damaged, enchanted, renamed, other components). A container with none
+ * costs one zero byte. Version 1 files load with no flags, which counts
+ * their items as plain until the container is seen again.</p>
+ *
+ * <p>All disk work runs on one background thread in submission order; the
+ * game thread only copies immutable snapshots into it.</p>
  */
 final class ContainerCacheStore {
 	private static final int CACHE_MAGIC = 0x45434331; // ECC1
 	private static final int LOG_MAGIC = 0x45434c31; // ECL1
 	// Older versions keep their readers, so a mod update upgrades a file
 	// instead of starting the cache over.
-	private static final int FORMAT_VERSION = 1;
+	// 2: flagged items (StackReasons masks) after each container's items.
+	private static final int FORMAT_VERSION = 2;
 	private static final int OP_DEFINE = 1;
 	private static final int OP_PUT = 2;
 	private static final int OP_REMOVE = 3;
@@ -223,6 +230,11 @@ final class ContainerCacheStore {
 				items[i++] = log.index(entry.getKey());
 				items[i++] = entry.getValue();
 			}
+			// Palette definitions go out before the record that uses them.
+			Map<Integer, Map<Integer, Integer>> flagged = new LinkedHashMap<>();
+			for (Map.Entry<String, Map<Integer, Integer>> entry : snapshot.contents().flaggedCounts().entrySet()) {
+				flagged.put(log.index(entry.getKey()), entry.getValue());
+			}
 			DataOutputStream out = log.out;
 			out.writeByte(OP_PUT);
 			writePosition(out, dimension, type, key.anchorPos());
@@ -231,6 +243,7 @@ final class ContainerCacheStore {
 			for (int value : items) {
 				writeVarInt(out, value);
 			}
+			writeFlags(out, flagged);
 		}));
 	}
 
@@ -539,6 +552,9 @@ final class ContainerCacheStore {
 			for (String itemId : snapshot.itemCounts().keySet()) {
 				palette.putIfAbsent(itemId, palette.size());
 			}
+			for (String itemId : snapshot.contents().flaggedCounts().keySet()) {
+				palette.putIfAbsent(itemId, palette.size());
+			}
 		}
 
 		out.writeInt(CACHE_MAGIC);
@@ -578,6 +594,24 @@ final class ContainerCacheStore {
 				writeVarInt(out, palette.get(entry.getKey()));
 				writeVarInt(out, entry.getValue());
 			}
+			Map<Integer, Map<Integer, Integer>> flagged = new LinkedHashMap<>();
+			for (Map.Entry<String, Map<Integer, Integer>> entry : snapshot.contents().flaggedCounts().entrySet()) {
+				flagged.put(palette.get(entry.getKey()), entry.getValue());
+			}
+			writeFlags(out, flagged);
+		}
+	}
+
+	/** Flagged item count, then per item: palette index, mask count, (mask, count) pairs. */
+	private static void writeFlags(DataOutputStream out, Map<Integer, Map<Integer, Integer>> flagged) throws IOException {
+		writeVarInt(out, flagged.size());
+		for (Map.Entry<Integer, Map<Integer, Integer>> entry : flagged.entrySet()) {
+			writeVarInt(out, entry.getKey());
+			writeVarInt(out, entry.getValue().size());
+			for (Map.Entry<Integer, Integer> mask : entry.getValue().entrySet()) {
+				writeVarInt(out, mask.getKey());
+				writeVarInt(out, mask.getValue());
+			}
 		}
 	}
 
@@ -590,14 +624,17 @@ final class ContainerCacheStore {
 		}
 		int version = readVarInt(in);
 		switch (version) {
-			case 1 -> readCacheV1(in, state);
+			case 1 -> readCacheEntries(in, state, false);
+			case 2 -> readCacheEntries(in, state, true);
 			default -> throw new IOException("format version " + version + " is newer than this mod");
 		}
 	}
 
-	private static void readCacheV1(
+	/** Versions 1 and 2 share the layout; 2 adds the flags after each container's items. */
+	private static void readCacheEntries(
 		DataInputStream in,
-		Map<NearbyContainerCache.ContainerKey, NearbyContainerCache.ContainerSnapshot> state
+		Map<NearbyContainerCache.ContainerKey, NearbyContainerCache.ContainerSnapshot> state,
+		boolean flagged
 	) throws IOException {
 		int paletteSize = readVarInt(in);
 		List<String> palette = new ArrayList<>(paletteSize);
@@ -624,13 +661,13 @@ final class ContainerCacheStore {
 			y += unzigzag(readVarInt(in));
 			z += unzigzag(readVarInt(in));
 			time += unzigzag(readVarLong(in));
-			Map<String, Integer> items = readItems(in, palette);
+			NearbyContainerCache.ContainerContents contents = readContents(in, palette, flagged);
 			ResourceKey<Level> dimensionKey = dimensions.computeIfAbsent(palette.get(dimension), ContainerCacheStore::dimensionKey);
 			if (dimensionKey == null) {
 				continue;
 			}
 			NearbyContainerCache.ContainerKey key = new NearbyContainerCache.ContainerKey(dimensionKey, type, new BlockPos(x, y, z));
-			state.put(key, new NearbyContainerCache.ContainerSnapshot(key, items, time));
+			state.put(key, new NearbyContainerCache.ContainerSnapshot(key, contents, time));
 		}
 	}
 
@@ -662,9 +699,9 @@ final class ContainerCacheStore {
 					case OP_PUT -> {
 						NearbyContainerCache.ContainerKey key = readPosition(in, palette, dimensions);
 						long time = readVarLong(in);
-						Map<String, Integer> items = readItems(in, palette);
+						NearbyContainerCache.ContainerContents contents = readContents(in, palette, version >= 2);
 						if (key != null) {
-							state.put(key, new NearbyContainerCache.ContainerSnapshot(key, items, time));
+							state.put(key, new NearbyContainerCache.ContainerSnapshot(key, contents, time));
 						}
 					}
 					case OP_REMOVE -> {
@@ -702,6 +739,33 @@ final class ContainerCacheStore {
 		BlockPos pos = new BlockPos(unzigzag(readVarInt(in)), unzigzag(readVarInt(in)), unzigzag(readVarInt(in)));
 		ResourceKey<Level> dimensionKey = dimensions.computeIfAbsent(dimension, ContainerCacheStore::dimensionKey);
 		return dimensionKey != null ? new NearbyContainerCache.ContainerKey(dimensionKey, type, pos) : null;
+	}
+
+	private static NearbyContainerCache.ContainerContents readContents(
+		DataInputStream in,
+		List<String> palette,
+		boolean flagged
+	) throws IOException {
+		Map<String, Integer> items = readItems(in, palette);
+		if (!flagged) {
+			return NearbyContainerCache.ContainerContents.unflagged(items);
+		}
+		int flaggedItems = readVarInt(in);
+		Map<String, Map<Integer, Integer>> flags = new LinkedHashMap<>();
+		for (int i = 0; i < flaggedItems; i++) {
+			String itemId = palette.get(readVarInt(in));
+			int masks = readVarInt(in);
+			Map<Integer, Integer> counts = new LinkedHashMap<>();
+			for (int j = 0; j < masks; j++) {
+				int mask = readVarInt(in);
+				int count = readVarInt(in);
+				counts.merge(mask, count, Integer::sum);
+			}
+			flags.put(itemId, counts);
+		}
+		// Clamps flags to the items and drops zero masks, so a hand-edited
+		// or torn file cannot claim more flagged items than the container has.
+		return new NearbyContainerCache.ContainerContents(items, flags).normalized();
 	}
 
 	private static Map<String, Integer> readItems(DataInputStream in, List<String> palette) throws IOException {
