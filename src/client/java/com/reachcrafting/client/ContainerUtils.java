@@ -95,8 +95,10 @@ public final class ContainerUtils {
 	}
 
 	public static boolean isSupportedContainer(BlockState state) {
-		String blockId = BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString();
-		if (ReachCraftingConfig.get().blacklistedContainerIds().contains(blockId)) {
+		// Runs for every container a nearby scan looks at: only build the id
+		// when there is a blacklist to check it against.
+		java.util.Set<String> blacklisted = ReachCraftingConfig.get().blacklistedContainerIds();
+		if (!blacklisted.isEmpty() && blacklisted.contains(BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString())) {
 			return false;
 		}
 		return isPotentiallySupportedContainer(state);
