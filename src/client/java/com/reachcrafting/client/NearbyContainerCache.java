@@ -54,7 +54,7 @@ public final class NearbyContainerCache {
 	private static ViewCacheKey lastViewKey;
 	private static ReachableView lastView;
 	private static final TrackedContainerContext TRACKED_CONTEXT = new TrackedContainerContext();
-	private static Map<String, Integer> lastOpenContents;
+	private static ContainerContents lastOpenContents;
 	private static Level lastLevel;
 
 	private NearbyContainerCache() {
@@ -267,7 +267,7 @@ public final class NearbyContainerCache {
 			lastOpenContents = null;
 			return;
 		}
-		Map<String, Integer> contents = ContainerUtils.collectAllItems(menu);
+		ContainerContents contents = ContainerUtils.collectContents(menu);
 		if (contents.equals(lastOpenContents)) {
 			return;
 		}
@@ -397,14 +397,21 @@ public final class NearbyContainerCache {
 		}
 
 		Map<String, Integer> aggregateCounts = new LinkedHashMap<>();
+		Map<String, Integer> craftableCounts = new LinkedHashMap<>();
+		Map<String, Integer> chainCraftableCounts = new LinkedHashMap<>();
 		for (ContainerSnapshot snapshot : includedSnapshots.values()) {
-			snapshot.itemCounts().forEach((itemId, count) -> aggregateCounts.merge(itemId, count, Integer::sum));
+			ContainerContents contents = snapshot.contents();
+			contents.itemCounts().forEach((itemId, count) -> aggregateCounts.merge(itemId, count, Integer::sum));
+			contents.craftableCounts().forEach((itemId, count) -> craftableCounts.merge(itemId, count, Integer::sum));
+			contents.chainCraftableCounts().forEach((itemId, count) -> chainCraftableCounts.merge(itemId, count, Integer::sum));
 		}
 
 		lastViewKey = cacheKey;
 		lastView = new ReachableView(
 			cacheKey.revision(),
 			Map.copyOf(aggregateCounts),
+			Map.copyOf(craftableCounts),
+			Map.copyOf(chainCraftableCounts),
 			Map.copyOf(includedSnapshots),
 			Map.copyOf(accessKeysByPos),
 			Map.copyOf(nearestAccessByKey)
@@ -450,7 +457,7 @@ public final class NearbyContainerCache {
 		return List.copyOf(prioritized);
 	}
 
-	public static void recordObservedContents(Level level, BlockPos observedPos, Map<String, Integer> itemCounts) {
+	public static void recordObservedContents(Level level, BlockPos observedPos, ContainerContents observed) {
 		if (!ReachCraftingConfig.get().cacheContainersForFasterSearch() || !ReachCraftingConfig.get().enableNearbyContainerUsage()) {
 			return;
 		}
@@ -459,16 +466,18 @@ public final class NearbyContainerCache {
 			return;
 		}
 
-		Map<String, Integer> normalizedCounts = normalizeCounts(itemCounts);
+		ContainerContents normalized = observed.normalized();
 		ContainerSnapshot previous = SNAPSHOTS.get(key);
-		if (previous != null && previous.itemCounts().equals(normalizedCounts)) {
+		// The flags count too: an enchanted bow swapped for a plain one keeps
+		// the totals but changes what crafting may take.
+		if (previous != null && previous.contents().equals(normalized)) {
 			// Unchanged, but seen: the time says how fresh the entry is, and
 			// the per-world cap drops the stalest first.
-			putSnapshot(new ContainerSnapshot(key, normalizedCounts, level.getGameTime()));
+			putSnapshot(new ContainerSnapshot(key, normalized, level.getGameTime()));
 			return;
 		}
 
-		putSnapshot(new ContainerSnapshot(key, normalizedCounts, level.getGameTime()));
+		putSnapshot(new ContainerSnapshot(key, normalized, level.getGameTime()));
 		bumpRevision();
 	}
 
@@ -513,7 +522,10 @@ public final class NearbyContainerCache {
 			return;
 		}
 
-		putSnapshot(new ContainerSnapshot(key, Map.copyOf(updatedCounts), level.getGameTime()));
+		// Withdrawals name ids, not stacks: a retrieval may have taken an
+		// enchanted copy, so the flags are only clamped to what is left.
+		ContainerContents updated = new ContainerContents(updatedCounts, snapshot.contents().flaggedCounts()).normalized();
+		putSnapshot(new ContainerSnapshot(key, updated, level.getGameTime()));
 		bumpRevision();
 	}
 
@@ -558,7 +570,7 @@ public final class NearbyContainerCache {
 			return;
 		}
 
-		recordObservedContents(client.level, TRACKED_CONTEXT.candidatePos(), ContainerUtils.collectAllItems(menu));
+		recordObservedContents(client.level, TRACKED_CONTEXT.candidatePos(), ContainerUtils.collectContents(menu));
 		TRACKED_CONTEXT.confirmOpen(menu.containerId);
 	}
 
@@ -569,19 +581,9 @@ public final class NearbyContainerCache {
 
 		Minecraft client = Minecraft.getInstance();
 		if (client.level != null) {
-			recordObservedContents(client.level, TRACKED_CONTEXT.confirmedPos(), ContainerUtils.collectAllItems(menu));
+			recordObservedContents(client.level, TRACKED_CONTEXT.confirmedPos(), ContainerUtils.collectContents(menu));
 		}
 		TRACKED_CONTEXT.clearConfirmed();
-	}
-
-	private static Map<String, Integer> normalizeCounts(Map<String, Integer> itemCounts) {
-		Map<String, Integer> normalized = new LinkedHashMap<>();
-		for (Map.Entry<String, Integer> entry : itemCounts.entrySet()) {
-			if (entry.getValue() > 0) {
-				normalized.put(entry.getKey(), entry.getValue());
-			}
-		}
-		return Map.copyOf(normalized);
 	}
 
 	public static void bumpRevision() {
@@ -650,32 +652,43 @@ public final class NearbyContainerCache {
 
 
 
+	/**
+	 * The cached containers in reach. aggregateCounts holds every item and is
+	 * what retrieval asks about; craftableCounts leaves out the stacks a
+	 * craft never takes (see ContainerContents), and chainCraftableCounts
+	 * also the non-pristine ones, matching the pristine-only chain placer.
+	 */
 	public record ReachableView(
 		long revision,
 		Map<String, Integer> aggregateCounts,
+		Map<String, Integer> craftableCounts,
+		Map<String, Integer> chainCraftableCounts,
 		Map<ContainerKey, ContainerSnapshot> snapshotsByKey,
 		Map<BlockPos, ContainerKey> accessKeyByPos,
 		Map<ContainerKey, BlockPos> nearestAccessByKey
 	) {
 		private static ReachableView empty(long revision) {
-			return new ReachableView(revision, Map.of(), Map.of(), Map.of(), Map.of());
+			return new ReachableView(revision, Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of());
 		}
 
 		public boolean isEmpty() {
 			return aggregateCounts.isEmpty();
 		}
 
-		public Map<String, Integer> countsFor(Set<String> acceptedItemIds) {
-			if (acceptedItemIds.isEmpty() || snapshotsByKey.isEmpty()) {
+		/** For cache signatures: changes when the totals or the flags do. */
+		public int contentHash() {
+			return java.util.Objects.hash(aggregateCounts, craftableCounts, chainCraftableCounts);
+		}
+
+		public Map<String, Integer> craftableCountsFor(Set<String> acceptedItemIds) {
+			if (acceptedItemIds.isEmpty() || craftableCounts.isEmpty()) {
 				return Map.of();
 			}
 
 			Map<String, Integer> filteredCounts = new LinkedHashMap<>();
-			for (ContainerSnapshot snapshot : snapshotsByKey.values()) {
-				for (Map.Entry<String, Integer> entry : snapshot.itemCounts().entrySet()) {
-					if (acceptedItemIds.contains(entry.getKey())) {
-						filteredCounts.merge(entry.getKey(), entry.getValue(), Integer::sum);
-					}
+			for (Map.Entry<String, Integer> entry : craftableCounts.entrySet()) {
+				if (acceptedItemIds.contains(entry.getKey())) {
+					filteredCounts.put(entry.getKey(), entry.getValue());
 				}
 			}
 			return Map.copyOf(filteredCounts);
@@ -712,14 +725,14 @@ public final class NearbyContainerCache {
 			return relevant;
 		}
 
-		public Map<String, Integer> itemCountsAt(BlockPos pos) {
+		public Map<String, Integer> craftableCountsAt(BlockPos pos) {
 			ContainerKey key = accessKeyByPos.get(pos);
 			if (key == null) {
 				return Map.of();
 			}
 
 			ContainerSnapshot snapshot = snapshotsByKey.get(key);
-			return snapshot != null ? snapshot.itemCounts() : Map.of();
+			return snapshot != null ? snapshot.contents().craftableCounts() : Map.of();
 		}
 	}
 
@@ -729,7 +742,87 @@ public final class NearbyContainerCache {
 	public record ContainerKey(ResourceKey<Level> dimension, String type, BlockPos anchorPos) {
 	}
 
-	public record ContainerSnapshot(ContainerKey key, Map<String, Integer> itemCounts, long lastSeenGameTime) {
+	public record ContainerSnapshot(ContainerKey key, ContainerContents contents, long lastSeenGameTime) {
+		public Map<String, Integer> itemCounts() {
+			return contents.itemCounts();
+		}
+	}
+
+	/**
+	 * A container's items by id, plus its flagged items: for each id, how
+	 * many carry each exact combination of StackReasons (damaged, enchanted,
+	 * renamed, other components). Unflagged items are pristine. Masks, not
+	 * verdicts, so any rule can be asked later without reopening the chest.
+	 * Recorded while the container is open, the only time the client sees
+	 * the components of its stacks.
+	 */
+	public record ContainerContents(
+		Map<String, Integer> itemCounts,
+		Map<String, Map<Integer, Integer>> flaggedCounts
+	) {
+		/** Contents saved before the flags existed: nothing known to exclude. */
+		static ContainerContents unflagged(Map<String, Integer> itemCounts) {
+			return new ContainerContents(itemCounts, Map.of());
+		}
+
+		/**
+		 * Positive counts only, and no more flagged items of an id than it
+		 * has. Which stacks a withdrawal took is unknown (it names ids), so a
+		 * flag total above what is left is trimmed in mask order.
+		 */
+		ContainerContents normalized() {
+			Map<String, Integer> items = new LinkedHashMap<>();
+			for (Map.Entry<String, Integer> entry : itemCounts.entrySet()) {
+				if (entry.getValue() > 0) {
+					items.put(entry.getKey(), entry.getValue());
+				}
+			}
+			Map<String, Map<Integer, Integer>> flagged = new LinkedHashMap<>();
+			for (Map.Entry<String, Map<Integer, Integer>> entry : flaggedCounts.entrySet()) {
+				int room = items.getOrDefault(entry.getKey(), 0);
+				Map<Integer, Integer> masks = new java.util.TreeMap<>();
+				for (Map.Entry<Integer, Integer> maskEntry : new java.util.TreeMap<>(entry.getValue()).entrySet()) {
+					int count = Math.min(maskEntry.getValue(), room);
+					if (maskEntry.getKey() != 0 && count > 0) {
+						masks.put(maskEntry.getKey(), count);
+						room -= count;
+					}
+				}
+				if (!masks.isEmpty()) {
+					flagged.put(entry.getKey(), Map.copyOf(masks));
+				}
+			}
+			return new ContainerContents(Map.copyOf(items), Map.copyOf(flagged));
+		}
+
+		/** What an ordinary craft may take (StackReasons.CRAFTING). */
+		public Map<String, Integer> craftableCounts() {
+			return countsAllowing(StackReasons.CRAFTING);
+		}
+
+		/** What a pristine-only chain step may take. */
+		public Map<String, Integer> chainCraftableCounts() {
+			return countsAllowing(StackReasons.PRISTINE);
+		}
+
+		Map<String, Integer> countsAllowing(int rule) {
+			if (flaggedCounts.isEmpty()) {
+				return itemCounts;
+			}
+			Map<String, Integer> remaining = new LinkedHashMap<>();
+			for (Map.Entry<String, Integer> entry : itemCounts.entrySet()) {
+				int count = entry.getValue();
+				for (Map.Entry<Integer, Integer> maskEntry : flaggedCounts.getOrDefault(entry.getKey(), Map.of()).entrySet()) {
+					if (!StackReasons.allows(rule, maskEntry.getKey())) {
+						count -= maskEntry.getValue();
+					}
+				}
+				if (count > 0) {
+					remaining.put(entry.getKey(), count);
+				}
+			}
+			return Map.copyOf(remaining);
+		}
 	}
 
 	private record ChunkRef(ResourceKey<Level> dimension, int chunkX, int chunkZ) {
