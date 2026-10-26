@@ -24,6 +24,10 @@ public final class InWorldFilterManager {
 	private static final Set<String> INSTANCE_WHITELIST = new HashSet<>();
 	private static String currentStorageId = null;
 	private static boolean dirty = false;
+	// What the storage id was last derived from (the singleplayer server or
+	// the server entry), so the id is not rebuilt for every container check.
+	private static Object storageIdSource;
+	private static String storageIdCache;
 
 	public enum InclusionState {
 		MANUAL_WHITELIST,
@@ -42,14 +46,33 @@ public final class InWorldFilterManager {
 		}
 	}
 
+	/**
+	 * Called for every container a nearby scan looks at (hundreds per scan in
+	 * a storage room), so the id is cached per world: deriving it runs a
+	 * regex over the level name or address, which made the filter check half
+	 * of a nearby scan's cost.
+	 */
 	private static String getStorageId() {
 		Minecraft client = Minecraft.getInstance();
+		Object source;
 		if (client.hasSingleplayerServer() && client.getSingleplayerServer() != null) {
-			return "local_" + client.getSingleplayerServer().getWorldData().getLevelName().replaceAll("[^a-zA-Z0-9_-]", "_");
+			source = client.getSingleplayerServer();
 		} else if (client.getConnection() != null && client.getConnection().getServerData() != null) {
-			return "server_" + client.getConnection().getServerData().ip.replaceAll("[^a-zA-Z0-9_-]", "_");
+			source = client.getConnection().getServerData();
+		} else {
+			source = null;
 		}
-		return "unknown";
+		if (source != storageIdSource || storageIdCache == null) {
+			storageIdSource = source;
+			if (source instanceof net.minecraft.server.MinecraftServer server) {
+				storageIdCache = "local_" + server.getWorldData().getLevelName().replaceAll("[^a-zA-Z0-9_-]", "_");
+			} else if (source instanceof net.minecraft.client.multiplayer.ServerData serverData) {
+				storageIdCache = "server_" + serverData.ip.replaceAll("[^a-zA-Z0-9_-]", "_");
+			} else {
+				storageIdCache = "unknown";
+			}
+		}
+		return storageIdCache;
 	}
 
 	public static boolean isContainerActive(Level level, BlockPos pos, BlockState state) {
@@ -72,10 +95,15 @@ public final class InWorldFilterManager {
 
 	public static InclusionState getManualState(Level level, BlockPos pos) {
 		updateContext();
-		for (String key : keysFor(level, pos)) {
+		if (INSTANCE_WHITELIST.isEmpty() && INSTANCE_BLACKLIST.isEmpty()) {
+			// Most worlds have no manual entries; skip building the keys.
+			return InclusionState.UNSET;
+		}
+		java.util.List<String> keys = keysFor(level, pos);
+		for (String key : keys) {
 			if (INSTANCE_WHITELIST.contains(key)) return InclusionState.MANUAL_WHITELIST;
 		}
-		for (String key : keysFor(level, pos)) {
+		for (String key : keys) {
 			if (INSTANCE_BLACKLIST.contains(key)) return InclusionState.MANUAL_BLACKLIST;
 		}
 		return InclusionState.UNSET;
