@@ -207,6 +207,30 @@ public final class ContainerUtils {
 		return allItems;
 	}
 
+	/**
+	 * collectAllItems plus each flagged stack's StackReasons mask, for the
+	 * container cache. Runs every tick while a container is open, so a stack
+	 * without components costs one empty-patch check.
+	 */
+	public static NearbyContainerCache.ContainerContents collectContents(AbstractContainerMenu menu) {
+		Map<String, Integer> allItems = new LinkedHashMap<>();
+		Map<String, Map<Integer, Integer>> flagged = new LinkedHashMap<>();
+		for (Slot slot : menu.slots) {
+			if (!isPullableContainerSlot(menu, slot) || !slot.hasItem()) {
+				continue;
+			}
+
+			ItemStack stack = slot.getItem();
+			String itemId = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
+			allItems.merge(itemId, stack.getCount(), Integer::sum);
+			int mask = StackReasons.of(stack);
+			if (mask != 0) {
+				flagged.computeIfAbsent(itemId, id -> new LinkedHashMap<>()).merge(mask, stack.getCount(), Integer::sum);
+			}
+		}
+		return new NearbyContainerCache.ContainerContents(allItems, flagged);
+	}
+
 	public static double squaredDistanceToBlock(Vec3 eyePos, BlockPos pos) {
 		return closestPointOnUnitBlock(eyePos, pos).distanceToSqr(eyePos);
 	}
@@ -339,9 +363,10 @@ public final class ContainerUtils {
 	 * bundles or shulker boxes, renamed items) are refused as crafting
 	 * inputs by the manual self-referential placer. Subtracting the player's
 	 * non-pristine stacks keeps replans from perpetually counting an
-	 * unusable item as available. Chest snapshots carry no component data,
-	 * so a non-pristine chest item is only excluded after staging pulls it
-	 * into the inventory — one wasted pull cycle, then the replan corrects.
+	 * unusable item as available. AvailableItemSnapshot already left out the
+	 * stacks no craft takes (damaged, enchanted, renamed), so only the
+	 * usable non-pristine ones are subtracted here; nearby chests are
+	 * excluded by the cache itself (ReachableView.chainCraftableCounts).
 	 */
 	static Map<String, Integer> subtractNonPristineLocalStacks(net.minecraft.client.Minecraft client, Map<String, Integer> counts) {
 		if (client.player == null || client.player.containerMenu == null) {
@@ -353,7 +378,7 @@ public final class ContainerUtils {
 				continue;
 			}
 			net.minecraft.world.item.ItemStack stack = slot.getItem();
-			if (ManualRecipePlacer.isPristine(stack)) {
+			if (ManualRecipePlacer.isPristine(stack) || !ManualRecipePlacer.isUsableForCrafting(stack)) {
 				continue;
 			}
 			String itemId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
