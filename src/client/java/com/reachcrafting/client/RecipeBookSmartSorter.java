@@ -167,6 +167,11 @@ public final class RecipeBookSmartSorter {
 			return new SortScore(3, 0, originalIndex);
 		}
 
+		// Retrieval-only entries never reach the craftability checks below.
+		if (isRetrievalOnlyEntry(recipes)) {
+			return new SortScore(retrievalOnlyTier(recipes), recentRank, originalIndex);
+		}
+
 		// Craftability decides the tier; recency only ranks WITHIN a tier, so
 		// a recently-used recipe never outranks something craftable right now.
 		if (collection.hasCraftable()) {
@@ -201,7 +206,7 @@ public final class RecipeBookSmartSorter {
 		if (anyChain) {
 			return new SortScore(3, recentRank, originalIndex);
 		}
-		return new SortScore(4, recentRank, originalIndex);
+		return new SortScore(NOTHING_TIER, recentRank, originalIndex);
 	}
 
 	static SortScore fullScore(RecipeCollection collection, SortPassContext context, int originalIndex) {
@@ -240,9 +245,14 @@ public final class RecipeBookSmartSorter {
 		}
 
 		// Tier order (user-facing contract): in-inventory direct, in-inventory
-		// chain, needs-nearby direct, needs-nearby chain, everything else.
+		// chain, needs-nearby direct, needs-nearby chain, retrieval-only
+		// entries a nearby container holds, retrieval-only entries nothing
+		// cached holds, then everything else (Retrieval-Only Recipes).
 		// Recency only ranks WITHIN a tier - a recently-used recipe with no
 		// materials must not outrank something craftable right now.
+		if (isRetrievalOnlyEntry(recipes)) {
+			return new SortScore(retrievalOnlyTier(recipes), recentRank, originalIndex);
+		}
 		if (collection.hasCraftable()) {
 			return new SortScore(0, recentRank, originalIndex);
 		}
@@ -276,7 +286,31 @@ public final class RecipeBookSmartSorter {
 		if (anyChain) {
 			return new SortScore(3, recentRank, originalIndex);
 		}
-		return new SortScore(4, recentRank, originalIndex);
+		return new SortScore(NOTHING_TIER, recentRank, originalIndex);
+	}
+
+	// Normal-book tiers after the four craftable ones (0-3). A retrieval-only
+	// entry does something on a click, so both kinds beat a recipe that can
+	// make nothing: first the ones a cached container holds (green dot), then
+	// the ones nothing cached holds, since a chest not yet opened, or changed
+	// since, may still have them and the click goes looking.
+	static final int RETRIEVABLE_TIER = 4;
+	static final int RETRIEVAL_ONLY_TIER = 5;
+	static final int NOTHING_TIER = 6;
+	/** A collection the chunked scheduler has not scored yet: after everything. */
+	static final int UNSCORED_TIER = 7;
+
+	private static boolean isRetrievalOnlyEntry(List<RecipeDisplayEntry> recipes) {
+		return recipes.size() == 1 && VirtualRetrievalRecipeBookEntries.isSyntheticRecipeId(recipes.getFirst().id());
+	}
+
+	private static int retrievalOnlyTier(List<RecipeDisplayEntry> recipes) {
+		return VirtualRetrievalRecipeBookEntries.hasLiveNearbyBacking(recipes.getFirst().id()) ? RETRIEVABLE_TIER : RETRIEVAL_ONLY_TIER;
+	}
+
+	/** Harness: the tier the full sort gives a collection in the book as it stands. */
+	static int tierFor(RecipeCollection collection) {
+		return fullScore(collection, new SortPassContext(recentRanks()), 0).tier();
 	}
 
 	private static List<RecipeDisplayEntry> selectedRecipes(RecipeCollection collection) {

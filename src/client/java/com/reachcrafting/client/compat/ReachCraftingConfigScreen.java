@@ -401,6 +401,17 @@ public final class ReachCraftingConfigScreen {
 			.setEnumNameProvider(value -> Component.translatable("enum.reachcrafting.existing_output_handling." + value.name().toLowerCase()))
 			.build());
 
+		nearbyGroup.add(entries.startEnumSelector(
+				Component.translatable("option.reachcrafting.retrieval_only_recipes"),
+				ReachCraftingConfig.RetrievalOnlyRecipes.class,
+				config.retrievalOnlyRecipes()
+			)
+			.setDefaultValue(ReachCraftingConfig.RetrievalOnlyRecipes.RETRIEVAL_AND_CRAFTING)
+			.setTooltip(Component.translatable("tooltip.reachcrafting.retrieval_only_recipes"))
+			.setSaveConsumer(config::setRetrievalOnlyRecipes)
+			.setEnumNameProvider(value -> Component.translatable("enum.reachcrafting.retrieval_only_recipes." + value.name().toLowerCase()))
+			.build());
+
 		nearbyGroup.add(entries.startBooleanToggle(
 				Component.translatable("option.reachcrafting.cache_containers_for_faster_search"),
 				config.cacheContainersForFasterSearch()
