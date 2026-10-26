@@ -53,6 +53,11 @@ public final class NearbyContainerCache {
 	private static long revision;
 	private static ViewCacheKey lastViewKey;
 	private static ReachableView lastView;
+	// Bumped when a block entity or a chunk loads or unloads: what can be a
+	// container in reach changed (containerCandidatesNear).
+	private static long layoutVersion;
+	private static LayoutKey lastLayoutKey;
+	private static List<BlockPos> lastLayout = List.of();
 	private static final TrackedContainerContext TRACKED_CONTEXT = new TrackedContainerContext();
 	private static ContainerContents lastOpenContents;
 	private static Level lastLevel;
@@ -78,10 +83,19 @@ public final class NearbyContainerCache {
 			recordOpenContainerChanges(client);
 			checkPendingChunks(client.level);
 		});
-		ClientChunkEvents.CHUNK_LOAD.register((level, chunk) -> queueChunkCheck(
-			level.dimension(), chunk.getPos().getMinBlockX() >> 4, chunk.getPos().getMinBlockZ() >> 4));
-		ClientBlockEntityEvents.BLOCK_ENTITY_LOAD.register((blockEntity, level) -> queueBlockCheck(level, blockEntity.getBlockPos()));
-		ClientBlockEntityEvents.BLOCK_ENTITY_UNLOAD.register((blockEntity, level) -> queueBlockCheck(level, blockEntity.getBlockPos()));
+		ClientChunkEvents.CHUNK_LOAD.register((level, chunk) -> {
+			layoutVersion++;
+			queueChunkCheck(level.dimension(), chunk.getPos().getMinBlockX() >> 4, chunk.getPos().getMinBlockZ() >> 4);
+		});
+		ClientChunkEvents.CHUNK_UNLOAD.register((level, chunk) -> layoutVersion++);
+		ClientBlockEntityEvents.BLOCK_ENTITY_LOAD.register((blockEntity, level) -> {
+			layoutVersion++;
+			queueBlockCheck(level, blockEntity.getBlockPos());
+		});
+		ClientBlockEntityEvents.BLOCK_ENTITY_UNLOAD.register((blockEntity, level) -> {
+			layoutVersion++;
+			queueBlockCheck(level, blockEntity.getBlockPos());
+		});
 		ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> client.execute(() -> {
 			// Keys carry a dimension but not a world, so nothing may cross
 			// into the next world joined.
@@ -116,6 +130,7 @@ public final class NearbyContainerCache {
 		PENDING_CHUNK_CHECKS.clear();
 		LAST_DRAIN_SOURCE_BY_ITEM.clear();
 		revision++;
+		layoutVersion++;
 		lastViewKey = null;
 		lastView = null;
 		lastOpenContents = null;
@@ -354,6 +369,7 @@ public final class NearbyContainerCache {
 		if (cacheKey.equals(lastViewKey) && lastView != null) {
 			return lastView;
 		}
+		long startNanos = PerformanceProfiler.start();
 
 		Vec3 eyePos = cameraEntity.getEyePosition(0);
 		int radius = Mth.ceil(reachDistance);
@@ -362,13 +378,27 @@ public final class NearbyContainerCache {
 		Map<ContainerKey, BlockPos> nearestAccessByKey = new LinkedHashMap<>();
 		Set<ContainerKey> visitedKeys = new LinkedHashSet<>();
 
-		for (BlockPos pos : BlockPos.betweenClosed(
-			center.offset(-radius, -radius, -radius),
-			center.offset(radius, radius, radius)
-		)) {
-			BlockPos immutablePos = pos.immutable();
+		// Per-stage timing for the perf log (Performance Logging), so a slow
+		// rebuild names its stage.
+		long stageStart = System.nanoTime();
+		List<BlockPos> candidates = containerCandidatesNear(level, center, radius);
+		long scanNanos = System.nanoTime() - stageStart;
+		long filterNanos = 0;
+		long openNanos = 0;
+		long loopStart = System.nanoTime();
+		for (BlockPos immutablePos : candidates) {
+			long t0 = System.nanoTime();
 			BlockState state = level.getBlockState(immutablePos);
-			if (!InWorldFilterManager.isContainerActive(level, immutablePos, state) || !ContainerUtils.canAttemptOpen(level, immutablePos, state)) {
+			boolean active = InWorldFilterManager.isContainerActive(level, immutablePos, state);
+			long t1 = System.nanoTime();
+			filterNanos += t1 - t0;
+			if (!active) {
+				continue;
+			}
+			boolean openable = ContainerUtils.canAttemptOpen(level, immutablePos, state);
+			long t2 = System.nanoTime();
+			openNanos += t2 - t1;
+			if (!openable) {
 				continue;
 			}
 			if (ContainerUtils.squaredDistanceToBlock(eyePos, immutablePos) > Mth.square(reachDistance)) {
@@ -395,32 +425,130 @@ public final class NearbyContainerCache {
 				includedSnapshots.put(key, snapshot);
 			}
 		}
+		// Everything in the loop but the two checks: distance, key, bookkeeping.
+		long keyNanos = System.nanoTime() - loopStart - filterNanos - openNanos;
 
+		long sumStart = System.nanoTime();
+		// One pass over every item; the craftable totals are the aggregate
+		// minus the flagged items each rule refuses, and flagged items are rare.
 		Map<String, Integer> aggregateCounts = new LinkedHashMap<>();
-		Map<String, Integer> craftableCounts = new LinkedHashMap<>();
-		Map<String, Integer> chainCraftableCounts = new LinkedHashMap<>();
+		Map<String, Integer> craftableRefused = new HashMap<>();
+		Map<String, Integer> chainRefused = new HashMap<>();
 		for (ContainerSnapshot snapshot : includedSnapshots.values()) {
 			ContainerContents contents = snapshot.contents();
 			contents.itemCounts().forEach((itemId, count) -> aggregateCounts.merge(itemId, count, Integer::sum));
-			contents.craftableCounts().forEach((itemId, count) -> craftableCounts.merge(itemId, count, Integer::sum));
-			contents.chainCraftableCounts().forEach((itemId, count) -> chainCraftableCounts.merge(itemId, count, Integer::sum));
+			contents.flaggedCounts().forEach((itemId, masks) -> masks.forEach((mask, count) -> {
+				if (!StackReasons.allows(StackReasons.CRAFTING, mask)) {
+					craftableRefused.merge(itemId, count, Integer::sum);
+				}
+				if (!StackReasons.allows(StackReasons.PRISTINE, mask)) {
+					chainRefused.merge(itemId, count, Integer::sum);
+				}
+			}));
 		}
 
 		lastViewKey = cacheKey;
 		Map<String, Integer> aggregate = Map.copyOf(aggregateCounts);
-		Map<String, Integer> craftable = Map.copyOf(craftableCounts);
-		Map<String, Integer> chainCraftable = Map.copyOf(chainCraftableCounts);
+		Map<String, Integer> craftable = withoutRefused(aggregate, craftableRefused);
+		Map<String, Integer> chainCraftable = withoutRefused(aggregate, chainRefused);
+		int aggregateHash = aggregate.hashCode();
 		lastView = new ReachableView(
 			cacheKey.revision(),
 			aggregate,
 			craftable,
 			chainCraftable,
-			java.util.Objects.hash(aggregate, craftable, chainCraftable),
+			java.util.Objects.hash(aggregateHash,
+				craftable == aggregate ? aggregateHash : craftable.hashCode(),
+				chainCraftable == aggregate ? aggregateHash : chainCraftable.hashCode()),
 			Map.copyOf(includedSnapshots),
 			Map.copyOf(accessKeysByPos),
 			Map.copyOf(nearestAccessByKey)
 		);
+		long sumNanos = System.nanoTime() - sumStart;
+		PerformanceProfiler.recordDuration("nearby.view.scan", scanNanos, "candidates=" + candidates.size());
+		PerformanceProfiler.recordDuration("nearby.view.filter", filterNanos);
+		PerformanceProfiler.recordDuration("nearby.view.can_open", openNanos);
+		PerformanceProfiler.recordDuration("nearby.view.key_and_maps", keyNanos);
+		PerformanceProfiler.recordDuration("nearby.view.sum_contents", sumNanos, "snapshots=" + includedSnapshots.size());
+		PerformanceProfiler.record(
+			"nearby.reachable_view_rebuild",
+			startNanos,
+			"candidates=" + candidates.size()
+				+ " snapshots=" + includedSnapshots.size()
+				+ " access_points=" + accessKeysByPos.size()
+				+ " aggregate_items=" + aggregateCounts.size()
+		);
 		return lastView;
+	}
+
+	/** The aggregate itself when nothing is refused (the usual case), else a trimmed copy. */
+	private static Map<String, Integer> withoutRefused(Map<String, Integer> aggregate, Map<String, Integer> refused) {
+		if (refused.isEmpty()) {
+			return aggregate;
+		}
+		Map<String, Integer> remaining = new LinkedHashMap<>();
+		for (Map.Entry<String, Integer> entry : aggregate.entrySet()) {
+			int count = entry.getValue() - refused.getOrDefault(entry.getKey(), 0);
+			if (count > 0) {
+				remaining.put(entry.getKey(), count);
+			}
+		}
+		return Map.copyOf(remaining);
+	}
+
+	private record LayoutKey(ResourceKey<Level> dimension, BlockPos center, int radius, long layoutVersion) {
+	}
+
+	/**
+	 * The positions in the reach cube around center whose block entity
+	 * could be a container (what ContainerUtils.canAttemptOpen needs: a
+	 * Container, or an ender chest), in the order a walk of the cube visits
+	 * them (x, then y, then z). Every container the mod can use has a block
+	 * entity, so walking the loaded block entities of the few chunks the cube
+	 * overlaps finds the same ones as testing every block in it, opened
+	 * before or not (discovery and the "cache incomplete" checks need the
+	 * unopened ones too). The block walk was 1,331 block lookups at normal
+	 * reach, 28-34 ms next to a big storage room. Cached until the player
+	 * moves to another block or a block entity or chunk loads or unloads: a
+	 * cache revision (a chest opened, a withdrawal) changes what they hold,
+	 * not what is in reach.
+	 */
+	private static List<BlockPos> containerCandidatesNear(Level level, BlockPos center, int radius) {
+		LayoutKey key = new LayoutKey(level.dimension(), center, radius, layoutVersion);
+		if (key.equals(lastLayoutKey)) {
+			return lastLayout;
+		}
+		int minX = center.getX() - radius;
+		int maxX = center.getX() + radius;
+		int minY = center.getY() - radius;
+		int maxY = center.getY() + radius;
+		int minZ = center.getZ() - radius;
+		int maxZ = center.getZ() + radius;
+		List<BlockPos> found = new ArrayList<>();
+		for (int chunkX = minX >> 4; chunkX <= maxX >> 4; chunkX++) {
+			for (int chunkZ = minZ >> 4; chunkZ <= maxZ >> 4; chunkZ++) {
+				if (!isChunkLoaded(level, chunkX, chunkZ)) {
+					continue;
+				}
+				for (net.minecraft.world.level.block.entity.BlockEntity blockEntity
+					: level.getChunk(chunkX, chunkZ).getBlockEntities().values()) {
+					if (!(blockEntity instanceof Container)
+						&& !(blockEntity instanceof net.minecraft.world.level.block.entity.EnderChestBlockEntity)) {
+						continue;
+					}
+					BlockPos pos = blockEntity.getBlockPos();
+					if (pos.getX() >= minX && pos.getX() <= maxX
+						&& pos.getY() >= minY && pos.getY() <= maxY
+						&& pos.getZ() >= minZ && pos.getZ() <= maxZ) {
+						found.add(pos.immutable());
+					}
+				}
+			}
+		}
+		found.sort(Comparator.comparingInt((BlockPos pos) -> pos.getZ()).thenComparingInt(pos -> pos.getY()).thenComparingInt(pos -> pos.getX()));
+		lastLayoutKey = key;
+		lastLayout = List.copyOf(found);
+		return lastLayout;
 	}
 
 	public static List<BlockPos> prioritizeCandidates(
