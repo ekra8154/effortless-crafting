@@ -20,7 +20,9 @@ import net.fabricmc.loader.api.FabricLoader;
 
 public final class ReachCraftingConfig {
 	private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-	private static final Path CONFIG_PATH = FabricLoader.getInstance().getConfigDir().resolve("effortless-crafting.json");
+	// An automated (suite) launch keeps its own copy: see AutomatedLaunchProfile.
+	private static final Path CONFIG_PATH = FabricLoader.getInstance().getConfigDir().resolve(
+		AutomatedLaunchProfile.fileName(FabricLoader.getInstance().getConfigDir(), "effortless-crafting.json"));
 	private static final boolean DEFAULT_ENABLED = true;
 	private static final NearbyContainerUsageMode DEFAULT_ENABLE_NEARBY_CONTAINER_USAGE = NearbyContainerUsageMode.CTRL_HELD;
 	private static final boolean DEFAULT_REDISTRIBUTE_TO_CRAFT_WHEN_NEEDED = true;
@@ -32,6 +34,7 @@ public final class ReachCraftingConfig {
 	private static final boolean DEFAULT_SHOW_CRAFTABILITY_INDICATORS = true;
 	private static final boolean DEFAULT_ENABLE_EXISTING_OUTPUT_RETRIEVAL = true;
 	private static final ExistingOutputHandling DEFAULT_EXISTING_OUTPUT_HANDLING = ExistingOutputHandling.RETRIEVE_THEN_ASK;
+	private static final RetrievalOnlyRecipes DEFAULT_RETRIEVAL_ONLY_RECIPES = RetrievalOnlyRecipes.RETRIEVAL_AND_CRAFTING;
 	private static final boolean DEFAULT_CACHE_CONTAINERS_FOR_FASTER_SEARCH = true;
 	private static final boolean DEFAULT_REMEMBER_CONTAINERS = true;
 	private static final boolean DEFAULT_FREEZE_REVOLVING_WHILE_QUEUING = true;
@@ -110,6 +113,7 @@ public final class ReachCraftingConfig {
 	private boolean showCraftabilityIndicators;
 	private boolean enableExistingOutputRetrieval;
 	private ExistingOutputHandling existingOutputHandling;
+	private RetrievalOnlyRecipes retrievalOnlyRecipes;
 	private boolean cacheContainersForFasterSearch;
 	private boolean rememberContainers;
 	private boolean freezeRevolvingWhileQueuing;
@@ -196,6 +200,7 @@ public final class ReachCraftingConfig {
 			instance.showCraftabilityIndicators = stored.showCraftabilityIndicators != null ? stored.showCraftabilityIndicators : DEFAULT_SHOW_CRAFTABILITY_INDICATORS;
 			instance.enableExistingOutputRetrieval = stored.enableExistingOutputRetrieval != null ? stored.enableExistingOutputRetrieval : DEFAULT_ENABLE_EXISTING_OUTPUT_RETRIEVAL;
 			instance.existingOutputHandling = stored.existingOutputHandling != null ? stored.existingOutputHandling : DEFAULT_EXISTING_OUTPUT_HANDLING;
+			instance.retrievalOnlyRecipes = stored.retrievalOnlyRecipes != null ? stored.retrievalOnlyRecipes : DEFAULT_RETRIEVAL_ONLY_RECIPES;
 			instance.cacheContainersForFasterSearch = stored.cacheContainersForFasterSearch != null
 				? stored.cacheContainersForFasterSearch
 				: DEFAULT_CACHE_CONTAINERS_FOR_FASTER_SEARCH;
@@ -397,6 +402,15 @@ public final class ReachCraftingConfig {
 
 	public void setExistingOutputHandling(ExistingOutputHandling existingOutputHandling) {
 		this.existingOutputHandling = existingOutputHandling != null ? existingOutputHandling : DEFAULT_EXISTING_OUTPUT_HANDLING;
+	}
+
+	public RetrievalOnlyRecipes retrievalOnlyRecipes() {
+		return retrievalOnlyRecipes != null ? retrievalOnlyRecipes : DEFAULT_RETRIEVAL_ONLY_RECIPES;
+	}
+
+	public void setRetrievalOnlyRecipes(RetrievalOnlyRecipes retrievalOnlyRecipes) {
+		this.retrievalOnlyRecipes = retrievalOnlyRecipes != null ? retrievalOnlyRecipes : DEFAULT_RETRIEVAL_ONLY_RECIPES;
+		RecipeButtonNearbyIndicator.clearCaches();
 	}
 
 	public boolean enableExistingOutputRetrieval() {
@@ -986,6 +1000,7 @@ public final class ReachCraftingConfig {
 		defaults.showCraftabilityIndicators = DEFAULT_SHOW_CRAFTABILITY_INDICATORS;
 		defaults.enableExistingOutputRetrieval = DEFAULT_ENABLE_EXISTING_OUTPUT_RETRIEVAL;
 		defaults.existingOutputHandling = DEFAULT_EXISTING_OUTPUT_HANDLING;
+		defaults.retrievalOnlyRecipes = DEFAULT_RETRIEVAL_ONLY_RECIPES;
 		defaults.cacheContainersForFasterSearch = DEFAULT_CACHE_CONTAINERS_FOR_FASTER_SEARCH;
 		defaults.rememberContainers = DEFAULT_REMEMBER_CONTAINERS;
 		defaults.freezeRevolvingWhileQueuing = DEFAULT_FREEZE_REVOLVING_WHILE_QUEUING;
@@ -1242,6 +1257,16 @@ public final class ReachCraftingConfig {
 		RETRIEVE_ONLY
 	}
 
+	/**
+	 * Where the book lists items no known recipe makes, as entries that
+	 * retrieve them from nearby containers: only in Retrieval Mode, or in
+	 * the normal crafting book too (RecipeBookSmartSorter's tiers 4 and 6).
+	 */
+	public enum RetrievalOnlyRecipes {
+		RETRIEVAL_MODE,
+		RETRIEVAL_AND_CRAFTING
+	}
+
 	public enum AutoCraftMode {
 		NORMAL,
 		BULK
@@ -1267,6 +1292,7 @@ public final class ReachCraftingConfig {
 		private Boolean showCraftabilityIndicators;
 		private Boolean enableExistingOutputRetrieval;
 		private ExistingOutputHandling existingOutputHandling;
+	private RetrievalOnlyRecipes retrievalOnlyRecipes;
 		private Boolean cacheContainersForFasterSearch;
 		private Boolean rememberContainers;
 		private Boolean freezeRevolvingWhileQueuing;
@@ -1336,6 +1362,7 @@ public final class ReachCraftingConfig {
 			this.showCraftabilityIndicators = config.showCraftabilityIndicators;
 			this.enableExistingOutputRetrieval = config.enableExistingOutputRetrieval;
 			this.existingOutputHandling = config.existingOutputHandling;
+			this.retrievalOnlyRecipes = config.retrievalOnlyRecipes;
 			this.cacheContainersForFasterSearch = config.cacheContainersForFasterSearch;
 			this.rememberContainers = config.rememberContainers;
 			this.freezeRevolvingWhileQueuing = config.freezeRevolvingWhileQueuing;
