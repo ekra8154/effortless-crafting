@@ -581,7 +581,8 @@ final class GridTopUp {
 		int sources = 0;
 		for (int i = firstSourceIndex(menu); i <= lastSourceIndex(menu); i++) {
 			ItemStack stack = menu.getSlot(i).getItem();
-			if (!stack.isEmpty() && reference.itemIds().contains(itemIdOf(stack))) {
+			if (!stack.isEmpty() && reference.itemIds().contains(itemIdOf(stack))
+				&& ManualRecipePlacer.isUsableForCrafting(stack)) {
 				sources++;
 			}
 		}
@@ -686,7 +687,10 @@ final class GridTopUp {
 		int pristine = -1;
 		for (int i = first; i <= last; i++) {
 			ItemStack stack = menu.getSlot(i).getItem();
-			if (stack.isEmpty() || !acceptedItemIds.contains(itemIdOf(stack))) {
+			// Never fall back to a stack vanilla would not place: the ring
+			// clicks for itself, so nothing else keeps an enchanted bow out.
+			if (stack.isEmpty() || !acceptedItemIds.contains(itemIdOf(stack))
+				|| !ManualRecipePlacer.isUsableForCrafting(stack)) {
 				continue;
 			}
 			if (preferPristine && pristine < 0

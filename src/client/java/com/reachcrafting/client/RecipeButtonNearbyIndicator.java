@@ -523,7 +523,7 @@ public final class RecipeButtonNearbyIndicator {
 		NearbyContainerCache.ReachableView reachableView
 	) {
 		int reachableSignature = 1;
-		reachableSignature = (31 * reachableSignature) + reachableView.aggregateCounts().hashCode();
+		reachableSignature = (31 * reachableSignature) + reachableView.contentHash();
 		reachableSignature = (31 * reachableSignature) + reachableView.snapshotsByKey().keySet().hashCode();
 		return new StateKey(screen.getClass(), inventoryHash, nearbyRevision, reachableSignature);
 	}
@@ -578,7 +578,7 @@ public final class RecipeButtonNearbyIndicator {
 			this.availableItems = AvailableItemSnapshot.capture(player, screen);
 			this.reachableView = reachableView;
 			this.inventoryCounts = this.availableItems.inventoryCounts();
-			this.totalAvailable = AvailableItemSnapshot.mergeCounts(this.inventoryCounts, reachableView.aggregateCounts());
+			this.totalAvailable = AvailableItemSnapshot.mergeCounts(this.inventoryCounts, reachableView.craftableCounts());
 			this.planningPolicy = ReachCraftingConfig.get().toPlanningPolicy();
 			this.hasReservedGrid = this.availableItems.hasReservedGrid();
 			this.reservedCraftCopies = currentReservedCraftCopies(this.availableItems);

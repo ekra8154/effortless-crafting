@@ -370,7 +370,9 @@ public final class ChainCraftabilityCache {
 	private static CountsCapture captureCounts(LocalPlayer player, Minecraft client) {
 		Map<String, Integer> localCounts = new java.util.HashMap<>();
 		for (ItemStack stack : player.getInventory().items) {
-			if (!stack.isEmpty()) {
+			// Same counts as AvailableItemSnapshot: a stack no craft takes
+			// makes nothing craftable.
+			if (!stack.isEmpty() && ManualRecipePlacer.isUsableForCrafting(stack)) {
 				String id = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
 				localCounts.merge(id, stack.getCount(), Integer::sum);
 			}
@@ -384,9 +386,9 @@ public final class ChainCraftabilityCache {
 			NearbyContainerCache.ReachableView view = NearbyContainerCache.getReachableView(
 				client.level, client.getCameraEntity(), player.blockInteractionRange()
 			);
-			if (!view.aggregateCounts().isEmpty()) {
+			if (!view.craftableCounts().isEmpty()) {
 				mergedCounts = new java.util.HashMap<>(localCounts);
-				for (Map.Entry<String, Integer> entry : view.aggregateCounts().entrySet()) {
+				for (Map.Entry<String, Integer> entry : view.craftableCounts().entrySet()) {
 					mergedCounts.merge(entry.getKey(), entry.getValue(), Integer::sum);
 				}
 			}
@@ -584,7 +586,7 @@ public final class ChainCraftabilityCache {
 
 	private static int reachableSignature(NearbyContainerCache.ReachableView view) {
 		int signature = 1;
-		signature = (31 * signature) + view.aggregateCounts().hashCode();
+		signature = (31 * signature) + view.contentHash();
 		signature = (31 * signature) + view.snapshotsByKey().keySet().hashCode();
 		return signature;
 	}

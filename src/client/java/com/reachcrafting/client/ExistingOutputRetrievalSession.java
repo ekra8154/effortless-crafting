@@ -259,8 +259,7 @@ final class ExistingOutputRetrievalSession extends BaseCraftSession {
 			return;
 		}
 
-		Map<String, Integer> allItems = ContainerUtils.collectAllItems(menu);
-		NearbyContainerCache.recordObservedContents(level, pendingContainerPos, allItems);
+		NearbyContainerCache.recordObservedContents(level, pendingContainerPos, ContainerUtils.collectContents(menu));
 		containerVisits++;
 		pendingMenu = menu;
 		pendingPlan = buildPlan(menu);
