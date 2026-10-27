@@ -407,11 +407,15 @@ public final class NearbyContainerCache {
 		}
 
 		lastViewKey = cacheKey;
+		Map<String, Integer> aggregate = Map.copyOf(aggregateCounts);
+		Map<String, Integer> craftable = Map.copyOf(craftableCounts);
+		Map<String, Integer> chainCraftable = Map.copyOf(chainCraftableCounts);
 		lastView = new ReachableView(
 			cacheKey.revision(),
-			Map.copyOf(aggregateCounts),
-			Map.copyOf(craftableCounts),
-			Map.copyOf(chainCraftableCounts),
+			aggregate,
+			craftable,
+			chainCraftable,
+			java.util.Objects.hash(aggregate, craftable, chainCraftable),
 			Map.copyOf(includedSnapshots),
 			Map.copyOf(accessKeysByPos),
 			Map.copyOf(nearestAccessByKey)
@@ -663,21 +667,18 @@ public final class NearbyContainerCache {
 		Map<String, Integer> aggregateCounts,
 		Map<String, Integer> craftableCounts,
 		Map<String, Integer> chainCraftableCounts,
+		/** For cache signatures: changes when the totals or the flags do. Hashed once, here. */
+		int contentHash,
 		Map<ContainerKey, ContainerSnapshot> snapshotsByKey,
 		Map<BlockPos, ContainerKey> accessKeyByPos,
 		Map<ContainerKey, BlockPos> nearestAccessByKey
 	) {
 		private static ReachableView empty(long revision) {
-			return new ReachableView(revision, Map.of(), Map.of(), Map.of(), Map.of(), Map.of(), Map.of());
+			return new ReachableView(revision, Map.of(), Map.of(), Map.of(), 0, Map.of(), Map.of(), Map.of());
 		}
 
 		public boolean isEmpty() {
 			return aggregateCounts.isEmpty();
-		}
-
-		/** For cache signatures: changes when the totals or the flags do. */
-		public int contentHash() {
-			return java.util.Objects.hash(aggregateCounts, craftableCounts, chainCraftableCounts);
 		}
 
 		public Map<String, Integer> craftableCountsFor(Set<String> acceptedItemIds) {

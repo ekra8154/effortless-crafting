@@ -570,7 +570,7 @@ final class GridPreview {
 			return hidden("no_grid");
 		}
 		if (ExistingOutputRetrievalController.isEnabled()) {
-			return hidden("retrieval_mode");
+			return retrievalPlan(client, player, action, clickCount);
 		}
 		ReachCraftingConfig config = ReachCraftingConfig.get();
 		boolean bulk = AutoCraftController.isBulkModeEnabled();
@@ -919,6 +919,65 @@ final class GridPreview {
 			retrievedItems,
 			flagShort && achievableItems < requestedItems,
 			Math.min(Math.max(achievableCopies, 0), Math.max(requestedCopies, 1))
+		);
+	}
+
+	/**
+	 * Retrieval Mode: nothing is crafted, so the result slot alone shows
+	 * what the release brings, as retrieve-first's plan does when it covers
+	 * the request. Planned from the container cache with retrieve-first's
+	 * own rules (the retrieval variant,
+	 * RetrieveThenCraftController.nearbyRetrievableOutput). A container the
+	 * cache has not seen counts as empty, so the ghost can show less than the
+	 * release then finds; when it shows less than the queue, the queued total
+	 * turns orange. The queue itself is never capped by it.
+	 */
+	private static Plan retrievalPlan(
+		Minecraft client,
+		LocalPlayer player,
+		RecipeBookClickCapture.HeldRecipeAction action,
+		int requested
+	) {
+		ReachCraftingConfig config = ReachCraftingConfig.get();
+		if (!config.enableNearbyContainerUsage() || !config.cacheContainersForFasterSearch() || client.getCameraEntity() == null) {
+			return hidden("retrieval_no_cache");
+		}
+		Map<String, Integer> nearby = NearbyContainerCache.getReachableView(
+			client.level, client.getCameraEntity(), player.blockInteractionRange()).aggregateCounts();
+		RecipeVariantResolver.Selection selection = RecipeVariantResolver.resolveRetrievalVariant(
+			client,
+			player,
+			action.recipe(),
+			action.collection(),
+			action.displayStack() != null ? action.displayStack().copy() : ItemStack.EMPTY,
+			action.explicitVariantSelection(),
+			true,
+			AvailableItemSnapshot.empty(),
+			nearby,
+			nearby,
+			false,
+			false,
+			Math.max(requested, 1)
+		);
+		if (selection == null || selection.displayStack().isEmpty()) {
+			return hidden("retrieval_unresolved");
+		}
+		ItemStack stack = selection.displayStack();
+		int available = RetrieveThenCraftController.nearbyRetrievableOutput(
+			client, action.recipe(), selection.recipe(), action.collection(), action.explicitVariantSelection(),
+			BuiltInRegistries.ITEM.getKey(stack.getItem()).toString(), nearby);
+		int shown = Math.min(Math.max(requested, 1), Math.max(available, 0));
+		return new Plan(
+			action.recipeId(),
+			selection.ingredientSummary(),
+			List.of(),
+			0,
+			List.of(),
+			shown > 0 ? stack.copyWithCount(shown) : ItemStack.EMPTY,
+			false,
+			shown,
+			shown < requested,
+			0
 		);
 	}
 

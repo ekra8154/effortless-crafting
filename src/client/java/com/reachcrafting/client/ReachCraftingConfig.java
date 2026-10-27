@@ -20,7 +20,9 @@ import net.fabricmc.loader.api.FabricLoader;
 
 public final class ReachCraftingConfig {
 	private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-	private static final Path CONFIG_PATH = FabricLoader.getInstance().getConfigDir().resolve("effortless-crafting.json");
+	// An automated (suite) launch keeps its own copy: see AutomatedLaunchProfile.
+	private static final Path CONFIG_PATH = FabricLoader.getInstance().getConfigDir().resolve(
+		AutomatedLaunchProfile.fileName(FabricLoader.getInstance().getConfigDir(), "effortless-crafting.json"));
 	private static final boolean DEFAULT_ENABLED = true;
 	private static final NearbyContainerUsageMode DEFAULT_ENABLE_NEARBY_CONTAINER_USAGE = NearbyContainerUsageMode.CTRL_HELD;
 	private static final boolean DEFAULT_REDISTRIBUTE_TO_CRAFT_WHEN_NEEDED = true;

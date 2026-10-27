@@ -39,6 +39,9 @@ public final class ChainCraftabilityCache {
 	private static Set<ResourceLocation> locallyChainCraftableRecipeIds = Set.of();
 	private static Set<ResourceLocation> locallyReachableRecipeIds = Set.of();
 	private static int tickCooldown = 0;
+	// Client ticks seen, and the tick a lookup last ran the staleness check on.
+	private static long clientTicks = 0;
+	private static long lookupCheckedTick = -1;
 	private static long lastInventoryHash = 0;
 	private static long lastNearbyRevision = -1;
 	private static int lastReachableSignature = 0;
@@ -136,6 +139,7 @@ public final class ChainCraftabilityCache {
 	}
 
 	private static void tick(Minecraft client) {
+		clientTicks++;
 		refreshIfNeeded(client, true);
 	}
 
@@ -182,6 +186,20 @@ public final class ChainCraftabilityCache {
 				locallyReachableRecipeIds = Set.of();
 			}
 			return;
+		}
+
+		// A lookup (isReachable and friends) runs the staleness check below at
+		// most once per client tick. The check walks every known recipe and
+		// hashes the inventory and the nearby view, and a sort pass looks up
+		// each of ~900 buttons up to four times: per lookup that was a 230 ms
+		// freeze on opening the book next to a big storage room. Nothing a
+		// lookup could see changes within a tick that the next tick would not
+		// catch, and refreshNow (a click's decision) still always checks.
+		if (!fromTick && !synchronous) {
+			if (lookupCheckedTick == clientTicks) {
+				return;
+			}
+			lookupCheckedTick = clientTicks;
 		}
 
 		// "In flight" runs from the async start until its publish lands on
