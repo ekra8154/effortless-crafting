@@ -36,6 +36,7 @@ public final class InWorldFilterManager {
 	private static boolean indexStale = true;
 	private static net.minecraft.resources.ResourceKey<Level> lastDimension;
 	private static String lastDimensionPrefix;
+	private static Level warmedLevel;
 
 	public enum InclusionState {
 		MANUAL_WHITELIST,
@@ -44,6 +45,26 @@ public final class InWorldFilterManager {
 	}
 
 	private InWorldFilterManager() {}
+
+	/**
+	 * Every client tick: on a join or dimension change, load that world's
+	 * filters and build their index right away. Otherwise the first nearby
+	 * scan (the first grid open) read the file and parsed every entry,
+	 * part of a 47 ms first open next to a big storage room.
+	 */
+	public static void tickWarmUp(Minecraft client) {
+		if (client.level == null) {
+			warmedLevel = null;
+			return;
+		}
+		if (client.level == warmedLevel) {
+			return;
+		}
+		warmedLevel = client.level;
+		updateContext();
+		rebuildIndexIfStale();
+		dimensionPrefix(client.level);
+	}
 
 	public static void updateContext() {
 		String newId = getStorageId();
