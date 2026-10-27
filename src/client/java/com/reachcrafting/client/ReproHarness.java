@@ -674,7 +674,7 @@ public final class ReproHarness {
 		com.reachcrafting.client.mixin.RecipeBookComponentAccessor accessor = (com.reachcrafting.client.mixin.RecipeBookComponentAccessor) component;
 		String search = itemId.substring(itemId.indexOf(':') + 1).replace('_', ' ');
 		accessor.getSearchBox().setValue(search);
-		accessor.invokeUpdateCollections(true, Boolean.TRUE.equals(accessor.getFilterButton().getValue()));
+		accessor.invokeUpdateCollections(true, accessor.getFilterButton().isStateTriggered());
 		java.util.List<RecipeCollection> listed = ((com.reachcrafting.client.mixin.RecipeBookPageAccessor) accessor.getRecipeBookPage()).getRecipeCollections();
 		ContextMap context = SlotDisplayContext.fromLevel(client.level);
 		int index = -1;
@@ -701,7 +701,7 @@ public final class ReproHarness {
 				firstRetrievalOnly = i;
 			}
 			ItemStack stack = RecipeVariantResolver.resolveDisplayStack(entry.display(), context);
-			if (found == null && !stack.isEmpty() && itemId.equals(stack.getItem().builtInRegistryHolder().key().identifier().toString())) {
+			if (found == null && !stack.isEmpty() && itemId.equals(stack.getItem().builtInRegistryHolder().key().location().toString())) {
 				found = entry;
 				foundCollection = collection;
 				index = i;
