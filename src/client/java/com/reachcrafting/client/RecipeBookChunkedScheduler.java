@@ -41,7 +41,9 @@ public final class RecipeBookChunkedScheduler {
 	}
 
 	public static PassSnapshot beginOrReusePass(List<RecipeCollection> collections, Map<Integer, Integer> originalOrder) {
+		long stateKeyStart = PerformanceProfiler.start();
 		StateKey stateKey = currentStateKey();
+		PerformanceProfiler.record("recipe_book.state_key", stateKeyStart, "");
 		if (stateKey == null || collections == null || collections.isEmpty()) {
 			clear();
 			return PassSnapshot.empty();
@@ -49,7 +51,9 @@ public final class RecipeBookChunkedScheduler {
 
 		int collectionSignature = collectionSignature(collections);
 		if (currentPass == null || !currentPass.matches(stateKey, collectionSignature)) {
+			long passStart = PerformanceProfiler.start();
 			currentPass = new Pass(stateKey, collectionSignature, collections, originalOrder);
+			PerformanceProfiler.record("recipe_book.pass_start", passStart, "fast_scored=" + currentPass.fastCursor + "/" + collections.size());
 		} else {
 			currentPass.refreshOriginalOrder(collections, originalOrder);
 		}
@@ -350,6 +354,11 @@ public final class RecipeBookChunkedScheduler {
 		private final StateKey stateKey;
 		private final int collectionSignature;
 		private final List<RecipeCollection> collections;
+		/** Fast-scoring order: last presented order first, so the old first page is scored first. */
+		private final List<RecipeCollection> fastOrder;
+		private int fastCursor = 0;
+		/** Full-scoring order (by fast score); null until every collection has a fast score. */
+		private List<RecipeCollection> processingOrder;
 		private final Map<RecipeCollection, Integer> originalOrder;
 		private final Map<RecipeCollection, RecipeBookSmartSorter.SortScore> fastScores = new IdentityHashMap<>();
 		private final Map<RecipeCollection, RecipeBookSmartSorter.SortScore> settledScores = new IdentityHashMap<>();
@@ -370,13 +379,16 @@ public final class RecipeBookChunkedScheduler {
 			this.collectionSignature = collectionSignature;
 			this.originalOrder = new IdentityHashMap<>();
 			
+			this.collections = List.copyOf(collections);
 			refreshOriginalOrder(collections, originalOrder);
-			populateFastScores(collections);
-
-			// Now sort the internal processing list by fastScore to evaluate the most likely items first
-			List<RecipeCollection> sortedForChunking = new java.util.ArrayList<>(collections);
-			sortedForChunking.sort(java.util.Comparator.comparing(fastScores::get));
-			this.collections = List.copyOf(sortedForChunking);
+			List<RecipeCollection> byOriginalOrder = new java.util.ArrayList<>(collections);
+			byOriginalOrder.sort(java.util.Comparator.comparingInt(collection -> this.originalOrder.getOrDefault(collection, Integer.MAX_VALUE)));
+			this.fastOrder = List.copyOf(byOriginalOrder);
+			// Fast scores for the whole book took 8-19 ms in one frame on a
+			// grid open (859 collections); score what fits the chunk budget
+			// now and let the ticks finish the rest. Unscored collections
+			// rank last until then.
+			populateFastScores(CHUNK_TIME_BUDGET_NANOS);
 		}
 
 		private boolean matches(StateKey stateKey, int collectionSignature) {
@@ -393,11 +405,26 @@ public final class RecipeBookChunkedScheduler {
 			}
 		}
 
-		private void populateFastScores(List<RecipeCollection> rawCollections) {
-			for (RecipeCollection collection : rawCollections) {
+		/**
+		 * Fast-scores collections until the budget runs out; once all have a
+		 * fast score, orders the full-scoring pass by it so the most likely
+		 * collections are evaluated first. Returns how many it scored.
+		 */
+		private int populateFastScores(long timeBudgetNanos) {
+			int scored = 0;
+			long startNanos = System.nanoTime();
+			while (fastCursor < fastOrder.size() && System.nanoTime() - startNanos < timeBudgetNanos) {
+				RecipeCollection collection = fastOrder.get(fastCursor++);
 				int originalIndex = originalOrder.getOrDefault(collection, Integer.MAX_VALUE);
 				fastScores.put(collection, RecipeBookSmartSorter.fastScore(collection, sortContext, originalIndex));
+				scored++;
 			}
+			if (processingOrder == null && fastCursor >= fastOrder.size()) {
+				List<RecipeCollection> sortedForChunking = new java.util.ArrayList<>(collections);
+				sortedForChunking.sort(java.util.Comparator.comparing(fastScores::get));
+				processingOrder = List.copyOf(sortedForChunking);
+			}
+			return scored;
 		}
 
 		private PassSnapshot snapshot() {
@@ -420,8 +447,14 @@ public final class RecipeBookChunkedScheduler {
 		}
 
 		private int processChunk(long timeBudgetNanos) {
-			int processed = 0;
 			long startNanos = System.nanoTime();
+			int processed = 0;
+			if (processingOrder == null) {
+				processed += populateFastScores(timeBudgetNanos);
+				if (processingOrder == null) {
+					return processed;
+				}
+			}
 			while (System.nanoTime() - startNanos < timeBudgetNanos) {
 				RecipeCollection collection = nextCollection();
 				if (collection == null) {
@@ -455,8 +488,8 @@ public final class RecipeBookChunkedScheduler {
 				return collection;
 			}
 
-			while (cursor < collections.size()) {
-				RecipeCollection collection = collections.get(cursor++);
+			while (cursor < processingOrder.size()) {
+				RecipeCollection collection = processingOrder.get(cursor++);
 				if (!settledScores.containsKey(collection)) {
 					return collection;
 				}
