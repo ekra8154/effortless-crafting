@@ -661,7 +661,7 @@ public final class ReproHarness {
 	 * many queued on it (GridPreview.planFor, the queue's own compute).
 	 */
 	private static void bookEntryForItemId(Minecraft client, String itemId, boolean click, int count) {
-		if (!(client.gui.screen() instanceof net.minecraft.client.gui.screens.inventory.AbstractRecipeBookScreen<?> screen)) {
+		if (!(client.screen instanceof net.minecraft.client.gui.screens.inventory.AbstractRecipeBookScreen<?> screen)) {
 			ReachCraftingMod.LOGGER.warn("[repro_harness] book needs a recipe book screen");
 			return;
 		}
