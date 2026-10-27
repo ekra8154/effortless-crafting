@@ -107,6 +107,7 @@ public class ReachCraftingModClient implements ClientModInitializer {
 			// /effortlesscrafting settings opens on the tick after the command,
 			// and must work even while the mod is switched off.
 			HelpCommand.tickPendingSettings(client);
+			InWorldFilterManager.tickWarmUp(client);
 			tickCounter[0]++;
 			if (tickCounter[0] >= 200) {
 				tickCounter[0] = 0;
