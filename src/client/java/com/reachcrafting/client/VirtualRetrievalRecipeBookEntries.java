@@ -171,27 +171,37 @@ public final class VirtualRetrievalRecipeBookEntries {
 		Set<String> usedCacheKeys = new HashSet<>();
 		Set<String> candidateItemIds = new java.util.LinkedHashSet<>(nearbyCounts.keySet());
 		candidateItemIds.addAll(experiencedItemIds);
+		String language = minecraft.getLanguageManager().getSelected();
+		int infoMisses = 0;
+		int newCollections = 0;
+		long infoNanos = 0;
+		long collectionNanos = 0;
 		for (String itemId : candidateItemIds) {
 			if (outputIds.contains(itemId)) {
 				continue;
 			}
-			Item item = BuiltInRegistries.ITEM.getOptional(net.minecraft.resources.Identifier.parse(itemId)).orElse(null);
-			if (item == null) {
+			long infoStart = System.nanoTime();
+			if (!ITEM_INFO.containsKey(itemId) || !language.equals(itemInfoLanguage)) {
+				infoMisses++;
+			}
+			ItemInfo info = itemInfo(itemId, language);
+			infoNanos += System.nanoTime() - infoStart;
+			if (info.item() == null) {
 				continue;
 			}
-			ItemStack stack = new ItemStack(item);
 			boolean hasLiveNearbyBacking = nearbyCounts.containsKey(itemId);
 			int displayCount = hasLiveNearbyBacking
-				? Math.min(Math.max(nearbyCounts.get(itemId), 1), stack.getMaxStackSize())
+				? Math.min(Math.max(nearbyCounts.get(itemId), 1), info.maxStackSize())
 				: 1;
-			usedCacheKeys.add(syntheticCacheKey(itemId, displayCount, hasLiveNearbyBacking));
-			RecipeBookCategory category = categoryFor(item, itemId);
-			built.add(new Candidate(
-				itemId,
-				category,
-				stack.getHoverName().getString().toLowerCase(Locale.ROOT),
-				syntheticCollectionFor(itemId, item, displayCount, hasLiveNearbyBacking, category)
-			));
+			String cacheKey = syntheticCacheKey(itemId, displayCount, hasLiveNearbyBacking);
+			usedCacheKeys.add(cacheKey);
+			long collectionStart = System.nanoTime();
+			if (!SYNTHETIC_CACHE.containsKey(cacheKey)) {
+				newCollections++;
+			}
+			RecipeCollection collection = syntheticCollectionFor(itemId, info.item(), displayCount, hasLiveNearbyBacking, info.category());
+			collectionNanos += System.nanoTime() - collectionStart;
+			built.add(new Candidate(itemId, info.category(), info.lowerName(), collection));
 		}
 		built.sort(Comparator.comparing(Candidate::lowerName));
 		// Entries for counts no chest holds any more would otherwise pile up
@@ -200,11 +210,72 @@ public final class VirtualRetrievalRecipeBookEntries {
 		candidatesKey = key;
 		cachedCandidates = List.copyOf(built);
 		ReachCraftingMod.diag(
-			"[retrieval_virtual] candidates_rebuilt candidates={} nearby_items={} experienced_items={} crafting_outputs={} us={}",
+			"[retrieval_virtual] candidates_rebuilt candidates={} nearby_items={} experienced_items={} crafting_outputs={} us={} info_misses={} info_us={} new_collections={} collection_us={}",
 			cachedCandidates.size(), nearbyCounts.size(), experiencedItemIds.size(), outputIds.size(),
-			(System.nanoTime() - startNanos) / 1_000L
+			(System.nanoTime() - startNanos) / 1_000L, infoMisses, infoNanos / 1_000L, newCollections, collectionNanos / 1_000L
 		);
 		return cachedCandidates;
+	}
+
+	/** What a candidate needs from an item that never changes (until the language does). Null item = unknown id. */
+	private record ItemInfo(Item item, String lowerName, RecipeBookCategory category, int maxStackSize) {
+	}
+
+	private static final Map<String, ItemInfo> ITEM_INFO = new java.util.HashMap<>();
+	private static String itemInfoLanguage;
+	private static Object warmUpLevel;
+	private static java.util.Iterator<String> warmUpIds;
+	private static final long WARM_UP_BUDGET_NANOS = 1_000_000L; // 1ms per tick
+
+	/**
+	 * Per-item parts of a candidate, memoized: the registry lookup and the
+	 * translated name were most of a rebuild (5 ms for ~1,200 ids in a
+	 * storage world), and a rebuild happens whenever a nearby count changes.
+	 */
+	private static ItemInfo itemInfo(String itemId, String language) {
+		if (!language.equals(itemInfoLanguage)) {
+			ITEM_INFO.clear();
+			itemInfoLanguage = language;
+		}
+		return ITEM_INFO.computeIfAbsent(itemId, id -> {
+			net.minecraft.resources.Identifier identifier = net.minecraft.resources.Identifier.tryParse(id);
+			Item item = identifier == null ? null : BuiltInRegistries.ITEM.getOptional(identifier).orElse(null);
+			if (item == null) {
+				return new ItemInfo(null, "", RecipeBookCategories.CRAFTING_MISC, 1);
+			}
+			ItemStack stack = new ItemStack(item);
+			return new ItemInfo(item, stack.getHoverName().getString().toLowerCase(Locale.ROOT), categoryFor(item, id), stack.getMaxStackSize());
+		});
+	}
+
+	/**
+	 * Called every client tick: after joining a world, fills the item memo
+	 * for the world's experienced items a millisecond per tick, so the first
+	 * grid open does not pay for ~1,000 name lookups in one frame.
+	 */
+	public static void tickWarmUp(Minecraft client) {
+		if (client.level == null) {
+			warmUpLevel = null;
+			warmUpIds = null;
+			return;
+		}
+		if (client.level != warmUpLevel) {
+			warmUpLevel = client.level;
+			warmUpIds = ReachCraftingConfig.get().enableExistingOutputRetrieval()
+				? List.copyOf(ReachCraftingConfig.get().experiencedItemIds()).iterator()
+				: null;
+		}
+		if (warmUpIds == null) {
+			return;
+		}
+		String language = client.getLanguageManager().getSelected();
+		long startNanos = System.nanoTime();
+		while (warmUpIds.hasNext() && System.nanoTime() - startNanos < WARM_UP_BUDGET_NANOS) {
+			itemInfo(warmUpIds.next(), language);
+		}
+		if (!warmUpIds.hasNext()) {
+			warmUpIds = null;
+		}
 	}
 
 	private static Set<String> craftingOutputIds(LocalPlayer player, int gridSlotCount, int levelId) {
@@ -214,8 +285,10 @@ public final class VirtualRetrievalRecipeBookEntries {
 		}
 		OutputIdsKey key = new OutputIdsKey(levelId, knownRecipes, gridSlotCount);
 		if (!key.equals(outputIdsKey)) {
+			long startNanos = PerformanceProfiler.start();
 			outputIdsKey = key;
 			cachedOutputIds = Set.copyOf(collectCraftingTableOutputIds(player, gridSlotCount));
+			PerformanceProfiler.record("retrieval.output_ids", startNanos, "outputs=" + cachedOutputIds.size() + " recipes=" + knownRecipes);
 		}
 		return cachedOutputIds;
 	}
