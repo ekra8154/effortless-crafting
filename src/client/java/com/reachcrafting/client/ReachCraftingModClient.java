@@ -108,6 +108,7 @@ public class ReachCraftingModClient implements ClientModInitializer {
 			// and must work even while the mod is switched off.
 			HelpCommand.tickPendingSettings(client);
 			InWorldFilterManager.tickWarmUp(client);
+			VirtualRetrievalRecipeBookEntries.tickWarmUp(client);
 			tickCounter[0]++;
 			if (tickCounter[0] >= 200) {
 				tickCounter[0] = 0;
