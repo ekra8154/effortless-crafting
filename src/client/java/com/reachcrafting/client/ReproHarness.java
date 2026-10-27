@@ -712,7 +712,7 @@ public final class ReproHarness {
 		if (!click && found != null && count > 0) {
 			GridPreview.Plan plan = GridPreview.planFor(client,
 				new RecipeBookClickCapture.HeldRecipeAction(found.id(), foundCollection,
-					RecipeVariantResolver.resolveDisplayStack(found.display(), context), InputConstants.MOUSE_BUTTON_LEFT, false),
+					RecipeVariantResolver.resolveDisplayStack(found.display(), context), org.lwjgl.glfw.GLFW.GLFW_MOUSE_BUTTON_LEFT, false),
 				count, false, false);
 			previewResult = plan == null ? -1 : plan.result().getCount();
 			previewShort = plan != null && plan.shortOfRequest();
