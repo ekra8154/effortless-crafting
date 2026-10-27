@@ -943,7 +943,7 @@ final class GridPreview {
 			return hidden("retrieval_no_cache");
 		}
 		Map<String, Integer> nearby = NearbyContainerCache.getReachableView(
-			client.level, client.getCameraEntity(), player.blockInteractionRange()).aggregateCounts();
+			client.level, client.getCameraEntity(), (client.gameMode != null ? client.gameMode.getPickRange() : 4.5D)).aggregateCounts();
 		RecipeVariantResolver.Selection selection = RecipeVariantResolver.resolveRetrievalVariant(
 			client,
 			player,
