@@ -92,6 +92,11 @@ public final class ReproHarness {
 	private static boolean freeMouse = QUIET_LAUNCH;
 	private static boolean freeMouseKeyWasDown;
 
+	/** Launched by the automated scripts (the quiet flag), not by hand. */
+	public static boolean isQuietLaunch() {
+		return QUIET_LAUNCH;
+	}
+
 	public static boolean suppressWindowFocus() {
 		return QUIET_LAUNCH;
 	}
